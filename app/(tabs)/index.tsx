@@ -1,214 +1,192 @@
-import { FlatList, StyleSheet, View, Text, Image, Pressable } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Image, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAlbums } from '@/context/AlbumsContext';
 
-type Album = {
-  id: string;
-  title: string;
-  artist: string;
-  year: number;
-  rating: number;
-  dateLogged: string;
-  coverColor: string;
-};
-
-const MOCK_ALBUMS: Album[] = [
-  {
-    id: '1',
-    title: 'To Pimp a Butterfly',
-    artist: 'Kendrick Lamar',
-    year: 2015,
-    rating: 5,
-    dateLogged: 'Mar 24, 2026',
-    coverColor: '#2d5a27',
-  },
-  {
-    id: '2',
-    title: 'Fetch the Bolt Cutters',
-    artist: 'Fiona Apple',
-    year: 2020,
-    rating: 5,
-    dateLogged: 'Mar 21, 2026',
-    coverColor: '#7a4a2e',
-  },
-  {
-    id: '3',
-    title: 'In Rainbows',
-    artist: 'Radiohead',
-    year: 2007,
-    rating: 4,
-    dateLogged: 'Mar 18, 2026',
-    coverColor: '#1e3a5f',
-  },
-  {
-    id: '4',
-    title: 'Blonde',
-    artist: 'Frank Ocean',
-    year: 2016,
-    rating: 5,
-    dateLogged: 'Mar 15, 2026',
-    coverColor: '#d4a017',
-  },
-  {
-    id: '5',
-    title: 'Javelin',
-    artist: 'Sufjan Stevens',
-    year: 2023,
-    rating: 4,
-    dateLogged: 'Mar 10, 2026',
-    coverColor: '#5c2d82',
-  },
-  {
-    id: '6',
-    title: 'Ctrl',
-    artist: 'SZA',
-    year: 2017,
-    rating: 4,
-    dateLogged: 'Mar 5, 2026',
-    coverColor: '#8b1a1a',
-  },
-];
-
-function StarRating({ rating, color }: { rating: number; color: string }) {
-  return (
-    <View style={styles.stars}>
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Text
-          key={star}
-          style={[styles.star, { color: star <= rating ? '#E94560' : color }]}>
-          ★
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-function AlbumCard({ album, colors }: { album: Album; colors: typeof Colors.light }) {
-  return (
-    <Pressable style={[styles.card, { backgroundColor: colors.card }]}>
-      <View style={[styles.albumArt, { backgroundColor: album.coverColor }]}>
-        <Text style={styles.albumArtInitial}>
-          {album.title.charAt(0)}
-        </Text>
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={[styles.albumTitle, { color: colors.text }]} numberOfLines={1}>
-          {album.title}
-        </Text>
-        <Text style={[styles.artistName, { color: colors.subtext }]} numberOfLines={1}>
-          {album.artist} · {album.year}
-        </Text>
-        <View style={styles.ratingRow}>
-          <StarRating rating={album.rating} color={colors.subtext} />
-          <Text style={[styles.dateLogged, { color: colors.subtext }]}>
-            {album.dateLogged}
-          </Text>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-export default function JournalScreen() {
+export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const isDark = colorScheme === 'dark';
+  const { loggedAlbums } = useAlbums();
+  const router = useRouter();
+
+  const avgRating = loggedAlbums.length
+    ? (loggedAlbums.reduce((s, a) => s + a.rating, 0) / loggedAlbums.length).toFixed(1)
+    : '—';
+
+  const now = new Date();
+  const currentMonth = now.toLocaleDateString('en-US', { month: 'short' });
+  const currentYear = now.getFullYear().toString();
+  const thisMonth = loggedAlbums.filter(
+    (a) => a.dateLogged.includes(currentMonth) && a.dateLogged.includes(currentYear)
+  ).length;
+
+  const recent = loggedAlbums.slice(0, 6);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={MOCK_ALBUMS}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <AlbumCard album={item} colors={colors} />}
-        contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => (
-          <View style={[styles.separator, { backgroundColor: colorScheme === 'dark' ? '#222' : '#eee' }]} />
-        )}
-        ListHeaderComponent={() => (
-          <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>Recent</Text>
-            <Text style={[styles.headerCount, { color: colors.subtext }]}>
-              {MOCK_ALBUMS.length} albums
-            </Text>
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}>
+
+      <View style={styles.statsRow}>
+        <View style={[styles.statCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.statNum, { color: colors.text }]}>{loggedAlbums.length}</Text>
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>Albums</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.statNum, { color: '#FF3CAC' }]}>{avgRating}</Text>
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>Avg Rating</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.statNum, { color: colors.text }]}>{thisMonth}</Text>
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>This Month</Text>
+        </View>
+      </View>
+
+      {recent.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Recently Logged</Text>
+            <Pressable onPress={() => router.push('/(tabs)/listend')}>
+              <Text style={[styles.seeAll, { color: '#FF3CAC' }]}>See all</Text>
+            </Pressable>
           </View>
-        )}
-      />
-    </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.recentRow}>
+            {recent.map((album) => (
+              <Pressable
+                key={album.id}
+                style={styles.recentItem}
+                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}>
+                {album.artworkUrl ? (
+                  <Image source={{ uri: album.artworkUrl }} style={styles.recentArt} />
+                ) : (
+                  <View style={[styles.recentArt, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={styles.recentInitial}>{album.title.charAt(0)}</Text>
+                  </View>
+                )}
+                <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
+                  {album.title}
+                </Text>
+                <Text style={[styles.recentArtist, { color: colors.subtext }]} numberOfLines={1}>
+                  {album.artist}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>What are you listening to?</Text>
+        <Pressable
+          style={[styles.logButton, { backgroundColor: '#FF3CAC' }]}
+          onPress={() => router.push('/(tabs)/search')}>
+          <Text style={styles.logButtonText}>+ Log an Album</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.discoverButton, { backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0' }]}
+          onPress={() => router.push('/(tabs)/discover')}>
+          <Text style={[styles.discoverButtonText, { color: colors.text }]}>Browse Top Charts</Text>
+        </Pressable>
+      </View>
+
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    padding: 16,
+    paddingBottom: 40,
+    gap: 24,
   },
-  list: {
-    paddingBottom: 24,
-  },
-  header: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 12,
+    gap: 10,
+    marginTop: 4,
   },
-  headerTitle: {
-    fontSize: 22,
+  statCard: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statNum: {
+    fontSize: 24,
     fontWeight: '700',
     letterSpacing: -0.5,
   },
-  headerCount: {
-    fontSize: 14,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  albumArt: {
-    width: 60,
-    height: 60,
-    borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  albumArtInitial: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  cardContent: {
-    flex: 1,
-    marginLeft: 14,
-    gap: 3,
-  },
-  albumTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  artistName: {
-    fontSize: 14,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  stars: {
-    flexDirection: 'row',
-    gap: 1,
-  },
-  star: {
-    fontSize: 14,
-  },
-  dateLogged: {
+  statLabel: {
     fontSize: 12,
   },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 90,
+  section: {
+    gap: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  seeAll: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  recentRow: {
+    gap: 12,
+    paddingRight: 4,
+  },
+  recentItem: {
+    width: 90,
+  },
+  recentArt: {
+    width: 90,
+    height: 90,
+    borderRadius: 6,
+  },
+  recentInitial: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  recentTitle: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  recentArtist: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  logButton: {
+    height: 52,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  discoverButton: {
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  discoverButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
 });

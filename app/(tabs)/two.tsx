@@ -8,7 +8,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.avatar, { backgroundColor: '#E94560' }]}>
+      <View style={[styles.avatar, { backgroundColor: '#FF3CAC' }]}>
         <Text style={styles.avatarInitial}>H</Text>
       </View>
       <Text style={[styles.username, { color: colors.text }]}>@houman</Text>

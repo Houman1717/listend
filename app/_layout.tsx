@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
+import { AlbumsProvider } from '@/context/AlbumsContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -49,11 +50,17 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <AlbumsProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="log-album" options={{ presentation: 'modal', title: 'Log Album' }} />
+          <Stack.Screen name="album-detail" options={{ presentation: 'modal', title: 'Album' }} />
+          <Stack.Screen name="pick-item" options={{ presentation: 'modal', title: 'Search' }} />
+          <Stack.Screen name="profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+        </Stack>
+      </ThemeProvider>
+    </AlbumsProvider>
   );
 }
