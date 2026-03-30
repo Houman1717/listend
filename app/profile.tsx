@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   Alert,
-  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,30 +22,28 @@ const SUBTEXT = '#888';
 
 function FavSlot({
   item,
-  size,
   onAdd,
   onRemove,
 }: {
   item?: { artworkUrl?: string; title: string };
-  size: number;
   onAdd: () => void;
   onRemove: () => void;
 }) {
   if (item) {
     return (
-      <Pressable onPress={onRemove} style={[s.favFilled, { width: size, height: size }]}>
+      <Pressable onPress={onRemove} style={s.favSlot}>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={StyleSheet.absoluteFill} />
+          <Image source={{ uri: item.artworkUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: CARD_BG, justifyContent: 'center', alignItems: 'center' }]}>
-            <Text style={{ color: SUBTEXT, fontSize: 18, fontWeight: '700' }}>{item.title.charAt(0)}</Text>
+          <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
+            <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
           </View>
         )}
       </Pressable>
     );
   }
   return (
-    <Pressable onPress={onAdd} style={[s.favEmpty, { width: size, height: size, borderColor: BORDER }]}>
+    <Pressable onPress={onAdd} style={[s.favSlot, s.favEmpty]}>
       <Text style={s.favPlus}>+</Text>
     </Pressable>
   );
@@ -57,10 +54,6 @@ function FavSlot({
 export default function ProfileScreen() {
   const router = useRouter();
   const { loggedAlbums, topAlbums, topSongs, removeTopAlbum, removeTopSong } = useAlbums();
-  const { width } = useWindowDimensions();
-
-  // 5 items, padding 20 each side, 6px gaps between 5 items
-  const slotSize = Math.floor((width - 40 - 24) / 5);
 
   const avgRating = loggedAlbums.length
     ? (loggedAlbums.reduce((sum, a) => sum + a.rating, 0) / loggedAlbums.length).toFixed(1)
@@ -140,7 +133,6 @@ export default function ProfileScreen() {
               <FavSlot
                 key={i}
                 item={a}
-                size={slotSize}
                 onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'album' } })}
                 onRemove={() => a && confirmRemoveAlbum(a.id, a.title)}
               />
@@ -166,7 +158,6 @@ export default function ProfileScreen() {
               <FavSlot
                 key={i}
                 item={song}
-                size={slotSize}
                 onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}
                 onRemove={() => song && confirmRemoveSong(song.id, song.title)}
               />
@@ -266,19 +257,32 @@ const s = StyleSheet.create({
   rule: { height: StyleSheet.hairlineWidth, marginHorizontal: 20, marginVertical: 4 },
 
   favSection: { paddingHorizontal: 20, paddingVertical: 16 },
-  favHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  favHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   favTitle: { color: SUBTEXT, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
   editLabel: { color: '#FF3CAC', fontSize: 12 },
-  favRow: { flexDirection: 'row', gap: 6 },
-  favFilled: { borderRadius: 6, overflow: 'hidden', backgroundColor: CARD_BG },
+
+  // The row is the "container" — its background acts as the 1px separator between slots
+  favRow: {
+    flexDirection: 'row',
+    gap: 1,               // 1px of DARK_BG bleeds between slots → hairline separator
+    backgroundColor: DARK_BG,
+    borderRadius: 4,
+    overflow: 'hidden',   // clips slot corners to the container's radius
+  },
+  // Every slot — filled or empty — uses flex:1 + aspectRatio so they fill the row equally
+  favSlot: {
+    flex: 1,
+    aspectRatio: 1,
+    backgroundColor: '#1e1e1e',
+    overflow: 'hidden',
+  },
   favEmpty: {
-    borderRadius: 6,
-    borderWidth: 1,
-    borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#1e1e1e',
   },
-  favPlus: { color: SUBTEXT, fontSize: 20 },
+  favInitial: { color: '#555', fontSize: 16, fontWeight: '700' },
+  favPlus: { color: '#444', fontSize: 22, fontWeight: '300', lineHeight: 24 },
 
   recentSection: { paddingHorizontal: 20, paddingTop: 16 },
   recentRow: {
