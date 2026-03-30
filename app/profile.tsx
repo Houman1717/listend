@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +19,13 @@ const BORDER = '#2a2a2a';
 const TEXT = '#f0f0f0';
 const SUBTEXT = '#888';
 
+const FAV_GAP = 3;
+const FAV_SLOTS = 5;
+// 20px padding on each side, 4 gaps between 5 slots
+const FAV_SLOT_SIZE = Math.floor(
+  (Dimensions.get('window').width - 40 - FAV_GAP * (FAV_SLOTS - 1)) / FAV_SLOTS
+);
+
 // ─── Favourite slot ───────────────────────────────────────────────────────────
 
 function FavSlot({
@@ -29,19 +37,26 @@ function FavSlot({
   onAdd: () => void;
   onRemove: () => void;
 }) {
+  const size = FAV_SLOT_SIZE;
+
   if (item) {
     return (
       <Pressable onPress={onRemove} style={s.favSlot}>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <Image
+            source={{ uri: item.artworkUrl }}
+            style={{ width: size, height: size }}
+            resizeMode="cover"
+          />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={s.favInitialBg}>
             <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
           </View>
         )}
       </Pressable>
     );
   }
+
   return (
     <Pressable onPress={onAdd} style={[s.favSlot, s.favEmpty]}>
       <Text style={s.favPlus}>+</Text>
@@ -261,28 +276,31 @@ const s = StyleSheet.create({
   favTitle: { color: SUBTEXT, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
   editLabel: { color: '#FF3CAC', fontSize: 12 },
 
-  // The row is the "container" — its background acts as the 1px separator between slots
   favRow: {
     flexDirection: 'row',
-    gap: 1,               // 1px of DARK_BG bleeds between slots → hairline separator
-    backgroundColor: DARK_BG,
-    borderRadius: 4,
-    overflow: 'hidden',   // clips slot corners to the container's radius
+    gap: FAV_GAP,
   },
-  // Every slot — filled or empty — uses flex:1 + aspectRatio so they fill the row equally
   favSlot: {
-    flex: 1,
-    aspectRatio: 1,
-    backgroundColor: '#1e1e1e',
+    width: FAV_SLOT_SIZE,
+    height: FAV_SLOT_SIZE,
+    borderRadius: 3,
     overflow: 'hidden',
+    backgroundColor: '#1a1a1a',
   },
   favEmpty: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1e1e1e',
+    borderWidth: 1,
+    borderColor: '#2e2e2e',
+  },
+  favInitialBg: {
+    width: FAV_SLOT_SIZE,
+    height: FAV_SLOT_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   favInitial: { color: '#555', fontSize: 16, fontWeight: '700' },
-  favPlus: { color: '#444', fontSize: 22, fontWeight: '300', lineHeight: 24 },
+  favPlus: { color: '#505050', fontSize: 20, fontWeight: '300' },
 
   recentSection: { paddingHorizontal: 20, paddingTop: 16 },
   recentRow: {
