@@ -13,18 +13,14 @@ import { useState, useRef, useCallback } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, TopAlbum, TopSong } from '@/context/AlbumsContext';
+import { spotifyGet, albumFromSpotify, trackFromSpotify, SpotifyAlbum, SpotifyTrack } from '@/context/SpotifyService';
 
-type ResultItem = {
-  id: string;
-  title: string;
-  artist: string;
-  year?: number;
-  artworkUrl: string;
-};
+type ResultItem = SpotifyAlbum | SpotifyTrack;
 
 export default function PickItemScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { type } = useLocalSearchParams<{ type: 'album' | 'song' }>();
   const { addTopAlbum, addTopSong } = useAlbums();
@@ -34,41 +30,28 @@ export default function PickItemScreen() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isDark = colorScheme === 'dark';
 
   const isAlbum = type === 'album';
-  const entity = isAlbum ? 'album' : 'song';
-
-  function toItunesQuery(text: string) {
-    return text.replace(/\s+by\s+/gi, ' ').trim();
-  }
 
   const search = useCallback(async (text: string) => {
-    if (!text.trim()) {
-      setResults([]);
-      setSearched(false);
-      return;
-    }
+    if (!text.trim()) { setResults([]); setSearched(false); return; }
     setLoading(true);
     setSearched(true);
     try {
-      const url = `https://itunes.apple.com/search?term=${encodeURIComponent(toItunesQuery(text))}&entity=${entity}&limit=25`;
-      const res = await fetch(url);
-      const data = await res.json();
-      const items: ResultItem[] = (data.results ?? []).map((r: any) => ({
-        id: String(isAlbum ? r.collectionId : r.trackId),
-        title: isAlbum ? r.collectionName : r.trackName,
-        artist: r.artistName,
-        year: r.releaseDate ? new Date(r.releaseDate).getFullYear() : undefined,
-        artworkUrl: (r.artworkUrl100 ?? '').replace('100x100', '300x300'),
-      }));
-      setResults(items);
+      const q = encodeURIComponent(text.trim());
+      const spotifyType = isAlbum ? 'album' : 'track';
+      const data = await spotifyGet(`/search?q=${q}&type=${spotifyType}&limit=25`);
+      if (isAlbum) {
+        setResults((data.albums?.items ?? []).map(albumFromSpotify));
+      } else {
+        setResults((data.tracks?.items ?? []).map(trackFromSpotify));
+      }
     } catch {
       setResults([]);
     } finally {
       setLoading(false);
     }
-  }, [entity, isAlbum]);
+  }, [isAlbum]);
 
   function handleChangeText(text: string) {
     setQuery(text);
@@ -78,21 +61,12 @@ export default function PickItemScreen() {
 
   function handleSelect(item: ResultItem) {
     if (isAlbum) {
-      const album: TopAlbum = {
-        id: item.id,
-        title: item.title,
-        artist: item.artist,
-        year: item.year ?? 0,
-        artworkUrl: item.artworkUrl,
-      };
+      const a = item as SpotifyAlbum;
+      const album: TopAlbum = { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl };
       addTopAlbum(album);
     } else {
-      const song: TopSong = {
-        id: item.id,
-        title: item.title,
-        artist: item.artist,
-        artworkUrl: item.artworkUrl,
-      };
+      const t = item as SpotifyTrack;
+      const song: TopSong = { id: t.id, title: t.title, artist: t.artist, artworkUrl: t.artworkUrl };
       addTopSong(song);
     }
     router.back();
@@ -109,10 +83,7 @@ export default function PickItemScreen() {
           value={query}
           onChangeText={handleChangeText}
           returnKeyType="search"
-          onSubmitEditing={() => {
-            if (debounceTimer.current) clearTimeout(debounceTimer.current);
-            search(query);
-          }}
+          onSubmitEditing={() => { if (debounceTimer.current) clearTimeout(debounceTimer.current); search(query); }}
           autoFocus
           autoCorrect={false}
           autoCapitalize="none"
@@ -144,25 +115,31 @@ export default function PickItemScreen() {
         data={results}
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [
-              styles.resultRow,
-              { backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
-            ]}
-            onPress={() => handleSelect(item)}>
-            <Image source={{ uri: item.artworkUrl }} style={styles.artwork} />
-            <View style={styles.resultText}>
-              <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={[styles.resultArtist, { color: colors.subtext }]} numberOfLines={1}>
-                {item.artist}{item.year ? ` · ${item.year}` : ''}
-              </Text>
-            </View>
-            <Text style={[styles.addIcon, { color: colors.tint }]}>+</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const title = isAlbum ? (item as SpotifyAlbum).title : (item as SpotifyTrack).title;
+          const sub = isAlbum
+            ? `${(item as SpotifyAlbum).artist} · ${(item as SpotifyAlbum).year || ''}`
+            : (item as SpotifyTrack).artist;
+          return (
+            <Pressable
+              style={({ pressed }) => [
+                styles.resultRow,
+                { backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
+              ]}
+              onPress={() => handleSelect(item)}>
+              {item.artworkUrl ? (
+                <Image source={{ uri: item.artworkUrl }} style={styles.artwork} />
+              ) : (
+                <View style={[styles.artwork, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]} />
+              )}
+              <View style={styles.resultText}>
+                <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
+                <Text style={[styles.resultArtist, { color: colors.subtext }]} numberOfLines={1}>{sub}</Text>
+              </View>
+              <Text style={[styles.addIcon, { color: colors.tint }]}>+</Text>
+            </Pressable>
+          );
+        }}
         ItemSeparatorComponent={() => (
           <View style={[styles.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
         )}

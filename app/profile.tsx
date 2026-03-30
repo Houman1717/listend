@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAlbums, TopAlbum, TopSong } from '@/context/AlbumsContext';
 
@@ -21,9 +22,14 @@ const SUBTEXT = '#888';
 
 const FAV_GAP = 3;
 const FAV_SLOTS = 5;
-// 20px padding on each side, 4 gaps between 5 slots
 const FAV_SLOT_SIZE = Math.floor(
   (Dimensions.get('window').width - 40 - FAV_GAP * (FAV_SLOTS - 1)) / FAV_SLOTS
+);
+
+const GRID_COLS = 4;
+const GRID_GAP = 2;
+const GRID_ITEM_SIZE = Math.floor(
+  (Dimensions.get('window').width - 40 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS
 );
 
 // ─── Favourite slot ───────────────────────────────────────────────────────────
@@ -68,7 +74,7 @@ function FavSlot({
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { loggedAlbums, topAlbums, topSongs, removeTopAlbum, removeTopSong } = useAlbums();
+  const { loggedAlbums, topAlbums, topSongs, removeTopAlbum, removeTopSong, wantToListen } = useAlbums();
 
   const avgRating = loggedAlbums.length
     ? (loggedAlbums.reduce((sum, a) => sum + a.rating, 0) / loggedAlbums.length).toFixed(1)
@@ -133,6 +139,18 @@ export default function ProfileScreen() {
 
       <View style={[s.rule, { backgroundColor: BORDER }]} />
 
+      {/* Want to Listen */}
+      <Pressable
+        style={({ pressed }) => [s.wantRow, { opacity: pressed ? 0.7 : 1 }]}
+        onPress={() => router.push('/want-to-listen')}>
+        <FontAwesome name="bookmark-o" size={14} color={SUBTEXT} style={{ marginTop: 1 }} />
+        <Text style={s.wantLabel}>Want to Listen</Text>
+        <Text style={s.wantCount}>{wantToListen.length}</Text>
+        <FontAwesome name="chevron-right" size={12} color={SUBTEXT} />
+      </Pressable>
+
+      <View style={[s.rule, { backgroundColor: BORDER }]} />
+
       {/* Favourite Albums */}
       <View style={s.favSection}>
         <View style={s.favHeader}>
@@ -179,6 +197,36 @@ export default function ProfileScreen() {
             );
           })}
         </View>
+      </View>
+
+      <View style={[s.rule, { backgroundColor: BORDER }]} />
+
+      {/* Listened grid */}
+      <View style={s.gridSection}>
+        <View style={s.favHeader}>
+          <Text style={s.favTitle}>LISTENED</Text>
+          <Text style={s.albumCount}>{loggedAlbums.length} albums</Text>
+        </View>
+        {loggedAlbums.length === 0 ? (
+          <Text style={s.gridEmpty}>No albums logged yet.</Text>
+        ) : (
+          <View style={s.grid}>
+            {loggedAlbums.map((album) => (
+              <Pressable
+                key={album.id}
+                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
+                style={({ pressed }) => [s.gridItem, { opacity: pressed ? 0.7 : 1 }]}>
+                {album.artworkUrl ? (
+                  <Image source={{ uri: album.artworkUrl }} style={s.gridArt} resizeMode="cover" />
+                ) : (
+                  <View style={[s.gridArt, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={s.gridInitial}>{album.title.charAt(0)}</Text>
+                  </View>
+                )}
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
 
       <View style={[s.rule, { backgroundColor: BORDER }]} />
@@ -271,10 +319,21 @@ const s = StyleSheet.create({
 
   rule: { height: StyleSheet.hairlineWidth, marginHorizontal: 20, marginVertical: 4 },
 
+  wantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  wantLabel: { flex: 1, color: TEXT, fontSize: 15, fontWeight: '500' },
+  wantCount: { color: SUBTEXT, fontSize: 15, marginRight: 2 },
+
   favSection: { paddingHorizontal: 20, paddingVertical: 16 },
   favHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   favTitle: { color: SUBTEXT, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
   editLabel: { color: '#FF3CAC', fontSize: 12 },
+  albumCount: { color: SUBTEXT, fontSize: 12 },
 
   favRow: {
     flexDirection: 'row',
@@ -285,7 +344,7 @@ const s = StyleSheet.create({
     height: FAV_SLOT_SIZE,
     borderRadius: 3,
     overflow: 'hidden',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: CARD_BG,
   },
   favEmpty: {
     justifyContent: 'center',
@@ -301,6 +360,25 @@ const s = StyleSheet.create({
   },
   favInitial: { color: '#555', fontSize: 16, fontWeight: '700' },
   favPlus: { color: '#505050', fontSize: 20, fontWeight: '300' },
+
+  gridSection: { paddingHorizontal: 20, paddingVertical: 16 },
+  gridEmpty: { color: SUBTEXT, fontSize: 14, marginTop: 8 },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
+  },
+  gridItem: {
+    width: GRID_ITEM_SIZE,
+    height: GRID_ITEM_SIZE,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  gridArt: {
+    width: GRID_ITEM_SIZE,
+    height: GRID_ITEM_SIZE,
+  },
+  gridInitial: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '700' },
 
   recentSection: { paddingHorizontal: 20, paddingTop: 16 },
   recentRow: {

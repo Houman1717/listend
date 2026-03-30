@@ -3,7 +3,6 @@ import React, {
   useContext,
   useState,
   useEffect,
-  useRef,
   ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,7 +22,7 @@ export type LoggedAlbum = {
 };
 
 export type PendingAlbum = {
-  itunesId: number;
+  spotifyId: string;
   title: string;
   artist: string;
   year: number;
@@ -45,6 +44,14 @@ export type TopSong = {
   artworkUrl: string;
 };
 
+export type WantToListenAlbum = {
+  id: string;
+  title: string;
+  artist: string;
+  year: number;
+  artworkUrl: string;
+};
+
 type AlbumsContextType = {
   loggedAlbums: LoggedAlbum[];
   pendingAlbum: PendingAlbum | null;
@@ -57,6 +64,9 @@ type AlbumsContextType = {
   removeTopAlbum: (id: string) => void;
   addTopSong: (song: TopSong) => void;
   removeTopSong: (id: string) => void;
+  wantToListen: WantToListenAlbum[];
+  addToWantToListen: (album: WantToListenAlbum) => void;
+  removeFromWantToListen: (id: string) => void;
   isLoaded: boolean;
 };
 
@@ -66,16 +76,13 @@ const STORAGE_KEYS = {
   LOGGED: '@listend:loggedAlbums_v1',
   TOP_ALBUMS: '@listend:topAlbums_v1',
   TOP_SONGS: '@listend:topSongs_v1',
+  WANT_TO_LISTEN: '@listend:wantToListen_v1',
 };
 
 const COVER_COLORS = [
   '#2d5a27', '#7a4a2e', '#1e3a5f', '#d4a017',
   '#5c2d82', '#8b1a1a', '#1a5a5a', '#4a2d7a',
 ];
-
-const MB_HEADERS = {
-  'User-Agent': 'Listend/1.0 (https://github.com/listend)',
-};
 
 const INITIAL_ALBUMS: LoggedAlbum[] = [
   { id: '1', title: 'To Pimp a Butterfly', artist: 'Kendrick Lamar', year: 2015, rating: 5, dateLogged: 'Mar 24, 2026', coverColor: '#2d5a27' },
@@ -86,43 +93,6 @@ const INITIAL_ALBUMS: LoggedAlbum[] = [
   { id: '6', title: 'Ctrl', artist: 'SZA', year: 2017, rating: 4, dateLogged: 'Mar 5, 2026', coverColor: '#8b1a1a' },
 ];
 
-// ─── MusicBrainz / Cover Art Archive ─────────────────────────────────────────
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function fetchArtworkMusicBrainz(title: string, artist: string): Promise<string | null> {
-  try {
-    const query = encodeURIComponent(`${title} ${artist}`);
-    const searchRes = await fetch(
-      `https://musicbrainz.org/ws/2/release-group?query=${query}&fmt=json&limit=5&type=album`,
-      { headers: MB_HEADERS }
-    );
-    if (!searchRes.ok) return null;
-
-    const searchData = await searchRes.json();
-    const groups: Array<{ id: string; title: string }> = searchData['release-groups'] ?? [];
-    if (groups.length === 0) return null;
-
-    for (const group of groups.slice(0, 4)) {
-      try {
-        await sleep(300);
-        const artRes = await fetch(
-          `https://coverartarchive.org/release-group/${group.id}/front-250`,
-          { headers: MB_HEADERS }
-        );
-        if (artRes.ok) return artRes.url;
-      } catch {
-        // Try next result
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 const AlbumsContext = createContext<AlbumsContextType | null>(null);
@@ -131,22 +101,24 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   const [loggedAlbums, setLoggedAlbums] = useState<LoggedAlbum[]>(INITIAL_ALBUMS);
   const [topAlbums, setTopAlbums] = useState<TopAlbum[]>([]);
   const [topSongs, setTopSongs] = useState<TopSong[]>([]);
+  const [wantToListen, setWantToListen] = useState<WantToListenAlbum[]>([]);
   const [pendingAlbum, setPendingAlbum] = useState<PendingAlbum | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const artworkFetchStarted = useRef(false);
 
   // ── Load persisted data on mount ──────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
-        const [albumsStr, topAlbumsStr, topSongsStr] = await Promise.all([
+        const [albumsStr, topAlbumsStr, topSongsStr, wantStr] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.LOGGED),
           AsyncStorage.getItem(STORAGE_KEYS.TOP_ALBUMS),
           AsyncStorage.getItem(STORAGE_KEYS.TOP_SONGS),
+          AsyncStorage.getItem(STORAGE_KEYS.WANT_TO_LISTEN),
         ]);
         if (albumsStr !== null) setLoggedAlbums(JSON.parse(albumsStr));
         if (topAlbumsStr !== null) setTopAlbums(JSON.parse(topAlbumsStr));
         if (topSongsStr !== null) setTopSongs(JSON.parse(topSongsStr));
+        if (wantStr !== null) setWantToListen(JSON.parse(wantStr));
       } catch {
         // Fallback to initial state
       } finally {
@@ -154,31 +126,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, []);
-
-  // ── Fetch MusicBrainz artwork for albums that don't have it ───────────────
-  useEffect(() => {
-    if (!isLoaded || artworkFetchStarted.current) return;
-    artworkFetchStarted.current = true;
-
-    const toFetch = loggedAlbums.filter((a) => !a.artworkUrl);
-    if (toFetch.length === 0) return;
-
-    let cancelled = false;
-    (async () => {
-      for (const album of toFetch) {
-        if (cancelled) break;
-        await sleep(1200); // Respect MusicBrainz 1 req/sec policy
-        const url = await fetchArtworkMusicBrainz(album.title, album.artist);
-        if (url && !cancelled) {
-          setLoggedAlbums((prev) =>
-            prev.map((a) => (a.id === album.id ? { ...a, artworkUrl: url } : a))
-          );
-        }
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Persist on every change (after initial load) ──────────────────────────
   useEffect(() => {
@@ -196,6 +143,11 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEYS.TOP_SONGS, JSON.stringify(topSongs)).catch(() => {});
   }, [topSongs, isLoaded]);
 
+  useEffect(() => {
+    if (!isLoaded) return;
+    AsyncStorage.setItem(STORAGE_KEYS.WANT_TO_LISTEN, JSON.stringify(wantToListen)).catch(() => {});
+  }, [wantToListen, isLoaded]);
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
   function logAlbum(rating: number, review: string) {
@@ -208,7 +160,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     const colorIndex = loggedAlbums.length % COVER_COLORS.length;
 
     const newAlbum: LoggedAlbum = {
-      id: String(pendingAlbum.itunesId),
+      id: pendingAlbum.spotifyId,
       title: pendingAlbum.title,
       artist: pendingAlbum.artist,
       year: pendingAlbum.year,
@@ -221,17 +173,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
     setLoggedAlbums((prev) => [newAlbum, ...prev]);
     setPendingAlbum(null);
-
-    // Enrich with MusicBrainz artwork in the background
-    (async () => {
-      await sleep(500);
-      const url = await fetchArtworkMusicBrainz(newAlbum.title, newAlbum.artist);
-      if (url) {
-        setLoggedAlbums((prev) =>
-          prev.map((a) => (a.id === newAlbum.id ? { ...a, artworkUrl: url } : a))
-        );
-      }
-    })();
   }
 
   function updateReview(id: string, rating: number, review: string) {
@@ -264,10 +205,22 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     setTopSongs((prev) => prev.filter((s) => s.id !== id));
   }
 
+  function addToWantToListen(album: WantToListenAlbum) {
+    setWantToListen((prev) => {
+      if (prev.find((a) => a.id === album.id)) return prev;
+      return [album, ...prev];
+    });
+  }
+
+  function removeFromWantToListen(id: string) {
+    setWantToListen((prev) => prev.filter((a) => a.id !== id));
+  }
+
   return (
     <AlbumsContext.Provider value={{
       loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, updateReview,
       topAlbums, topSongs, addTopAlbum, removeTopAlbum, addTopSong, removeTopSong,
+      wantToListen, addToWantToListen, removeFromWantToListen,
       isLoaded,
     }}>
       {children}

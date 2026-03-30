@@ -4,291 +4,257 @@ import {
   Text,
   Image,
   Pressable,
-  FlatList,
   ScrollView,
   Alert,
+  Dimensions,
 } from 'react-native';
-import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
-import { useAlbums, LoggedAlbum, TopAlbum, TopSong } from '@/context/AlbumsContext';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useAlbums, TopAlbum, TopSong } from '@/context/AlbumsContext';
 
-const GRADIENT: [string, string, string] = ['#FF3CAC', '#784BA0', '#2B86C5'];
-const MAX = 5;
+const DARK_BG = '#0d0d0d';
+const CARD_BG = '#1a1a1a';
+const BORDER = '#2a2a2a';
+const TEXT = '#f0f0f0';
+const SUBTEXT = '#888';
 
-// ─── Shared ───────────────────────────────────────────────────────────────────
+const FAV_GAP = 3;
+const FAV_SLOTS = 5;
+const FAV_SLOT_SIZE = Math.floor(
+  (Dimensions.get('window').width - 40 - FAV_GAP * (FAV_SLOTS - 1)) / FAV_SLOTS
+);
 
-function Stars({ rating, color }: { rating: number; color: string }) {
+// ─── Horizontal favourite slot ────────────────────────────────────────────────
+
+function FavSlot({
+  item,
+  onAdd,
+  onRemove,
+}: {
+  item?: { artworkUrl?: string; title: string };
+  onAdd: () => void;
+  onRemove: () => void;
+}) {
+  if (item) {
+    return (
+      <Pressable onPress={onRemove} style={s.favSlot}>
+        {item.artworkUrl ? (
+          <Image
+            source={{ uri: item.artworkUrl }}
+            style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE }}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={s.favInitialBg}>
+            <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
+          </View>
+        )}
+      </Pressable>
+    );
+  }
   return (
-    <View style={s.stars}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Text key={n} style={[s.star, { color: n <= rating ? '#FF3CAC' : color }]}>★</Text>
-      ))}
-    </View>
-  );
-}
-
-// ─── Albums Tab ───────────────────────────────────────────────────────────────
-
-function AlbumRow({ album, colors, onPress }: { album: LoggedAlbum; colors: typeof Colors.light; onPress: () => void }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [s.albumRow, { opacity: pressed ? 0.7 : 1 }]}
-      onPress={onPress}>
-      {album.artworkUrl ? (
-        <Image source={{ uri: album.artworkUrl }} style={s.albumArt} />
-      ) : (
-        <View style={[s.albumArt, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={s.albumInitial}>{album.title.charAt(0)}</Text>
-        </View>
-      )}
-      <View style={s.albumInfo}>
-        <Text style={[s.albumTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
-        <Text style={[s.albumArtist, { color: colors.subtext }]} numberOfLines={1}>
-          {album.artist} · {album.year}
-        </Text>
-        <View style={s.ratingRow}>
-          <Stars rating={album.rating} color={colors.subtext} />
-          <Text style={[s.dateLogged, { color: colors.subtext }]}>{album.dateLogged}</Text>
-        </View>
-        {album.review ? (
-          <Text style={[s.reviewSnippet, { color: colors.subtext }]} numberOfLines={2}>{album.review}</Text>
-        ) : null}
-      </View>
+    <Pressable onPress={onAdd} style={[s.favSlot, s.favEmpty]}>
+      <Text style={s.favPlus}>+</Text>
     </Pressable>
   );
 }
 
-// ─── Top 5 Tab ────────────────────────────────────────────────────────────────
+// ─── Navigation row ───────────────────────────────────────────────────────────
 
-function TopSlot({
-  rank, title, subtitle, artworkUrl,
-  colors, isDark, onAdd, onRemove, addLabel,
+function NavRow({
+  icon,
+  label,
+  count,
+  onPress,
 }: {
-  rank: number;
-  title?: string;
-  subtitle?: string;
-  artworkUrl?: string;
-  colors: typeof Colors.light;
-  isDark: boolean;
-  onAdd: () => void;
-  onRemove: () => void;
-  addLabel: string;
+  icon: React.ComponentProps<typeof FontAwesome>['name'];
+  label: string;
+  count?: number;
+  onPress: () => void;
 }) {
   return (
-    <View style={s.slotRow}>
-      <Text style={[s.slotRank, { color: colors.subtext }]}>{rank}</Text>
-      {title ? (
-        <Pressable style={[s.filledSlot, { backgroundColor: colors.card }]} onPress={onRemove}>
-          {artworkUrl ? (
-            <Image source={{ uri: artworkUrl }} style={s.slotArt} />
-          ) : (
-            <View style={[s.slotArt, { backgroundColor: '#333' }]} />
-          )}
-          <View style={s.slotText}>
-            <Text style={[s.slotTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
-            {subtitle ? <Text style={[s.slotSub, { color: colors.subtext }]} numberOfLines={1}>{subtitle}</Text> : null}
-          </View>
-          <Text style={[s.removeIcon, { color: colors.subtext }]}>✕</Text>
-        </Pressable>
-      ) : (
-        <Pressable
-          style={[s.emptySlot, { backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', borderColor: isDark ? '#2a2a2a' : '#e0e0e0' }]}
-          onPress={onAdd}>
-          <Text style={[s.addLabel, { color: '#FF3CAC' }]}>{addLabel}</Text>
-        </Pressable>
+    <Pressable
+      style={({ pressed }) => [s.navRow, { opacity: pressed ? 0.7 : 1 }]}
+      onPress={onPress}>
+      <FontAwesome name={icon} size={15} color={SUBTEXT} style={s.navIcon} />
+      <Text style={s.navLabel}>{label}</Text>
+      {count !== undefined && (
+        <Text style={s.navCount}>{count}</Text>
       )}
-    </View>
-  );
-}
-
-function Top5Tab({ colors, isDark }: { colors: typeof Colors.light; isDark: boolean }) {
-  const router = useRouter();
-  const { topAlbums, topSongs, removeTopAlbum, removeTopSong } = useAlbums();
-
-  function confirmRemove(id: string, title: string, type: 'album' | 'song') {
-    Alert.alert('Remove', `Remove "${title}" from your Top 5?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove', style: 'destructive',
-        onPress: () => type === 'album' ? removeTopAlbum(id) : removeTopSong(id),
-      },
-    ]);
-  }
-
-  return (
-    <ScrollView contentContainerStyle={s.top5Container} showsVerticalScrollIndicator={false}>
-      <Text style={[s.sectionTitle, { color: colors.text }]}>Top 5 Albums</Text>
-      {Array.from({ length: MAX }).map((_, i) => {
-        const a: TopAlbum | undefined = topAlbums[i];
-        return (
-          <TopSlot
-            key={i} rank={i + 1}
-            title={a?.title}
-            subtitle={a ? `${a.artist} · ${a.year}` : undefined}
-            artworkUrl={a?.artworkUrl}
-            colors={colors} isDark={isDark}
-            addLabel="+ Add album"
-            onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'album' } })}
-            onRemove={() => a && confirmRemove(a.id, a.title, 'album')}
-          />
-        );
-      })}
-
-      <View style={[s.divider, { backgroundColor: isDark ? '#2a2a2a' : '#e5e5e5' }]} />
-
-      <Text style={[s.sectionTitle, { color: colors.text }]}>Top 5 Songs</Text>
-      {Array.from({ length: MAX }).map((_, i) => {
-        const song: TopSong | undefined = topSongs[i];
-        return (
-          <TopSlot
-            key={i} rank={i + 1}
-            title={song?.title}
-            subtitle={song?.artist}
-            artworkUrl={song?.artworkUrl}
-            colors={colors} isDark={isDark}
-            addLabel="+ Add song"
-            onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}
-            onRemove={() => song && confirmRemove(song.id, song.title, 'song')}
-          />
-        );
-      })}
-    </ScrollView>
+      <FontAwesome name="chevron-right" size={12} color={SUBTEXT} />
+    </Pressable>
   );
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-type Tab = 'albums' | 'top5';
-
 export default function ListendScreen() {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-  const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { loggedAlbums } = useAlbums();
-  const [activeTab, setActiveTab] = useState<Tab>('albums');
+  const { topAlbums, topSongs, removeTopAlbum, removeTopSong, loggedAlbums, wantToListen } = useAlbums();
+
+  const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
+
+  function confirmRemoveAlbum(id: string, title: string) {
+    Alert.alert('Remove', `Remove "${title}" from Top 5?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeTopAlbum(id) },
+    ]);
+  }
+
+  function confirmRemoveSong(id: string, title: string) {
+    Alert.alert('Remove', `Remove "${title}" from Top 5?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeTopSong(id) },
+    ]);
+  }
 
   return (
-    <View style={[s.container, { backgroundColor: colors.background }]}>
+    <ScrollView
+      style={s.container}
+      contentContainerStyle={s.content}
+      showsVerticalScrollIndicator={false}>
 
-      {/* Inner tab bar */}
-      <View style={[s.innerTabBar, { backgroundColor: isDark ? '#111' : '#fff', borderBottomColor: isDark ? '#222' : '#e5e5e5' }]}>
-        {(['albums', 'top5'] as Tab[]).map((tab) => {
-          const label = tab === 'albums' ? `Albums (${loggedAlbums.length})` : 'Top 5';
-          const active = activeTab === tab;
-          return (
-            <Pressable key={tab} style={s.innerTab} onPress={() => setActiveTab(tab)}>
-              <Text style={[s.innerTabText, { color: active ? '#FF3CAC' : colors.subtext }]}>
-                {label}
-              </Text>
-              {active && (
-                <LinearGradient
-                  colors={GRADIENT}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={s.tabIndicator}
-                />
-              )}
-            </Pressable>
-          );
-        })}
+      {/* Top 5 Albums */}
+      <View style={s.section}>
+        <View style={s.sectionHeader}>
+          <Text style={s.sectionTitle}>TOP 5 ALBUMS</Text>
+          <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'album' } })}>
+            <Text style={s.editLabel}>Edit</Text>
+          </Pressable>
+        </View>
+        <View style={s.favRow}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const a: TopAlbum | undefined = topAlbums[i];
+            return (
+              <FavSlot
+                key={i}
+                item={a}
+                onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'album' } })}
+                onRemove={() => a && confirmRemoveAlbum(a.id, a.title)}
+              />
+            );
+          })}
+        </View>
       </View>
 
-      {/* Tab content */}
-      {activeTab === 'albums' ? (
-        <FlatList
-          data={loggedAlbums}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={s.listContent}
-          ItemSeparatorComponent={() => (
-            <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
-          )}
-          ListEmptyComponent={() => (
-            <Text style={[s.emptyText, { color: colors.subtext }]}>
-              No albums logged yet — head to Search!
-            </Text>
-          )}
-          renderItem={({ item }) => (
-            <AlbumRow
-              album={item}
-              colors={colors}
-              onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
-            />
-          )}
+      <View style={s.rule} />
+
+      {/* Top 5 Songs */}
+      <View style={s.section}>
+        <View style={s.sectionHeader}>
+          <Text style={s.sectionTitle}>TOP 5 SONGS</Text>
+          <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}>
+            <Text style={s.editLabel}>Edit</Text>
+          </Pressable>
+        </View>
+        <View style={s.favRow}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const song: TopSong | undefined = topSongs[i];
+            return (
+              <FavSlot
+                key={i}
+                item={song}
+                onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}
+                onRemove={() => song && confirmRemoveSong(song.id, song.title)}
+              />
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={s.navGroup}>
+        <NavRow
+          icon="music"
+          label="My Listend"
+          count={loggedAlbums.length}
+          onPress={() => router.push('/my-listend')}
         />
-      ) : (
-        <Top5Tab colors={colors} isDark={isDark} />
-      )}
-    </View>
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="bookmark-o"
+          label="Want to Listen"
+          count={wantToListen.length}
+          onPress={() => router.push('/want-to-listen')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="clock-o"
+          label="Recent Listens"
+          onPress={() => router.push('/recent-listens')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="pencil"
+          label="My Reviews"
+          count={reviewCount}
+          onPress={() => router.push('/my-reviews')}
+        />
+      </View>
+
+    </ScrollView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: DARK_BG },
+  content: { paddingBottom: 48 },
 
-  innerTabBar: {
+  section: { paddingHorizontal: 20, paddingVertical: 18 },
+  sectionHeader: {
     flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  innerTab: {
-    flex: 1,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    marginBottom: 12,
   },
-  innerTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.2,
+  sectionTitle: {
+    color: SUBTEXT,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: 16,
-    right: 16,
-    height: 2,
-    borderRadius: 1,
-  },
+  editLabel: { color: '#FF3CAC', fontSize: 12 },
 
-  listContent: { paddingBottom: 40 },
-  separator: { height: StyleSheet.hairlineWidth, marginLeft: 90 },
-  emptyText: { textAlign: 'center', marginTop: 48, fontSize: 15 },
-
-  albumRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  albumArt: { width: 60, height: 60, borderRadius: 4, flexShrink: 0 },
-  albumInitial: { color: 'rgba(255,255,255,0.7)', fontSize: 22, fontWeight: '700' },
-  albumInfo: { flex: 1, marginLeft: 14, gap: 3 },
-  albumTitle: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
-  albumArtist: { fontSize: 13 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
-  stars: { flexDirection: 'row', gap: 1 },
-  star: { fontSize: 13 },
-  dateLogged: { fontSize: 12 },
-  reviewSnippet: { fontSize: 13, lineHeight: 18, marginTop: 4, fontStyle: 'italic' },
-
-  top5Container: { padding: 16, paddingBottom: 40, gap: 10 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3, marginBottom: 4, marginTop: 8 },
-  divider: { height: 1, marginVertical: 16 },
-
-  slotRow: { flexDirection: 'row', alignItems: 'center' },
-  slotRank: { width: 22, fontSize: 13, fontWeight: '700', textAlign: 'right', marginRight: 10 },
-  filledSlot: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10,
+  favRow: { flexDirection: 'row', gap: FAV_GAP },
+  favSlot: {
+    width: FAV_SLOT_SIZE,
+    height: FAV_SLOT_SIZE,
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: CARD_BG,
   },
-  slotArt: { width: 44, height: 44, borderRadius: 4 },
-  slotText: { flex: 1, marginLeft: 10, gap: 2 },
-  slotTitle: { fontSize: 14, fontWeight: '600' },
-  slotSub: { fontSize: 12 },
-  removeIcon: { fontSize: 12, marginLeft: 8 },
-  emptySlot: {
-    flex: 1, height: 60, borderRadius: 10,
-    borderWidth: 1, borderStyle: 'dashed',
-    justifyContent: 'center', alignItems: 'center',
+  favEmpty: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2e2e2e',
   },
-  addLabel: { fontSize: 14, fontWeight: '500' },
+  favInitialBg: {
+    width: FAV_SLOT_SIZE,
+    height: FAV_SLOT_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  favInitial: { color: '#555', fontSize: 16, fontWeight: '700' },
+  favPlus: { color: '#505050', fontSize: 20, fontWeight: '300' },
+
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 20 },
+
+  navGroup: {
+    marginTop: 24,
+    marginHorizontal: 20,
+    backgroundColor: CARD_BG,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+  },
+  navIcon: { width: 20, textAlign: 'center', marginRight: 12 },
+  navLabel: { flex: 1, color: TEXT, fontSize: 15, fontWeight: '500' },
+  navCount: { color: SUBTEXT, fontSize: 15, marginRight: 8 },
+  navSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginLeft: 48 },
 });
