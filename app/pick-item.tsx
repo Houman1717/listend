@@ -12,18 +12,26 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useCallback } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useAlbums, TopAlbum, TopSong } from '@/context/AlbumsContext';
-import { spotifyGet, albumFromSpotify, trackFromSpotify, SpotifyAlbum, SpotifyTrack } from '@/context/SpotifyService';
+import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
+import {
+  spotifyGet,
+  albumFromSpotify,
+  trackFromSpotify,
+  artistFromSpotify,
+  SpotifyAlbum,
+  SpotifyTrack,
+  SpotifyArtist,
+} from '@/context/SpotifyService';
 
-type ResultItem = SpotifyAlbum | SpotifyTrack;
+type ResultItem = SpotifyAlbum | SpotifyTrack | SpotifyArtist;
 
 export default function PickItemScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { type } = useLocalSearchParams<{ type: 'album' | 'song' }>();
-  const { addTopAlbum, addTopSong } = useAlbums();
+  const { type } = useLocalSearchParams<{ type: 'album' | 'song' | 'artist' }>();
+  const { addTopAlbum, addTopSong, addTopArtist } = useAlbums();
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ResultItem[]>([]);
@@ -32,6 +40,7 @@ export default function PickItemScreen() {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAlbum = type === 'album';
+  const isArtist = type === 'artist';
 
   const search = useCallback(async (text: string) => {
     if (!text.trim()) { setResults([]); setSearched(false); return; }
@@ -39,19 +48,21 @@ export default function PickItemScreen() {
     setSearched(true);
     try {
       const q = encodeURIComponent(text.trim());
-      const spotifyType = isAlbum ? 'album' : 'track';
-      const data = await spotifyGet(`/search?q=${q}&type=${spotifyType}&limit=25`);
+      const spotifyType = isAlbum ? 'album' : isArtist ? 'artist' : 'track';
+      const data = await spotifyGet(`/search?q=${q}&type=${spotifyType}&limit=10`);
       if (isAlbum) {
-        setResults((data.albums?.items ?? []).map(albumFromSpotify));
+        setResults((data.albums?.items ?? []).filter(Boolean).map(albumFromSpotify));
+      } else if (isArtist) {
+        setResults((data.artists?.items ?? []).filter(Boolean).map(artistFromSpotify));
       } else {
-        setResults((data.tracks?.items ?? []).map(trackFromSpotify));
+        setResults((data.tracks?.items ?? []).filter(Boolean).map(trackFromSpotify));
       }
     } catch {
       setResults([]);
     } finally {
       setLoading(false);
     }
-  }, [isAlbum]);
+  }, [isAlbum, isArtist]);
 
   function handleChangeText(text: string) {
     setQuery(text);
@@ -64,6 +75,10 @@ export default function PickItemScreen() {
       const a = item as SpotifyAlbum;
       const album: TopAlbum = { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl };
       addTopAlbum(album);
+    } else if (isArtist) {
+      const a = item as SpotifyArtist;
+      const artist: TopArtist = { id: a.id, name: a.name, artworkUrl: a.artworkUrl };
+      addTopArtist(artist);
     } else {
       const t = item as SpotifyTrack;
       const song: TopSong = { id: t.id, title: t.title, artist: t.artist, artworkUrl: t.artworkUrl };
@@ -72,13 +87,16 @@ export default function PickItemScreen() {
     router.back();
   }
 
+  const placeholder = isAlbum ? 'Search albums…' : isArtist ? 'Search artists…' : 'Search songs…';
+  const emptyPrompt = isAlbum ? 'Search for an album to add.' : isArtist ? 'Search for an artist to add.' : 'Search for a song to add.';
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.searchBar, { backgroundColor: isDark ? '#1e1e1e' : '#efefef' }]}>
         <Text style={[styles.searchIcon, { color: colors.subtext }]}>⌕</Text>
         <TextInput
           style={[styles.input, { color: colors.text }]}
-          placeholder={isAlbum ? 'Search albums…' : 'Search songs…'}
+          placeholder={placeholder}
           placeholderTextColor={colors.subtext}
           value={query}
           onChangeText={handleChangeText}
@@ -105,9 +123,7 @@ export default function PickItemScreen() {
 
       {!loading && !searched && (
         <View style={styles.empty}>
-          <Text style={[styles.emptyText, { color: colors.subtext }]}>
-            {isAlbum ? 'Search for an album to add.' : 'Search for a song to add.'}
-          </Text>
+          <Text style={[styles.emptyText, { color: colors.subtext }]}>{emptyPrompt}</Text>
         </View>
       )}
 
@@ -116,10 +132,18 @@ export default function PickItemScreen() {
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => {
-          const title = isAlbum ? (item as SpotifyAlbum).title : (item as SpotifyTrack).title;
-          const sub = isAlbum
+          const isArtistItem = isArtist;
+          const title = isArtistItem
+            ? (item as SpotifyArtist).name
+            : isAlbum
+            ? (item as SpotifyAlbum).title
+            : (item as SpotifyTrack).title;
+          const sub = isArtistItem
+            ? (item as SpotifyArtist).genre
+            : isAlbum
             ? `${(item as SpotifyAlbum).artist} · ${(item as SpotifyAlbum).year || ''}`
             : (item as SpotifyTrack).artist;
+          const artworkRadius = isArtistItem ? 26 : 4;
           return (
             <Pressable
               style={({ pressed }) => [
@@ -128,13 +152,13 @@ export default function PickItemScreen() {
               ]}
               onPress={() => handleSelect(item)}>
               {item.artworkUrl ? (
-                <Image source={{ uri: item.artworkUrl }} style={styles.artwork} />
+                <Image source={{ uri: item.artworkUrl }} style={[styles.artwork, { borderRadius: artworkRadius }]} />
               ) : (
-                <View style={[styles.artwork, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]} />
+                <View style={[styles.artwork, { borderRadius: artworkRadius, backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]} />
               )}
               <View style={styles.resultText}>
                 <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
-                <Text style={[styles.resultArtist, { color: colors.subtext }]} numberOfLines={1}>{sub}</Text>
+                {sub ? <Text style={[styles.resultArtist, { color: colors.subtext }]} numberOfLines={1}>{sub}</Text> : null}
               </View>
               <Text style={[styles.addIcon, { color: colors.tint }]}>+</Text>
             </Pressable>
@@ -170,7 +194,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  artwork: { width: 52, height: 52, borderRadius: 4 },
+  artwork: { width: 52, height: 52 },
   resultText: { flex: 1, marginLeft: 12, gap: 3 },
   resultTitle: { fontSize: 15, fontWeight: '600' },
   resultArtist: { fontSize: 13 },

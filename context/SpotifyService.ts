@@ -2,8 +2,8 @@
 // Note: embedding credentials in a client app is a known trade-off of the
 // Client Credentials flow — there is no per-user auth here.
 
-const CLIENT_ID = '15eb472d52e74891ad93df89f614bd06';
-const CLIENT_SECRET = 'a8a060441f4b40e7826a70121b95ca1a';
+const CLIENT_ID = process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ?? '15eb472d52e74891ad93df89f614bd06';
+const CLIENT_SECRET = process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_SECRET ?? '169d56a0bf5c4fe794cf0b11da40019c';
 const API_BASE = 'https://api.spotify.com/v1';
 
 // ─── Token cache (in-memory, resets on app restart) ──────────────────────────
@@ -37,11 +37,19 @@ async function getToken(): Promise<string> {
 
 export async function spotifyGet<T = any>(path: string): Promise<T> {
   const token = await getToken();
+  console.log('[Spotify] GET', path);
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
-  return res.json() as Promise<T>;
+  console.log('[Spotify] Response status:', res.status);
+  if (!res.ok) {
+    const body = await res.text();
+    console.error('[Spotify] Error body:', body);
+    throw new Error(`Spotify API error: ${res.status}`);
+  }
+  const json = await res.json();
+  console.log('[Spotify] Response keys:', Object.keys(json));
+  return json as T;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

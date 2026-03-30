@@ -11,7 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAlbums, TopAlbum, TopSong } from '@/context/AlbumsContext';
+import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 
 const GRADIENT: [string, string, string] = ['#FF3CAC', '#784BA0', '#2B86C5'];
 const DARK_BG = '#0d0d0d';
@@ -38,24 +38,27 @@ function FavSlot({
   item,
   onAdd,
   onRemove,
+  circular = false,
 }: {
   item?: { artworkUrl?: string; title: string };
   onAdd: () => void;
   onRemove: () => void;
+  circular?: boolean;
 }) {
   const size = FAV_SLOT_SIZE;
+  const radius = circular ? size / 2 : 3;
 
   if (item) {
     return (
-      <Pressable onPress={onRemove} style={s.favSlot}>
+      <Pressable onPress={onRemove} style={[s.favSlot, { borderRadius: radius }]}>
         {item.artworkUrl ? (
           <Image
             source={{ uri: item.artworkUrl }}
-            style={{ width: size, height: size }}
+            style={{ width: size, height: size, borderRadius: radius }}
             resizeMode="cover"
           />
         ) : (
-          <View style={s.favInitialBg}>
+          <View style={[s.favInitialBg, { borderRadius: radius }]}>
             <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
           </View>
         )}
@@ -64,7 +67,7 @@ function FavSlot({
   }
 
   return (
-    <Pressable onPress={onAdd} style={[s.favSlot, s.favEmpty]}>
+    <Pressable onPress={onAdd} style={[s.favSlot, s.favEmpty, { borderRadius: radius }]}>
       <Text style={s.favPlus}>+</Text>
     </Pressable>
   );
@@ -74,7 +77,7 @@ function FavSlot({
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { loggedAlbums, topAlbums, topSongs, removeTopAlbum, removeTopSong, wantToListen } = useAlbums();
+  const { loggedAlbums, topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, wantToListen } = useAlbums();
 
   const avgRating = loggedAlbums.length
     ? (loggedAlbums.reduce((sum, a) => sum + a.rating, 0) / loggedAlbums.length).toFixed(1)
@@ -95,6 +98,13 @@ export default function ProfileScreen() {
     Alert.alert('Remove', `Remove "${title}" from Favourites?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => removeTopSong(id) },
+    ]);
+  }
+
+  function confirmRemoveArtist(id: string, name: string) {
+    Alert.alert('Remove', `Remove "${name}" from Favourites?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeTopArtist(id) },
     ]);
   }
 
@@ -193,6 +203,32 @@ export default function ProfileScreen() {
                 item={song}
                 onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}
                 onRemove={() => song && confirmRemoveSong(song.id, song.title)}
+              />
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={[s.rule, { backgroundColor: BORDER }]} />
+
+      {/* Favourite Artists */}
+      <View style={s.favSection}>
+        <View style={s.favHeader}>
+          <Text style={s.favTitle}>FAVOURITE ARTISTS</Text>
+          <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'artist' } })}>
+            <Text style={s.editLabel}>Edit</Text>
+          </Pressable>
+        </View>
+        <View style={s.favRow}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const artist: TopArtist | undefined = topArtists[i];
+            return (
+              <FavSlot
+                key={i}
+                item={artist ? { artworkUrl: artist.artworkUrl, title: artist.name } : undefined}
+                circular
+                onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'artist' } })}
+                onRemove={() => artist && confirmRemoveArtist(artist.id, artist.name)}
               />
             );
           })}

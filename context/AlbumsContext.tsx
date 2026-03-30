@@ -44,6 +44,12 @@ export type TopSong = {
   artworkUrl: string;
 };
 
+export type TopArtist = {
+  id: string;
+  name: string;
+  artworkUrl: string;
+};
+
 export type WantToListenAlbum = {
   id: string;
   title: string;
@@ -60,10 +66,13 @@ type AlbumsContextType = {
   updateReview: (id: string, rating: number, review: string) => void;
   topAlbums: TopAlbum[];
   topSongs: TopSong[];
+  topArtists: TopArtist[];
   addTopAlbum: (album: TopAlbum) => void;
   removeTopAlbum: (id: string) => void;
   addTopSong: (song: TopSong) => void;
   removeTopSong: (id: string) => void;
+  addTopArtist: (artist: TopArtist) => void;
+  removeTopArtist: (id: string) => void;
   wantToListen: WantToListenAlbum[];
   addToWantToListen: (album: WantToListenAlbum) => void;
   removeFromWantToListen: (id: string) => void;
@@ -76,6 +85,7 @@ const STORAGE_KEYS = {
   LOGGED: '@listend:loggedAlbums_v1',
   TOP_ALBUMS: '@listend:topAlbums_v1',
   TOP_SONGS: '@listend:topSongs_v1',
+  TOP_ARTISTS: '@listend:topArtists_v1',
   WANT_TO_LISTEN: '@listend:wantToListen_v1',
 };
 
@@ -101,6 +111,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   const [loggedAlbums, setLoggedAlbums] = useState<LoggedAlbum[]>(INITIAL_ALBUMS);
   const [topAlbums, setTopAlbums] = useState<TopAlbum[]>([]);
   const [topSongs, setTopSongs] = useState<TopSong[]>([]);
+  const [topArtists, setTopArtists] = useState<TopArtist[]>([]);
   const [wantToListen, setWantToListen] = useState<WantToListenAlbum[]>([]);
   const [pendingAlbum, setPendingAlbum] = useState<PendingAlbum | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -109,15 +120,17 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [albumsStr, topAlbumsStr, topSongsStr, wantStr] = await Promise.all([
+        const [albumsStr, topAlbumsStr, topSongsStr, topArtistsStr, wantStr] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.LOGGED),
           AsyncStorage.getItem(STORAGE_KEYS.TOP_ALBUMS),
           AsyncStorage.getItem(STORAGE_KEYS.TOP_SONGS),
+          AsyncStorage.getItem(STORAGE_KEYS.TOP_ARTISTS),
           AsyncStorage.getItem(STORAGE_KEYS.WANT_TO_LISTEN),
         ]);
         if (albumsStr !== null) setLoggedAlbums(JSON.parse(albumsStr));
         if (topAlbumsStr !== null) setTopAlbums(JSON.parse(topAlbumsStr));
         if (topSongsStr !== null) setTopSongs(JSON.parse(topSongsStr));
+        if (topArtistsStr !== null) setTopArtists(JSON.parse(topArtistsStr));
         if (wantStr !== null) setWantToListen(JSON.parse(wantStr));
       } catch {
         // Fallback to initial state
@@ -142,6 +155,11 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     if (!isLoaded) return;
     AsyncStorage.setItem(STORAGE_KEYS.TOP_SONGS, JSON.stringify(topSongs)).catch(() => {});
   }, [topSongs, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    AsyncStorage.setItem(STORAGE_KEYS.TOP_ARTISTS, JSON.stringify(topArtists)).catch(() => {});
+  }, [topArtists, isLoaded]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -205,6 +223,17 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     setTopSongs((prev) => prev.filter((s) => s.id !== id));
   }
 
+  function addTopArtist(artist: TopArtist) {
+    setTopArtists((prev) => {
+      if (prev.find((a) => a.id === artist.id)) return prev;
+      return [...prev, artist].slice(0, 5);
+    });
+  }
+
+  function removeTopArtist(id: string) {
+    setTopArtists((prev) => prev.filter((a) => a.id !== id));
+  }
+
   function addToWantToListen(album: WantToListenAlbum) {
     setWantToListen((prev) => {
       if (prev.find((a) => a.id === album.id)) return prev;
@@ -219,7 +248,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   return (
     <AlbumsContext.Provider value={{
       loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, updateReview,
-      topAlbums, topSongs, addTopAlbum, removeTopAlbum, addTopSong, removeTopSong,
+      topAlbums, topSongs, topArtists, addTopAlbum, removeTopAlbum, addTopSong, removeTopSong, addTopArtist, removeTopArtist,
       wantToListen, addToWantToListen, removeFromWantToListen,
       isLoaded,
     }}>

@@ -24,26 +24,27 @@ function decadeToYearRange(decade: string): string {
 async function fetchForCategory(category: string, value?: string): Promise<SpotifyAlbum[]> {
   switch (category) {
     case 'new-releases': {
-      const data = await spotifyGet('/browse/new-releases?limit=25&country=US');
+      const data = await spotifyGet('/search?q=tag:new&type=album&limit=10&market=US');
       return (data.albums?.items ?? []).map(albumFromSpotify);
     }
     case 'popular': {
-      const data = await spotifyGet('/browse/new-releases?limit=50&country=US');
+      const year = new Date().getFullYear();
+      const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=10&market=US`);
       return (data.albums?.items ?? []).map(albumFromSpotify);
     }
     case 'coming-soon': {
       const year = new Date().getFullYear();
-      const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=30`);
+      const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=10`);
       return (data.albums?.items ?? []).map(albumFromSpotify);
     }
     case 'genre': {
-      const q = encodeURIComponent(`genre:${value ?? ''}`);
-      const data = await spotifyGet(`/search?q=${q}&type=album&limit=30`);
+      const q = encodeURIComponent(value ?? '');
+      const data = await spotifyGet(`/search?q=${q}&type=album&limit=10`);
       return (data.albums?.items ?? []).map(albumFromSpotify);
     }
     case 'decade': {
       const range = decadeToYearRange(value ?? '');
-      const data = await spotifyGet(`/search?q=year:${range}&type=album&limit=30`);
+      const data = await spotifyGet(`/search?q=year:${range}&type=album&limit=10`);
       return (data.albums?.items ?? []).map(albumFromSpotify);
     }
     default:

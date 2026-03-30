@@ -1,27 +1,29 @@
 import { StyleSheet, View, Text, Pressable, ScrollView, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
-type Genre = { label: string; color: string };
+type Genre = { label: string; spotifyGenre: string };
 
 const GENRES: Genre[] = [
-  { label: 'Rap',         color: '#8B1A1A' },
-  { label: 'R&B',         color: '#7a0060' },
-  { label: 'Pop',         color: '#c0392b' },
-  { label: 'Rock',        color: '#1e3a6b' },
-  { label: 'House',       color: '#4A0080' },
-  { label: 'Afrobeats',   color: '#7a3b00' },
-  { label: 'Reggaeton',   color: '#1a5a3a' },
-  { label: 'Country',     color: '#3d5a27' },
-  { label: 'Jazz',        color: '#2c3e50' },
-  { label: 'Soul',        color: '#5c0040' },
-  { label: 'Electronic',  color: '#0d3a5f' },
-  { label: 'Alternative', color: '#002855' },
-  { label: 'Indie',       color: '#005c5c' },
-  { label: 'Metal',       color: '#1c1c1c' },
-  { label: 'Classical',   color: '#4a3000' },
-  { label: 'Folk',        color: '#3d2b00' },
-  { label: 'Latin',       color: '#7a2000' },
-  { label: 'K-Pop',       color: '#6b006b' },
+  { label: 'Rap',         spotifyGenre: 'hip-hop'      },
+  { label: 'R&B',         spotifyGenre: 'r-n-b'        },
+  { label: 'Pop',         spotifyGenre: 'pop'          },
+  { label: 'Rock',        spotifyGenre: 'rock'         },
+  { label: 'House',       spotifyGenre: 'house'        },
+  { label: 'Afrobeats',   spotifyGenre: 'afrobeats'    },
+  { label: 'Reggaeton',   spotifyGenre: 'reggaeton'    },
+  { label: 'Country',     spotifyGenre: 'country'      },
+  { label: 'Jazz',        spotifyGenre: 'jazz'         },
+  { label: 'Soul',        spotifyGenre: 'soul'         },
+  { label: 'Electronic',  spotifyGenre: 'electronic'   },
+  { label: 'Alternative', spotifyGenre: 'alternative'  },
+  { label: 'Indie',       spotifyGenre: 'indie'        },
+  { label: 'Metal',       spotifyGenre: 'metal'        },
+  { label: 'Classical',   spotifyGenre: 'classical'    },
+  { label: 'Folk',        spotifyGenre: 'folk'         },
+  { label: 'Latin',       spotifyGenre: 'latin'        },
+  { label: 'K-Pop',       spotifyGenre: 'k-pop'        },
 ];
 
 const GAP = 10;
@@ -31,10 +33,13 @@ const TILE_HEIGHT = Math.round(TILE_WIDTH * 0.56);
 
 export default function DiscoverGenresScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  const isDark = colorScheme === 'dark';
 
   return (
     <ScrollView
-      style={s.container}
+      style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}>
       <View style={s.grid}>
@@ -43,15 +48,22 @@ export default function DiscoverGenresScreen() {
             key={genre.label}
             style={({ pressed }) => [
               s.tile,
-              { backgroundColor: genre.color, width: TILE_WIDTH, height: TILE_HEIGHT, opacity: pressed ? 0.75 : 1 },
+              {
+                width: TILE_WIDTH,
+                height: TILE_HEIGHT,
+                backgroundColor: isDark ? '#1a1a1a' : '#fff',
+                borderColor: isDark ? '#2a2a2a' : '#e5e5e5',
+                opacity: pressed ? 0.7 : 1,
+              },
             ]}
             onPress={() =>
               router.push({
                 pathname: '/discover-results',
-                params: { category: 'genre', value: genre.label, title: genre.label },
+                params: { category: 'genre', value: genre.spotifyGenre, title: genre.label },
               })
             }>
-            <Text style={s.tileLabel}>{genre.label}</Text>
+            <Text style={[s.tileLabel, { color: colors.text }]}>{genre.label}</Text>
+            <View style={s.accent} />
           </Pressable>
         ))}
       </View>
@@ -60,7 +72,7 @@ export default function DiscoverGenresScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d0d' },
+  container: { flex: 1 },
   content: { padding: 16, paddingBottom: 48 },
   grid: {
     flexDirection: 'row',
@@ -69,17 +81,22 @@ const s = StyleSheet.create({
   },
   tile: {
     borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
     justifyContent: 'flex-end',
     padding: 12,
     overflow: 'hidden',
   },
   tileLabel: {
-    color: '#fff',
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: -0.3,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+  },
+  accent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 3,
+    height: '100%',
+    backgroundColor: '#FF3CAC',
   },
 });

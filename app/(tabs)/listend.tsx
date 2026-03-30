@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useAlbums, TopAlbum, TopSong } from '@/context/AlbumsContext';
+import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 
 const DARK_BG = '#0d0d0d';
 const CARD_BG = '#1a1a1a';
@@ -30,22 +30,25 @@ function FavSlot({
   item,
   onAdd,
   onRemove,
+  circular = false,
 }: {
   item?: { artworkUrl?: string; title: string };
   onAdd: () => void;
   onRemove: () => void;
+  circular?: boolean;
 }) {
+  const radius = circular ? FAV_SLOT_SIZE / 2 : 3;
   if (item) {
     return (
-      <Pressable onPress={onRemove} style={s.favSlot}>
+      <Pressable onPress={onRemove} style={[s.favSlot, { borderRadius: radius }]}>
         {item.artworkUrl ? (
           <Image
             source={{ uri: item.artworkUrl }}
-            style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE }}
+            style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE, borderRadius: radius }}
             resizeMode="cover"
           />
         ) : (
-          <View style={s.favInitialBg}>
+          <View style={[s.favInitialBg, { borderRadius: radius }]}>
             <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
           </View>
         )}
@@ -53,7 +56,7 @@ function FavSlot({
     );
   }
   return (
-    <Pressable onPress={onAdd} style={[s.favSlot, s.favEmpty]}>
+    <Pressable onPress={onAdd} style={[s.favSlot, s.favEmpty, { borderRadius: radius }]}>
       <Text style={s.favPlus}>+</Text>
     </Pressable>
   );
@@ -90,7 +93,7 @@ function NavRow({
 
 export default function ListendScreen() {
   const router = useRouter();
-  const { topAlbums, topSongs, removeTopAlbum, removeTopSong, loggedAlbums, wantToListen } = useAlbums();
+  const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, loggedAlbums, wantToListen } = useAlbums();
 
   const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
 
@@ -105,6 +108,13 @@ export default function ListendScreen() {
     Alert.alert('Remove', `Remove "${title}" from Top 5?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => removeTopSong(id) },
+    ]);
+  }
+
+  function confirmRemoveArtist(id: string, name: string) {
+    Alert.alert('Remove', `Remove "${name}" from Top 5?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeTopArtist(id) },
     ]);
   }
 
@@ -156,6 +166,32 @@ export default function ListendScreen() {
                 item={song}
                 onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}
                 onRemove={() => song && confirmRemoveSong(song.id, song.title)}
+              />
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={s.rule} />
+
+      {/* Top 5 Artists */}
+      <View style={s.section}>
+        <View style={s.sectionHeader}>
+          <Text style={s.sectionTitle}>TOP 5 ARTISTS</Text>
+          <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'artist' } })}>
+            <Text style={s.editLabel}>Edit</Text>
+          </Pressable>
+        </View>
+        <View style={s.favRow}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const artist: TopArtist | undefined = topArtists[i];
+            return (
+              <FavSlot
+                key={i}
+                circular
+                item={artist ? { artworkUrl: artist.artworkUrl, title: artist.name } : undefined}
+                onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'artist' } })}
+                onRemove={() => artist && confirmRemoveArtist(artist.id, artist.name)}
               />
             );
           })}

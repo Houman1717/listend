@@ -52,15 +52,23 @@ async function searchSpotify(tab: SearchTab, query: string): Promise<ResultItem[
 
   const type = tab === 'albums' ? 'album' : tab === 'songs' ? 'track' : 'artist';
   const q = encodeURIComponent(query.trim());
-  const data = await spotifyGet(`/search?q=${q}&type=${type}&limit=25`);
+  const data = await spotifyGet(`/search?q=${q}&type=${type}&limit=10`);
+
+  console.log('[searchSpotify] tab:', tab, 'albums:', data.albums?.items?.length, 'tracks:', data.tracks?.items?.length, 'artists:', data.artists?.items?.length);
 
   if (tab === 'albums') {
-    return (data.albums?.items ?? []).map((i: any) => ({ kind: 'album' as const, ...albumFromSpotify(i) }));
+    const items = (data.albums?.items ?? []).filter(Boolean);
+    console.log('[searchSpotify] mapping', items.length, 'album items');
+    return items.map((i: any) => ({ kind: 'album' as const, ...albumFromSpotify(i) }));
   }
   if (tab === 'songs') {
-    return (data.tracks?.items ?? []).map((i: any) => ({ kind: 'song' as const, ...trackFromSpotify(i) }));
+    const items = (data.tracks?.items ?? []).filter(Boolean);
+    console.log('[searchSpotify] mapping', items.length, 'track items');
+    return items.map((i: any) => ({ kind: 'song' as const, ...trackFromSpotify(i) }));
   }
-  return (data.artists?.items ?? []).map((i: any) => ({ kind: 'artist' as const, ...artistFromSpotify(i) }));
+  const items = (data.artists?.items ?? []).filter(Boolean);
+  console.log('[searchSpotify] mapping', items.length, 'artist items');
+  return items.map((i: any) => ({ kind: 'artist' as const, ...artistFromSpotify(i) }));
 }
 
 // ─── Row components ───────────────────────────────────────────────────────────
@@ -210,8 +218,11 @@ export default function SearchScreen() {
     setLoading(true);
     setSearched(true);
     try {
-      setResults(await searchSpotify(tab, text));
-    } catch {
+      const items = await searchSpotify(tab, text);
+      console.log('[Search] Setting', items.length, 'results, searched=true');
+      setResults(items);
+    } catch (e) {
+      console.error('[Search] Error:', e);
       setResults([]);
     } finally {
       setLoading(false);
