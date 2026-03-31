@@ -14,6 +14,12 @@ import Colors from '@/constants/Colors';
 import { useAlbums, PendingAlbum } from '@/context/AlbumsContext';
 import { spotifyGet, albumFromSpotify, SpotifyAlbum } from '@/context/SpotifyService';
 
+// ─── Genre result cache (module-level, persists across navigations) ───────────
+
+const genreCache = new Map<string, SpotifyAlbum[]>();
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 // ─── Fetch strategies ─────────────────────────────────────────────────────────
 
 function decadeToYearRange(decade: string): string {
@@ -38,9 +44,28 @@ async function fetchForCategory(category: string, value?: string): Promise<Spoti
       return (data.albums?.items ?? []).map(albumFromSpotify);
     }
     case 'genre': {
-      const q = encodeURIComponent(value ?? '');
-      const data = await spotifyGet(`/search?q=${q}&type=album&limit=10`);
-      return (data.albums?.items ?? []).map(albumFromSpotify);
+      const cacheKey = value ?? '';
+      if (genreCache.has(cacheKey)) return genreCache.get(cacheKey)!;
+
+      // Spotify genre metadata lives on artists, not albums.
+      // Search artists by genre, then pull albums from each sequentially.
+      const q = encodeURIComponent(`genre:${cacheKey}`);
+      const artistData = await spotifyGet(`/search?q=${q}&type=artist&limit=3&market=US`);
+      const artists: any[] = artistData.artists?.items ?? [];
+      if (artists.length === 0) return [];
+
+      const results: SpotifyAlbum[] = [];
+      for (const artist of artists) {
+        await delay(200);
+        const d = await spotifyGet(
+          `/artists/${artist.id}/albums?include_groups=album&limit=4&market=US`
+        ).catch(() => ({ items: [] }));
+        results.push(...(d.items ?? []).map(albumFromSpotify));
+      }
+
+      const albums = results.slice(0, 10);
+      genreCache.set(cacheKey, albums);
+      return albums;
     }
     case 'decade': {
       const range = decadeToYearRange(value ?? '');

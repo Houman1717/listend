@@ -127,7 +127,7 @@ export default function ListendScreen() {
       {/* Top 5 Albums */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>TOP 5 ALBUMS</Text>
+          <Text style={s.sectionTitle}>MY TOP 5 ALBUMS</Text>
           <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'album' } })}>
             <Text style={s.editLabel}>Edit</Text>
           </Pressable>
@@ -152,7 +152,7 @@ export default function ListendScreen() {
       {/* Top 5 Songs */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>TOP 5 SONGS</Text>
+          <Text style={s.sectionTitle}>MY TOP 5 SONGS</Text>
           <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}>
             <Text style={s.editLabel}>Edit</Text>
           </Pressable>
@@ -177,7 +177,7 @@ export default function ListendScreen() {
       {/* Top 5 Artists */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>TOP 5 ARTISTS</Text>
+          <Text style={s.sectionTitle}>MY TOP 5 ARTISTS</Text>
           <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'artist' } })}>
             <Text style={s.editLabel}>Edit</Text>
           </Pressable>
