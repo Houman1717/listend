@@ -10,10 +10,65 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
+
+const RATING_LABELS: Record<number, string> = {
+  1:  'Skip',
+  2:  'Dust Collector',
+  3:  'Static',
+  4:  'Passable',
+  5:  'In the Rotation',
+  6:  'Keeper',
+  7:  'Mainstay',
+  8:  'Daily Spin',
+  9:  'Total Fixation',
+  10: 'Timeless / No Skips',
+};
+
+// Heights in px for bars 1–10 (staircase, bottom-aligned)
+const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
+
+function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
+  const barsWidth = useRef(0);
+  const activeColor = '#FF3CAC';
+  const inactiveColor = isDark ? '#2e2e2e' : '#e0e0e0';
+
+  function ratingFromX(x: number): number {
+    const w = barsWidth.current;
+    if (w === 0) return 0;
+    return Math.max(1, Math.min(10, Math.ceil((x / w) * 10)));
+  }
+
+  return (
+    <View style={styles.ratingContainer}>
+      <View style={styles.ratingRow}>
+        <FontAwesome name="volume-up" size={22} color={rating > 0 ? activeColor : inactiveColor} />
+        <View
+          style={styles.barsTrack}
+          onLayout={(e) => { barsWidth.current = e.nativeEvent.layout.width; }}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={(e) => onChange(ratingFromX(e.nativeEvent.locationX))}
+          onResponderMove={(e) => onChange(ratingFromX(e.nativeEvent.locationX))}
+        >
+          {BAR_HEIGHTS.map((h, i) => (
+            <View
+              key={i}
+              style={[styles.bar, { height: h, backgroundColor: i + 1 <= rating ? activeColor : inactiveColor }]}
+            />
+          ))}
+        </View>
+      </View>
+      <Text style={[styles.ratingHint, { color: isDark ? '#888' : '#999' }]}>
+        {rating > 0 ? RATING_LABELS[rating] : ' '}
+      </Text>
+    </View>
+  );
+}
 
 export default function LogAlbumScreen() {
   const colorScheme = useColorScheme();
@@ -56,20 +111,7 @@ export default function LogAlbumScreen() {
         </Text>
 
         <Text style={[styles.sectionLabel, { color: colors.subtext }]}>Your rating</Text>
-        <View style={styles.starsRow}>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <Pressable key={star} onPress={() => setRating(star)} hitSlop={8}>
-              <Text style={[styles.star, { color: star <= rating ? '#FF3CAC' : (isDark ? '#444' : '#ccc') }]}>
-                ★
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        {rating > 0 && (
-          <Text style={[styles.ratingHint, { color: colors.subtext }]}>
-            {['', 'Awful', 'Bad', 'OK', 'Good', 'Amazing'][rating]}
-          </Text>
-        )}
+        <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
 
         <Text style={[styles.sectionLabel, { color: colors.subtext, marginTop: 28 }]}>
           Review <Text style={{ fontWeight: '400' }}>(optional)</Text>
@@ -153,17 +195,31 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 8,
+  ratingContainer: {
+    width: '100%',
     marginTop: 10,
   },
-  star: {
-    fontSize: 40,
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
+  },
+  barsTrack: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+    paddingBottom: 2,
+  },
+  bar: {
+    flex: 1,
+    borderRadius: 2,
   },
   ratingHint: {
-    marginTop: 6,
+    marginTop: 10,
     fontSize: 13,
+    textAlign: 'center',
+    height: 18,
   },
   reviewInput: {
     width: '100%',

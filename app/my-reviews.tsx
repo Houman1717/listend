@@ -7,43 +7,76 @@ import {
   FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 
-function Stars({ rating, color }: { rating: number; color: string }) {
+// ─── Volume badge (with number) ───────────────────────────────────────────────
+
+const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
+
+function VolumeBadge({ rating }: { rating: number }) {
   return (
-    <View style={s.stars}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Text key={n} style={[s.star, { color: n <= rating ? '#FF3CAC' : color }]}>★</Text>
-      ))}
+    <View style={s.badge}>
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#FF3CAC' : '#3a3a3a'} />
+      <View style={s.badgeBars}>
+        {BAR_HEIGHTS.map((h, i) => (
+          <View
+            key={i}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#FF3CAC' : '#2a2a2a' }]}
+          />
+        ))}
+      </View>
+      {rating > 0 && <Text style={s.badgeNum}>{rating}</Text>}
     </View>
   );
 }
 
-function ReviewRow({ album, colors, onPress }: { album: LoggedAlbum; colors: typeof Colors.light; onPress: () => void }) {
+// ─── Review row ───────────────────────────────────────────────────────────────
+
+function ReviewRow({
+  album,
+  colors,
+  isDark,
+  onPress,
+}: {
+  album: LoggedAlbum;
+  colors: typeof Colors.light;
+  isDark: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
-      style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]}
-      onPress={onPress}>
+      onPress={onPress}
+      style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]}>
+      {/* Thumbnail */}
       {album.artworkUrl ? (
-        <Image source={{ uri: album.artworkUrl }} style={s.art} />
+        <Image source={{ uri: album.artworkUrl }} style={s.thumb} resizeMode="cover" />
       ) : (
-        <View style={[s.art, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={s.artInitial}>{album.title.charAt(0)}</Text>
+        <View style={[s.thumb, s.thumbFallback, { backgroundColor: album.coverColor }]}>
+          <Text style={s.thumbInitial}>{album.title.charAt(0)}</Text>
         </View>
       )}
+
+      {/* Text block */}
       <View style={s.info}>
-        <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
+        <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>
+          {album.title}
+        </Text>
         <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>
           {album.artist} · {album.year}
         </Text>
-        <Stars rating={album.rating} color={colors.subtext} />
-        <Text style={[s.review, { color: colors.subtext }]} numberOfLines={3}>{album.review}</Text>
+        <VolumeBadge rating={album.rating} />
+        <Text style={[s.review, { color: isDark ? '#aaa' : '#555' }]}>
+          {album.review}
+        </Text>
       </View>
     </Pressable>
   );
 }
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MyReviewsScreen() {
   const colorScheme = useColorScheme();
@@ -58,10 +91,11 @@ export default function MyReviewsScreen() {
     <FlatList
       data={reviewed}
       keyExtractor={(item) => item.id}
-      style={{ backgroundColor: colors.background }}
+      style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.listContent}
+      showsVerticalScrollIndicator={false}
       ItemSeparatorComponent={() => (
-        <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
+        <View style={[s.separator, { backgroundColor: isDark ? '#1e1e1e' : '#ebebeb' }]} />
       )}
       ListEmptyComponent={() => (
         <View style={s.empty}>
@@ -75,6 +109,7 @@ export default function MyReviewsScreen() {
         <ReviewRow
           album={item}
           colors={colors}
+          isDark={isDark}
           onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
         />
       )}
@@ -83,20 +118,32 @@ export default function MyReviewsScreen() {
 }
 
 const s = StyleSheet.create({
-  listContent: { paddingBottom: 40 },
-  separator: { height: StyleSheet.hairlineWidth, marginLeft: 90 },
+  container:   { flex: 1 },
+  listContent: { paddingVertical: 8, paddingBottom: 48 },
 
-  row: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 14 },
-  art: { width: 64, height: 64, borderRadius: 4, flexShrink: 0 },
-  artInitial: { color: 'rgba(255,255,255,0.7)', fontSize: 22, fontWeight: '700' },
-  info: { flex: 1, marginLeft: 14, gap: 4 },
-  title: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
+  // Row
+  row:  { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 16, gap: 14 },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: 94 },
+
+  // Thumbnail
+  thumb:        { width: 64, height: 64, borderRadius: 6, flexShrink: 0 },
+  thumbFallback:{ justifyContent: 'center', alignItems: 'center' },
+  thumbInitial: { color: 'rgba(255,255,255,0.5)', fontSize: 22, fontWeight: '700' },
+
+  // Text
+  info:   { flex: 1, gap: 4 },
+  title:  { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
   artist: { fontSize: 13 },
-  stars: { flexDirection: 'row', gap: 1 },
-  star: { fontSize: 12 },
-  review: { fontSize: 13, lineHeight: 19, fontStyle: 'italic', marginTop: 2 },
+  review: { fontSize: 13, lineHeight: 20, fontStyle: 'italic', marginTop: 2 },
 
-  empty: { alignItems: 'center', marginTop: 80, paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 17, fontWeight: '600', marginBottom: 8 },
-  emptySubtext: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  // Volume badge
+  badge:    { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  badgeBars:{ flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
+  badgeBar: { width: 2.5, borderRadius: 1 },
+  badgeNum: { color: '#FF3CAC', fontSize: 10, fontWeight: '700', lineHeight: 15 },
+
+  // Empty state
+  empty:       { alignItems: 'center', marginTop: 80, paddingHorizontal: 32 },
+  emptyTitle:  { fontSize: 17, fontWeight: '600', marginBottom: 8 },
+  emptySubtext:{ fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

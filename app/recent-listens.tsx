@@ -4,97 +4,112 @@ import {
   Text,
   Image,
   Pressable,
-  FlatList,
+  ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 
-function Stars({ rating, color }: { rating: number; color: string }) {
+const PADDING = 16;
+const GAP     = 12;
+const COLS    = 4;
+
+const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
+
+function VolumeBadge({ rating }: { rating: number }) {
   return (
-    <View style={s.stars}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Text key={n} style={[s.star, { color: n <= rating ? '#FF3CAC' : color }]}>★</Text>
-      ))}
+    <View style={s.badge}>
+      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#FF3CAC' : '#3a3a3a'} />
+      <View style={s.badgeBars}>
+        {BAR_HEIGHTS.map((h, i) => (
+          <View
+            key={i}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#FF3CAC' : '#2e2e2e' }]}
+          />
+        ))}
+      </View>
+      {rating > 0 && <Text style={s.badgeNum}>{rating}</Text>}
     </View>
   );
 }
 
-function AlbumRow({ album, colors, onPress }: { album: LoggedAlbum; colors: typeof Colors.light; onPress: () => void }) {
+function AlbumCard({ album, cardWidth, onPress }: { album: LoggedAlbum; cardWidth: number; onPress: () => void }) {
   return (
     <Pressable
-      style={({ pressed }) => [s.albumRow, { opacity: pressed ? 0.7 : 1 }]}
-      onPress={onPress}>
+      onPress={onPress}
+      style={({ pressed }) => [s.card, { width: cardWidth, opacity: pressed ? 0.7 : 1 }]}>
       {album.artworkUrl ? (
-        <Image source={{ uri: album.artworkUrl }} style={s.albumArt} />
+        <Image
+          source={{ uri: album.artworkUrl }}
+          style={{ width: cardWidth, height: cardWidth, borderRadius: 8 }}
+          resizeMode="cover"
+        />
       ) : (
-        <View style={[s.albumArt, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={s.albumInitial}>{album.title.charAt(0)}</Text>
+        <View style={[s.fallback, { width: cardWidth, height: cardWidth, backgroundColor: album.coverColor }]}>
+          <Text style={[s.fallbackText, { fontSize: cardWidth * 0.32 }]}>{album.title.charAt(0)}</Text>
         </View>
       )}
-      <View style={s.albumInfo}>
-        <Text style={[s.albumTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
-        <Text style={[s.albumArtist, { color: colors.subtext }]} numberOfLines={1}>
-          {album.artist} · {album.year}
-        </Text>
-        <View style={s.ratingRow}>
-          <Stars rating={album.rating} color={colors.subtext} />
-          <Text style={[s.dateLogged, { color: colors.subtext }]}>{album.dateLogged}</Text>
-        </View>
+      <View style={s.ratingWrap}>
+        <VolumeBadge rating={album.rating} />
       </View>
     </Pressable>
   );
 }
 
 export default function RecentListensScreen() {
+  const { width } = useWindowDimensions();
+  const cardWidth = (width - PADDING * 2 - GAP * (COLS - 1)) / COLS;
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { loggedAlbums } = useAlbums();
 
-  // Most recent first — already sorted newest-first, take top 20
   const recent = loggedAlbums.slice(0, 20);
 
   return (
-    <FlatList
-      data={recent}
-      keyExtractor={(item) => item.id}
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={s.listContent}
-      ItemSeparatorComponent={() => (
-        <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
-      )}
-      ListEmptyComponent={() => (
+    <ScrollView
+      style={[s.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={s.gridWrap}
+      showsVerticalScrollIndicator={false}>
+      {recent.length === 0 ? (
         <Text style={[s.emptyText, { color: colors.subtext }]}>
           No albums logged yet — head to Search!
         </Text>
+      ) : (
+        <View style={s.grid}>
+          {recent.map((album) => (
+            <AlbumCard
+              key={album.id}
+              album={album}
+              cardWidth={cardWidth}
+              onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
+            />
+          ))}
+        </View>
       )}
-      renderItem={({ item }) => (
-        <AlbumRow
-          album={item}
-          colors={colors}
-          onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
-        />
-      )}
-    />
+    </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  listContent: { paddingBottom: 40 },
-  separator: { height: StyleSheet.hairlineWidth, marginLeft: 90 },
-  emptyText: { textAlign: 'center', marginTop: 48, fontSize: 15 },
+  container: { flex: 1 },
+  gridWrap:  { padding: PADDING, paddingBottom: 48 },
+  grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
 
-  albumRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  albumArt: { width: 60, height: 60, borderRadius: 4, flexShrink: 0 },
-  albumInitial: { color: 'rgba(255,255,255,0.7)', fontSize: 22, fontWeight: '700' },
-  albumInfo: { flex: 1, marginLeft: 14, gap: 3 },
-  albumTitle: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
-  albumArtist: { fontSize: 13 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
-  stars: { flexDirection: 'row', gap: 1 },
-  star: { fontSize: 13 },
-  dateLogged: { fontSize: 12 },
+  card: { gap: 0 },
+
+  fallback: { borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  fallbackText: { color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
+
+  ratingWrap: { marginTop: 6, alignItems: 'center' },
+
+  badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
+  badgeBar:  { width: 2.5, borderRadius: 1 },
+  badgeNum:  { color: '#FF3CAC', fontSize: 9, fontWeight: '700', lineHeight: 14 },
+
+  emptyText: { textAlign: 'center', marginTop: 80, fontSize: 15 },
 });

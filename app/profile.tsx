@@ -20,6 +20,24 @@ const BORDER = '#2a2a2a';
 const TEXT = '#f0f0f0';
 const SUBTEXT = '#888';
 
+const BADGE_HEIGHTS = [3, 4, 5, 6, 7, 8, 10, 11, 13, 14];
+
+function VolumeBadge({ rating }: { rating: number }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 5 }}>
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#FF3CAC' : '#444'} />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
+        {BADGE_HEIGHTS.map((h, i) => (
+          <View
+            key={i}
+            style={{ width: 3, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#FF3CAC' : '#333' }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const FAV_GAP = 3;
 const FAV_SLOTS = 5;
 const FAV_SLOT_SIZE = Math.floor(
@@ -288,11 +306,7 @@ export default function ProfileScreen() {
               <Text style={s.recentTitle} numberOfLines={1}>{album.title}</Text>
               <Text style={s.recentArtist} numberOfLines={1}>{album.artist}</Text>
             </View>
-            <View style={s.recentStars}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Text key={n} style={[s.miniStar, { color: n <= album.rating ? '#FF3CAC' : '#333' }]}>★</Text>
-              ))}
-            </View>
+            <VolumeBadge rating={album.rating} />
           </Pressable>
         ))}
       </View>
@@ -429,6 +443,4 @@ const s = StyleSheet.create({
   recentInfo: { flex: 1 },
   recentTitle: { color: TEXT, fontSize: 14, fontWeight: '600' },
   recentArtist: { color: SUBTEXT, fontSize: 12, marginTop: 2 },
-  recentStars: { flexDirection: 'row', gap: 1 },
-  miniStar: { fontSize: 11 },
 });

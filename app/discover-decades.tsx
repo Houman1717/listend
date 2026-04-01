@@ -168,21 +168,9 @@ async function doFetch(albums: CuratedAlbum[]): Promise<SpotifyAlbum[]> {
   for (const entry of albums) {
     const album = await searchOne(entry).catch(() => null);
     if (album) results.push(album);
-    if (albums.indexOf(entry) < albums.length - 1) await delay(100);
+    // No per-request delay — the global queue in SpotifyService paces all calls.
   }
   return results;
-}
-
-async function fetchWithRetry(label: string, albums: CuratedAlbum[]): Promise<SpotifyAlbum[]> {
-  try {
-    return await doFetch(albums);
-  } catch (e: any) {
-    if (String(e?.message).includes('429')) {
-      await delay(2000);
-      return await doFetch(albums);
-    }
-    throw e;
-  }
 }
 
 async function processQueue() {
@@ -196,8 +184,9 @@ async function processQueue() {
     }
     const decade = DECADES.find((d) => d.label === label);
     try {
-      cache[label] = decade ? await fetchWithRetry(label, decade.albums) : [];
-    } catch {
+      cache[label] = decade ? await doFetch(decade.albums) : [];
+    } catch (err: any) {
+      console.error(`[Decades] Failed to load "${label}":`, err?.message ?? err);
       cache[label] = [];
     }
     subs[label]?.forEach((cb) => cb());

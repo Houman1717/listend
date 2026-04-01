@@ -190,24 +190,26 @@ function FavSlot({
 function NavRow({
   icon,
   label,
-  count,
+  sub,
   onPress,
 }: {
   icon: React.ComponentProps<typeof FontAwesome>['name'];
   label: string;
-  count?: number;
+  sub: string;
   onPress: () => void;
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [s.navRow, { opacity: pressed ? 0.7 : 1 }]}
+      style={({ pressed }) => [s.navRow, { opacity: pressed ? 0.6 : 1 }]}
       onPress={onPress}>
-      <FontAwesome name={icon} size={15} color={SUBTEXT} style={s.navIcon} />
-      <Text style={s.navLabel}>{label}</Text>
-      {count !== undefined && (
-        <Text style={s.navCount}>{count}</Text>
-      )}
-      <FontAwesome name="chevron-right" size={12} color={SUBTEXT} />
+      <View style={s.navIconWrap}>
+        <FontAwesome name={icon} size={16} color="#FF3CAC" />
+      </View>
+      <View style={s.navRowText}>
+        <Text style={s.navLabel}>{label}</Text>
+        <Text style={s.navSub}>{sub}</Text>
+      </View>
+      <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
     </Pressable>
   );
 }
@@ -342,27 +344,28 @@ export default function ListendScreen() {
         <NavRow
           icon="music"
           label="My Listend"
-          count={loggedAlbums.length}
+          sub={`${loggedAlbums.length} albums`}
           onPress={() => router.push('/my-listend')}
         />
         <View style={s.navSeparator} />
         <NavRow
           icon="bookmark-o"
           label="Want to Listen"
-          count={wantToListen.length}
+          sub={`${wantToListen.length} saved`}
           onPress={() => router.push('/want-to-listen')}
         />
         <View style={s.navSeparator} />
         <NavRow
           icon="clock-o"
           label="Recent Listens"
+          sub="Last 20 logged"
           onPress={() => router.push('/recent-listens')}
         />
         <View style={s.navSeparator} />
         <NavRow
           icon="pencil"
           label="My Reviews"
-          count={reviewCount}
+          sub={`${reviewCount} reviews`}
           onPress={() => router.push('/my-reviews')}
         />
       </View>
@@ -419,18 +422,22 @@ const s = StyleSheet.create({
   navGroup: {
     marginTop: 24,
     marginHorizontal: 20,
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
+    backgroundColor: '#111',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#222',
     overflow: 'hidden',
   },
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 15,
+    paddingVertical: 14,
+    gap: 14,
   },
-  navIcon: { width: 20, textAlign: 'center', marginRight: 12 },
-  navLabel: { flex: 1, color: TEXT, fontSize: 15, fontWeight: '500' },
-  navCount: { color: SUBTEXT, fontSize: 15, marginRight: 8 },
-  navSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginLeft: 48 },
+  navIconWrap: { width: 28, alignItems: 'center' },
+  navRowText: { flex: 1, gap: 2 },
+  navLabel: { color: TEXT, fontSize: 16, fontWeight: '600' },
+  navSub: { color: SUBTEXT, fontSize: 13 },
+  navSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: '#222', marginLeft: 58 },
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -54,16 +54,25 @@ const cache: {
   friendsArt?:  Record<string, string>; // friend id → artworkUrl
 } = {};
 
-const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
+// Each fetcher uses the cheapest available endpoint for its content type:
+//   • Albums  → /browse/new-releases  (dedicated browse endpoint, not search)
+//   • Songs   → /browse/featured-playlists → /playlists/{id}/tracks
+//               (two browse/playlist calls instead of a search)
+//   • Artists → /search (no browse alternative for arbitrary artist lookup)
+//   • Friends → /search (no browse alternative for arbitrary album lookup)
 
 async function fetchAlbums(): Promise<SpotifyAlbum[]> {
+  // /browse/new-releases was deprecated by Spotify in Nov 2024 and returns 403
+  // for apps without Extended Quota Mode. Search with tag:new is the correct
+  // alternative for standard apps.
   const data = await spotifyGet('/search?q=tag:new&type=album&limit=10&market=US');
   return (data.albums?.items ?? []).map(albumFromSpotify);
 }
 
 async function fetchSongs(): Promise<SpotifyTrack[]> {
+  // /browse/featured-playlists was deprecated alongside /browse/new-releases.
+  // Search is the available alternative for standard apps.
   const data = await spotifyGet('/search?q=year:2025&type=track&limit=10&market=US');
   return (data.tracks?.items ?? []).map(trackFromSpotify);
 }
@@ -75,7 +84,7 @@ async function fetchArtists(): Promise<SpotifyArtist[]> {
     const data = await spotifyGet(`/search?q=${q}&type=artist&limit=1&market=US`).catch(() => null);
     const item = data?.artists?.items?.[0];
     results.push(item ? artistFromSpotify(item) : { id: p.id, name: p.name, genre: p.genre, artworkUrl: '' });
-    await delay(120);
+    // No per-request delay — the global queue in SpotifyService paces all calls.
   }
   return results;
 }
@@ -87,7 +96,7 @@ async function fetchFriendsArt(): Promise<Record<string, string>> {
     const data = await spotifyGet(`/search?q=${q}&type=album&limit=1&market=US`).catch(() => null);
     const item = data?.albums?.items?.[0];
     map[f.id] = item ? albumFromSpotify(item).artworkUrl : '';
-    await delay(120);
+    // No per-request delay — the global queue in SpotifyService paces all calls.
   }
   return map;
 }
@@ -235,43 +244,96 @@ export default function HomeScreen() {
   const [loadingArtists, setLoadingArtists] = useState(!cache.artists);
   const [loadingFriends, setLoadingFriends] = useState(!cache.friendsArt);
 
+  // ── Ref that gates below-fold loading to after the user first scrolls ──────
+  // Initialised to true when all secondary caches are already warm (returning
+  // visitor) so we never re-fire fetches that are already done.
+  const belowFoldTriggered = useRef(
+    cache.songs !== undefined &&
+    cache.artists !== undefined &&
+    cache.friendsArt !== undefined
+  );
+
+  // ── Phase 1: load only the first (above-fold) section on mount ──────────────
+  // One request to /browse/new-releases. Nothing else fires at startup.
   useEffect(() => {
-    // Each group is independent — kick them all off in parallel.
-
-    if (!cache.albums) {
-      fetchAlbums()
-        .then((data) => { cache.albums = data; setAlbums(data); })
-        .catch(() => { cache.albums = []; })
-        .finally(() => setLoadingAlbums(false));
-    }
-
-    if (!cache.songs) {
-      fetchSongs()
-        .then((data) => { cache.songs = data; setSongs(data); })
-        .catch(() => { cache.songs = []; })
-        .finally(() => setLoadingSongs(false));
-    }
-
-    if (!cache.artists) {
-      fetchArtists()
-        .then((data) => { cache.artists = data; setArtists(data); })
-        .catch(() => { cache.artists = []; })
-        .finally(() => setLoadingArtists(false));
-    }
-
-    if (!cache.friendsArt) {
-      fetchFriendsArt()
-        .then((data) => { cache.friendsArt = data; setFriendsArt(data); })
-        .catch(() => { cache.friendsArt = {}; })
-        .finally(() => setLoadingFriends(false));
-    }
+    if (cache.albums) return; // already cached — nothing to do
+    (async () => {
+      try {
+        const data = await fetchAlbums();
+        cache.albums = data;
+        setAlbums(data);
+      } catch (err: any) {
+        console.error('[Home] fetchAlbums failed:', err?.message ?? err);
+        cache.albums = [];
+      } finally {
+        setLoadingAlbums(false);
+      }
+    })();
   }, []);
+
+  // ── Phase 2: load below-fold sections once the user starts scrolling ────────
+  // Songs uses 2 browse/playlist calls; artists and friends use /search.
+  // They fire sequentially (songs first, then artists+friends together) so the
+  // global queue is not flooded all at once.
+  function triggerBelowFold() {
+    if (belowFoldTriggered.current) return;
+    belowFoldTriggered.current = true;
+
+    (async () => {
+      if (!cache.songs) {
+        try {
+          const data = await fetchSongs();
+          cache.songs = data;
+          setSongs(data);
+        } catch (err: any) {
+          console.error('[Home] fetchSongs failed:', err?.message ?? err);
+          cache.songs = [];
+        } finally {
+          setLoadingSongs(false);
+        }
+      }
+
+      // Artists and friends fire together; the global queue serialises them.
+      const tasks: Promise<void>[] = [];
+
+      if (!cache.artists) {
+        tasks.push(
+          fetchArtists()
+            .then((data) => { cache.artists = data; setArtists(data); })
+            .catch((err) => {
+              console.error('[Home] fetchArtists failed:', err?.message ?? err);
+              cache.artists = [];
+            })
+            .finally(() => setLoadingArtists(false)),
+        );
+      }
+
+      if (!cache.friendsArt) {
+        tasks.push(
+          fetchFriendsArt()
+            .then((data) => { cache.friendsArt = data; setFriendsArt(data); })
+            .catch((err) => {
+              console.error('[Home] fetchFriendsArt failed:', err?.message ?? err);
+              cache.friendsArt = {};
+            })
+            .finally(() => setLoadingFriends(false)),
+        );
+      }
+
+      await Promise.all(tasks);
+    })();
+  }
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}>
+      showsVerticalScrollIndicator={false}
+      scrollEventThrottle={200}
+      onScroll={(e: any) => {
+        // Any scroll beyond 50px means the user is moving toward below-fold content
+        if (e.nativeEvent.contentOffset.y > 50) triggerBelowFold();
+      }}>
 
       {/* 1 — Top Listend Albums This Week */}
       <Section title="Top Listend Albums This Week" loading={loadingAlbums}>
