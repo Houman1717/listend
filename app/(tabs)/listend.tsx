@@ -18,6 +18,129 @@ const BORDER = '#2a2a2a';
 const TEXT = '#f0f0f0';
 const SUBTEXT = '#888';
 
+// ─── Profile header ───────────────────────────────────────────────────────────
+
+function ProfileHeader({
+  albumCount,
+  thisYearCount,
+  avgRating,
+}: {
+  albumCount: number;
+  thisYearCount: number;
+  avgRating: string;
+}) {
+  return (
+    <View style={ph.container}>
+      {/* Avatar */}
+      <View style={ph.avatarWrap}>
+        <View style={ph.avatar}>
+          <Text style={ph.avatarInitial}>H</Text>
+        </View>
+      </View>
+
+      {/* Name + username */}
+      <Text style={ph.name}>Houman</Text>
+      <Text style={ph.username}>@houman</Text>
+
+      {/* Stats row */}
+      <View style={ph.statsRow}>
+        <View style={ph.statBox}>
+          <Text style={ph.statValue}>{albumCount}</Text>
+          <Text style={ph.statLabel}>Albums</Text>
+        </View>
+        <View style={ph.statDivider} />
+        <View style={ph.statBox}>
+          <Text style={ph.statValue}>{thisYearCount}</Text>
+          <Text style={ph.statLabel}>This Year</Text>
+        </View>
+        <View style={ph.statDivider} />
+        <View style={ph.statBox}>
+          <Text style={ph.statValue}>{avgRating}</Text>
+          <Text style={ph.statLabel}>Avg Rating</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const ph = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    paddingTop: 28,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#2a2a2a',
+  },
+  avatarWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: '#2a2a2a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FF3CAC',
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#1f1f1f',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    color: '#FF3CAC',
+    fontSize: 32,
+    fontWeight: '700',
+  },
+  name: {
+    color: TEXT,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  username: {
+    color: SUBTEXT,
+    fontSize: 14,
+    marginTop: 2,
+    marginBottom: 20,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    width: '100%',
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+  },
+  statValue: {
+    color: TEXT,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  statLabel: {
+    color: SUBTEXT,
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 32,
+    backgroundColor: BORDER,
+  },
+});
+
 const FAV_GAP = 3;
 const FAV_SLOTS = 5;
 const FAV_SLOT_SIZE = Math.floor(
@@ -97,6 +220,16 @@ export default function ListendScreen() {
 
   const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
 
+  // ── Profile stats ────────────────────────────────────────────────────────────
+  const currentYear = new Date().getFullYear();
+  const thisYearCount = loggedAlbums.filter((a) => {
+    const y = parseInt(a.dateLogged?.split(', ')[1] ?? '0', 10);
+    return y === currentYear;
+  }).length;
+  const avgRating = loggedAlbums.length > 0
+    ? (loggedAlbums.reduce((sum, a) => sum + a.rating, 0) / loggedAlbums.length).toFixed(1)
+    : '—';
+
   function confirmRemoveAlbum(id: string, title: string) {
     Alert.alert('Remove', `Remove "${title}" from Top 5?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -123,6 +256,13 @@ export default function ListendScreen() {
       style={s.container}
       contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}>
+
+      {/* Profile header */}
+      <ProfileHeader
+        albumCount={loggedAlbums.length}
+        thisYearCount={thisYearCount}
+        avgRating={avgRating}
+      />
 
       {/* Top 5 Albums */}
       <View style={s.section}>

@@ -1,192 +1,385 @@
-import { StyleSheet, View, Text, ScrollView, Image, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  FlatList,
+  Pressable,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useAlbums } from '@/context/AlbumsContext';
+import {
+  spotifyGet,
+  albumFromSpotify,
+  trackFromSpotify,
+  artistFromSpotify,
+  SpotifyAlbum,
+  SpotifyTrack,
+  SpotifyArtist,
+} from '@/context/SpotifyService';
+
+// ─── Placeholder definitions (text/metadata only — images fetched at runtime) ─
+
+const PLACEHOLDER_ARTISTS = [
+  { id: '1', name: 'Kendrick Lamar',     genre: 'Rap'       },
+  { id: '2', name: 'Taylor Swift',       genre: 'Pop'       },
+  { id: '3', name: 'SZA',                genre: 'R&B'       },
+  { id: '4', name: 'Tyler the Creator',  genre: 'Rap'       },
+  { id: '5', name: 'Billie Eilish',      genre: 'Pop'       },
+  { id: '6', name: 'Bad Bunny',          genre: 'Reggaeton' },
+  { id: '7', name: 'The Weeknd',         genre: 'R&B'       },
+  { id: '8', name: 'Chappell Roan',      genre: 'Pop'       },
+];
+
+const PLACEHOLDER_FRIENDS = [
+  { id: '1', user: 'alex_m',  album: 'After Hours',            artist: 'The Weeknd'     },
+  { id: '2', user: 'sara_k',  album: 'folklore',               artist: 'Taylor Swift'   },
+  { id: '3', user: 'jvines',  album: 'DAMN.',                  artist: 'Kendrick Lamar' },
+  { id: '4', user: 'priya_r', album: 'SOS',                    artist: 'SZA'            },
+  { id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk'      },
+  { id: '6', user: 'nadia_w', album: 'Currents',               artist: 'Tame Impala'    },
+];
+
+const AGO = ['2m ago', '14m ago', '1h ago', '2h ago', '3h ago', '5h ago'];
+
+// ─── Module-level cache — persists across navigations ─────────────────────────
+
+const cache: {
+  albums?:      SpotifyAlbum[];
+  songs?:       SpotifyTrack[];
+  artists?:     SpotifyArtist[];
+  friendsArt?:  Record<string, string>; // friend id → artworkUrl
+} = {};
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// ─── Fetchers ─────────────────────────────────────────────────────────────────
+
+async function fetchAlbums(): Promise<SpotifyAlbum[]> {
+  const data = await spotifyGet('/search?q=tag:new&type=album&limit=10&market=US');
+  return (data.albums?.items ?? []).map(albumFromSpotify);
+}
+
+async function fetchSongs(): Promise<SpotifyTrack[]> {
+  const data = await spotifyGet('/search?q=year:2025&type=track&limit=10&market=US');
+  return (data.tracks?.items ?? []).map(trackFromSpotify);
+}
+
+async function fetchArtists(): Promise<SpotifyArtist[]> {
+  const results: SpotifyArtist[] = [];
+  for (const p of PLACEHOLDER_ARTISTS) {
+    const q = encodeURIComponent(p.name);
+    const data = await spotifyGet(`/search?q=${q}&type=artist&limit=1&market=US`).catch(() => null);
+    const item = data?.artists?.items?.[0];
+    results.push(item ? artistFromSpotify(item) : { id: p.id, name: p.name, genre: p.genre, artworkUrl: '' });
+    await delay(120);
+  }
+  return results;
+}
+
+async function fetchFriendsArt(): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  for (const f of PLACEHOLDER_FRIENDS) {
+    const q = encodeURIComponent(`album:${f.album} artist:${f.artist}`);
+    const data = await spotifyGet(`/search?q=${q}&type=album&limit=1&market=US`).catch(() => null);
+    const item = data?.albums?.items?.[0];
+    map[f.id] = item ? albumFromSpotify(item).artworkUrl : '';
+    await delay(120);
+  }
+  return map;
+}
+
+// ─── Card sizes ───────────────────────────────────────────────────────────────
+
+const ALBUM_CARD  = 120;
+const ARTIST_CARD = 90;
+const SONG_CARD   = 120;
+const FRIEND_CARD = 140;
+const FALLBACK_BG = '#1e1e2e';
+
+// ─── Shared components ────────────────────────────────────────────────────────
+
+function Section({ title, loading, children }: { title: string; loading: boolean; children: React.ReactNode }) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  return (
+    <View style={s.section}>
+      <Text style={[s.sectionLabel, { color: colors.text }]}>{title}</Text>
+      {loading ? (
+        <View style={s.sectionLoader}>
+          <ActivityIndicator color="#FF3CAC" />
+        </View>
+      ) : children}
+    </View>
+  );
+}
+
+function ArtFallback({ size, radius, label }: { size: number; radius: number; label: string }) {
+  return (
+    <View style={[s.fallback, { width: size, height: size, borderRadius: radius }]}>
+      <Text style={[s.fallbackText, { fontSize: size * 0.32 }]}>{label[0]?.toUpperCase()}</Text>
+    </View>
+  );
+}
+
+// ─── Album card ───────────────────────────────────────────────────────────────
+
+function AlbumCard({ item, isDark }: { item: SpotifyAlbum; isDark: boolean }) {
+  return (
+    <Pressable style={({ pressed }) => [s.card, { width: ALBUM_CARD, opacity: pressed ? 0.7 : 1 }]}>
+      {item.artworkUrl ? (
+        <Image source={{ uri: item.artworkUrl }} style={{ width: ALBUM_CARD, height: ALBUM_CARD, borderRadius: 6 }} />
+      ) : (
+        <ArtFallback size={ALBUM_CARD} radius={6} label={item.title} />
+      )}
+      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666' }]} numberOfLines={1}>{item.artist}</Text>
+    </Pressable>
+  );
+}
+
+// ─── Song card ────────────────────────────────────────────────────────────────
+
+function SongCard({ item, index, isDark }: { item: SpotifyTrack; index: number; isDark: boolean }) {
+  return (
+    <Pressable style={({ pressed }) => [s.card, { width: SONG_CARD, opacity: pressed ? 0.7 : 1 }]}>
+      <View>
+        {item.artworkUrl ? (
+          <Image source={{ uri: item.artworkUrl }} style={{ width: SONG_CARD, height: SONG_CARD, borderRadius: 6 }} />
+        ) : (
+          <ArtFallback size={SONG_CARD} radius={6} label={item.title} />
+        )}
+        <View style={s.rankBadge}>
+          <Text style={s.rankText}>#{index + 1}</Text>
+        </View>
+      </View>
+      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666' }]} numberOfLines={1}>{item.artist}</Text>
+    </Pressable>
+  );
+}
+
+// ─── Artist card (circular) ───────────────────────────────────────────────────
+
+function ArtistCard({ item, isDark }: { item: SpotifyArtist & { genre: string }; isDark: boolean }) {
+  return (
+    <Pressable style={({ pressed }) => [s.card, { width: ARTIST_CARD, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
+      {item.artworkUrl ? (
+        <Image source={{ uri: item.artworkUrl }} style={{ width: ARTIST_CARD, height: ARTIST_CARD, borderRadius: ARTIST_CARD / 2 }} />
+      ) : (
+        <ArtFallback size={ARTIST_CARD} radius={ARTIST_CARD / 2} label={item.name} />
+      )}
+      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111', textAlign: 'center' }]} numberOfLines={1}>{item.name}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666', textAlign: 'center' }]} numberOfLines={1}>{item.genre}</Text>
+    </Pressable>
+  );
+}
+
+// ─── Friend card ──────────────────────────────────────────────────────────────
+
+function FriendCard({
+  friend,
+  artworkUrl,
+  ago,
+  isDark,
+  colors,
+}: {
+  friend: typeof PLACEHOLDER_FRIENDS[number];
+  artworkUrl: string;
+  ago: string;
+  isDark: boolean;
+  colors: any;
+}) {
+  const artSize = FRIEND_CARD - 24;
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        s.friendCard,
+        {
+          width: FRIEND_CARD,
+          backgroundColor: isDark ? '#1a1a1a' : '#fff',
+          borderColor: isDark ? '#2a2a2a' : '#e5e5e5',
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}>
+      {artworkUrl ? (
+        <Image source={{ uri: artworkUrl }} style={{ width: artSize, height: artSize, borderRadius: 6 }} />
+      ) : (
+        <ArtFallback size={artSize} radius={6} label={friend.album} />
+      )}
+      <Text style={[s.friendUser, { color: '#FF3CAC' }]} numberOfLines={1}>@{friend.user}</Text>
+      <Text style={[s.cardTitle,  { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{friend.album}</Text>
+      <Text style={[s.cardSub,    { color: isDark ? '#888' : '#666' }]} numberOfLines={1}>{friend.artist}</Text>
+      <Text style={[s.friendAgo,  { color: colors.subtext }]}>{ago}</Text>
+    </Pressable>
+  );
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
-  const { loggedAlbums } = useAlbums();
-  const router = useRouter();
 
-  const avgRating = loggedAlbums.length
-    ? (loggedAlbums.reduce((s, a) => s + a.rating, 0) / loggedAlbums.length).toFixed(1)
-    : '—';
+  const [albums,     setAlbums]     = useState<SpotifyAlbum[]>(cache.albums     ?? []);
+  const [songs,      setSongs]      = useState<SpotifyTrack[]>(cache.songs       ?? []);
+  const [artists,    setArtists]    = useState<SpotifyArtist[]>(cache.artists    ?? []);
+  const [friendsArt, setFriendsArt] = useState<Record<string, string>>(cache.friendsArt ?? {});
 
-  const now = new Date();
-  const currentMonth = now.toLocaleDateString('en-US', { month: 'short' });
-  const currentYear = now.getFullYear().toString();
-  const thisMonth = loggedAlbums.filter(
-    (a) => a.dateLogged.includes(currentMonth) && a.dateLogged.includes(currentYear)
-  ).length;
+  const [loadingAlbums,  setLoadingAlbums]  = useState(!cache.albums);
+  const [loadingSongs,   setLoadingSongs]   = useState(!cache.songs);
+  const [loadingArtists, setLoadingArtists] = useState(!cache.artists);
+  const [loadingFriends, setLoadingFriends] = useState(!cache.friendsArt);
 
-  const recent = loggedAlbums.slice(0, 6);
+  useEffect(() => {
+    // Each group is independent — kick them all off in parallel.
+
+    if (!cache.albums) {
+      fetchAlbums()
+        .then((data) => { cache.albums = data; setAlbums(data); })
+        .catch(() => { cache.albums = []; })
+        .finally(() => setLoadingAlbums(false));
+    }
+
+    if (!cache.songs) {
+      fetchSongs()
+        .then((data) => { cache.songs = data; setSongs(data); })
+        .catch(() => { cache.songs = []; })
+        .finally(() => setLoadingSongs(false));
+    }
+
+    if (!cache.artists) {
+      fetchArtists()
+        .then((data) => { cache.artists = data; setArtists(data); })
+        .catch(() => { cache.artists = []; })
+        .finally(() => setLoadingArtists(false));
+    }
+
+    if (!cache.friendsArt) {
+      fetchFriendsArt()
+        .then((data) => { cache.friendsArt = data; setFriendsArt(data); })
+        .catch(() => { cache.friendsArt = {}; })
+        .finally(() => setLoadingFriends(false));
+    }
+  }, []);
 
   return (
     <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={styles.container}
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}>
 
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.statNum, { color: colors.text }]}>{loggedAlbums.length}</Text>
-          <Text style={[styles.statLabel, { color: colors.subtext }]}>Albums</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.statNum, { color: '#FF3CAC' }]}>{avgRating}</Text>
-          <Text style={[styles.statLabel, { color: colors.subtext }]}>Avg Rating</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.statNum, { color: colors.text }]}>{thisMonth}</Text>
-          <Text style={[styles.statLabel, { color: colors.subtext }]}>This Month</Text>
-        </View>
-      </View>
+      {/* 1 — Top Listend Albums This Week */}
+      <Section title="Top Listend Albums This Week" loading={loadingAlbums}>
+        <FlatList
+          horizontal
+          data={albums}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.row}
+          renderItem={({ item }) => <AlbumCard item={item} isDark={isDark} />}
+        />
+      </Section>
 
-      {recent.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Recently Logged</Text>
-            <Pressable onPress={() => router.push('/(tabs)/listend')}>
-              <Text style={[styles.seeAll, { color: '#FF3CAC' }]}>See all</Text>
-            </Pressable>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.recentRow}>
-            {recent.map((album) => (
-              <Pressable
-                key={album.id}
-                style={styles.recentItem}
-                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}>
-                {album.artworkUrl ? (
-                  <Image source={{ uri: album.artworkUrl }} style={styles.recentArt} />
-                ) : (
-                  <View style={[styles.recentArt, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
-                    <Text style={styles.recentInitial}>{album.title.charAt(0)}</Text>
-                  </View>
-                )}
-                <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
-                  {album.title}
-                </Text>
-                <Text style={[styles.recentArtist, { color: colors.subtext }]} numberOfLines={1}>
-                  {album.artist}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+      {/* 2 — Friends Activity: Recently Listend */}
+      <Section title="Friends Activity: Recently Listend" loading={loadingFriends}>
+        <FlatList
+          horizontal
+          data={PLACEHOLDER_FRIENDS}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.row}
+          renderItem={({ item, index }) => (
+            <FriendCard
+              friend={item}
+              artworkUrl={friendsArt[item.id] ?? ''}
+              ago={AGO[index] ?? ''}
+              isDark={isDark}
+              colors={colors}
+            />
+          )}
+        />
+      </Section>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>What are you listening to?</Text>
-        <Pressable
-          style={[styles.logButton, { backgroundColor: '#FF3CAC' }]}
-          onPress={() => router.push('/(tabs)/search')}>
-          <Text style={styles.logButtonText}>+ Log an Album</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.discoverButton, { backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0' }]}
-          onPress={() => router.push('/(tabs)/discover')}>
-          <Text style={[styles.discoverButtonText, { color: colors.text }]}>Browse Top Charts</Text>
-        </Pressable>
-      </View>
+      {/* 3 — Top Listend Songs This Week */}
+      <Section title="Top Listend Songs This Week" loading={loadingSongs}>
+        <FlatList
+          horizontal
+          data={songs}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.row}
+          renderItem={({ item, index }) => <SongCard item={item} index={index} isDark={isDark} />}
+        />
+      </Section>
+
+      {/* 4 — Top Listend Artists This Week */}
+      <Section title="Top Listend Artists This Week" loading={loadingArtists}>
+        <FlatList
+          horizontal
+          data={artists}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.row}
+          renderItem={({ item }) => (
+            <ArtistCard
+              item={{ ...item, genre: PLACEHOLDER_ARTISTS.find((p) => p.name === item.name)?.genre ?? item.genre }}
+              isDark={isDark}
+            />
+          )}
+        />
+      </Section>
 
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-    paddingBottom: 40,
-    gap: 24,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    gap: 4,
-  },
-  statNum: {
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    fontSize: 12,
-  },
-  section: {
-    gap: 12,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  seeAll: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  recentRow: {
-    gap: 12,
-    paddingRight: 4,
-  },
-  recentItem: {
-    width: 90,
-  },
-  recentArt: {
-    width: 90,
-    height: 90,
-    borderRadius: 6,
-  },
-  recentInitial: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  recentTitle: {
-    marginTop: 6,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  recentArtist: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  logButton: {
-    height: 52,
-    borderRadius: 12,
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  content: { paddingTop: 20, paddingBottom: 48, gap: 32 },
+
+  section:      { gap: 12 },
+  sectionLabel: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3, paddingHorizontal: 16 },
+  sectionLoader:{ height: ALBUM_CARD, justifyContent: 'center', alignItems: 'center' },
+  row:          { paddingHorizontal: 16, gap: 12 },
+
+  card: { gap: 5 },
+
+  fallback: {
+    backgroundColor: FALLBACK_BG,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  fallbackText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '700',
   },
-  discoverButton: {
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+
+  cardTitle: { fontSize: 12, fontWeight: '600' },
+  cardSub:   { fontSize: 11 },
+
+  rankBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
   },
-  discoverButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
+  rankText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+
+  friendCard: {
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    gap: 5,
   },
+  friendUser: { fontSize: 11, fontWeight: '600', marginTop: 4 },
+  friendAgo:  { fontSize: 10, marginTop: 2 },
 });

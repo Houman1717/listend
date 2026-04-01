@@ -35,6 +35,16 @@ type ResultItem =
   | (SpotifyTrack  & { kind: 'song'   })
   | (SpotifyArtist & { kind: 'artist' });
 
+// A recent-search entry stores the full item so we can show artwork + subtitle.
+type RecentItem = {
+  kind: 'album' | 'song' | 'artist';
+  id: string;
+  title: string;   // album/song title, or artist name
+  subtitle: string; // artist · year  /  artist  /  genre
+  artworkUrl: string;
+  circular: boolean; // true for artists
+};
+
 const TABS: { key: SearchTab; label: string }[] = [
   { key: 'albums',  label: 'Albums'  },
   { key: 'songs',   label: 'Songs'   },
@@ -42,8 +52,8 @@ const TABS: { key: SearchTab; label: string }[] = [
   { key: 'users',   label: 'Users'   },
 ];
 
-const RECENT_KEY = '@listend:recentSearches_v1';
-const MAX_RECENT = 8;
+const RECENT_KEY = '@listend:recentItems_v2';
+const MAX_RECENT = 10;
 
 // ─── Spotify search helpers ───────────────────────────────────────────────────
 
@@ -54,27 +64,54 @@ async function searchSpotify(tab: SearchTab, query: string): Promise<ResultItem[
   const q = encodeURIComponent(query.trim());
   const data = await spotifyGet(`/search?q=${q}&type=${type}&limit=10`);
 
-  console.log('[searchSpotify] tab:', tab, 'albums:', data.albums?.items?.length, 'tracks:', data.tracks?.items?.length, 'artists:', data.artists?.items?.length);
-
   if (tab === 'albums') {
     const items = (data.albums?.items ?? []).filter(Boolean);
-    console.log('[searchSpotify] mapping', items.length, 'album items');
     return items.map((i: any) => ({ kind: 'album' as const, ...albumFromSpotify(i) }));
   }
   if (tab === 'songs') {
     const items = (data.tracks?.items ?? []).filter(Boolean);
-    console.log('[searchSpotify] mapping', items.length, 'track items');
     return items.map((i: any) => ({ kind: 'song' as const, ...trackFromSpotify(i) }));
   }
   const items = (data.artists?.items ?? []).filter(Boolean);
-  console.log('[searchSpotify] mapping', items.length, 'artist items');
   return items.map((i: any) => ({ kind: 'artist' as const, ...artistFromSpotify(i) }));
+}
+
+function resultToRecentItem(item: ResultItem): RecentItem {
+  if (item.kind === 'album') {
+    return {
+      kind: 'album',
+      id: item.id,
+      title: item.title,
+      subtitle: item.artist + (item.year ? ` · ${item.year}` : ''),
+      artworkUrl: item.artworkUrl,
+      circular: false,
+    };
+  }
+  if (item.kind === 'song') {
+    return {
+      kind: 'song',
+      id: item.id,
+      title: item.title,
+      subtitle: item.artist,
+      artworkUrl: item.artworkUrl,
+      circular: false,
+    };
+  }
+  // artist
+  return {
+    kind: 'artist',
+    id: item.id,
+    title: item.name,
+    subtitle: item.genre ?? '',
+    artworkUrl: item.artworkUrl,
+    circular: true,
+  };
 }
 
 // ─── Row components ───────────────────────────────────────────────────────────
 
 function AlbumRow({
-  item, isDark, colors, isBookmarked, onLog, onBookmark,
+  item, isDark, colors, isBookmarked, onLog, onBookmark, onSaveRecent,
 }: {
   item: SpotifyAlbum & { kind: 'album' };
   isDark: boolean;
@@ -82,6 +119,7 @@ function AlbumRow({
   isBookmarked: boolean;
   onLog: () => void;
   onBookmark: () => void;
+  onSaveRecent: () => void;
 }) {
   return (
     <View style={s.resultRow}>
@@ -90,7 +128,7 @@ function AlbumRow({
           s.resultMain,
           { backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
         ]}
-        onPress={onLog}>
+        onPress={() => { onSaveRecent(); onLog(); }}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
         ) : (
@@ -110,20 +148,23 @@ function AlbumRow({
           color={isBookmarked ? '#FF3CAC' : colors.subtext}
         />
       </Pressable>
-      <Pressable onPress={onLog} hitSlop={8} style={s.actionBtn}>
+      <Pressable onPress={() => { onSaveRecent(); onLog(); }} hitSlop={8} style={s.actionBtn}>
         <Text style={[s.plusIcon, { color: colors.tint }]}>+</Text>
       </Pressable>
     </View>
   );
 }
 
-function SongRow({ item, isDark, colors }: {
+function SongRow({ item, isDark, colors, onSaveRecent }: {
   item: SpotifyTrack & { kind: 'song' };
   isDark: boolean;
   colors: typeof Colors.light;
+  onSaveRecent: () => void;
 }) {
   return (
-    <View style={[s.resultRow, { paddingRight: 16 }]}>
+    <Pressable
+      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' }]}
+      onPress={onSaveRecent}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
@@ -137,17 +178,20 @@ function SongRow({ item, isDark, colors }: {
           <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>{item.artist}</Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
-function ArtistRow({ item, isDark, colors }: {
+function ArtistRow({ item, isDark, colors, onSaveRecent }: {
   item: SpotifyArtist & { kind: 'artist' };
   isDark: boolean;
   colors: typeof Colors.light;
+  onSaveRecent: () => void;
 }) {
   return (
-    <View style={[s.resultRow, { paddingRight: 16 }]}>
+    <Pressable
+      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' }]}
+      onPress={onSaveRecent}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={[s.artwork, { borderRadius: 26 }]} />
@@ -163,6 +207,56 @@ function ArtistRow({ item, isDark, colors }: {
           ) : null}
         </View>
       </View>
+    </Pressable>
+  );
+}
+
+// ─── Recent item row ──────────────────────────────────────────────────────────
+
+function RecentRow({
+  item,
+  isDark,
+  colors,
+  onPress,
+  onRemove,
+}: {
+  item: RecentItem;
+  isDark: boolean;
+  colors: typeof Colors.light;
+  onPress: () => void;
+  onRemove: () => void;
+}) {
+  const imgRadius = item.circular ? 26 : 4;
+  return (
+    <View style={[s.recentRow, { borderBottomColor: isDark ? '#222' : '#eee' }]}>
+      <Pressable
+        style={({ pressed }) => [s.recentMain, { backgroundColor: pressed ? (isDark ? '#1a1a1a' : '#f5f5f5') : 'transparent' }]}
+        onPress={onPress}>
+        {/* artwork */}
+        {item.artworkUrl ? (
+          <Image source={{ uri: item.artworkUrl }} style={[s.recentArt, { borderRadius: imgRadius }]} />
+        ) : (
+          <View style={[s.recentArt, { borderRadius: imgRadius, backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+            <Text style={[s.recentInitial, { color: colors.subtext }]}>{item.title.charAt(0).toUpperCase()}</Text>
+          </View>
+        )}
+        {/* text */}
+        <View style={s.recentText}>
+          <Text style={[s.recentTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+          {item.subtitle ? (
+            <Text style={[s.recentSub, { color: colors.subtext }]} numberOfLines={1}>{item.subtitle}</Text>
+          ) : null}
+        </View>
+        {/* kind pill */}
+        <View style={[s.kindPill, { backgroundColor: isDark ? '#2a2a2a' : '#e8e8e8' }]}>
+          <Text style={[s.kindLabel, { color: colors.subtext }]}>
+            {item.kind === 'album' ? 'Album' : item.kind === 'song' ? 'Song' : 'Artist'}
+          </Text>
+        </View>
+      </Pressable>
+      <Pressable onPress={onRemove} hitSlop={12} style={s.recentRemove}>
+        <FontAwesome name="times" size={13} color={colors.subtext} />
+      </Pressable>
     </View>
   );
 }
@@ -181,35 +275,34 @@ export default function SearchScreen() {
   const [results, setResults] = useState<ResultItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(RECENT_KEY)
-      .then((v) => { if (v) setRecentSearches(JSON.parse(v)); })
+      .then((v) => { if (v) setRecentItems(JSON.parse(v)); })
       .catch(() => {});
   }, []);
 
-  function saveRecentSearch(term: string) {
-    const trimmed = term.trim();
-    if (!trimmed) return;
-    setRecentSearches((prev) => {
-      const next = [trimmed, ...prev.filter((s) => s !== trimmed)].slice(0, MAX_RECENT);
+  function saveRecentItem(item: ResultItem) {
+    const entry = resultToRecentItem(item);
+    setRecentItems((prev) => {
+      const next = [entry, ...prev.filter((r) => !(r.kind === entry.kind && r.id === entry.id))].slice(0, MAX_RECENT);
       AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
   }
 
-  function removeRecentSearch(term: string) {
-    setRecentSearches((prev) => {
-      const next = prev.filter((s) => s !== term);
+  function removeRecentItem(kind: string, id: string) {
+    setRecentItems((prev) => {
+      const next = prev.filter((r) => !(r.kind === kind && r.id === id));
       AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
   }
 
-  function clearRecentSearches() {
-    setRecentSearches([]);
+  function clearRecentItems() {
+    setRecentItems([]);
     AsyncStorage.removeItem(RECENT_KEY).catch(() => {});
   }
 
@@ -219,7 +312,6 @@ export default function SearchScreen() {
     setSearched(true);
     try {
       const items = await searchSpotify(tab, text);
-      console.log('[Search] Setting', items.length, 'results, searched=true');
       setResults(items);
     } catch (e) {
       console.error('[Search] Error:', e);
@@ -238,7 +330,6 @@ export default function SearchScreen() {
   function handleSubmit() {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     search(query, activeTab);
-    saveRecentSearch(query);
   }
 
   function handleClear() { setQuery(''); setResults([]); setSearched(false); }
@@ -253,10 +344,12 @@ export default function SearchScreen() {
     }
   }
 
-  function handleRecentTap(term: string) {
-    setQuery(term);
-    search(term, activeTab);
-    saveRecentSearch(term);
+  function handleRecentTap(item: RecentItem) {
+    setQuery(item.title);
+    // Switch tab to match the kind
+    const tab: SearchTab = item.kind === 'album' ? 'albums' : item.kind === 'song' ? 'songs' : 'artists';
+    setActiveTab(tab);
+    search(item.title, tab);
   }
 
   function handleLogAlbum(item: SpotifyAlbum) {
@@ -342,24 +435,23 @@ export default function SearchScreen() {
 
       {/* Body */}
       {isEmpty ? (
-        recentSearches.length > 0 ? (
+        recentItems.length > 0 ? (
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.recentContainer}>
             <View style={s.recentHeader}>
-              <Text style={[s.recentTitle, { color: colors.text }]}>Recent</Text>
-              <Pressable onPress={clearRecentSearches} hitSlop={8}>
+              <Text style={[s.recentHeading, { color: colors.text }]}>Recent Searches</Text>
+              <Pressable onPress={clearRecentItems} hitSlop={8}>
                 <Text style={s.clearAll}>Clear All</Text>
               </Pressable>
             </View>
-            {recentSearches.map((term) => (
-              <View key={term} style={[s.recentRow, { borderBottomColor: isDark ? '#222' : '#eee' }]}>
-                <Pressable style={s.recentMain} onPress={() => handleRecentTap(term)}>
-                  <FontAwesome name="clock-o" size={14} color={colors.subtext} style={s.recentIcon} />
-                  <Text style={[s.recentTerm, { color: colors.text }]} numberOfLines={1}>{term}</Text>
-                </Pressable>
-                <Pressable onPress={() => removeRecentSearch(term)} hitSlop={12} style={s.recentRemove}>
-                  <FontAwesome name="times" size={13} color={colors.subtext} />
-                </Pressable>
-              </View>
+            {recentItems.map((item) => (
+              <RecentRow
+                key={item.kind + item.id}
+                item={item}
+                isDark={isDark}
+                colors={colors}
+                onPress={() => handleRecentTap(item)}
+                onRemove={() => removeRecentItem(item.kind, item.id)}
+              />
             ))}
           </ScrollView>
         ) : (
@@ -406,13 +498,28 @@ export default function SearchScreen() {
                   isBookmarked={!!wantToListen.find((a) => a.id === item.id)}
                   onLog={() => handleLogAlbum(item)}
                   onBookmark={() => handleToggleBookmark(item)}
+                  onSaveRecent={() => saveRecentItem(item)}
                 />
               );
             }
             if (item.kind === 'song') {
-              return <SongRow item={item} isDark={isDark} colors={colors} />;
+              return (
+                <SongRow
+                  item={item}
+                  isDark={isDark}
+                  colors={colors}
+                  onSaveRecent={() => saveRecentItem(item)}
+                />
+              );
             }
-            return <ArtistRow item={item} isDark={isDark} colors={colors} />;
+            return (
+              <ArtistRow
+                item={item}
+                isDark={isDark}
+                colors={colors}
+                onSaveRecent={() => saveRecentItem(item)}
+              />
+            );
           }}
         />
       )}
@@ -445,30 +552,46 @@ const s = StyleSheet.create({
   tabPillActive: { backgroundColor: '#FF3CAC' },
   tabLabel: { fontSize: 14, fontWeight: '600' },
 
+  // ── Recent searches ─────────────────────────────────────────────────────────
   recentContainer: { paddingBottom: 40 },
   recentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 20,
+    paddingBottom: 10,
   },
-  recentTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
+  recentHeading: { fontSize: 17, fontWeight: '700' },
   clearAll: { fontSize: 13, color: '#FF3CAC' },
-  recentRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth },
+
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   recentMain: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 10,
     gap: 12,
   },
-  recentIcon: { width: 16, textAlign: 'center' },
-  recentTerm: { fontSize: 15 },
-  recentRemove: { paddingHorizontal: 16, paddingVertical: 13 },
+  recentArt: { width: 48, height: 48, flexShrink: 0 },
+  recentInitial: { fontSize: 18, fontWeight: '700' },
+  recentText: { flex: 1, gap: 2 },
+  recentTitle: { fontSize: 15, fontWeight: '600' },
+  recentSub: { fontSize: 13 },
+  kindPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  kindLabel: { fontSize: 11, fontWeight: '600' },
+  recentRemove: { paddingHorizontal: 16, paddingVertical: 14 },
 
+  // ── Empty state ──────────────────────────────────────────────────────────────
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -482,6 +605,7 @@ const s = StyleSheet.create({
 
   spinner: { marginTop: 48 },
 
+  // ── Result rows ──────────────────────────────────────────────────────────────
   resultRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 12 },
   resultMain: {
     flex: 1,
