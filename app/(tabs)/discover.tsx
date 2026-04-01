@@ -4,49 +4,77 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 
-type CategoryRow = {
+type NavItem = {
   id: string;
   label: string;
   sub: string;
   icon: React.ComponentProps<typeof FontAwesome>['name'];
-  params: { pathname: string; params?: Record<string, string> };
+  pathname: string;
 };
 
-const CATEGORIES: CategoryRow[] = [
+const NAV_ITEMS: NavItem[] = [
   {
     id: 'new-releases',
     label: 'New Releases',
-    sub: 'Latest drops across all genres',
-    icon: 'bolt',
-    params: { pathname: '/discover-results', params: { category: 'new-releases', title: 'New Releases' } },
+    sub: 'Latest drops',
+    icon: 'star',
+    pathname: '/discover-new-releases',
   },
   {
-    id: 'popular',
-    label: 'Popular Albums',
-    sub: 'Charts and trending right now',
+    id: 'coming-soon',
+    label: 'Coming Soon',
+    sub: 'Coming soon to streaming',
+    icon: 'calendar',
+    pathname: '/discover-coming-soon',
+  },
+  {
+    id: 'top-rated',
+    label: 'Top Rated Albums',
+    sub: 'Critically acclaimed albums',
+    icon: 'trophy',
+    pathname: '/discover-top-rated',
+  },
+  {
+    id: 'most-popular',
+    label: 'Most Popular Albums',
+    sub: 'Most streamed right now',
     icon: 'fire',
-    params: { pathname: '/discover-results', params: { category: 'popular', title: 'Popular Albums' } },
+    pathname: '/discover-most-popular',
+  },
+  {
+    id: 'recommended',
+    label: 'Recommended For You',
+    sub: 'Based on your logged albums',
+    icon: 'thumbs-up',
+    pathname: '/discover-recommended',
+  },
+  {
+    id: 'top-artists',
+    label: 'Top Artists',
+    sub: 'The most acclaimed artists',
+    icon: 'microphone',
+    pathname: '/discover-top-artists',
+  },
+  {
+    id: 'top-songs',
+    label: 'Top Songs',
+    sub: 'The most acclaimed tracks',
+    icon: 'headphones',
+    pathname: '/discover-top-songs',
   },
   {
     id: 'genres',
     label: 'Genres',
     sub: 'Rap, Rock, R&B, Afrobeats and more',
     icon: 'music',
-    params: { pathname: '/discover-genres' },
-  },
-  {
-    id: 'coming-soon',
-    label: 'Coming Soon',
-    sub: 'Anticipated and upcoming albums',
-    icon: 'calendar',
-    params: { pathname: '/discover-results', params: { category: 'coming-soon', title: 'Coming Soon' } },
+    pathname: '/discover-genres',
   },
   {
     id: 'by-decade',
     label: 'By Decade',
-    sub: '1960s through 2020s',
+    sub: '1950s through 2020s',
     icon: 'clock-o',
-    params: { pathname: '/discover-decades' },
+    pathname: '/discover-decades',
   },
 ];
 
@@ -66,25 +94,22 @@ export default function DiscoverScreen() {
       <Text style={[s.subheading, { color: colors.subtext }]}>Browse music by category</Text>
 
       <View style={[s.group, { backgroundColor: isDark ? '#111' : '#fff', borderColor: isDark ? '#222' : '#e5e5e5' }]}>
-        {CATEGORIES.map((cat, i) => (
-          <View key={cat.id}>
+        {NAV_ITEMS.map((item, i) => (
+          <View key={item.id}>
             <Pressable
-              style={({ pressed }) => [
-                s.row,
-                { opacity: pressed ? 0.6 : 1 },
-              ]}
-              onPress={() => router.push(cat.params as any)}>
+              style={({ pressed }) => [s.row, { opacity: pressed ? 0.6 : 1 }]}
+              onPress={() => router.push(item.pathname as any)}>
               <View style={s.iconWrap}>
-                <FontAwesome name={cat.icon} size={16} color="#FF3CAC" />
+                <FontAwesome name={item.icon} size={16} color="#FF3CAC" />
               </View>
               <View style={s.rowText}>
-                <Text style={[s.rowLabel, { color: colors.text }]}>{cat.label}</Text>
-                <Text style={[s.rowSub, { color: colors.subtext }]} numberOfLines={1}>{cat.sub}</Text>
+                <Text style={[s.rowLabel, { color: colors.text }]}>{item.label}</Text>
+                <Text style={[s.rowSub, { color: colors.subtext }]} numberOfLines={1}>{item.sub}</Text>
               </View>
               <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
             </Pressable>
-            {i < CATEGORIES.length - 1 && (
-              <View style={[s.divider, { backgroundColor: isDark ? '#222' : '#f0f0f0', marginLeft: 58 }]} />
+            {i < NAV_ITEMS.length - 1 && (
+              <View style={[s.divider, { backgroundColor: isDark ? '#222' : '#f0f0f0' }]} />
             )}
           </View>
         ))}
@@ -97,7 +122,7 @@ export default function DiscoverScreen() {
 const s = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 48, paddingTop: 24 },
 
-  heading: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
+  heading:    { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
   subheading: { fontSize: 14, marginTop: 4, marginBottom: 24 },
 
   group: {
@@ -112,12 +137,9 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     gap: 14,
   },
-  iconWrap: {
-    width: 28,
-    alignItems: 'center',
-  },
-  rowText: { flex: 1, gap: 2 },
+  iconWrap: { width: 28, alignItems: 'center' },
+  rowText:  { flex: 1, gap: 2 },
   rowLabel: { fontSize: 16, fontWeight: '600' },
-  rowSub: { fontSize: 13 },
-  divider: { height: StyleSheet.hairlineWidth },
+  rowSub:   { fontSize: 13 },
+  divider:  { height: StyleSheet.hairlineWidth, marginLeft: 58 },
 });
