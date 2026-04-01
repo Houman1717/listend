@@ -15,128 +15,130 @@ import { spotifyGet, albumFromSpotify, SpotifyAlbum } from '@/context/SpotifySer
 import { useAlbums, PendingAlbum } from '@/context/AlbumsContext';
 
 // ─── Genre list ───────────────────────────────────────────────────────────────
-// Each genre has exactly 10 curated Spotify album IDs fetched via /v1/albums?ids=
-// IDs verified from open.spotify.com album URLs.
+// Curated top-10 albums per genre by name + artist.
+// At runtime each is resolved via a single Spotify search call.
 
-const GENRES = [
+type CuratedAlbum = { album: string; artist: string };
+
+const GENRES: { label: string; albums: CuratedAlbum[] }[] = [
   {
     label: 'Rap',
-    albumIds: [
-      '0NGwRz0semIXUCSxR0uffa', // Drake – Take Care
-      '4eLPsYPBmXABThSJ821sqY', // Kendrick Lamar – DAMN.
-      '7ycBtnsMtyVbbwTfJwRjSP', // Kendrick Lamar – To Pimp a Butterfly
-      '41GuZcammIkupMPKH2OJ6I', // Travis Scott – ASTROWORLD
-      '0UMMIkurRUmkruZ3KGBLtG', // J. Cole – 2014 Forest Hills Drive
-      '20r762YmB5HeofjMCiPMLv', // Kanye West – My Beautiful Dark Twisted Fantasy
-      '2NaYh6NEBGVAV9la4vKJSK', // JAY-Z – The Blueprint
-      '07bIdDDe3I3hhWpxU6tuBp', // Pusha T – DAYTONA
-      '0cszZwl0JRKHBdcFLfNX3T', // Nas – Illmatic
-      '6PBZN8cbwkqm1ERj2BGXJ1', // Kendrick Lamar – good kid, m.A.A.d city
+    albums: [
+      { album: 'DAMN.',                              artist: 'Kendrick Lamar'  },
+      { album: 'Take Care',                          artist: 'Drake'           },
+      { album: 'To Pimp a Butterfly',                artist: 'Kendrick Lamar'  },
+      { album: 'ASTROWORLD',                         artist: 'Travis Scott'    },
+      { album: '2014 Forest Hills Drive',            artist: 'J. Cole'         },
+      { album: 'My Beautiful Dark Twisted Fantasy',  artist: 'Kanye West'      },
+      { album: 'The Blueprint',                      artist: 'JAY-Z'           },
+      { album: 'Illmatic',                           artist: 'Nas'             },
+      { album: 'good kid, m.A.A.d city',             artist: 'Kendrick Lamar'  },
+      { album: 'The Marshall Mathers LP',            artist: 'Eminem'          },
     ],
   },
   {
     label: 'R&B',
-    albumIds: [
-      '4yP0hdKOZPNshxUOjY0cZj', // The Weeknd – After Hours
-      '07w0rG5TETcyihsEIZR3qG', // SZA – SOS
-      '7dK54iZuOxXFarGhXwEXfF', // Beyoncé – Lemonade
-      '2ODvWsOgouMbaA5xf0RkJe', // The Weeknd – Starboy
-      '3xybjP7r2VsWzwvDQipdM0', // Daniel Caesar – Freudian
-      '0PHMNbcgHfzSUALlfk7wGg', // Brent Faiyaz – WASTELAND
-      '4lPqFAvgmG97pxyxQsyCQx', // Summer Walker – Still Over It
-      '6kf46HbnYCZzP6rjvQHYzg', // Khalid – American Teen
-      '392p3shh2jkxUxY2VHvlH8', // Frank Ocean – channel ORANGE
-      '4IwODpNZKFYkHWXSeWMGmP', // H.E.R. – Back of My Mind
+    albums: [
+      { album: 'After Hours',                        artist: 'The Weeknd'      },
+      { album: 'SOS',                                artist: 'SZA'             },
+      { album: 'Lemonade',                           artist: 'Beyoncé'         },
+      { album: 'channel ORANGE',                     artist: 'Frank Ocean'     },
+      { album: 'Freudian',                           artist: 'Daniel Caesar'   },
+      { album: 'WASTELAND',                          artist: 'Brent Faiyaz'    },
+      { album: 'Still Over It',                      artist: 'Summer Walker'   },
+      { album: 'Starboy',                            artist: 'The Weeknd'      },
+      { album: 'American Teen',                      artist: 'Khalid'          },
+      { album: 'Back of My Mind',                    artist: 'H.E.R.'          },
     ],
   },
   {
     label: 'Pop',
-    albumIds: [
-      '2fenSS68JI1h4Fo296JfGr', // Taylor Swift – folklore
-      '151w1FgRZfnKZA9FEcg9Z3', // Taylor Swift – Midnights
-      '21jF5jlMtzo94wbxmJ18aa', // Adele – 30
-      '7fJJK56U9fHixgO0HQkhtI', // Dua Lipa – Future Nostalgia
-      '5r36AJ6VOJtp00oxSkBZ5h', // Harry Styles – Harry's House
-      '6s84u2TUpR3wdUv4NgKA2j', // Olivia Rodrigo – SOUR
-      '0S0KGZnfBGSIssfF54WSJh', // Billie Eilish – WHEN WE ALL FALL ASLEEP…
-      '3T4tUhGYeRNVUGevb0wThu', // Ed Sheeran – ÷ (Deluxe)
-      '2fYhqwDWXjbpjaIJPEfKFw', // Ariana Grande – thank u, next
-      '4g1ZRSobMefqF6nelkgibi', // Post Malone – Hollywood's Bleeding
+    albums: [
+      { album: 'folklore',                           artist: 'Taylor Swift'    },
+      { album: 'Midnights',                          artist: 'Taylor Swift'    },
+      { album: '30',                                 artist: 'Adele'           },
+      { album: 'Future Nostalgia',                   artist: 'Dua Lipa'        },
+      { album: "Harry's House",                      artist: 'Harry Styles'    },
+      { album: 'SOUR',                               artist: 'Olivia Rodrigo'  },
+      { album: 'When We All Fall Asleep Where Do We Go', artist: 'Billie Eilish' },
+      { album: 'Divide',                             artist: 'Ed Sheeran'      },
+      { album: 'thank u, next',                      artist: 'Ariana Grande'   },
+      { album: "Hollywood's Bleeding",               artist: 'Post Malone'     },
     ],
   },
   {
     label: 'Rock',
-    albumIds: [
-      '78bpIziExqiI9qztvNFlQu', // Arctic Monkeys – AM
-      '79dL7FLiJFOO0EoehUHQBv', // Tame Impala – Currents
-      '6dVIqQ8qmQ5GBnJ9shOYGE', // Radiohead – OK Computer
-      '2k8KgmDp9oHrmu0MIj4XDE', // The Strokes – Is This It
-      '5DLhV9yOvZ7IxVmljMXtNm', // The Black Keys – El Camino
-      '5lnQLEUiVDkLbFJHXHQu9m', // Foo Fighters – Wasting Light
-      '7xl50xr9NDkd3i2kBbzsNZ', // Red Hot Chili Peppers – Stadium Arcadium
-      '5T5NM01392dvvd4EhGrCnj', // Queens of the Stone Age – …Like Clockwork
-      '1AP6uGYHdakRgwuWQsP5pK', // Muse – Origin of Symmetry
-      '50Zz8CkIhATKUlQMbHO3k1', // Arctic Monkeys – Whatever People Say I Am…
+    albums: [
+      { album: 'AM',                                 artist: 'Arctic Monkeys'            },
+      { album: 'OK Computer',                        artist: 'Radiohead'                 },
+      { album: 'Is This It',                         artist: 'The Strokes'               },
+      { album: 'Currents',                           artist: 'Tame Impala'               },
+      { album: 'El Camino',                          artist: 'The Black Keys'            },
+      { album: 'Wasting Light',                      artist: 'Foo Fighters'              },
+      { album: 'Stadium Arcadium',                   artist: 'Red Hot Chili Peppers'     },
+      { album: '...Like Clockwork',                  artist: 'Queens of the Stone Age'   },
+      { album: 'Origin of Symmetry',                 artist: 'Muse'                      },
+      { album: "Whatever People Say I Am, That's What I'm Not", artist: 'Arctic Monkeys' },
     ],
   },
   {
     label: 'House',
-    albumIds: [
-      '4m2880jivSbbyEGAKfITCa', // Daft Punk – Random Access Memories
-      '2noRn2Aes5aoNVsU6iWThc', // Daft Punk – Discovery
-      '1ZFGRj11NnZHos8DUbbpF1', // Disclosure – Settle
-      '7qzDkshVM3auVXjbZNdJB0', // Disclosure – Caracal
-      '04Duapg2mNlVykd895xcfZ', // Jamie xx – In Colour
-      '6x2gG7Pw1g54ZjQWjiAVCK', // Four Tet – There Is Love In You
-      '3gkW0gOyovtdcscDX6WZ6O', // Caribou – Swim
-      '48zisMeiXniWLzOQghbPqS', // Calvin Harris – Motion
-      '5q2iMctlDvEMYVIawF6Vop', // Fred again.. – Actual Life 3
-      '5m1RkwKeU7MV0Ni6PH2lPy', // Bonobo – Black Sands
+    albums: [
+      { album: 'Random Access Memories',             artist: 'Daft Punk'       },
+      { album: 'Discovery',                          artist: 'Daft Punk'       },
+      { album: 'Settle',                             artist: 'Disclosure'      },
+      { album: 'Caracal',                            artist: 'Disclosure'      },
+      { album: 'In Colour',                          artist: 'Jamie xx'        },
+      { album: 'There Is Love In You',               artist: 'Four Tet'        },
+      { album: 'Swim',                               artist: 'Caribou'         },
+      { album: 'Motion',                             artist: 'Calvin Harris'   },
+      { album: 'Actual Life 3',                      artist: 'Fred again..'    },
+      { album: 'Black Sands',                        artist: 'Bonobo'          },
     ],
   },
   {
     label: 'Jazz',
-    albumIds: [
-      '1weenld61qoidwYuZ1GESA', // Miles Davis – Kind of Blue
-      '7Eoz7hJvaX1eFkbpQxC5PA', // John Coltrane – A Love Supreme
-      '0nTTEAhCZsbbeplyDMIFuA', // Dave Brubeck Quartet – Time Out
-      '5fmIolILp5NAtNYiRPjhzA', // Herbie Hancock – Head Hunters
-      '5oGct1rifFn4mIPCL2dH0L', // Bill Evans Trio – Waltz for Debby
-      '7pojWP7x9uEFSJgw765khA', // Charles Mingus – Mingus Ah Um
-      '5JJ779nrbHx0KB2lBrMMa4', // Chet Baker – Chet Baker Sings
-      '2dtjLAwt7Cq763h6AupyPZ', // Sonny Rollins – Saxophone Colossus
-      '56WqCnM5giX57Jr3aAN2aK', // Miles Davis – Sketches of Spain
-      '5VTlqV8lZH3YspQ1cDcjrL', // Thelonious Monk – Monk's Dream
+    albums: [
+      { album: 'Kind of Blue',                       artist: 'Miles Davis'              },
+      { album: 'A Love Supreme',                     artist: 'John Coltrane'            },
+      { album: 'Time Out',                           artist: 'Dave Brubeck Quartet'     },
+      { album: 'Head Hunters',                       artist: 'Herbie Hancock'           },
+      { album: 'Waltz for Debby',                    artist: 'Bill Evans'               },
+      { album: 'Mingus Ah Um',                       artist: 'Charles Mingus'           },
+      { album: 'Chet Baker Sings',                   artist: 'Chet Baker'               },
+      { album: 'Saxophone Colossus',                 artist: 'Sonny Rollins'            },
+      { album: 'Sketches of Spain',                  artist: 'Miles Davis'              },
+      { album: "Monk's Dream",                       artist: 'Thelonious Monk'          },
     ],
   },
   {
     label: 'Soul',
-    albumIds: [
-      '2v6ANhWhZBUKkg6pJJBs3B', // Marvin Gaye – What's Going On
-      '097eYvf9NKjFnv4xA9s2oV', // Amy Winehouse – Back to Black
-      '1BZoqf8Zje5nGdwZhOjAtD', // Ms. Lauryn Hill – The Miseducation of Lauryn Hill
-      '6YUCc2RiXcEKS9ibuZxjt0', // Stevie Wonder – Songs in the Key of Life
-      '2lO9yuuIDgBpSJzxTh3ai8', // D'Angelo – Voodoo
-      '3Yko2SxDk4hc6fncIBQlcM', // Solange – A Seat at the Table
-      '3qr4pTBWEU1SVf01j6RAx3', // Erykah Badu – Baduizm
-      '4W6kVnBPgcW8zDYXbRHh2J', // John Legend – Get Lifted
-      '5qUlPoDmNxCSzqVx81RDLJ', // Alicia Keys – Songs in A Minor
-      '4svLfrPPk2npPVuI4kXPYg', // Leon Bridges – Coming Home
+    albums: [
+      { album: "What's Going On",                    artist: 'Marvin Gaye'              },
+      { album: 'Back to Black',                      artist: 'Amy Winehouse'            },
+      { album: 'The Miseducation of Lauryn Hill',    artist: 'Ms. Lauryn Hill'          },
+      { album: 'Songs in the Key of Life',           artist: 'Stevie Wonder'            },
+      { album: 'Voodoo',                             artist: "D'Angelo"                 },
+      { album: 'A Seat at the Table',                artist: 'Solange'                  },
+      { album: 'Baduizm',                            artist: 'Erykah Badu'              },
+      { album: 'Get Lifted',                         artist: 'John Legend'              },
+      { album: 'Songs in A Minor',                   artist: 'Alicia Keys'              },
+      { album: 'Coming Home',                        artist: 'Leon Bridges'             },
     ],
   },
   {
     label: 'Country',
-    albumIds: [
-      '6JlCkqkqobGirPsaleJpFr', // Morgan Wallen – Dangerous: The Double Album
-      '7f6xPqyaolTiziKf5R5Z0c', // Kacey Musgraves – Golden Hour
-      '7lxHnls3yQNl8B9bILmHj7', // Chris Stapleton – Traveller
-      '7IouDrXPdAZwT1NzVV3vef', // Zach Bryan – American Heartbreak
-      '1lhNch5NkOONvFhRPh8qaj', // Luke Combs – This One's for You
-      '35LcGAeeMwVeIJrDpB3Gkz', // Tyler Childers – Purgatory
-      '4makbOuLd5SUdyHMaNM1Ag', // Sturgill Simpson – Metamodern Sounds in Country Music
-      '2wDKBKgco7u3V1IWEK5V8l', // Brandi Carlile – By the Way, I Forgive You
-      '0f9YXFsnwFxaQbhksDKQZ9', // Jason Isbell – Southeastern
-      '53Oa5Bu0UTU8o8qCTaHKoz', // Luke Combs – This One's for You Too (Deluxe)
+    albums: [
+      { album: 'Dangerous: The Double Album',        artist: 'Morgan Wallen'            },
+      { album: 'Golden Hour',                        artist: 'Kacey Musgraves'          },
+      { album: 'Traveller',                          artist: 'Chris Stapleton'          },
+      { album: 'American Heartbreak',                artist: 'Zach Bryan'               },
+      { album: "This One's for You",                 artist: 'Luke Combs'               },
+      { album: 'Purgatory',                          artist: 'Tyler Childers'           },
+      { album: 'Metamodern Sounds in Country Music', artist: 'Sturgill Simpson'         },
+      { album: 'By the Way, I Forgive You',          artist: 'Brandi Carlile'           },
+      { album: 'Southeastern',                       artist: 'Jason Isbell'             },
+      { album: 'Stoned Side of the Mtn',             artist: 'Tyler Childers'           },
     ],
   },
 ];
@@ -157,22 +159,31 @@ function subscribe(label: string, cb: () => void): () => void {
   return () => subs[label]?.delete(cb);
 }
 
-async function doFetch(label: string, albumIds: string[]): Promise<SpotifyAlbum[]> {
-  // Single batch call — /v1/albums accepts up to 20 IDs comma-separated.
-  const ids = albumIds.join(',');
-  const data = await spotifyGet(`/albums?ids=${ids}&market=US`);
-  return (data.albums ?? [])
-    .filter((item: any) => item != null)
-    .map(albumFromSpotify);
+// Search Spotify for a single album by name + artist, return the best match.
+async function searchOne(entry: CuratedAlbum): Promise<SpotifyAlbum | null> {
+  const q = encodeURIComponent(`album:${entry.album} artist:${entry.artist}`);
+  const data = await spotifyGet(`/search?q=${q}&type=album&limit=1&market=US`);
+  const item = data.albums?.items?.[0];
+  return item ? albumFromSpotify(item) : null;
 }
 
-async function fetchWithRetry(label: string, albumIds: string[]): Promise<SpotifyAlbum[]> {
+async function doFetch(albums: CuratedAlbum[]): Promise<SpotifyAlbum[]> {
+  const results: SpotifyAlbum[] = [];
+  for (const entry of albums) {
+    const album = await searchOne(entry).catch(() => null);
+    if (album) results.push(album);
+    if (albums.indexOf(entry) < albums.length - 1) await delay(100);
+  }
+  return results;
+}
+
+async function fetchWithRetry(label: string, albums: CuratedAlbum[]): Promise<SpotifyAlbum[]> {
   try {
-    return await doFetch(label, albumIds);
+    return await doFetch(albums);
   } catch (e: any) {
     if (String(e?.message).includes('429')) {
       await delay(2000);
-      return await doFetch(label, albumIds);
+      return await doFetch(albums);
     }
     throw e;
   }
@@ -189,7 +200,7 @@ async function processQueue() {
     }
     const genre = GENRES.find((g) => g.label === label);
     try {
-      cache[label] = genre ? await fetchWithRetry(label, genre.albumIds) : [];
+      cache[label] = genre ? await fetchWithRetry(label, genre.albums) : [];
     } catch {
       cache[label] = [];
     }
@@ -237,17 +248,15 @@ function AlbumCard({
 
 // ─── Genre section ────────────────────────────────────────────────────────────
 // Only mounts when FlatList scrolls it into view.
-// On mount, enqueues its batch fetch — the module-level queue keeps them sequential.
+// Enqueues its fetch on mount — the module-level queue keeps genres sequential.
 
 function GenreSection({
   label,
-  albumIds,
   onAlbumPress,
   colors,
   isDark,
 }: {
   label: string;
-  albumIds: string[];
   onAlbumPress: (album: SpotifyAlbum) => void;
   colors: any;
   isDark: boolean;
@@ -331,7 +340,6 @@ export default function DiscoverGenresScreen() {
         renderItem={({ item }) => (
           <GenreSection
             label={item.label}
-            albumIds={item.albumIds}
             onAlbumPress={handleAlbumPress}
             colors={colors}
             isDark={isDark}

@@ -35,21 +35,45 @@ async function getToken(): Promise<string> {
 
 // ─── Authenticated GET ────────────────────────────────────────────────────────
 
-export async function spotifyGet<T = any>(path: string): Promise<T> {
-  const token = await getToken();
-  console.log('[Spotify] GET', path);
+async function spotifyGetOnce<T = any>(path: string, token: string): Promise<{ status: number; json?: T; body?: string }> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   console.log('[Spotify] Response status:', res.status);
   if (!res.ok) {
     const body = await res.text();
-    console.error('[Spotify] Error body:', body);
-    throw new Error(`Spotify API error: ${res.status}`);
+    return { status: res.status, body };
   }
   const json = await res.json();
-  console.log('[Spotify] Response keys:', Object.keys(json));
-  return json as T;
+  return { status: res.status, json: json as T };
+}
+
+export async function spotifyGet<T = any>(path: string): Promise<T> {
+  console.log('[Spotify] GET', path);
+  const token = await getToken();
+  const result = await spotifyGetOnce<T>(path, token);
+
+  if (result.status === 401 || result.status === 403) {
+    // Token was rejected — invalidate the cache and fetch a fresh one, then retry once.
+    console.warn(`[Spotify] ${result.status} received, refreshing token and retrying…`);
+    cachedToken = null;
+    tokenExpiry = 0;
+    const freshToken = await getToken();
+    const retry = await spotifyGetOnce<T>(path, freshToken);
+    if (!retry.json) {
+      console.error('[Spotify] Error body:', retry.body);
+      throw new Error(`Spotify API error: ${retry.status}`);
+    }
+    console.log('[Spotify] Response keys:', Object.keys(retry.json as object));
+    return retry.json;
+  }
+
+  if (!result.json) {
+    console.error('[Spotify] Error body:', result.body);
+    throw new Error(`Spotify API error: ${result.status}`);
+  }
+  console.log('[Spotify] Response keys:', Object.keys(result.json as object));
+  return result.json;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
