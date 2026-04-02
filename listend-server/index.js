@@ -6,7 +6,7 @@ const supabase = require('./db');
 const { runRefresh } = require('./refresh');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 // Allow any origin — the client is a mobile app, not a browser page
 app.use((req, res, next) => {
