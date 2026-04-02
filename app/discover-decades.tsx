@@ -11,190 +11,39 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { spotifyGet, albumFromSpotify, SpotifyAlbum } from '@/context/SpotifyService';
+import { SpotifyAlbum } from '@/context/SpotifyService';
 import { useAlbums, PendingAlbum } from '@/context/AlbumsContext';
 
-// ─── Decade list ──────────────────────────────────────────────────────────────
+// ─── Backend URL ──────────────────────────────────────────────────────────────
 
-type CuratedAlbum = { album: string; artist: string };
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
-const DECADES: { label: string; albums: CuratedAlbum[] }[] = [
-  {
-    label: '1950s',
-    albums: [
-      { album: 'Songs for Swingin\' Lovers!',          artist: 'Frank Sinatra'             },
-      { album: 'Kind of Blue',                          artist: 'Miles Davis'               },
-      { album: 'Time Out',                              artist: 'Dave Brubeck Quartet'      },
-      { album: 'Elvis Presley',                         artist: 'Elvis Presley'             },
-      { album: 'Come Fly with Me',                      artist: 'Frank Sinatra'             },
-      { album: 'Moanin\'',                              artist: 'Art Blakey'                },
-      { album: 'The Genius of Ray Charles',             artist: 'Ray Charles'               },
-      { album: 'Ella and Louis',                        artist: 'Ella Fitzgerald'           },
-      { album: 'Johnny Cash with His Hot and Blue Guitar', artist: 'Johnny Cash'           },
-      { album: 'Mingus Ah Um',                          artist: 'Charles Mingus'            },
-    ],
-  },
-  {
-    label: '1960s',
-    albums: [
-      { album: 'Revolver',                              artist: 'The Beatles'               },
-      { album: 'Pet Sounds',                            artist: 'The Beach Boys'            },
-      { album: 'Highway 61 Revisited',                  artist: 'Bob Dylan'                 },
-      { album: 'Sgt. Pepper\'s Lonely Hearts Club Band', artist: 'The Beatles'              },
-      { album: 'The Velvet Underground & Nico',          artist: 'The Velvet Underground'   },
-      { album: 'Blonde on Blonde',                      artist: 'Bob Dylan'                 },
-      { album: 'Abbey Road',                            artist: 'The Beatles'               },
-      { album: 'Are You Experienced',                   artist: 'Jimi Hendrix'              },
-      { album: 'Led Zeppelin',                          artist: 'Led Zeppelin'              },
-      { album: 'Aftermath',                             artist: 'The Rolling Stones'        },
-    ],
-  },
-  {
-    label: '1970s',
-    albums: [
-      { album: 'The Dark Side of the Moon',             artist: 'Pink Floyd'                },
-      { album: 'Rumours',                               artist: 'Fleetwood Mac'             },
-      { album: 'Led Zeppelin IV',                       artist: 'Led Zeppelin'              },
-      { album: 'Born to Run',                           artist: 'Bruce Springsteen'         },
-      { album: 'Tapestry',                              artist: 'Carole King'               },
-      { album: 'Hotel California',                      artist: 'Eagles'                    },
-      { album: 'Exile on Main St.',                     artist: 'The Rolling Stones'        },
-      { album: 'Innervisions',                          artist: 'Stevie Wonder'             },
-      { album: 'London Calling',                        artist: 'The Clash'                 },
-      { album: 'Off the Wall',                          artist: 'Michael Jackson'           },
-    ],
-  },
-  {
-    label: '1980s',
-    albums: [
-      { album: 'Thriller',                              artist: 'Michael Jackson'           },
-      { album: 'Purple Rain',                           artist: 'Prince'                    },
-      { album: 'The Joshua Tree',                       artist: 'U2'                        },
-      { album: 'Appetite for Destruction',              artist: 'Guns N\' Roses'            },
-      { album: 'Back in Black',                         artist: 'AC/DC'                     },
-      { album: 'Born in the U.S.A.',                    artist: 'Bruce Springsteen'         },
-      { album: 'Sign \'O\' the Times',                  artist: 'Prince'                    },
-      { album: 'Graceland',                             artist: 'Paul Simon'                },
-      { album: 'Like a Prayer',                         artist: 'Madonna'                   },
-      { album: 'Eliminator',                            artist: 'ZZ Top'                    },
-    ],
-  },
-  {
-    label: '1990s',
-    albums: [
-      { album: 'Nevermind',                             artist: 'Nirvana'                   },
-      { album: 'The Chronic',                           artist: 'Dr. Dre'                   },
-      { album: 'OK Computer',                           artist: 'Radiohead'                 },
-      { album: 'Illmatic',                              artist: 'Nas'                       },
-      { album: 'Ten',                                   artist: 'Pearl Jam'                 },
-      { album: 'Ready to Die',                          artist: 'The Notorious B.I.G.'      },
-      { album: 'Jagged Little Pill',                    artist: 'Alanis Morissette'         },
-      { album: 'Achtung Baby',                          artist: 'U2'                        },
-      { album: 'The Miseducation of Lauryn Hill',       artist: 'Ms. Lauryn Hill'           },
-      { album: 'Reasonable Doubt',                      artist: 'JAY-Z'                     },
-    ],
-  },
-  {
-    label: '2000s',
-    albums: [
-      { album: 'The College Dropout',                   artist: 'Kanye West'                },
-      { album: 'Is This It',                            artist: 'The Strokes'               },
-      { album: 'Speakerboxxx/The Love Below',           artist: 'Outkast'                   },
-      { album: 'Funeral',                               artist: 'Arcade Fire'               },
-      { album: 'Elephant',                              artist: 'The White Stripes'         },
-      { album: 'American Idiot',                        artist: 'Green Day'                 },
-      { album: 'Late Registration',                     artist: 'Kanye West'                },
-      { album: 'Stankonia',                             artist: 'Outkast'                   },
-      { album: 'Whatever People Say I Am, That\'s What I\'m Not', artist: 'Arctic Monkeys' },
-      { album: 'Stadium Arcadium',                      artist: 'Red Hot Chili Peppers'     },
-    ],
-  },
-  {
-    label: '2010s',
-    albums: [
-      { album: 'To Pimp a Butterfly',                   artist: 'Kendrick Lamar'            },
-      { album: 'Blonde',                                artist: 'Frank Ocean'               },
-      { album: 'My Beautiful Dark Twisted Fantasy',     artist: 'Kanye West'                },
-      { album: 'good kid, m.A.A.d city',                artist: 'Kendrick Lamar'            },
-      { album: 'Lemonade',                              artist: 'Beyoncé'                   },
-      { album: '1989',                                  artist: 'Taylor Swift'              },
-      { album: 'AM',                                    artist: 'Arctic Monkeys'            },
-      { album: 'Currents',                              artist: 'Tame Impala'               },
-      { album: 'Random Access Memories',                artist: 'Daft Punk'                 },
-      { album: 'channel ORANGE',                        artist: 'Frank Ocean'               },
-    ],
-  },
-  {
-    label: '2020s',
-    albums: [
-      { album: 'folklore',                              artist: 'Taylor Swift'              },
-      { album: 'After Hours',                           artist: 'The Weeknd'                },
-      { album: 'Mr. Morale & the Big Steppers',         artist: 'Kendrick Lamar'            },
-      { album: 'SOS',                                   artist: 'SZA'                       },
-      { album: 'Un Verano Sin Ti',                      artist: 'Bad Bunny'                 },
-      { album: 'Future Nostalgia',                      artist: 'Dua Lipa'                  },
-      { album: 'SOUR',                                  artist: 'Olivia Rodrigo'            },
-      { album: 'Midnights',                             artist: 'Taylor Swift'              },
-      { album: 'Harry\'s House',                        artist: 'Harry Styles'              },
-      { album: 'Actual Life 3',                         artist: 'Fred again..'              },
-    ],
-  },
-];
+// ─── Display order for decade sections ───────────────────────────────────────
 
-// ─── Module-level cache + sequential fetch queue ──────────────────────────────
+const DECADE_LABELS = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];
+
+// ─── Module-level cache + shared fetch promise ────────────────────────────────
 
 const cache: Record<string, SpotifyAlbum[]> = {};
-const queue: string[] = [];
-const subs: Record<string, Set<() => void>> = {};
-let processing = false;
+let loadPromise: Promise<void> | null = null;
 
-const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+function loadDecades(): Promise<void> {
+  if (Object.keys(cache).length > 0) return Promise.resolve();
+  if (loadPromise) return loadPromise;
 
-function subscribe(label: string, cb: () => void): () => void {
-  if (!subs[label]) subs[label] = new Set();
-  subs[label].add(cb);
-  return () => subs[label]?.delete(cb);
-}
-
-async function searchOne(entry: CuratedAlbum): Promise<SpotifyAlbum | null> {
-  const q = encodeURIComponent(`album:${entry.album} artist:${entry.artist}`);
-  const data = await spotifyGet(`/search?q=${q}&type=album&limit=1&market=US`);
-  const item = data.albums?.items?.[0];
-  return item ? albumFromSpotify(item) : null;
-}
-
-async function doFetch(albums: CuratedAlbum[]): Promise<SpotifyAlbum[]> {
-  const results = await Promise.all(albums.map(entry => searchOne(entry).catch(() => null)));
-  return results.filter((a): a is SpotifyAlbum => a !== null);
-}
-
-async function processQueue() {
-  if (processing) return;
-  processing = true;
-  while (queue.length > 0) {
-    const label = queue.shift()!;
-    if (cache[label] !== undefined) {
-      subs[label]?.forEach((cb) => cb());
-      continue;
+  loadPromise = (async () => {
+    const res = await fetch(`${API_URL}/decades`);
+    if (!res.ok) throw new Error(`/decades → ${res.status}`);
+    const data: Record<string, SpotifyAlbum[]> = await res.json();
+    for (const [label, albums] of Object.entries(data)) {
+      cache[label] = albums;
     }
-    const decade = DECADES.find((d) => d.label === label);
-    try {
-      cache[label] = decade ? await doFetch(decade.albums) : [];
-    } catch (err: any) {
-      console.error(`[Decades] Failed to load "${label}":`, err?.message ?? err);
-      cache[label] = [];
-    }
-    cache[label]?.forEach(album => { if (album.artworkUrl) Image.prefetch(album.artworkUrl); });
-    subs[label]?.forEach((cb) => cb());
-    if (queue.length > 0) await delay(150);
-  }
-  processing = false;
-}
+  })().catch((err) => {
+    console.error('[Decades] loadDecades failed:', err?.message ?? err);
+    loadPromise = null; // allow retry on next mount
+  });
 
-function enqueue(label: string) {
-  if (cache[label] !== undefined || queue.includes(label)) return;
-  queue.push(label);
-  processQueue();
+  return loadPromise;
 }
 
 // ─── Album card ───────────────────────────────────────────────────────────────
@@ -241,20 +90,18 @@ function DecadeSection({
   isDark: boolean;
 }) {
   const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => cache[label] ?? []);
-  const [loading, setLoading] = useState(cache[label] === undefined);
+  const [loading, setLoading] = useState(!cache[label]);
 
   useEffect(() => {
-    if (cache[label] !== undefined) {
+    if (cache[label]) {
       setAlbums(cache[label]);
       setLoading(false);
       return;
     }
-    const unsub = subscribe(label, () => {
+    loadDecades().then(() => {
       setAlbums(cache[label] ?? []);
       setLoading(false);
     });
-    enqueue(label);
-    return unsub;
   }, [label]);
 
   return (
@@ -294,7 +141,7 @@ export default function DiscoverDecadesScreen() {
   const { setPendingAlbum } = useAlbums();
 
   useEffect(() => {
-    DECADES.forEach(d => enqueue(d.label));
+    loadDecades(); // prefetch all decades on mount
   }, []);
 
   function handleAlbumPress(album: SpotifyAlbum) {
@@ -315,13 +162,13 @@ export default function DiscoverDecadesScreen() {
       <FlatList
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.content}
-        data={DECADES}
-        keyExtractor={(item) => item.label}
+        data={DECADE_LABELS}
+        keyExtractor={(label) => label}
         initialNumToRender={1}
         windowSize={3}
-        renderItem={({ item }) => (
+        renderItem={({ item: label }) => (
           <DecadeSection
-            label={item.label}
+            label={label}
             onAlbumPress={handleAlbumPress}
             colors={colors}
             isDark={isDark}

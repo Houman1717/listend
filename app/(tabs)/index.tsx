@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,28 +11,13 @@ import {
 } from 'react-native';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import {
-  spotifyGet,
-  albumFromSpotify,
-  trackFromSpotify,
-  artistFromSpotify,
-  SpotifyAlbum,
-  SpotifyTrack,
-  SpotifyArtist,
-} from '@/context/SpotifyService';
+import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
 
-// ─── Placeholder definitions (text/metadata only — images fetched at runtime) ─
+// ─── Backend URL ──────────────────────────────────────────────────────────────
 
-const PLACEHOLDER_ARTISTS = [
-  { id: '1', name: 'Kendrick Lamar',     genre: 'Rap'       },
-  { id: '2', name: 'Taylor Swift',       genre: 'Pop'       },
-  { id: '3', name: 'SZA',                genre: 'R&B'       },
-  { id: '4', name: 'Tyler the Creator',  genre: 'Rap'       },
-  { id: '5', name: 'Billie Eilish',      genre: 'Pop'       },
-  { id: '6', name: 'Bad Bunny',          genre: 'Reggaeton' },
-  { id: '7', name: 'The Weeknd',         genre: 'R&B'       },
-  { id: '8', name: 'Chappell Roan',      genre: 'Pop'       },
-];
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+
+// ─── Placeholder friends (no Spotify fetch — artwork shows fallback) ──────────
 
 const PLACEHOLDER_FRIENDS = [
   { id: '1', user: 'alex_m',  album: 'After Hours',            artist: 'The Weeknd'     },
@@ -48,57 +33,17 @@ const AGO = ['2m ago', '14m ago', '1h ago', '2h ago', '3h ago', '5h ago'];
 // ─── Module-level cache — persists across navigations ─────────────────────────
 
 const cache: {
-  albums?:      SpotifyAlbum[];
-  songs?:       SpotifyTrack[];
-  artists?:     SpotifyArtist[];
-  friendsArt?:  Record<string, string>; // friend id → artworkUrl
+  albums?:  SpotifyAlbum[];
+  songs?:   SpotifyTrack[];
+  artists?: SpotifyArtist[];
 } = {};
 
-// ─── Fetchers ─────────────────────────────────────────────────────────────────
-// Each fetcher uses the cheapest available endpoint for its content type:
-//   • Albums  → /browse/new-releases  (dedicated browse endpoint, not search)
-//   • Songs   → /browse/featured-playlists → /playlists/{id}/tracks
-//               (two browse/playlist calls instead of a search)
-//   • Artists → /search (no browse alternative for arbitrary artist lookup)
-//   • Friends → /search (no browse alternative for arbitrary album lookup)
+// ─── Fetcher ──────────────────────────────────────────────────────────────────
 
-async function fetchAlbums(): Promise<SpotifyAlbum[]> {
-  // /browse/new-releases was deprecated by Spotify in Nov 2024 and returns 403
-  // for apps without Extended Quota Mode. Search with tag:new is the correct
-  // alternative for standard apps.
-  const data = await spotifyGet('/search?q=tag:new&type=album&limit=10&market=US');
-  return (data.albums?.items ?? []).map(albumFromSpotify);
-}
-
-async function fetchSongs(): Promise<SpotifyTrack[]> {
-  // /browse/featured-playlists was deprecated alongside /browse/new-releases.
-  // Search is the available alternative for standard apps.
-  const data = await spotifyGet('/search?q=year:2025&type=track&limit=10&market=US');
-  return (data.tracks?.items ?? []).map(trackFromSpotify);
-}
-
-async function fetchArtists(): Promise<SpotifyArtist[]> {
-  const results: SpotifyArtist[] = [];
-  for (const p of PLACEHOLDER_ARTISTS) {
-    const q = encodeURIComponent(p.name);
-    const data = await spotifyGet(`/search?q=${q}&type=artist&limit=1&market=US`).catch(() => null);
-    const item = data?.artists?.items?.[0];
-    results.push(item ? artistFromSpotify(item) : { id: p.id, name: p.name, genre: p.genre, artworkUrl: '' });
-    // No per-request delay — the global queue in SpotifyService paces all calls.
-  }
-  return results;
-}
-
-async function fetchFriendsArt(): Promise<Record<string, string>> {
-  const map: Record<string, string> = {};
-  for (const f of PLACEHOLDER_FRIENDS) {
-    const q = encodeURIComponent(`album:${f.album} artist:${f.artist}`);
-    const data = await spotifyGet(`/search?q=${q}&type=album&limit=1&market=US`).catch(() => null);
-    const item = data?.albums?.items?.[0];
-    map[f.id] = item ? albumFromSpotify(item).artworkUrl : '';
-    // No per-request delay — the global queue in SpotifyService paces all calls.
-  }
-  return map;
+async function fetchHome(): Promise<{ albums: SpotifyAlbum[]; songs: SpotifyTrack[]; artists: SpotifyArtist[] }> {
+  const res = await fetch(`${API_URL}/home`);
+  if (!res.ok) throw new Error(`/home → ${res.status}`);
+  return res.json();
 }
 
 // ─── Card sizes ───────────────────────────────────────────────────────────────
@@ -173,7 +118,7 @@ function SongCard({ item, index, isDark }: { item: SpotifyTrack; index: number; 
 
 // ─── Artist card (circular) ───────────────────────────────────────────────────
 
-function ArtistCard({ item, isDark }: { item: SpotifyArtist & { genre: string }; isDark: boolean }) {
+function ArtistCard({ item, isDark }: { item: SpotifyArtist; isDark: boolean }) {
   return (
     <Pressable style={({ pressed }) => [s.card, { width: ARTIST_CARD, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
@@ -191,13 +136,11 @@ function ArtistCard({ item, isDark }: { item: SpotifyArtist & { genre: string };
 
 function FriendCard({
   friend,
-  artworkUrl,
   ago,
   isDark,
   colors,
 }: {
   friend: typeof PLACEHOLDER_FRIENDS[number];
-  artworkUrl: string;
   ago: string;
   isDark: boolean;
   colors: any;
@@ -214,11 +157,7 @@ function FriendCard({
           opacity: pressed ? 0.7 : 1,
         },
       ]}>
-      {artworkUrl ? (
-        <Image source={{ uri: artworkUrl }} style={{ width: artSize, height: artSize, borderRadius: 6 }} />
-      ) : (
-        <ArtFallback size={artSize} radius={6} label={friend.album} />
-      )}
+      <ArtFallback size={artSize} radius={6} label={friend.album} />
       <Text style={[s.friendUser, { color: '#FF3CAC' }]} numberOfLines={1}>@{friend.user}</Text>
       <Text style={[s.cardTitle,  { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{friend.album}</Text>
       <Text style={[s.cardSub,    { color: isDark ? '#888' : '#666' }]} numberOfLines={1}>{friend.artist}</Text>
@@ -234,98 +173,27 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
 
-  const [albums,     setAlbums]     = useState<SpotifyAlbum[]>(cache.albums     ?? []);
-  const [songs,      setSongs]      = useState<SpotifyTrack[]>(cache.songs       ?? []);
-  const [artists,    setArtists]    = useState<SpotifyArtist[]>(cache.artists    ?? []);
-  const [friendsArt, setFriendsArt] = useState<Record<string, string>>(cache.friendsArt ?? {});
+  const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(cache.albums   ?? []);
+  const [songs,   setSongs]   = useState<SpotifyTrack[]>(cache.songs    ?? []);
+  const [artists, setArtists] = useState<SpotifyArtist[]>(cache.artists ?? []);
+  const [loading, setLoading] = useState(!cache.albums);
 
-  const [loadingAlbums,  setLoadingAlbums]  = useState(!cache.albums);
-  const [loadingSongs,   setLoadingSongs]   = useState(!cache.songs);
-  const [loadingArtists, setLoadingArtists] = useState(!cache.artists);
-  const [loadingFriends, setLoadingFriends] = useState(!cache.friendsArt);
-
-  // ── Ref that gates below-fold loading to after the user first scrolls ──────
-  // Initialised to true when all secondary caches are already warm (returning
-  // visitor) so we never re-fire fetches that are already done.
-  const belowFoldTriggered = useRef(
-    cache.songs !== undefined &&
-    cache.artists !== undefined &&
-    cache.friendsArt !== undefined
-  );
-
-  // ── Load all sections on mount ───────────────────────────────────────────────
-  // Albums kick off first; below-fold sections (songs, artists, friends) fire
-  // immediately after without waiting for albums to resolve.
   useEffect(() => {
-    if (!cache.albums) {
-      (async () => {
-        try {
-          const data = await fetchAlbums();
-          cache.albums = data;
-          setAlbums(data);
-          data.forEach(album => { if (album.artworkUrl) Image.prefetch(album.artworkUrl); });
-        } catch (err: any) {
-          console.error('[Home] fetchAlbums failed:', err?.message ?? err);
-          cache.albums = [];
-        } finally {
-          setLoadingAlbums(false);
-        }
-      })();
-    }
-    triggerBelowFold();
+    if (cache.albums) return; // already warm
+
+    fetchHome()
+      .then((data) => {
+        cache.albums  = data.albums;
+        cache.songs   = data.songs;
+        cache.artists = data.artists;
+        setAlbums(data.albums);
+        setSongs(data.songs);
+        setArtists(data.artists);
+        data.albums.forEach(a => { if (a.artworkUrl) Image.prefetch(a.artworkUrl); });
+      })
+      .catch((err) => console.error('[Home] fetchHome failed:', err?.message ?? err))
+      .finally(() => setLoading(false));
   }, []);
-
-  // Songs uses 2 browse/playlist calls; artists and friends use /search.
-  // They fire sequentially (songs first, then artists+friends together) so the
-  // global queue is not flooded all at once.
-  function triggerBelowFold() {
-    if (belowFoldTriggered.current) return;
-    belowFoldTriggered.current = true;
-
-    (async () => {
-      if (!cache.songs) {
-        try {
-          const data = await fetchSongs();
-          cache.songs = data;
-          setSongs(data);
-        } catch (err: any) {
-          console.error('[Home] fetchSongs failed:', err?.message ?? err);
-          cache.songs = [];
-        } finally {
-          setLoadingSongs(false);
-        }
-      }
-
-      // Artists and friends fire together; the global queue serialises them.
-      const tasks: Promise<void>[] = [];
-
-      if (!cache.artists) {
-        tasks.push(
-          fetchArtists()
-            .then((data) => { cache.artists = data; setArtists(data); })
-            .catch((err) => {
-              console.error('[Home] fetchArtists failed:', err?.message ?? err);
-              cache.artists = [];
-            })
-            .finally(() => setLoadingArtists(false)),
-        );
-      }
-
-      if (!cache.friendsArt) {
-        tasks.push(
-          fetchFriendsArt()
-            .then((data) => { cache.friendsArt = data; setFriendsArt(data); })
-            .catch((err) => {
-              console.error('[Home] fetchFriendsArt failed:', err?.message ?? err);
-              cache.friendsArt = {};
-            })
-            .finally(() => setLoadingFriends(false)),
-        );
-      }
-
-      await Promise.all(tasks);
-    })();
-  }
 
   return (
     <ScrollView
@@ -334,7 +202,7 @@ export default function HomeScreen() {
       showsVerticalScrollIndicator={false}>
 
       {/* 1 — Top Listend Albums This Week */}
-      <Section title="Top Listend Albums This Week" loading={loadingAlbums}>
+      <Section title="Top Listend Albums This Week" loading={loading}>
         <FlatList
           horizontal
           data={albums}
@@ -346,7 +214,7 @@ export default function HomeScreen() {
       </Section>
 
       {/* 2 — Friends Activity: Recently Listend */}
-      <Section title="Friends Activity: Recently Listend" loading={loadingFriends}>
+      <Section title="Friends Activity: Recently Listend" loading={false}>
         <FlatList
           horizontal
           data={PLACEHOLDER_FRIENDS}
@@ -356,7 +224,6 @@ export default function HomeScreen() {
           renderItem={({ item, index }) => (
             <FriendCard
               friend={item}
-              artworkUrl={friendsArt[item.id] ?? ''}
               ago={AGO[index] ?? ''}
               isDark={isDark}
               colors={colors}
@@ -366,7 +233,7 @@ export default function HomeScreen() {
       </Section>
 
       {/* 3 — Top Listend Songs This Week */}
-      <Section title="Top Listend Songs This Week" loading={loadingSongs}>
+      <Section title="Top Listend Songs This Week" loading={loading}>
         <FlatList
           horizontal
           data={songs}
@@ -378,19 +245,14 @@ export default function HomeScreen() {
       </Section>
 
       {/* 4 — Top Listend Artists This Week */}
-      <Section title="Top Listend Artists This Week" loading={loadingArtists}>
+      <Section title="Top Listend Artists This Week" loading={loading}>
         <FlatList
           horizontal
           data={artists}
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
-          renderItem={({ item }) => (
-            <ArtistCard
-              item={{ ...item, genre: PLACEHOLDER_ARTISTS.find((p) => p.name === item.name)?.genre ?? item.genre }}
-              isDark={isDark}
-            />
-          )}
+          renderItem={({ item }) => <ArtistCard item={item} isDark={isDark} />}
         />
       </Section>
 

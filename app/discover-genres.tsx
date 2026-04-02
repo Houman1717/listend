@@ -11,194 +11,39 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { spotifyGet, albumFromSpotify, SpotifyAlbum } from '@/context/SpotifyService';
+import { SpotifyAlbum } from '@/context/SpotifyService';
 import { useAlbums, PendingAlbum } from '@/context/AlbumsContext';
 
-// ─── Genre list ───────────────────────────────────────────────────────────────
-// Curated top-10 albums per genre by name + artist.
-// At runtime each is resolved via a single Spotify search call.
+// ─── Backend URL ──────────────────────────────────────────────────────────────
 
-type CuratedAlbum = { album: string; artist: string };
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
-const GENRES: { label: string; albums: CuratedAlbum[] }[] = [
-  {
-    label: 'Rap',
-    albums: [
-      { album: 'DAMN.',                              artist: 'Kendrick Lamar'  },
-      { album: 'Take Care',                          artist: 'Drake'           },
-      { album: 'To Pimp a Butterfly',                artist: 'Kendrick Lamar'  },
-      { album: 'ASTROWORLD',                         artist: 'Travis Scott'    },
-      { album: '2014 Forest Hills Drive',            artist: 'J. Cole'         },
-      { album: 'My Beautiful Dark Twisted Fantasy',  artist: 'Kanye West'      },
-      { album: 'The Blueprint',                      artist: 'JAY-Z'           },
-      { album: 'Illmatic',                           artist: 'Nas'             },
-      { album: 'good kid, m.A.A.d city',             artist: 'Kendrick Lamar'  },
-      { album: 'The Marshall Mathers LP',            artist: 'Eminem'          },
-    ],
-  },
-  {
-    label: 'R&B',
-    albums: [
-      { album: 'After Hours',                        artist: 'The Weeknd'      },
-      { album: 'SOS',                                artist: 'SZA'             },
-      { album: 'Lemonade',                           artist: 'Beyoncé'         },
-      { album: 'channel ORANGE',                     artist: 'Frank Ocean'     },
-      { album: 'Freudian',                           artist: 'Daniel Caesar'   },
-      { album: 'WASTELAND',                          artist: 'Brent Faiyaz'    },
-      { album: 'Still Over It',                      artist: 'Summer Walker'   },
-      { album: 'Starboy',                            artist: 'The Weeknd'      },
-      { album: 'American Teen',                      artist: 'Khalid'          },
-      { album: 'Back of My Mind',                    artist: 'H.E.R.'          },
-    ],
-  },
-  {
-    label: 'Pop',
-    albums: [
-      { album: 'folklore',                           artist: 'Taylor Swift'    },
-      { album: 'Midnights',                          artist: 'Taylor Swift'    },
-      { album: '30',                                 artist: 'Adele'           },
-      { album: 'Future Nostalgia',                   artist: 'Dua Lipa'        },
-      { album: "Harry's House",                      artist: 'Harry Styles'    },
-      { album: 'SOUR',                               artist: 'Olivia Rodrigo'  },
-      { album: 'When We All Fall Asleep Where Do We Go', artist: 'Billie Eilish' },
-      { album: 'Divide',                             artist: 'Ed Sheeran'      },
-      { album: 'thank u, next',                      artist: 'Ariana Grande'   },
-      { album: "Hollywood's Bleeding",               artist: 'Post Malone'     },
-    ],
-  },
-  {
-    label: 'Rock',
-    albums: [
-      { album: 'AM',                                 artist: 'Arctic Monkeys'            },
-      { album: 'OK Computer',                        artist: 'Radiohead'                 },
-      { album: 'Is This It',                         artist: 'The Strokes'               },
-      { album: 'Currents',                           artist: 'Tame Impala'               },
-      { album: 'El Camino',                          artist: 'The Black Keys'            },
-      { album: 'Wasting Light',                      artist: 'Foo Fighters'              },
-      { album: 'Stadium Arcadium',                   artist: 'Red Hot Chili Peppers'     },
-      { album: '...Like Clockwork',                  artist: 'Queens of the Stone Age'   },
-      { album: 'Origin of Symmetry',                 artist: 'Muse'                      },
-      { album: "Whatever People Say I Am, That's What I'm Not", artist: 'Arctic Monkeys' },
-    ],
-  },
-  {
-    label: 'House',
-    albums: [
-      { album: 'Random Access Memories',             artist: 'Daft Punk'       },
-      { album: 'Discovery',                          artist: 'Daft Punk'       },
-      { album: 'Settle',                             artist: 'Disclosure'      },
-      { album: 'Caracal',                            artist: 'Disclosure'      },
-      { album: 'In Colour',                          artist: 'Jamie xx'        },
-      { album: 'There Is Love In You',               artist: 'Four Tet'        },
-      { album: 'Swim',                               artist: 'Caribou'         },
-      { album: 'Motion',                             artist: 'Calvin Harris'   },
-      { album: 'Actual Life 3',                      artist: 'Fred again..'    },
-      { album: 'Black Sands',                        artist: 'Bonobo'          },
-    ],
-  },
-  {
-    label: 'Jazz',
-    albums: [
-      { album: 'Kind of Blue',                       artist: 'Miles Davis'              },
-      { album: 'A Love Supreme',                     artist: 'John Coltrane'            },
-      { album: 'Time Out',                           artist: 'Dave Brubeck Quartet'     },
-      { album: 'Head Hunters',                       artist: 'Herbie Hancock'           },
-      { album: 'Waltz for Debby',                    artist: 'Bill Evans'               },
-      { album: 'Mingus Ah Um',                       artist: 'Charles Mingus'           },
-      { album: 'Chet Baker Sings',                   artist: 'Chet Baker'               },
-      { album: 'Saxophone Colossus',                 artist: 'Sonny Rollins'            },
-      { album: 'Sketches of Spain',                  artist: 'Miles Davis'              },
-      { album: "Monk's Dream",                       artist: 'Thelonious Monk'          },
-    ],
-  },
-  {
-    label: 'Soul',
-    albums: [
-      { album: "What's Going On",                    artist: 'Marvin Gaye'              },
-      { album: 'Back to Black',                      artist: 'Amy Winehouse'            },
-      { album: 'The Miseducation of Lauryn Hill',    artist: 'Ms. Lauryn Hill'          },
-      { album: 'Songs in the Key of Life',           artist: 'Stevie Wonder'            },
-      { album: 'Voodoo',                             artist: "D'Angelo"                 },
-      { album: 'A Seat at the Table',                artist: 'Solange'                  },
-      { album: 'Baduizm',                            artist: 'Erykah Badu'              },
-      { album: 'Get Lifted',                         artist: 'John Legend'              },
-      { album: 'Songs in A Minor',                   artist: 'Alicia Keys'              },
-      { album: 'Coming Home',                        artist: 'Leon Bridges'             },
-    ],
-  },
-  {
-    label: 'Country',
-    albums: [
-      { album: 'Dangerous: The Double Album',        artist: 'Morgan Wallen'            },
-      { album: 'Golden Hour',                        artist: 'Kacey Musgraves'          },
-      { album: 'Traveller',                          artist: 'Chris Stapleton'          },
-      { album: 'American Heartbreak',                artist: 'Zach Bryan'               },
-      { album: "This One's for You",                 artist: 'Luke Combs'               },
-      { album: 'Purgatory',                          artist: 'Tyler Childers'           },
-      { album: 'Metamodern Sounds in Country Music', artist: 'Sturgill Simpson'         },
-      { album: 'By the Way, I Forgive You',          artist: 'Brandi Carlile'           },
-      { album: 'Southeastern',                       artist: 'Jason Isbell'             },
-      { album: 'Stoned Side of the Mtn',             artist: 'Tyler Childers'           },
-    ],
-  },
-];
+// ─── Display order for genre sections ────────────────────────────────────────
 
-// ─── Module-level cache + sequential fetch queue ──────────────────────────────
-// Lives outside the component so results survive navigation and re-renders.
+const GENRE_LABELS = ['Rap', 'R&B', 'Pop', 'Rock', 'House', 'Jazz', 'Soul', 'Country'];
+
+// ─── Module-level cache + shared fetch promise ────────────────────────────────
 
 const cache: Record<string, SpotifyAlbum[]> = {};
-const queue: string[] = [];
-const subs: Record<string, Set<() => void>> = {};
-let processing = false;
+let loadPromise: Promise<void> | null = null;
 
-const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+function loadGenres(): Promise<void> {
+  if (Object.keys(cache).length > 0) return Promise.resolve();
+  if (loadPromise) return loadPromise;
 
-function subscribe(label: string, cb: () => void): () => void {
-  if (!subs[label]) subs[label] = new Set();
-  subs[label].add(cb);
-  return () => subs[label]?.delete(cb);
-}
-
-// Search Spotify for a single album by name + artist, return the best match.
-async function searchOne(entry: CuratedAlbum): Promise<SpotifyAlbum | null> {
-  const q = encodeURIComponent(`album:${entry.album} artist:${entry.artist}`);
-  const data = await spotifyGet(`/search?q=${q}&type=album&limit=1&market=US`);
-  const item = data.albums?.items?.[0];
-  return item ? albumFromSpotify(item) : null;
-}
-
-async function doFetch(albums: CuratedAlbum[]): Promise<SpotifyAlbum[]> {
-  const results = await Promise.all(albums.map(entry => searchOne(entry).catch(() => null)));
-  return results.filter((a): a is SpotifyAlbum => a !== null);
-}
-
-async function processQueue() {
-  if (processing) return;
-  processing = true;
-  while (queue.length > 0) {
-    const label = queue.shift()!;
-    if (cache[label] !== undefined) {
-      subs[label]?.forEach((cb) => cb());
-      continue;
+  loadPromise = (async () => {
+    const res = await fetch(`${API_URL}/genres`);
+    if (!res.ok) throw new Error(`/genres → ${res.status}`);
+    const data: Record<string, SpotifyAlbum[]> = await res.json();
+    for (const [label, albums] of Object.entries(data)) {
+      cache[label] = albums;
     }
-    const genre = GENRES.find((g) => g.label === label);
-    try {
-      cache[label] = genre ? await doFetch(genre.albums) : [];
-    } catch (err: any) {
-      console.error(`[Genres] Failed to load "${label}":`, err?.message ?? err);
-      cache[label] = [];
-    }
-    cache[label]?.forEach(album => { if (album.artworkUrl) Image.prefetch(album.artworkUrl); });
-    subs[label]?.forEach((cb) => cb());
-    if (queue.length > 0) await delay(150);
-  }
-  processing = false;
-}
+  })().catch((err) => {
+    console.error('[Genres] loadGenres failed:', err?.message ?? err);
+    loadPromise = null; // allow retry on next mount
+  });
 
-function enqueue(label: string) {
-  if (cache[label] !== undefined || queue.includes(label)) return;
-  queue.push(label);
-  processQueue();
+  return loadPromise;
 }
 
 // ─── Album card ───────────────────────────────────────────────────────────────
@@ -232,8 +77,6 @@ function AlbumCard({
 }
 
 // ─── Genre section ────────────────────────────────────────────────────────────
-// Only mounts when FlatList scrolls it into view.
-// Enqueues its fetch on mount — the module-level queue keeps genres sequential.
 
 function GenreSection({
   label,
@@ -247,20 +90,18 @@ function GenreSection({
   isDark: boolean;
 }) {
   const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => cache[label] ?? []);
-  const [loading, setLoading] = useState(cache[label] === undefined);
+  const [loading, setLoading] = useState(!cache[label]);
 
   useEffect(() => {
-    if (cache[label] !== undefined) {
+    if (cache[label]) {
       setAlbums(cache[label]);
       setLoading(false);
       return;
     }
-    const unsub = subscribe(label, () => {
+    loadGenres().then(() => {
       setAlbums(cache[label] ?? []);
       setLoading(false);
     });
-    enqueue(label);
-    return unsub;
   }, [label]);
 
   return (
@@ -300,7 +141,7 @@ export default function DiscoverGenresScreen() {
   const { setPendingAlbum } = useAlbums();
 
   useEffect(() => {
-    GENRES.forEach(g => enqueue(g.label));
+    loadGenres(); // prefetch all genres on mount
   }, []);
 
   function handleAlbumPress(album: SpotifyAlbum) {
@@ -321,14 +162,13 @@ export default function DiscoverGenresScreen() {
       <FlatList
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.content}
-        data={GENRES}
-        keyExtractor={(item) => item.label}
-        // Render only the first section on mount; load more as user scrolls
+        data={GENRE_LABELS}
+        keyExtractor={(label) => label}
         initialNumToRender={1}
         windowSize={3}
-        renderItem={({ item }) => (
+        renderItem={({ item: label }) => (
           <GenreSection
-            label={item.label}
+            label={label}
             onAlbumPress={handleAlbumPress}
             colors={colors}
             isDark={isDark}
