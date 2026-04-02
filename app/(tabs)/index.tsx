@@ -17,15 +17,15 @@ import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyServ
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
-// ─── Placeholder friends (no Spotify fetch — artwork shows fallback) ──────────
+// ─── Placeholder friends ──────────────────────────────────────────────────────
 
 const PLACEHOLDER_FRIENDS = [
-  { id: '1', user: 'alex_m',  album: 'After Hours',            artist: 'The Weeknd'     },
-  { id: '2', user: 'sara_k',  album: 'folklore',               artist: 'Taylor Swift'   },
-  { id: '3', user: 'jvines',  album: 'DAMN.',                  artist: 'Kendrick Lamar' },
-  { id: '4', user: 'priya_r', album: 'SOS',                    artist: 'SZA'            },
-  { id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk'      },
-  { id: '6', user: 'nadia_w', album: 'Currents',               artist: 'Tame Impala'    },
+  { id: '1', user: 'alex_m',  album: 'After Hours',            artist: 'The Weeknd',     artworkUrl: 'https://i.scdn.co/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36' },
+  { id: '2', user: 'sara_k',  album: 'folklore',               artist: 'Taylor Swift',   artworkUrl: 'https://i.scdn.co/image/ab67616d0000b27395f754318336a07e85ec59bc' },
+  { id: '3', user: 'jvines',  album: 'DAMN.',                  artist: 'Kendrick Lamar', artworkUrl: 'https://i.scdn.co/image/ab67616d0000b2738b52c6b9bc4e43d873869699' },
+  { id: '4', user: 'priya_r', album: 'SOS',                    artist: 'SZA',            artworkUrl: 'https://i.scdn.co/image/ab67616d0000b273bc18bdade69ec5ef0bb25b17' },
+  { id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk',      artworkUrl: 'https://i.scdn.co/image/ab67616d0000b2739b9b36b0e22870b9f542d937' },
+  { id: '6', user: 'nadia_w', album: 'Currents',               artist: 'Tame Impala',    artworkUrl: 'https://i.scdn.co/image/ab67616d0000b2739e1cfc756886ac782e363d79' },
 ];
 
 const AGO = ['2m ago', '14m ago', '1h ago', '2h ago', '3h ago', '5h ago'];
@@ -157,7 +157,11 @@ function FriendCard({
           opacity: pressed ? 0.7 : 1,
         },
       ]}>
-      <ArtFallback size={artSize} radius={6} label={friend.album} />
+      {friend.artworkUrl ? (
+        <Image source={{ uri: friend.artworkUrl }} style={{ width: artSize, height: artSize, borderRadius: 6 }} />
+      ) : (
+        <ArtFallback size={artSize} radius={6} label={friend.album} />
+      )}
       <Text style={[s.friendUser, { color: '#FF3CAC' }]} numberOfLines={1}>@{friend.user}</Text>
       <Text style={[s.cardTitle,  { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{friend.album}</Text>
       <Text style={[s.cardSub,    { color: isDark ? '#888' : '#666' }]} numberOfLines={1}>{friend.artist}</Text>
