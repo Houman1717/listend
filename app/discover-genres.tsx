@@ -168,13 +168,8 @@ async function searchOne(entry: CuratedAlbum): Promise<SpotifyAlbum | null> {
 }
 
 async function doFetch(albums: CuratedAlbum[]): Promise<SpotifyAlbum[]> {
-  const results: SpotifyAlbum[] = [];
-  for (const entry of albums) {
-    const album = await searchOne(entry).catch(() => null);
-    if (album) results.push(album);
-    // No per-request delay — the global queue in SpotifyService paces all calls.
-  }
-  return results;
+  const results = await Promise.all(albums.map(entry => searchOne(entry).catch(() => null)));
+  return results.filter((a): a is SpotifyAlbum => a !== null);
 }
 
 async function processQueue() {
@@ -193,8 +188,9 @@ async function processQueue() {
       console.error(`[Genres] Failed to load "${label}":`, err?.message ?? err);
       cache[label] = [];
     }
+    cache[label]?.forEach(album => { if (album.artworkUrl) Image.prefetch(album.artworkUrl); });
     subs[label]?.forEach((cb) => cb());
-    if (queue.length > 0) await delay(500);
+    if (queue.length > 0) await delay(150);
   }
   processing = false;
 }
@@ -302,6 +298,10 @@ export default function DiscoverGenresScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const { setPendingAlbum } = useAlbums();
+
+  useEffect(() => {
+    GENRES.forEach(g => enqueue(g.label));
+  }, []);
 
   function handleAlbumPress(album: SpotifyAlbum) {
     const pending: PendingAlbum = {

@@ -105,21 +105,23 @@ async function getToken(): Promise<string> {
   return tokenFetchPromise;
 }
 
-// ─── Global serial request queue ─────────────────────────────────────────────
-// Every spotifyGet call is funnelled through this queue and processed one at
-// a time with a guaranteed gap between requests.  This prevents burst traffic
-// regardless of how many screens fire requests concurrently.
+// ─── Concurrent request queue ────────────────────────────────────────────────
+// Every spotifyGet call is funnelled through this queue.  Up to MAX_CONCURRENT
+// requests run simultaneously; new slots are opened MIN_REQUEST_GAP_MS apart
+// so we stagger launches rather than firing all concurrently at t=0.
 //
-// When a 429 is received the drain loop sleeps for the full cooldown duration
-// inside the currently-executing entry, which naturally blocks every other
-// queued request for the same period.  rateLimitCooldownUntil acts as an
-// additional safety net so the drain always checks before picking up the next
-// entry, even after a failed request that gave up without sleeping.
+// When a 429 is received, rateLimitCooldownUntil is set and the drain loop
+// refuses to start new entries until the cooldown expires.  In-flight requests
+// are not cancelled — they may complete or fail on their own while the cooldown
+// prevents new work from starting.
 
-const MIN_REQUEST_GAP_MS = 250;       // ≈ 4 req/s between normal requests
-const RATE_LIMIT_COOLDOWN_MS = 60_000; // pause entire queue for 60s on any 429
+const MIN_REQUEST_GAP_MS  = 100;       // gap between launching each new slot
+const MAX_CONCURRENT      = 3;         // max simultaneous in-flight requests
+const RATE_LIMIT_COOLDOWN_MS = 60_000; // pause new launches for 60s on any 429
 
 let rateLimitCooldownUntil = 0; // epoch ms; 0 means no active cooldown
+let activeCount = 0;            // number of requests currently in-flight
+let draining = false;           // prevents concurrent drain loops
 
 type QueueEntry = {
   execute: () => Promise<any>;
@@ -128,35 +130,44 @@ type QueueEntry = {
 };
 
 const requestQueue: QueueEntry[] = [];
-let queueRunning = false;
 
 async function drainQueue(): Promise<void> {
-  if (queueRunning) return;
-  queueRunning = true;
+  if (draining) return;
+  draining = true;
 
   while (requestQueue.length > 0) {
+    // ── No open slots — exit and let the next completing slot re-trigger drain
+    if (activeCount >= MAX_CONCURRENT) {
+      draining = false;
+      return;
+    }
+
     // ── Honour any active rate-limit cooldown before starting the next request
     const cooldownRemaining = rateLimitCooldownUntil - Date.now();
     if (cooldownRemaining > 0) {
       console.log(
-        `[Spotify] Rate-limit cooldown — pausing queue for ${Math.ceil(cooldownRemaining / 1000)}s`
+        `[Spotify] Rate-limit cooldown — pausing new launches for ${Math.ceil(cooldownRemaining / 1000)}s`
       );
       await sleep(cooldownRemaining);
+      continue;
     }
 
     const entry = requestQueue.shift()!;
-    try {
-      entry.resolve(await entry.execute());
-    } catch (err) {
-      entry.reject(err);
-    }
+    activeCount++;
 
-    if (requestQueue.length > 0) {
+    // Fire without awaiting — this slot runs concurrently with the next iteration
+    entry.execute().then(
+      (v) => { entry.resolve(v); activeCount--; drainQueue(); },
+      (e) => { entry.reject(e);  activeCount--; drainQueue(); }
+    );
+
+    // Stagger slot launches so we don't burst all MAX_CONCURRENT at t=0
+    if (requestQueue.length > 0 && activeCount < MAX_CONCURRENT) {
       await sleep(MIN_REQUEST_GAP_MS);
     }
   }
 
-  queueRunning = false;
+  draining = false;
 }
 
 function enqueue<T>(execute: () => Promise<T>): Promise<T> {
@@ -192,8 +203,8 @@ async function spotifyGetOnce<T>(
   return { status: res.status, json: (await res.json()) as T };
 }
 
-// Runs the actual HTTP fetch with retry logic.  Always called via enqueue() so
-// it is serialised — it must never be called directly.
+// Runs the actual HTTP fetch with retry logic.  Always called via enqueue() —
+// must never be called directly.
 async function spotifyGetDirect<T>(path: string): Promise<T> {
   console.log('[Spotify] GET', path);
   let token = await getToken();
@@ -223,8 +234,8 @@ async function spotifyGetDirect<T>(path: string): Promise<T> {
     }
 
     // ── Rate limited — impose 60s global cooldown, then retry once ────────────
-    // The sleep here blocks the queue drain loop, so every other pending
-    // request also waits for the full cooldown duration.
+    // rateLimitCooldownUntil prevents the drain loop from starting new requests
+    // during the cooldown; in-flight requests (including this one) are unaffected.
     if (result.status === 429) {
       if (attempt >= MAX_429_RETRIES) {
         console.error(

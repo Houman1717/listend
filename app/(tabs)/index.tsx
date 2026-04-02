@@ -253,25 +253,28 @@ export default function HomeScreen() {
     cache.friendsArt !== undefined
   );
 
-  // ── Phase 1: load only the first (above-fold) section on mount ──────────────
-  // One request to /browse/new-releases. Nothing else fires at startup.
+  // ── Load all sections on mount ───────────────────────────────────────────────
+  // Albums kick off first; below-fold sections (songs, artists, friends) fire
+  // immediately after without waiting for albums to resolve.
   useEffect(() => {
-    if (cache.albums) return; // already cached — nothing to do
-    (async () => {
-      try {
-        const data = await fetchAlbums();
-        cache.albums = data;
-        setAlbums(data);
-      } catch (err: any) {
-        console.error('[Home] fetchAlbums failed:', err?.message ?? err);
-        cache.albums = [];
-      } finally {
-        setLoadingAlbums(false);
-      }
-    })();
+    if (!cache.albums) {
+      (async () => {
+        try {
+          const data = await fetchAlbums();
+          cache.albums = data;
+          setAlbums(data);
+          data.forEach(album => { if (album.artworkUrl) Image.prefetch(album.artworkUrl); });
+        } catch (err: any) {
+          console.error('[Home] fetchAlbums failed:', err?.message ?? err);
+          cache.albums = [];
+        } finally {
+          setLoadingAlbums(false);
+        }
+      })();
+    }
+    triggerBelowFold();
   }, []);
 
-  // ── Phase 2: load below-fold sections once the user starts scrolling ────────
   // Songs uses 2 browse/playlist calls; artists and friends use /search.
   // They fire sequentially (songs first, then artists+friends together) so the
   // global queue is not flooded all at once.
@@ -328,12 +331,7 @@ export default function HomeScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}
-      scrollEventThrottle={200}
-      onScroll={(e: any) => {
-        // Any scroll beyond 50px means the user is moving toward below-fold content
-        if (e.nativeEvent.contentOffset.y > 50) triggerBelowFold();
-      }}>
+      showsVerticalScrollIndicator={false}>
 
       {/* 1 — Top Listend Albums This Week */}
       <Section title="Top Listend Albums This Week" loading={loadingAlbums}>
