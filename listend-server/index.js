@@ -122,6 +122,19 @@ app.get('/decades', async (req, res) => {
   }
 });
 
+// ── GET /refresh ──────────────────────────────────────────────────────────────
+// Manual trigger for seeding or forcing a data update outside the cron schedule.
+
+app.get('/refresh', async (req, res) => {
+  try {
+    await runRefresh();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[/refresh]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Refresh failed' });
+  }
+});
+
 // ── Cron: refresh every 6 hours ───────────────────────────────────────────────
 
 cron.schedule('0 */6 * * *', () => {
@@ -133,6 +146,4 @@ cron.schedule('0 */6 * * *', () => {
 
 app.listen(PORT, () => {
   console.log(`Listend server listening on port ${PORT}`);
-  // Populate the cache on first boot (runs in background, server is ready immediately)
-  runRefresh();
 });
