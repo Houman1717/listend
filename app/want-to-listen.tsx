@@ -15,7 +15,7 @@ import { useAlbums, WantToListenAlbum } from '@/context/AlbumsContext';
 
 const PADDING = 16;
 const GAP     = 12;
-const COLS    = 4;
+const COLS    = 3;
 
 function AlbumCard({
   album,

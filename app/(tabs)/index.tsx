@@ -217,8 +217,8 @@ export default function HomeScreen() {
         />
       </Section>
 
-      {/* 2 — Friends Activity: Recently Listend */}
-      <Section title="Friends Activity: Recently Listend" loading={false}>
+      {/* 2 — Friends Recent Listend */}
+      <Section title="Friends Recent Listend" loading={false}>
         <FlatList
           horizontal
           data={PLACEHOLDER_FRIENDS}

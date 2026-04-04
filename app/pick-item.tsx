@@ -13,15 +13,11 @@ import { useState, useRef, useCallback } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
-import {
-  spotifyGet,
-  albumFromSpotify,
-  trackFromSpotify,
-  artistFromSpotify,
-  SpotifyAlbum,
-  SpotifyTrack,
-  SpotifyArtist,
-} from '@/context/SpotifyService';
+import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+
+// ─── Backend URL ──────────────────────────────────────────────────────────────
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 type ResultItem = SpotifyAlbum | SpotifyTrack | SpotifyArtist;
 
@@ -49,14 +45,9 @@ export default function PickItemScreen() {
     try {
       const q = encodeURIComponent(text.trim());
       const spotifyType = isAlbum ? 'album' : isArtist ? 'artist' : 'track';
-      const data = await spotifyGet(`/search?q=${q}&type=${spotifyType}&limit=10`);
-      if (isAlbum) {
-        setResults((data.albums?.items ?? []).filter(Boolean).map(albumFromSpotify));
-      } else if (isArtist) {
-        setResults((data.artists?.items ?? []).filter(Boolean).map(artistFromSpotify));
-      } else {
-        setResults((data.tracks?.items ?? []).filter(Boolean).map(trackFromSpotify));
-      }
+      const res = await fetch(`${API_URL}/search?q=${q}&type=${spotifyType}`);
+      if (!res.ok) throw new Error(`/search → ${res.status}`);
+      setResults(await res.json());
     } catch {
       setResults([]);
     } finally {

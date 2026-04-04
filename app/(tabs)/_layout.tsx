@@ -46,7 +46,7 @@ export default function TabLayout() {
         options={{
           title: 'Search',
           tabBarIcon: ({ color }) => <TabBarIcon name="search" color={color} />,
-          headerTitle: 'Find an Album',
+          headerShown: false,
         }}
       />
       <Tabs.Screen

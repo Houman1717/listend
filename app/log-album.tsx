@@ -9,8 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -32,35 +33,84 @@ const RATING_LABELS: Record<number, string> = {
 // Heights in px for bars 1–10 (staircase, bottom-aligned)
 const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
 
-function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
-  const barsWidth = useRef(0);
-  const activeColor = '#FF3CAC';
+// ─── Inner bar track — gesture handling only ─────────────────────────────────
+
+function RatingBar({
+  rating,
+  onRatingChange,
+  containerWidth,
+  isDark,
+}: {
+  rating: number;
+  onRatingChange: (r: number) => void;
+  containerWidth: number;
+  isDark: boolean;
+}) {
+  const activeColor   = '#FF3CAC';
   const inactiveColor = isDark ? '#2e2e2e' : '#e0e0e0';
 
-  function ratingFromX(x: number): number {
-    const w = barsWidth.current;
-    if (w === 0) return 0;
-    return Math.max(1, Math.min(10, Math.ceil((x / w) * 10)));
-  }
+  const tap = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd((e) => {
+      const val = Math.ceil((e.x / containerWidth) * 10);
+      onRatingChange(Math.max(1, Math.min(10, val)));
+    });
+
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .onUpdate((e) => {
+      const val = Math.ceil((e.x / containerWidth) * 10);
+      onRatingChange(Math.max(1, Math.min(10, val)));
+    });
+
+  const composed = Gesture.Simultaneous(tap, pan);
+
+  return (
+    <GestureDetector gesture={composed}>
+      <View style={{
+        width: containerWidth,
+        height: 44,
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        gap: 4,
+        paddingBottom: 2,
+      }}>
+        {BAR_HEIGHTS.map((h, i) => (
+          <View
+            key={i}
+            style={[styles.bar, { height: h, backgroundColor: i + 1 <= rating ? activeColor : inactiveColor }]}
+          />
+        ))}
+      </View>
+    </GestureDetector>
+  );
+}
+
+// ─── Outer wrapper — layout measurement + full row ────────────────────────────
+
+function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
+  const [barWidth, setBarWidth] = useState(0);
+  const activeColor   = '#FF3CAC';
+  const inactiveColor = isDark ? '#2e2e2e' : '#e0e0e0';
 
   return (
     <View style={styles.ratingContainer}>
       <View style={styles.ratingRow}>
         <FontAwesome name="volume-up" size={22} color={rating > 0 ? activeColor : inactiveColor} />
-        <View
-          style={styles.barsTrack}
-          onLayout={(e) => { barsWidth.current = e.nativeEvent.layout.width; }}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderGrant={(e) => onChange(ratingFromX(e.nativeEvent.locationX))}
-          onResponderMove={(e) => onChange(ratingFromX(e.nativeEvent.locationX))}
-        >
-          {BAR_HEIGHTS.map((h, i) => (
-            <View
-              key={i}
-              style={[styles.bar, { height: h, backgroundColor: i + 1 <= rating ? activeColor : inactiveColor }]}
+        <View style={{ flex: 1 }} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}>
+          {barWidth > 0 && (
+            <RatingBar
+              rating={rating}
+              onRatingChange={onChange}
+              containerWidth={barWidth}
+              isDark={isDark}
             />
-          ))}
+          )}
+        </View>
+        <View style={styles.ratingNumBox}>
+          <Text style={[styles.ratingNum, { color: rating > 0 ? activeColor : inactiveColor }]}>
+            {rating > 0 ? rating : '–'}
+          </Text>
         </View>
       </View>
       <Text style={[styles.ratingHint, { color: isDark ? '#888' : '#999' }]}>
@@ -214,6 +264,16 @@ const styles = StyleSheet.create({
   bar: {
     flex: 1,
     borderRadius: 2,
+  },
+  ratingNumBox: {
+    width: 30,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 2,
+  },
+  ratingNum: {
+    fontSize: 20,
+    fontWeight: '700',
   },
   ratingHint: {
     marginTop: 10,

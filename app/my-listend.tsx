@@ -15,7 +15,7 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 
 const PADDING = 16;
 const GAP     = 12;
-const COLS    = 4;
+const COLS    = 3;
 
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 

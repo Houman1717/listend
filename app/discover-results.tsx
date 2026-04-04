@@ -12,65 +12,42 @@ import { useEffect, useState } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, PendingAlbum } from '@/context/AlbumsContext';
-import { spotifyGet, albumFromSpotify, SpotifyAlbum } from '@/context/SpotifyService';
+import { SpotifyAlbum } from '@/context/SpotifyService';
 
-// ─── Genre result cache (module-level, persists across navigations) ───────────
+// ─── Backend URL ──────────────────────────────────────────────────────────────
 
-const genreCache = new Map<string, SpotifyAlbum[]>();
-
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Fetch strategies ─────────────────────────────────────────────────────────
-
-function decadeToYearRange(decade: string): string {
-  const start = parseInt(decade.replace('s', ''), 10);
-  return `${start}-${start + 9}`;
-}
 
 async function fetchForCategory(category: string, value?: string): Promise<SpotifyAlbum[]> {
   switch (category) {
     case 'new-releases': {
-      const data = await spotifyGet('/search?q=tag:new&type=album&limit=10&market=US');
-      return (data.albums?.items ?? []).map(albumFromSpotify);
+      const res = await fetch(`${API_URL}/discover/new-releases`);
+      if (!res.ok) throw new Error(`/discover/new-releases → ${res.status}`);
+      return res.json();
     }
     case 'popular': {
-      const year = new Date().getFullYear();
-      const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=10&market=US`);
-      return (data.albums?.items ?? []).map(albumFromSpotify);
+      const res = await fetch(`${API_URL}/discover/popular`);
+      if (!res.ok) throw new Error(`/discover/popular → ${res.status}`);
+      return res.json();
     }
     case 'coming-soon': {
-      const year = new Date().getFullYear();
-      const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=10`);
-      return (data.albums?.items ?? []).map(albumFromSpotify);
+      const res = await fetch(`${API_URL}/discover/coming-soon`);
+      if (!res.ok) throw new Error(`/discover/coming-soon → ${res.status}`);
+      return res.json();
     }
     case 'genre': {
-      const cacheKey = value ?? '';
-      if (genreCache.has(cacheKey)) return genreCache.get(cacheKey)!;
-
-      // Spotify genre metadata lives on artists, not albums.
-      // Search artists by genre, then pull albums from each sequentially.
-      const q = encodeURIComponent(`genre:${cacheKey}`);
-      const artistData = await spotifyGet(`/search?q=${q}&type=artist&limit=3&market=US`);
-      const artists: any[] = artistData.artists?.items ?? [];
-      if (artists.length === 0) return [];
-
-      const results: SpotifyAlbum[] = [];
-      for (const artist of artists) {
-        await delay(200);
-        const d = await spotifyGet(
-          `/artists/${artist.id}/albums?include_groups=album&limit=4&market=US`
-        ).catch(() => ({ items: [] }));
-        results.push(...(d.items ?? []).map(albumFromSpotify));
-      }
-
-      const albums = results.slice(0, 10);
-      genreCache.set(cacheKey, albums);
-      return albums;
+      const res = await fetch(`${API_URL}/genres`);
+      if (!res.ok) throw new Error(`/genres → ${res.status}`);
+      const data: Record<string, SpotifyAlbum[]> = await res.json();
+      return data[value ?? ''] ?? [];
     }
     case 'decade': {
-      const range = decadeToYearRange(value ?? '');
-      const data = await spotifyGet(`/search?q=year:${range}&type=album&limit=10`);
-      return (data.albums?.items ?? []).map(albumFromSpotify);
+      const res = await fetch(`${API_URL}/decades`);
+      if (!res.ok) throw new Error(`/decades → ${res.status}`);
+      const data: Record<string, SpotifyAlbum[]> = await res.json();
+      return data[value ?? ''] ?? [];
     }
     default:
       return [];

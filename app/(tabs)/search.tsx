@@ -16,15 +16,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, PendingAlbum, WantToListenAlbum } from '@/context/AlbumsContext';
-import {
-  spotifyGet,
-  albumFromSpotify,
-  trackFromSpotify,
-  artistFromSpotify,
-  SpotifyAlbum,
-  SpotifyTrack,
-  SpotifyArtist,
-} from '@/context/SpotifyService';
+import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+
+// ─── Backend URL ──────────────────────────────────────────────────────────────
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,31 +45,26 @@ const TABS: { key: SearchTab; label: string }[] = [
   { key: 'albums',  label: 'Albums'  },
   { key: 'songs',   label: 'Songs'   },
   { key: 'artists', label: 'Artists' },
-  { key: 'users',   label: 'Users'   },
+  { key: 'users',   label: 'Listend Members' },
 ];
 
 const RECENT_KEY = '@listend:recentItems_v2';
 const MAX_RECENT = 10;
 
-// ─── Spotify search helpers ───────────────────────────────────────────────────
+// ─── Backend search ───────────────────────────────────────────────────────────
 
-async function searchSpotify(tab: SearchTab, query: string): Promise<ResultItem[]> {
+async function searchBackend(tab: SearchTab, query: string): Promise<ResultItem[]> {
   if (tab === 'users') return [];
 
   const type = tab === 'albums' ? 'album' : tab === 'songs' ? 'track' : 'artist';
   const q = encodeURIComponent(query.trim());
-  const data = await spotifyGet(`/search?q=${q}&type=${type}&limit=10`);
+  const res = await fetch(`${API_URL}/search?q=${q}&type=${type}`);
+  if (!res.ok) throw new Error(`/search → ${res.status}`);
+  const data = await res.json();
 
-  if (tab === 'albums') {
-    const items = (data.albums?.items ?? []).filter(Boolean);
-    return items.map((i: any) => ({ kind: 'album' as const, ...albumFromSpotify(i) }));
-  }
-  if (tab === 'songs') {
-    const items = (data.tracks?.items ?? []).filter(Boolean);
-    return items.map((i: any) => ({ kind: 'song' as const, ...trackFromSpotify(i) }));
-  }
-  const items = (data.artists?.items ?? []).filter(Boolean);
-  return items.map((i: any) => ({ kind: 'artist' as const, ...artistFromSpotify(i) }));
+  if (tab === 'albums')  return (data as SpotifyAlbum[]).map(a => ({ kind: 'album'  as const, ...a }));
+  if (tab === 'songs')   return (data as SpotifyTrack[]).map(t => ({ kind: 'song'   as const, ...t }));
+  return                        (data as SpotifyArtist[]).map(a => ({ kind: 'artist' as const, ...a }));
 }
 
 function resultToRecentItem(item: ResultItem): RecentItem {
@@ -311,7 +302,7 @@ export default function SearchScreen() {
     setLoading(true);
     setSearched(true);
     try {
-      const items = await searchSpotify(tab, text);
+      const items = await searchBackend(tab, text);
       setResults(items);
     } catch (e) {
       console.error('[Search] Error:', e);
@@ -410,28 +401,32 @@ export default function SearchScreen() {
       </View>
 
       {/* Filter tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.tabsRow}
-        style={[s.tabsContainer, { borderBottomColor: isDark ? '#222' : '#e5e5e5' }]}>
-        {TABS.map(({ key, label }) => {
-          const active = activeTab === key;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => handleTabChange(key)}
-              style={[
-                s.tabPill,
-                active ? s.tabPillActive : { backgroundColor: isDark ? '#1e1e1e' : '#f0f0f0' },
-              ]}>
-              <Text style={[s.tabLabel, { color: active ? '#fff' : colors.subtext }]}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? '#222' : '#e5e5e5' }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingRight: 8 }}
+          style={{ overflow: 'visible' }}>
+          {TABS.map(({ key, label }) => {
+            const active = activeTab === key;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => handleTabChange(key)}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: active ? '#FF3CAC' : (isDark ? '#2C2C2E' : '#f0f0f0'),
+                }}>
+                <Text style={{ color: active ? '#fff' : colors.subtext, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* Body */}
       {isEmpty ? (
@@ -530,13 +525,13 @@ export default function SearchScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, paddingTop: 48 },
 
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 12,
-    marginTop: 12,
+    marginTop: 0,
     marginBottom: 8,
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -546,11 +541,6 @@ const s = StyleSheet.create({
   searchIcon: { marginTop: 1 },
   input: { flex: 1, fontSize: 15, height: '100%' },
 
-  tabsContainer: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth },
-  tabsRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 10, gap: 8 },
-  tabPill: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 },
-  tabPillActive: { backgroundColor: '#FF3CAC' },
-  tabLabel: { fontSize: 14, fontWeight: '600' },
 
   // ── Recent searches ─────────────────────────────────────────────────────────
   recentContainer: { paddingBottom: 40 },
