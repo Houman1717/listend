@@ -4,9 +4,35 @@ const express = require('express');
 const cron = require('node-cron');
 const supabase = require('./db');
 const { runRefresh } = require('./refresh');
+const { spotifyGet } = require('./spotify');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+// ── In-memory response cache ───────────────────────────────────────────────────
+// Simple Map keyed by cache key string.  Each entry: { data, expiresAt (epoch ms) }
+// No external dependency — lives in process memory, resets on server restart.
+
+const memCache = new Map();
+
+const TTL_6H  = 6  * 60 * 60 * 1000;  // static / slow-changing data
+const TTL_10M = 10 * 60 * 1000;        // search results
+
+function cacheGet(key) {
+  const entry = memCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { memCache.delete(key); return null; }
+  return entry.data;
+}
+
+function cacheSet(key, data, ttlMs) {
+  memCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+function cacheClear(...keys) {
+  if (keys.length === 0) { memCache.clear(); return; }
+  for (const k of keys) memCache.delete(k);
+}
 
 // Allow any origin — the client is a mobile app, not a browser page
 app.use((req, res, next) => {
@@ -22,6 +48,10 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 // Returns { albums, songs, artists } from Supabase cache.
 
 app.get('/home', async (req, res) => {
+  const CACHE_KEY = 'home';
+  const cached = cacheGet(CACHE_KEY);
+  if (cached) return res.json(cached);
+
   try {
     const [albumsRes, songsRes, artistsRes] = await Promise.all([
       supabase.from('home_albums').select('*').order('updated_at', { ascending: false }).limit(10),
@@ -33,7 +63,7 @@ app.get('/home', async (req, res) => {
     if (songsRes.error) throw songsRes.error;
     if (artistsRes.error) throw artistsRes.error;
 
-    res.json({
+    const payload = {
       albums: (albumsRes.data ?? []).map(r => ({
         id: r.spotify_id,
         title: r.title,
@@ -53,7 +83,10 @@ app.get('/home', async (req, res) => {
         artworkUrl: r.artwork_url,
         genre: r.genre ?? '',
       })),
-    });
+    };
+
+    cacheSet(CACHE_KEY, payload, TTL_6H);
+    res.json(payload);
   } catch (err) {
     console.error('[/home]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
@@ -64,6 +97,10 @@ app.get('/home', async (req, res) => {
 // Returns albums grouped by genre_label: { Rap: [...], 'R&B': [...], ... }
 
 app.get('/genres', async (req, res) => {
+  const CACHE_KEY = 'genres';
+  const cached = cacheGet(CACHE_KEY);
+  if (cached) return res.json(cached);
+
   try {
     const { data, error } = await supabase
       .from('genre_albums')
@@ -84,6 +121,7 @@ app.get('/genres', async (req, res) => {
       });
     }
 
+    cacheSet(CACHE_KEY, grouped, TTL_6H);
     res.json(grouped);
   } catch (err) {
     console.error('[/genres]', err.message ?? err);
@@ -95,6 +133,10 @@ app.get('/genres', async (req, res) => {
 // Returns albums grouped by decade_label: { '1950s': [...], '1960s': [...], ... }
 
 app.get('/decades', async (req, res) => {
+  const CACHE_KEY = 'decades';
+  const cached = cacheGet(CACHE_KEY);
+  if (cached) return res.json(cached);
+
   try {
     const { data, error } = await supabase
       .from('decade_albums')
@@ -115,6 +157,7 @@ app.get('/decades', async (req, res) => {
       });
     }
 
+    cacheSet(CACHE_KEY, grouped, TTL_6H);
     res.json(grouped);
   } catch (err) {
     console.error('[/decades]', err.message ?? err);
@@ -122,12 +165,144 @@ app.get('/decades', async (req, res) => {
   }
 });
 
+// ── GET /search ───────────────────────────────────────────────────────────────
+// Live Spotify search proxy. Returns normalized arrays — no raw Spotify shape
+// reaches the client.
+// Query params: q (required), type = album | track | artist (required)
+
+app.get('/search', async (req, res) => {
+  const { q, type } = req.query;
+  if (!q || !type) return res.status(400).json({ error: 'q and type are required' });
+  if (!['album', 'track', 'artist'].includes(type)) {
+    return res.status(400).json({ error: 'type must be album, track, or artist' });
+  }
+
+  const CACHE_KEY = `search:${type}:${q.trim().toLowerCase()}`;
+  const cached = cacheGet(CACHE_KEY);
+  if (cached) return res.json(cached);
+
+  try {
+    const encoded = encodeURIComponent(q);
+    const data = await spotifyGet(`/search?q=${encoded}&type=${type}&limit=10&market=US`);
+
+    let results;
+    if (type === 'album') {
+      results = (data.albums?.items ?? []).filter(Boolean).map(item => ({
+        id: item.id,
+        title: item.name,
+        artist: item.artists?.[0]?.name ?? '',
+        year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
+        artworkUrl: item.images?.[0]?.url ?? '',
+      }));
+    } else if (type === 'track') {
+      results = (data.tracks?.items ?? []).filter(Boolean).map(item => ({
+        id: item.id,
+        title: item.name,
+        artist: item.artists?.[0]?.name ?? '',
+        artworkUrl: item.album?.images?.[0]?.url ?? '',
+      }));
+    } else {
+      results = (data.artists?.items ?? []).filter(Boolean).map(item => ({
+        id: item.id,
+        name: item.name,
+        genre: item.genres?.[0] ?? '',
+        artworkUrl: item.images?.[0]?.url ?? '',
+      }));
+    }
+
+    cacheSet(CACHE_KEY, results, TTL_10M);
+    res.json(results);
+  } catch (err) {
+    console.error('[/search]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /discover/new-releases ────────────────────────────────────────────────
+
+app.get('/discover/new-releases', async (req, res) => {
+  const CACHE_KEY = 'discover:new-releases';
+  const cached = cacheGet(CACHE_KEY);
+  if (cached) return res.json(cached);
+
+  try {
+    const data = await spotifyGet('/search?q=tag:new&type=album&limit=10&market=US');
+    const results = (data.albums?.items ?? []).filter(Boolean).map(item => ({
+      id: item.id,
+      title: item.name,
+      artist: item.artists?.[0]?.name ?? '',
+      year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
+      artworkUrl: item.images?.[0]?.url ?? '',
+    }));
+    cacheSet(CACHE_KEY, results, TTL_6H);
+    res.json(results);
+  } catch (err) {
+    console.error('[/discover/new-releases]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /discover/popular ─────────────────────────────────────────────────────
+
+app.get('/discover/popular', async (req, res) => {
+  const CACHE_KEY = 'discover:popular';
+  const cached = cacheGet(CACHE_KEY);
+  if (cached) return res.json(cached);
+
+  try {
+    const year = new Date().getFullYear();
+    const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=10&market=US`);
+    const results = (data.albums?.items ?? []).filter(Boolean).map(item => ({
+      id: item.id,
+      title: item.name,
+      artist: item.artists?.[0]?.name ?? '',
+      year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
+      artworkUrl: item.images?.[0]?.url ?? '',
+    }));
+    cacheSet(CACHE_KEY, results, TTL_6H);
+    res.json(results);
+  } catch (err) {
+    console.error('[/discover/popular]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /discover/coming-soon ─────────────────────────────────────────────────
+
+app.get('/discover/coming-soon', async (req, res) => {
+  const CACHE_KEY = 'discover:coming-soon';
+  const cached = cacheGet(CACHE_KEY);
+  if (cached) return res.json(cached);
+
+  try {
+    const year = new Date().getFullYear();
+    const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=10`);
+    const results = (data.albums?.items ?? []).filter(Boolean).map(item => ({
+      id: item.id,
+      title: item.name,
+      artist: item.artists?.[0]?.name ?? '',
+      year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
+      artworkUrl: item.images?.[0]?.url ?? '',
+    }));
+    cacheSet(CACHE_KEY, results, TTL_6H);
+    res.json(results);
+  } catch (err) {
+    console.error('[/discover/coming-soon]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /refresh ──────────────────────────────────────────────────────────────
 // Manual trigger for seeding or forcing a data update outside the cron schedule.
+// Clears the 6h caches for home/genres/decades so the next request fetches the
+// freshly written Supabase data immediately.
 
 app.get('/refresh', async (req, res) => {
   try {
     await runRefresh();
+    cacheClear('home', 'genres', 'decades',
+               'discover:new-releases', 'discover:popular', 'discover:coming-soon');
+    console.log('[/refresh] Cache cleared after refresh.');
     res.json({ success: true });
   } catch (err) {
     console.error('[/refresh]', err.message ?? err);
@@ -139,7 +314,11 @@ app.get('/refresh', async (req, res) => {
 
 cron.schedule('0 */6 * * *', () => {
   console.log('[cron] Triggering scheduled refresh...');
-  runRefresh();
+  runRefresh().then(() => {
+    cacheClear('home', 'genres', 'decades',
+               'discover:new-releases', 'discover:popular', 'discover:coming-soon');
+    console.log('[cron] Cache cleared after refresh.');
+  });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
