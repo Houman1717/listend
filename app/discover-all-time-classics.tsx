@@ -5,13 +5,13 @@ const GAP = 12;
 const COLS = 3;
 const PLACEHOLDER_COUNT = 48;
 
-export default function DiscoverRecommendedScreen() {
+export default function DiscoverAllTimeClassicsScreen() {
   const { width } = useWindowDimensions();
   const cardSize = (width - 32 - GAP * (COLS - 1)) / COLS;
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Recommended For You' }} />
+      <Stack.Screen options={{ title: 'All-Time Classics' }} />
       <ScrollView
         style={s.container}
         contentContainerStyle={s.gridWrap}

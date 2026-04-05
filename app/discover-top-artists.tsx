@@ -2,8 +2,8 @@ import { StyleSheet, View, Pressable, ScrollView, useWindowDimensions } from 're
 import { Stack } from 'expo-router';
 
 const GAP = 12;
-const COLS = 4;
-const PLACEHOLDER_COUNT = 32;
+const COLS = 3;
+const PLACEHOLDER_COUNT = 48;
 
 export default function DiscoverTopArtistsScreen() {
   const { width } = useWindowDimensions();
@@ -20,7 +20,7 @@ export default function DiscoverTopArtistsScreen() {
           {Array.from({ length: PLACEHOLDER_COUNT }).map((_, i) => (
             <Pressable
               key={i}
-              style={({ pressed }) => [s.card, { width: cardSize, height: cardSize, opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [s.card, { width: cardSize, height: cardSize, borderRadius: cardSize / 2, opacity: pressed ? 0.7 : 1 }]}
             />
           ))}
         </View>
@@ -33,5 +33,5 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d0d0d' },
   gridWrap:  { padding: 16, paddingBottom: 48 },
   grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-  card:      { backgroundColor: '#1e1e1e', borderRadius: 8 },
+  card:      { backgroundColor: '#1e1e1e' },
 });

@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
-  Text,
   Image,
   Pressable,
-  FlatList,
+  ScrollView,
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
@@ -43,7 +42,9 @@ function loadGenres(): Promise<void> {
 
 // ─── Grid constants ───────────────────────────────────────────────────────────
 
+const GAP = 12;
 const COLS = 3;
+const TOTAL = 48;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ export default function GenreGridScreen() {
   const router = useRouter();
   const { setPendingAlbum } = useAlbums();
 
-  const cardSize = width / COLS;
+  const cardSize = (width - 32 - GAP * (COLS - 1)) / COLS;
 
   const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(() => cache[genre ?? ''] ?? []);
   const [loading, setLoading] = useState(!cache[genre ?? '']);
@@ -86,6 +87,8 @@ export default function GenreGridScreen() {
     router.push('/log-album');
   }
 
+  const padded = Array.from({ length: TOTAL }, (_, i) => albums[i] ?? null) as (SpotifyAlbum | null)[];
+
   return (
     <>
       <Stack.Screen options={{ title: genre ?? 'Genre' }} />
@@ -94,40 +97,33 @@ export default function GenreGridScreen() {
         <View style={[s.centered, { backgroundColor: colors.background }]}>
           <ActivityIndicator color="#FF3CAC" size="large" />
         </View>
-      ) : albums.length === 0 ? (
-        <View style={[s.centered, { backgroundColor: colors.background }]}>
-          <Text style={{ color: colors.subtext, fontSize: 15 }}>No albums found.</Text>
-        </View>
       ) : (
-        <FlatList
-          style={{ backgroundColor: colors.background }}
-          data={albums}
-          keyExtractor={(item) => item.id}
-          numColumns={COLS}
-          showsVerticalScrollIndicator={false}
-          columnWrapperStyle={s.columnWrapper}
-          contentContainerStyle={{ paddingBottom: 48 }}
-          renderItem={({ item }) => (
-            <Pressable
-              style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-              onPress={() => handlePress(item)}>
-              {item.artworkUrl ? (
-                <Image
-                  source={{ uri: item.artworkUrl }}
-                  style={{ width: cardSize, height: cardSize }}
-                />
+        <ScrollView
+          style={{ flex: 1, backgroundColor: colors.background }}
+          contentContainerStyle={s.gridWrap}
+          showsVerticalScrollIndicator={false}>
+          <View style={s.grid}>
+            {padded.map((item, i) =>
+              item ? (
+                <Pressable
+                  key={item.id}
+                  style={({ pressed }) => [{ width: cardSize, height: cardSize, borderRadius: 8, overflow: 'hidden', opacity: pressed ? 0.8 : 1 }]}
+                  onPress={() => handlePress(item)}>
+                  {item.artworkUrl ? (
+                    <Image source={{ uri: item.artworkUrl }} style={{ width: cardSize, height: cardSize }} />
+                  ) : (
+                    <View style={{ flex: 1, backgroundColor: isDark ? '#1e1e1e' : '#e0e0e0' }} />
+                  )}
+                </Pressable>
               ) : (
                 <View
-                  style={{
-                    width: cardSize,
-                    height: cardSize,
-                    backgroundColor: isDark ? '#1e1e1e' : '#e0e0e0',
-                  }}
+                  key={`placeholder-${i}`}
+                  style={{ width: cardSize, height: cardSize, borderRadius: 8, backgroundColor: isDark ? '#1e1e1e' : '#e0e0e0' }}
                 />
-              )}
-            </Pressable>
-          )}
-        />
+              )
+            )}
+          </View>
+        </ScrollView>
       )}
     </>
   );
@@ -136,6 +132,7 @@ export default function GenreGridScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  centered:      { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  columnWrapper: { gap: 0 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  gridWrap: { padding: 16, paddingBottom: 48 },
+  grid:     { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
 });

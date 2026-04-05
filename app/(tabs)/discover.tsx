@@ -42,7 +42,7 @@ const CARD_SIZE   = 120;
 const ARTIST_SIZE = 90;
 const FALLBACK_BG = '#1e1e2e';
 
-const PLACEHOLDER_COLORS = ['#1e1e2e', '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f', '#12122a', '#1c1c3a', '#0d1b2a'];
+const PLACEHOLDER_COLORS = ['#1e1e2e', '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f', '#12122a', '#1c1c3a', '#0d1b2a', '#131328', '#0e1f3a'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -114,9 +114,30 @@ function ArtistCard({ item, isDark }: { item: SpotifyArtist; isDark: boolean }) 
   );
 }
 
+// ─── See More button ──────────────────────────────────────────────────────────
+
+function SeeMoreButton({ onPress, isDark, size = CARD_SIZE, circular = false }: { onPress: () => void; isDark: boolean; size?: number; circular?: boolean }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        s.seeMoreBtn,
+        {
+          width: size,
+          height: size,
+          borderRadius: circular ? size / 2 : 6,
+          backgroundColor: isDark ? '#1a1a1a' : '#ebebeb',
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+      onPress={onPress}>
+      <Text style={[s.seeMoreText, { color: isDark ? '#f0f0f0' : '#111' }]}>See{'\n'}More</Text>
+    </Pressable>
+  );
+}
+
 // ─── Placeholder row (sections with no live data yet) ─────────────────────────
 
-function PlaceholderRow({ isDark }: { isDark: boolean }) {
+function PlaceholderRow({ isDark, onSeeMore }: { isDark: boolean; onSeeMore: () => void }) {
   return (
     <FlatList
       horizontal
@@ -132,6 +153,8 @@ function PlaceholderRow({ isDark }: { isDark: boolean }) {
           ]}
         />
       )}
+      ListFooterComponent={<SeeMoreButton onPress={onSeeMore} isDark={isDark} />}
+      ListFooterComponentStyle={{ marginLeft: 12 }}
     />
   );
 }
@@ -198,27 +221,32 @@ export default function DiscoverScreen() {
 
       {/* ── New Releases ── */}
       <Section title="New Releases">
-        <PlaceholderRow isDark={isDark} />
+        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-new-releases' as any)} />
       </Section>
 
       {/* ── Coming Soon ── */}
       <Section title="Coming Soon">
-        <PlaceholderRow isDark={isDark} />
+        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-coming-soon' as any)} />
       </Section>
 
       {/* ── Top Rated Albums ── */}
       <Section title="Top Rated Albums">
-        <PlaceholderRow isDark={isDark} />
+        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-top-rated' as any)} />
       </Section>
 
       {/* ── Most Popular Albums ── */}
       <Section title="Most Popular Albums">
-        <PlaceholderRow isDark={isDark} />
+        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-most-popular' as any)} />
       </Section>
 
-      {/* ── Recommended For You ── */}
-      <Section title="Recommended For You">
-        <PlaceholderRow isDark={isDark} />
+      {/* ── All-Time Classics ── */}
+      <Section title="All-Time Classics">
+        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-all-time-classics' as any)} />
+      </Section>
+
+      {/* ── Based on Your Taste ── */}
+      <Section title="Based on Your Taste">
+        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-recommended' as any)} />
       </Section>
 
       {/* ── Top Artists ── */}
@@ -228,11 +256,19 @@ export default function DiscoverScreen() {
         ) : (
           <FlatList
             horizontal
-            data={artists}
-            keyExtractor={(item) => item.id}
+            data={Array.from({ length: 10 }, (_, i) => artists[i] ?? null) as (SpotifyArtist | null)[]}
+            keyExtractor={(item, index) => item?.id ?? `artist-placeholder-${index}`}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.row}
-            renderItem={({ item }) => <ArtistCard item={item} isDark={isDark} />}
+            renderItem={({ item }) =>
+              item ? (
+                <ArtistCard item={item} isDark={isDark} />
+              ) : (
+                <View style={[s.artistPlaceholder, { backgroundColor: isDark ? '#1e1e2e' : '#e5e5e5' }]} />
+              )
+            }
+            ListFooterComponent={<SeeMoreButton onPress={() => router.push('/discover-top-artists' as any)} isDark={isDark} size={ARTIST_SIZE} circular />}
+            ListFooterComponentStyle={{ marginLeft: 12 }}
           />
         )}
       </Section>
@@ -244,11 +280,19 @@ export default function DiscoverScreen() {
         ) : (
           <FlatList
             horizontal
-            data={songs}
-            keyExtractor={(item) => item.id}
+            data={Array.from({ length: 10 }, (_, i) => songs[i] ?? null) as (SpotifyTrack | null)[]}
+            keyExtractor={(item, index) => item?.id ?? `song-placeholder-${index}`}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.row}
-            renderItem={({ item, index }) => <SongCard item={item} index={index} isDark={isDark} />}
+            renderItem={({ item, index }) =>
+              item ? (
+                <SongCard item={item} index={index} isDark={isDark} />
+              ) : (
+                <View style={[s.placeholderCard, { backgroundColor: isDark ? '#1e1e2e' : '#e5e5e5' }]} />
+              )
+            }
+            ListFooterComponent={<SeeMoreButton onPress={() => router.push('/discover-top-songs' as any)} isDark={isDark} />}
+            ListFooterComponentStyle={{ marginLeft: 12 }}
           />
         )}
       </Section>
@@ -345,6 +389,23 @@ const s = StyleSheet.create({
     width: CARD_SIZE,
     height: CARD_SIZE,
     borderRadius: 6,
+  },
+
+  artistPlaceholder: {
+    width: ARTIST_SIZE,
+    height: ARTIST_SIZE,
+    borderRadius: ARTIST_SIZE / 2,
+  },
+
+  seeMoreBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  seeMoreText: {
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: -0.2,
   },
 
   chip: {

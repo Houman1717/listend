@@ -2,8 +2,8 @@ import { StyleSheet, View, Pressable, ScrollView, useWindowDimensions } from 're
 import { Stack } from 'expo-router';
 
 const GAP = 12;
-const COLS = 4;
-const PLACEHOLDER_COUNT = 32;
+const COLS = 3;
+const PLACEHOLDER_COUNT = 48;
 
 export default function DiscoverComingSoonScreen() {
   const { width } = useWindowDimensions();
