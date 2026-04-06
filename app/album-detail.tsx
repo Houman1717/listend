@@ -460,7 +460,7 @@ export default function AlbumDetailScreen() {
           const allRows = [...pinnedRows, ...extraRows];
           if (!allRows.length) return null;
 
-          const PREVIEW = 4;
+          const PREVIEW = 2;
           const visibleRows = creditsExpanded ? allRows : allRows.slice(0, PREVIEW);
           const hasMore = allRows.length > PREVIEW;
 

@@ -39,7 +39,13 @@ async function spotifyGet(path) {
     await delay(retryAfter * 1000);
     return spotifyGet(path);
   }
-  if (!res.ok) throw new Error(`Spotify ${path} → ${res.status}`);
+  if (!res.ok) {
+    let body = '';
+    try { body = await res.text(); } catch (_) {}
+    const msg = `Spotify ${path} → ${res.status}: ${body}`;
+    console.error('[spotifyGet] error:', msg);
+    throw new Error(msg);
+  }
   return res.json();
 }
 
