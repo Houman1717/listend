@@ -4,7 +4,7 @@ const express = require('express');
 const cron = require('node-cron');
 const supabase = require('./db');
 const { runRefresh } = require('./refresh');
-const { spotifyGet } = require('./spotify');
+const { spotifyGet, getToken } = require('./spotify');
 const { getCached, setCache, TTL_24H, TTL_7D } = require('./cache');
 
 const app = express();
@@ -49,6 +49,28 @@ app.use((req, res, next) => {
 // ── GET /health ───────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => res.json({ ok: true }));
+
+// ── GET /debug/spotify — raw Spotify proxy for diagnosis ──────────────────────
+// Usage: /debug/spotify?path=/artists/ARTIST_ID/top-tracks%3Fmarket%3DUS
+// Returns the raw Spotify response (or error detail) as JSON.
+// DELETE or gate this endpoint before going to production.
+
+app.get('/debug/spotify', async (req, res) => {
+  const path = (req.query.path ?? '').trim();
+  if (!path) return res.status(400).json({ error: 'path query param required, e.g. /artists/xxx/top-tracks?market=US' });
+  try {
+    const token = await getToken();
+    console.log(`[/debug/spotify] calling path="${path}" token_present=${!!token}`);
+    const r = await fetch(`https://api.spotify.com/v1${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    let body;
+    try { body = await r.json(); } catch (_) { body = await r.text(); }
+    res.status(r.status).json({ spotifyStatus: r.status, body });
+  } catch (err) {
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+});
 
 // ── GET /home ─────────────────────────────────────────────────────────────────
 
@@ -622,32 +644,41 @@ app.get('/spotify/album/:id/tracks', async (req, res) => {
 
 app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
   const { id } = req.params;
-  console.log(`[/spotify/artist/top-tracks] id=${id}`);
+  console.log(`[/spotify/artist/top-tracks] ── START id="${id}"`);
+
+  if (!id || id === 'undefined') {
+    return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
+  }
+
   const CACHE_KEY = `spotify_artist_top_tracks_${id}`;
 
-  const mem = cacheGet(CACHE_KEY);
-  if (mem) { console.log('[/spotify/artist/top-tracks] cache hit (memory)'); return res.json(mem); }
-
-  const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db) { console.log('[/spotify/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
-
   try {
+    const mem = cacheGet(CACHE_KEY);
+    if (mem) { console.log('[/spotify/artist/top-tracks] cache hit (memory)'); return res.json(mem); }
+
+    const db = await getCached(CACHE_KEY, TTL_24H);
+    if (db) { console.log('[/spotify/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+    console.log(`[/spotify/artist/top-tracks] calling Spotify /artists/${id}/top-tracks?market=US`);
     const data = await spotifyGet(`/artists/${id}/top-tracks?market=US`);
+    console.log(`[/spotify/artist/top-tracks] Spotify response keys: ${Object.keys(data ?? {}).join(', ')}`);
+
     const tracks = (data.tracks ?? []).slice(0, 10).map((t, i) => ({
-      number: i + 1,
-      id: t.id,
-      title: t.name,
+      number:     i + 1,
+      id:         t.id,
+      title:      t.name,
       artworkUrl: t.album?.images?.[0]?.url ?? '',
       albumTitle: t.album?.name ?? '',
       durationMs: t.duration_ms,
     }));
-    console.log(`[/spotify/artist/top-tracks] success — ${tracks.length} tracks for id=${id}`);
+    console.log(`[/spotify/artist/top-tracks] success — ${tracks.length} tracks`);
     cacheSet(CACHE_KEY, tracks, TTL_6H);
     await setCache(CACHE_KEY, tracks);
     res.json(tracks);
   } catch (err) {
     const msg = err.message ?? String(err);
     console.error('[/spotify/artist/top-tracks] ERROR:', msg);
+    console.error('[/spotify/artist/top-tracks] STACK:', err.stack);
     res.status(500).json({ error: msg });
   }
 });
@@ -656,31 +687,40 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
 
 app.get('/spotify/artist/:id/albums', async (req, res) => {
   const { id } = req.params;
-  console.log(`[/spotify/artist/albums] id=${id}`);
+  console.log(`[/spotify/artist/albums] ── START id="${id}"`);
+
+  if (!id || id === 'undefined') {
+    return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
+  }
+
   const CACHE_KEY = `spotify_artist_albums_${id}`;
 
-  const mem = cacheGet(CACHE_KEY);
-  if (mem) { console.log('[/spotify/artist/albums] cache hit (memory)'); return res.json(mem); }
-
-  const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
-
   try {
+    const mem = cacheGet(CACHE_KEY);
+    if (mem) { console.log('[/spotify/artist/albums] cache hit (memory)'); return res.json(mem); }
+
+    const db = await getCached(CACHE_KEY, TTL_24H);
+    if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+    console.log(`[/spotify/artist/albums] calling Spotify /artists/${id}/albums?include_groups=album,single&market=US&limit=20`);
     const data = await spotifyGet(`/artists/${id}/albums?include_groups=album,single&market=US&limit=20`);
+    console.log(`[/spotify/artist/albums] Spotify response keys: ${Object.keys(data ?? {}).join(', ')}`);
+
     const albums = (data.items ?? []).map(item => ({
-      id: item.id,
-      title: item.name,
+      id:         item.id,
+      title:      item.name,
       artworkUrl: item.images?.[0]?.url ?? '',
-      year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-      type: item.album_group ?? 'album',
+      year:       parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
+      type:       item.album_group ?? 'album',
     }));
-    console.log(`[/spotify/artist/albums] success — ${albums.length} albums for id=${id}`);
+    console.log(`[/spotify/artist/albums] success — ${albums.length} albums`);
     cacheSet(CACHE_KEY, albums, TTL_6H);
     await setCache(CACHE_KEY, albums);
     res.json(albums);
   } catch (err) {
     const msg = err.message ?? String(err);
     console.error('[/spotify/artist/albums] ERROR:', msg);
+    console.error('[/spotify/artist/albums] STACK:', err.stack);
     res.status(500).json({ error: msg });
   }
 });
