@@ -61,7 +61,8 @@ type LastfmAlbum = {
 
 type GeniusCredits = {
   producers: string[] | null;
-  writers: string[] | null;
+  writers:   string[] | null;
+  credits:   { label: string; artists: string[] }[];
 };
 
 // ─── Rating bar ───────────────────────────────────────────────────────────────
@@ -387,23 +388,27 @@ export default function AlbumDetailScreen() {
         </View>
 
         {/* ── 5. Credits ────────────────────────────────────────────────────── */}
-        {genius && (genius.producers?.length || genius.writers?.length) ? (
-          <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
-            <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Credits</Text>
-            {genius.producers && genius.producers.length > 0 && (
-              <View style={s.creditRow}>
-                <Text style={[s.creditLabel, { color: colors.subtext }]}>Produced by</Text>
-                <Text style={[s.creditValue, { color: colors.text }]}>{genius.producers.join(', ')}</Text>
-              </View>
-            )}
-            {genius.writers && genius.writers.length > 0 && (
-              <View style={s.creditRow}>
-                <Text style={[s.creditLabel, { color: colors.subtext }]}>Written by</Text>
-                <Text style={[s.creditValue, { color: colors.text }]}>{genius.writers.join(', ')}</Text>
-              </View>
-            )}
-          </View>
-        ) : null}
+        {genius && (genius.credits?.length || genius.producers?.length || genius.writers?.length) ? (() => {
+          // Prefer structured credits from custom_performances; fall back to flat arrays.
+          const rows: { label: string; artists: string[] }[] =
+            genius.credits?.length
+              ? genius.credits
+              : [
+                  ...(genius.producers?.length ? [{ label: 'Produced by', artists: genius.producers }] : []),
+                  ...(genius.writers?.length   ? [{ label: 'Written by',  artists: genius.writers   }] : []),
+                ];
+          return (
+            <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
+              <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Credits</Text>
+              {rows.map((row, i) => (
+                <View key={i} style={[s.creditRow, i < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderColor }]}>
+                  <Text style={[s.creditLabel, { color: colors.subtext }]}>{row.label}</Text>
+                  <Text style={[s.creditValue, { color: colors.text }]}>{row.artists.join(', ')}</Text>
+                </View>
+              ))}
+            </View>
+          );
+        })() : null}
 
         {/* ── Add to Playlist (logged albums only) ──────────────────────────── */}
         {isLogged && (

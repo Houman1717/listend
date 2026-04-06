@@ -442,7 +442,7 @@ app.get('/genius/credits', async (req, res) => {
 
   console.log(`[/genius/credits] artist="${artistName}" track="${trackName}" GENIUS_ACCESS_TOKEN=${process.env.GENIUS_ACCESS_TOKEN ? 'set' : 'MISSING'}`);
 
-  const CACHE_KEY = `genius_${artistName.toLowerCase()}_${trackName.toLowerCase()}`;
+  const CACHE_KEY = `genius_v2_${artistName.toLowerCase()}_${trackName.toLowerCase()}`;
 
   const mem = cacheGet(CACHE_KEY);
   if (mem) { console.log(`[/genius/credits] cache hit (memory)`); return res.json(mem); }
@@ -467,7 +467,7 @@ app.get('/genius/credits', async (req, res) => {
     const hit = hits[0];
     if (!hit) {
       console.log(`[/genius/credits] no hits — returning empty credits`);
-      const empty = { producers: null, writers: null };
+      const empty = { producers: null, writers: null, credits: [] };
       cacheSet(CACHE_KEY, empty, TTL_6H);
       await setCache(CACHE_KEY, empty);
       return res.json(empty);
@@ -483,15 +483,47 @@ app.get('/genius/credits', async (req, res) => {
     const songJson = await songResp.json();
 
     const song = songJson.response?.song;
-    const producers = (song?.producer_artists ?? []).map(a => a.name);
-    const writers   = (song?.writer_artists   ?? []).map(a => a.name);
-    console.log(`[/genius/credits] producers=${producers.length} writers=${writers.length}`);
+
+    // ── custom_performances is the authoritative, complete credits list ────────
+    // Structure: [{ label: "Produced by", artists: [{ name, ... }, ...] }, ...]
+    // producer_artists / writer_artists are often incomplete (only primary entry).
+    const customPerfs = (song?.custom_performances ?? []);
+    console.log(`[/genius/credits] custom_performances entries: ${customPerfs.length}`);
+    console.log(`[/genius/credits] custom_performances labels:`, customPerfs.map(p => p.label));
+
+    // Build the structured credits array from custom_performances.
+    const credits = customPerfs
+      .filter(p => Array.isArray(p.artists) && p.artists.length > 0)
+      .map(p => ({
+        label: p.label,
+        artists: p.artists.map(a => a.name).filter(Boolean),
+      }))
+      .filter(p => p.artists.length > 0);
+
+    // Derive flat producers / writers by merging custom_performances labelled
+    // "Produced by" / "Co-produced by" etc. with producer_artists fallback.
+    const perfProducers = credits
+      .filter(p => /produced/i.test(p.label))
+      .flatMap(p => p.artists);
+    const fallbackProducers = (song?.producer_artists ?? []).map(a => a.name);
+    const producers = [...new Set([...perfProducers, ...fallbackProducers])].filter(Boolean);
+
+    const perfWriters = credits
+      .filter(p => /written/i.test(p.label))
+      .flatMap(p => p.artists);
+    const fallbackWriters = (song?.writer_artists ?? []).map(a => a.name);
+    const writers = [...new Set([...perfWriters, ...fallbackWriters])].filter(Boolean);
+
+    console.log(`[/genius/credits] producers (${producers.length}):`, producers);
+    console.log(`[/genius/credits] writers   (${writers.length}):`, writers);
+    console.log(`[/genius/credits] credits   (${credits.length} roles):`, credits.map(c => `${c.label}: ${c.artists.join(', ')}`));
 
     const payload = {
-      title: song?.title ?? hit.result.title,
-      artist: song?.primary_artist?.name ?? hit.result.primary_artist?.name ?? null,
+      title:    song?.title ?? hit.result.title,
+      artist:   song?.primary_artist?.name ?? hit.result.primary_artist?.name ?? null,
       producers: producers.length ? producers : null,
       writers:   writers.length   ? writers   : null,
+      credits,   // full structured list — primary source for the UI
     };
 
     cacheSet(CACHE_KEY, payload, TTL_6H);
