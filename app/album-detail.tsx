@@ -198,12 +198,13 @@ export default function AlbumDetailScreen() {
     return () => { cancelled = true; };
   }, [albumId, albumArtist, albumTitle]);
 
-  // ── Fetch Genius credits when first track is known ─────────────────────────
+  // ── Fetch Genius credits when tracks are known ──────────────────────────────
   useEffect(() => {
     if (!tracks || tracks.length === 0 || !albumArtist) return;
     let cancelled = false;
-    const firstTrack = tracks[0];
-    const geniusUrl = `${API_URL}/genius/credits?artist=${encodeURIComponent(albumArtist)}&track=${encodeURIComponent(firstTrack.title)}`;
+    const candidateTracks = tracks.slice(0, 3);
+    const trackParams = candidateTracks.map(t => `tracks=${encodeURIComponent(t.title)}`).join('&');
+    const geniusUrl = `${API_URL}/genius/credits?artist=${encodeURIComponent(albumArtist)}&${trackParams}`;
     console.log('[album-detail] fetching Genius:', geniusUrl);
     fetch(geniusUrl)
       .then(r => {

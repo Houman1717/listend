@@ -432,17 +432,107 @@ app.get('/lastfm/album', async (req, res) => {
   }
 });
 
-// ── GET /genius/credits — ?artist=<name>&track=<name> ─────────────────────────
-// Switched from path params to query params.
+// ── Genius credits helper ─────────────────────────────────────────────────────
+// Fetches and parses Genius credits for one track. Returns null on any failure.
+// All raw fields are logged so Railway deploy logs show exactly what Genius returns.
+
+const GENIUS_EXCLUDE = /publisher|published by|under exclusive license|distributed by|copyright|℗|record label|label|℗\s*&\s*©|rights reserved/i;
+
+async function fetchSongCredits(artistName, trackName) {
+  const query = `${artistName} ${trackName}`;
+  console.log(`[genius] ── searching: "${query}"`);
+
+  const searchResp = await fetch(
+    `https://api.genius.com/search?q=${encodeURIComponent(query)}`,
+    { headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` } }
+  );
+  console.log(`[genius] search HTTP ${searchResp.status} for "${query}"`);
+  if (!searchResp.ok) return null;
+
+  const searchJson = await searchResp.json();
+  const hits = searchJson.response?.hits ?? [];
+  console.log(`[genius] hits: ${hits.length} for "${query}"`);
+  if (!hits.length) return null;
+
+  const hit = hits[0];
+  const songId = hit.result.id;
+  console.log(`[genius] top hit: id=${songId} title="${hit.result.title}" artist="${hit.result.primary_artist?.name}"`);
+
+  const songResp = await fetch(
+    `https://api.genius.com/songs/${songId}?text_format=plain`,
+    { headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` } }
+  );
+  console.log(`[genius] song detail HTTP ${songResp.status} for id=${songId}`);
+  if (!songResp.ok) return null;
+
+  const songJson = await songResp.json();
+  const song = songJson.response?.song;
+  if (!song) return null;
+
+  // ── Raw fields — logged in full before any filtering ──────────────────────
+  const rawCustomPerfs  = song.custom_performances ?? [];
+  const rawProducers    = (song.producer_artists ?? []).map(a => a.name);
+  const rawWriters      = (song.writer_artists   ?? []).map(a => a.name);
+
+  console.log(`[genius] RAW custom_performances (${rawCustomPerfs.length} entries):`);
+  rawCustomPerfs.forEach((p, i) =>
+    console.log(`  [${i}] "${p.label}" → ${(p.artists ?? []).map(a => a.name).join(', ') || '(no artists)'}`)
+  );
+  console.log(`[genius] RAW producer_artists (${rawProducers.length}):`, rawProducers);
+  console.log(`[genius] RAW writer_artists   (${rawWriters.length}):`,   rawWriters);
+
+  // ── Filter to music-relevant roles only ───────────────────────────────────
+  const credits = rawCustomPerfs
+    .filter(p => Array.isArray(p.artists) && p.artists.length > 0)
+    .filter(p => !GENIUS_EXCLUDE.test(p.label ?? ''))
+    .map(p => ({ label: p.label, artists: p.artists.map(a => a.name).filter(Boolean) }))
+    .filter(p => p.artists.length > 0);
+
+  console.log(`[genius] FILTERED credits (${credits.length} roles):`);
+  credits.forEach(c => console.log(`  "${c.label}" → ${c.artists.join(', ')}`));
+
+  // ── Flat producers / writers ──────────────────────────────────────────────
+  const perfProducers = credits.filter(p => /produced/i.test(p.label)).flatMap(p => p.artists);
+  const producers = [...new Set([...perfProducers, ...rawProducers])].filter(Boolean);
+
+  const perfWriters = credits.filter(p => /written|lyrics/i.test(p.label)).flatMap(p => p.artists);
+  const writers = [...new Set([...perfWriters, ...rawWriters])].filter(Boolean);
+
+  console.log(`[genius] producers (${producers.length}):`, producers);
+  console.log(`[genius] writers   (${writers.length}):`,   writers);
+
+  return {
+    trackTitle: song.title ?? hit.result.title,
+    artist:     song.primary_artist?.name ?? hit.result.primary_artist?.name ?? null,
+    producers:  producers.length ? producers : null,
+    writers:    writers.length   ? writers   : null,
+    credits,
+    // score = number of filtered roles; used to pick the richest result across tracks
+    _score: credits.length,
+  };
+}
+
+// ── GET /genius/credits ───────────────────────────────────────────────────────
+// ?artist=<name>&tracks=<t1>&tracks=<t2>&tracks=<t3>  (tracks repeated up to 3×)
+// Tries each track in order, returns whichever has the most custom_performances
+// data after filtering. Falls back to producer_artists/writer_artists if all
+// tracks return empty custom_performances.
 
 app.get('/genius/credits', async (req, res) => {
   const artistName = (req.query.artist ?? '').trim();
-  const trackName  = (req.query.track  ?? '').trim();
-  if (!artistName || !trackName) return res.status(400).json({ error: 'artist and track query params required' });
 
-  console.log(`[/genius/credits] artist="${artistName}" track="${trackName}" GENIUS_ACCESS_TOKEN=${process.env.GENIUS_ACCESS_TOKEN ? 'set' : 'MISSING'}`);
+  // Accept both ?track= (legacy single) and ?tracks[]= / ?tracks= (multi)
+  const rawTracks = req.query.tracks ?? req.query.track ?? '';
+  const trackList = (Array.isArray(rawTracks) ? rawTracks : [rawTracks])
+    .map(t => t.trim()).filter(Boolean).slice(0, 3);
 
-  const CACHE_KEY = `genius_v3_${artistName.toLowerCase()}_${trackName.toLowerCase()}`;
+  if (!artistName || !trackList.length) {
+    return res.status(400).json({ error: 'artist and at least one tracks param required' });
+  }
+
+  console.log(`[/genius/credits] ══ START artist="${artistName}" tracks=${JSON.stringify(trackList)} token=${process.env.GENIUS_ACCESS_TOKEN ? 'set' : 'MISSING'}`);
+
+  const CACHE_KEY = `genius_v4_${artistName.toLowerCase()}_${trackList[0].toLowerCase()}`;
 
   const mem = cacheGet(CACHE_KEY);
   if (mem) { console.log(`[/genius/credits] cache hit (memory)`); return res.json(mem); }
@@ -451,86 +541,42 @@ app.get('/genius/credits', async (req, res) => {
   if (db) { console.log(`[/genius/credits] cache hit (db)`); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const q = encodeURIComponent(`${artistName} ${trackName}`);
-    console.log(`[/genius/credits] searching Genius for "${artistName} ${trackName}"`);
+    let best = null;
 
-    const searchResp = await fetch(`https://api.genius.com/search?q=${q}`, {
-      headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` },
-    });
-    console.log(`[/genius/credits] Genius search HTTP status: ${searchResp.status}`);
-    if (!searchResp.ok) throw new Error(`Genius search → ${searchResp.status}`);
-    const searchJson = await searchResp.json();
+    for (const trackName of trackList) {
+      console.log(`[/genius/credits] trying track "${trackName}" …`);
+      const result = await fetchSongCredits(artistName, trackName);
 
-    const hits = searchJson.response?.hits ?? [];
-    console.log(`[/genius/credits] Genius search hits: ${hits.length}`);
+      if (!result) {
+        console.log(`[/genius/credits] no result for "${trackName}" — skipping`);
+        continue;
+      }
 
-    const hit = hits[0];
-    if (!hit) {
-      console.log(`[/genius/credits] no hits — returning empty credits`);
+      console.log(`[/genius/credits] track "${trackName}" scored ${result._score} filtered roles`);
+
+      if (!best || result._score > best._score) {
+        best = result;
+        console.log(`[/genius/credits] new best: "${trackName}" (score ${result._score})`);
+      }
+
+      // Stop early if we already have rich credits (≥3 roles)
+      if (best._score >= 3) {
+        console.log(`[/genius/credits] score ≥ 3 — stopping early`);
+        break;
+      }
+    }
+
+    if (!best) {
+      console.log(`[/genius/credits] all tracks returned no data — returning empty`);
       const empty = { producers: null, writers: null, credits: [] };
       cacheSet(CACHE_KEY, empty, TTL_6H);
       await setCache(CACHE_KEY, empty);
       return res.json(empty);
     }
 
-    console.log(`[/genius/credits] top hit: "${hit.result.title}" by "${hit.result.primary_artist?.name}"`);
-    const songId = hit.result.id;
-    const songResp = await fetch(`https://api.genius.com/songs/${songId}?text_format=plain`, {
-      headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` },
-    });
-    console.log(`[/genius/credits] Genius song detail HTTP status: ${songResp.status}`);
-    if (!songResp.ok) throw new Error(`Genius song detail → ${songResp.status}`);
-    const songJson = await songResp.json();
+    console.log(`[/genius/credits] ══ FINAL using "${best.trackTitle}" score=${best._score}`);
 
-    const song = songJson.response?.song;
-
-    // ── custom_performances is the authoritative, complete credits list ────────
-    // Structure: [{ label: "Produced by", artists: [{ name, ... }, ...] }, ...]
-    // producer_artists / writer_artists are often incomplete (only primary entry).
-    const customPerfs = (song?.custom_performances ?? []);
-    console.log(`[/genius/credits] custom_performances entries: ${customPerfs.length}`);
-    console.log(`[/genius/credits] custom_performances labels:`, customPerfs.map(p => p.label));
-
-    // Exclude business/legal/publishing roles — keep only music-relevant credits.
-    const EXCLUDE_LABELS = /publisher|published by|under exclusive license|distributed by|copyright|℗|record label|label|℗\s*&\s*©|rights reserved/i;
-
-    // Build the structured credits array from custom_performances.
-    const credits = customPerfs
-      .filter(p => Array.isArray(p.artists) && p.artists.length > 0)
-      .filter(p => !EXCLUDE_LABELS.test(p.label ?? ''))
-      .map(p => ({
-        label: p.label,
-        artists: p.artists.map(a => a.name).filter(Boolean),
-      }))
-      .filter(p => p.artists.length > 0);
-
-    // Derive flat producers / writers:
-    // - Primary source: filtered credits entries whose label matches /produced/ or /written/
-    // - Fallback: producer_artists / writer_artists from the song object
-    const perfProducers = credits
-      .filter(p => /produced/i.test(p.label))
-      .flatMap(p => p.artists);
-    const fallbackProducers = (song?.producer_artists ?? []).map(a => a.name);
-    const producers = [...new Set([...perfProducers, ...fallbackProducers])].filter(Boolean);
-
-    const perfWriters = credits
-      .filter(p => /written|lyrics/i.test(p.label))
-      .flatMap(p => p.artists);
-    const fallbackWriters = (song?.writer_artists ?? []).map(a => a.name);
-    const writers = [...new Set([...perfWriters, ...fallbackWriters])].filter(Boolean);
-
-    console.log(`[/genius/credits] after filtering — ${credits.length} roles kept`);
-    console.log(`[/genius/credits] producers (${producers.length}):`, producers);
-    console.log(`[/genius/credits] writers   (${writers.length}):`, writers);
-    console.log(`[/genius/credits] credits   (${credits.length} roles):`, credits.map(c => `${c.label}: ${c.artists.join(', ')}`));
-
-    const payload = {
-      title:    song?.title ?? hit.result.title,
-      artist:   song?.primary_artist?.name ?? hit.result.primary_artist?.name ?? null,
-      producers: producers.length ? producers : null,
-      writers:   writers.length   ? writers   : null,
-      credits,   // full structured list — primary source for the UI
-    };
+    const { _score, trackTitle, ...payload } = best;
 
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
