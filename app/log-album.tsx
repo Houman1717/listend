@@ -134,7 +134,6 @@ export default function LogAlbumScreen() {
   }
 
   function handleLog() {
-    if (rating === 0) return;
     logAlbum(rating, review);
     router.back();
     router.replace('/(tabs)');
@@ -160,7 +159,9 @@ export default function LogAlbumScreen() {
           {pendingAlbum.artist} · {pendingAlbum.year}
         </Text>
 
-        <Text style={[styles.sectionLabel, { color: colors.subtext }]}>Your rating</Text>
+        <Text style={[styles.sectionLabel, { color: colors.subtext }]}>
+          Your rating <Text style={{ fontWeight: '400' }}>(optional)</Text>
+        </Text>
         <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
 
         <Text style={[styles.sectionLabel, { color: colors.subtext, marginTop: 28 }]}>
@@ -190,13 +191,9 @@ export default function LogAlbumScreen() {
         )}
 
         <Pressable
-          style={[
-            styles.logButton,
-            { backgroundColor: rating > 0 ? '#FF3CAC' : (isDark ? '#2a2a2a' : '#ddd') },
-          ]}
-          onPress={handleLog}
-          disabled={rating === 0}>
-          <Text style={[styles.logButtonText, { color: rating > 0 ? '#fff' : colors.subtext }]}>
+          style={[styles.logButton, { backgroundColor: '#FF3CAC' }]}
+          onPress={handleLog}>
+          <Text style={[styles.logButtonText, { color: '#fff' }]}>
             Log Album
           </Text>
         </Pressable>

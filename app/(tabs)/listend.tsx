@@ -42,6 +42,15 @@ function ProfileHeader({
       <Text style={ph.name}>Houman</Text>
       <Text style={ph.username}>@houman</Text>
 
+      {/* Following / Followers */}
+      <View style={ph.socialRow}>
+        <Text style={ph.socialCount}>0</Text>
+        <Text style={ph.socialLabel}> Following</Text>
+        <Text style={ph.socialDot}> · </Text>
+        <Text style={ph.socialCount}>0</Text>
+        <Text style={ph.socialLabel}> Followers</Text>
+      </View>
+
       {/* Stats row */}
       <View style={ph.statsRow}>
         <View style={ph.statBox}>
@@ -106,7 +115,25 @@ const ph = StyleSheet.create({
     color: SUBTEXT,
     fontSize: 14,
     marginTop: 2,
-    marginBottom: 20,
+    marginBottom: 10,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  socialCount: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  socialLabel: {
+    color: SUBTEXT,
+    fontSize: 13,
+  },
+  socialDot: {
+    color: SUBTEXT,
+    fontSize: 13,
   },
   statsRow: {
     flexDirection: 'row',
@@ -228,8 +255,9 @@ export default function ListendScreen() {
     const y = parseInt(a.dateLogged?.split(', ')[1] ?? '0', 10);
     return y === currentYear;
   }).length;
-  const avgRating = loggedAlbums.length > 0
-    ? (loggedAlbums.reduce((sum, a) => sum + a.rating, 0) / loggedAlbums.length).toFixed(1)
+  const ratedAlbums = loggedAlbums.filter((a) => a.rating > 0);
+  const avgRating = ratedAlbums.length > 0
+    ? (ratedAlbums.reduce((sum, a) => sum + a.rating, 0) / ratedAlbums.length).toFixed(1)
     : '—';
 
   function confirmRemoveAlbum(id: string, title: string) {
@@ -356,17 +384,24 @@ export default function ListendScreen() {
         />
         <View style={s.navSeparator} />
         <NavRow
-          icon="clock-o"
-          label="Recent Listens"
-          sub="Last 20 logged"
-          onPress={() => router.push('/recent-listens')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
           icon="pencil"
           label="My Reviews"
           sub={`${reviewCount} reviews`}
           onPress={() => router.push('/my-reviews')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="list"
+          label="My Playlists"
+          sub="Your album lists"
+          onPress={() => router.push('/my-playlists')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="bar-chart"
+          label="My Stats"
+          sub="Your listening insights"
+          onPress={() => router.push('/my-stats')}
         />
       </View>
 

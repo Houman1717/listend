@@ -58,6 +58,14 @@ export type WantToListenAlbum = {
   artworkUrl: string;
 };
 
+export type Playlist = {
+  id: string;
+  name: string;
+  description?: string;
+  albumIds: string[];
+  createdAt: string;
+};
+
 type AlbumsContextType = {
   loggedAlbums: LoggedAlbum[];
   pendingAlbum: PendingAlbum | null;
@@ -76,6 +84,11 @@ type AlbumsContextType = {
   wantToListen: WantToListenAlbum[];
   addToWantToListen: (album: WantToListenAlbum) => void;
   removeFromWantToListen: (id: string) => void;
+  playlists: Playlist[];
+  createPlaylist: (name: string, description?: string) => string;
+  deletePlaylist: (id: string) => void;
+  addAlbumToPlaylist: (playlistId: string, albumId: string) => void;
+  removeAlbumFromPlaylist: (playlistId: string, albumId: string) => void;
   isLoaded: boolean;
 };
 
@@ -87,6 +100,7 @@ const STORAGE_KEYS = {
   TOP_SONGS: '@listend:topSongs_v1',
   TOP_ARTISTS: '@listend:topArtists_v1',
   WANT_TO_LISTEN: '@listend:wantToListen_v1',
+  PLAYLISTS: '@listend:playlists_v1',
 };
 
 const COVER_COLORS = [
@@ -113,6 +127,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   const [topSongs, setTopSongs] = useState<TopSong[]>([]);
   const [topArtists, setTopArtists] = useState<TopArtist[]>([]);
   const [wantToListen, setWantToListen] = useState<WantToListenAlbum[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [pendingAlbum, setPendingAlbum] = useState<PendingAlbum | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -120,18 +135,20 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [albumsStr, topAlbumsStr, topSongsStr, topArtistsStr, wantStr] = await Promise.all([
+        const [albumsStr, topAlbumsStr, topSongsStr, topArtistsStr, wantStr, playlistsStr] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.LOGGED),
           AsyncStorage.getItem(STORAGE_KEYS.TOP_ALBUMS),
           AsyncStorage.getItem(STORAGE_KEYS.TOP_SONGS),
           AsyncStorage.getItem(STORAGE_KEYS.TOP_ARTISTS),
           AsyncStorage.getItem(STORAGE_KEYS.WANT_TO_LISTEN),
+          AsyncStorage.getItem(STORAGE_KEYS.PLAYLISTS),
         ]);
         if (albumsStr !== null) setLoggedAlbums(JSON.parse(albumsStr));
         if (topAlbumsStr !== null) setTopAlbums(JSON.parse(topAlbumsStr));
         if (topSongsStr !== null) setTopSongs(JSON.parse(topSongsStr));
         if (topArtistsStr !== null) setTopArtists(JSON.parse(topArtistsStr));
         if (wantStr !== null) setWantToListen(JSON.parse(wantStr));
+        if (playlistsStr !== null) setPlaylists(JSON.parse(playlistsStr));
       } catch {
         // Fallback to initial state
       } finally {
@@ -165,6 +182,11 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     if (!isLoaded) return;
     AsyncStorage.setItem(STORAGE_KEYS.WANT_TO_LISTEN, JSON.stringify(wantToListen)).catch(() => {});
   }, [wantToListen, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    AsyncStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists)).catch(() => {});
+  }, [playlists, isLoaded]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -245,11 +267,49 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     setWantToListen((prev) => prev.filter((a) => a.id !== id));
   }
 
+  function createPlaylist(name: string, description?: string): string {
+    const id = `pl_${Date.now()}`;
+    const newPlaylist: Playlist = {
+      id,
+      name: name.trim(),
+      description: description?.trim() || undefined,
+      albumIds: [],
+      createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+    setPlaylists((prev) => [newPlaylist, ...prev]);
+    return id;
+  }
+
+  function deletePlaylist(id: string) {
+    setPlaylists((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function addAlbumToPlaylist(playlistId: string, albumId: string) {
+    setPlaylists((prev) =>
+      prev.map((p) =>
+        p.id === playlistId && !p.albumIds.includes(albumId)
+          ? { ...p, albumIds: [...p.albumIds, albumId] }
+          : p
+      )
+    );
+  }
+
+  function removeAlbumFromPlaylist(playlistId: string, albumId: string) {
+    setPlaylists((prev) =>
+      prev.map((p) =>
+        p.id === playlistId
+          ? { ...p, albumIds: p.albumIds.filter((id) => id !== albumId) }
+          : p
+      )
+    );
+  }
+
   return (
     <AlbumsContext.Provider value={{
       loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, updateReview,
       topAlbums, topSongs, topArtists, addTopAlbum, removeTopAlbum, addTopSong, removeTopSong, addTopArtist, removeTopArtist,
       wantToListen, addToWantToListen, removeFromWantToListen,
+      playlists, createPlaylist, deletePlaylist, addAlbumToPlaylist, removeAlbumFromPlaylist,
       isLoaded,
     }}>
       {children}

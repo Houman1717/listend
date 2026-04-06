@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useState, useMemo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
@@ -19,10 +20,20 @@ const COLS    = 3;
 
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
+type FilterKey = 'recent' | 'top_rated' | 'a_z' | 'by_genre' | 'by_decade';
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'recent',    label: 'Recently Listened' },
+  { key: 'top_rated', label: 'Top Rated'         },
+  { key: 'a_z',       label: 'A–Z'               },
+  { key: 'by_genre',  label: 'By Genre'           },
+  { key: 'by_decade', label: 'By Decade'          },
+];
+
 function VolumeBadge({ rating }: { rating: number }) {
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#FF3CAC' : '#3a3a3a'} />
+      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#FF3CAC' : '#555'} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
@@ -59,55 +70,110 @@ function AlbumCard({ album, cardWidth, onPress }: { album: LoggedAlbum; cardWidt
   );
 }
 
+function FilterPills({
+  active,
+  onSelect,
+  isDark,
+}: {
+  active: FilterKey;
+  onSelect: (k: FilterKey) => void;
+  isDark: boolean;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={s.pillsRow}
+      style={s.pillsScroll}>
+      {FILTERS.map((f) => {
+        const isActive = f.key === active;
+        return (
+          <Pressable
+            key={f.key}
+            onPress={() => onSelect(f.key)}
+            style={[
+              s.pill,
+              isActive
+                ? s.pillActive
+                : { backgroundColor: isDark ? '#1e1e1e' : '#efefef', borderColor: isDark ? '#333' : '#ddd' },
+            ]}>
+            <Text style={[s.pillText, { color: isActive ? '#fff' : isDark ? '#aaa' : '#555' }]}>
+              {f.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 export default function MyListendScreen() {
   const { width } = useWindowDimensions();
   const cardWidth = (width - PADDING * 2 - GAP * (COLS - 1)) / COLS;
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { loggedAlbums } = useAlbums();
 
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('recent');
+
+  const filteredAlbums = useMemo(() => {
+    const arr = [...loggedAlbums];
+    switch (activeFilter) {
+      case 'top_rated': return arr.sort((a, b) => b.rating - a.rating);
+      case 'a_z':       return arr.sort((a, b) => a.title.localeCompare(b.title));
+      case 'by_decade': return arr.sort((a, b) => a.year - b.year);
+      case 'by_genre':  return arr.sort((a, b) => a.artist.localeCompare(b.artist));
+      default:          return arr;
+    }
+  }, [loggedAlbums, activeFilter]);
+
   return (
-    <ScrollView
-      style={[s.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={s.gridWrap}
-      showsVerticalScrollIndicator={false}>
-      {loggedAlbums.length === 0 ? (
-        <Text style={[s.emptyText, { color: colors.subtext }]}>
-          No albums logged yet — head to Search!
-        </Text>
-      ) : (
-        <View style={s.grid}>
-          {loggedAlbums.map((album) => (
-            <AlbumCard
-              key={album.id}
-              album={album}
-              cardWidth={cardWidth}
-              onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
-            />
-          ))}
-        </View>
-      )}
-    </ScrollView>
+    <View style={[s.root, { backgroundColor: colors.background }]}>
+      <FilterPills active={activeFilter} onSelect={setActiveFilter} isDark={isDark} />
+      <ScrollView contentContainerStyle={s.gridWrap} showsVerticalScrollIndicator={false}>
+        {filteredAlbums.length === 0 ? (
+          <Text style={[s.emptyText, { color: colors.subtext }]}>
+            No albums logged yet — head to Search!
+          </Text>
+        ) : (
+          <View style={s.grid}>
+            {filteredAlbums.map((album) => (
+              <AlbumCard
+                key={album.id}
+                album={album}
+                cardWidth={cardWidth}
+                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  gridWrap:  { padding: PADDING, paddingBottom: 48 },
-  grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  root: { flex: 1 },
 
+  // ── Filter pills ─────────────────────────────────────────────────────────────
+  pillsScroll: { flexGrow: 0 },
+  pillsRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  pill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  pillActive: { backgroundColor: '#FF3CAC', borderColor: '#FF3CAC' },
+  pillText: { fontSize: 13, fontWeight: '500' },
+
+  // ── Grid ─────────────────────────────────────────────────────────────────────
+  gridWrap: { padding: PADDING, paddingBottom: 48 },
+  grid:     { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
   card: { gap: 0 },
-
   fallback: { borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   fallbackText: { color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
-
   ratingWrap: { marginTop: 6, alignItems: 'center' },
-
   badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
   badgeBar:  { width: 2.5, borderRadius: 1 },
   badgeNum:  { color: '#FF3CAC', fontSize: 9, fontWeight: '700', lineHeight: 14 },
-
   emptyText: { textAlign: 'center', marginTop: 80, fontSize: 15 },
 });
