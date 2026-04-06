@@ -5,18 +5,17 @@ const cron = require('node-cron');
 const supabase = require('./db');
 const { runRefresh } = require('./refresh');
 const { spotifyGet } = require('./spotify');
+const { getCached, setCache, TTL_24H, TTL_7D } = require('./cache');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
 // ── In-memory response cache ───────────────────────────────────────────────────
-// Simple Map keyed by cache key string.  Each entry: { data, expiresAt (epoch ms) }
-// No external dependency — lives in process memory, resets on server restart.
 
 const memCache = new Map();
 
-const TTL_6H  = 6  * 60 * 60 * 1000;  // static / slow-changing data
-const TTL_10M = 10 * 60 * 1000;        // search results
+const TTL_6H  = 6  * 60 * 60 * 1000;
+const TTL_10M = 10 * 60 * 1000;
 
 function cacheGet(key) {
   const entry = memCache.get(key);
@@ -45,12 +44,15 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // ── GET /home ─────────────────────────────────────────────────────────────────
-// Returns { albums, songs, artists } from Supabase cache.
 
 app.get('/home', async (req, res) => {
   const CACHE_KEY = 'home';
-  const cached = cacheGet(CACHE_KEY);
-  if (cached) return res.json(cached);
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const [albumsRes, songsRes, artistsRes] = await Promise.all([
@@ -86,6 +88,7 @@ app.get('/home', async (req, res) => {
     };
 
     cacheSet(CACHE_KEY, payload, TTL_6H);
+    await setCache(CACHE_KEY, payload);
     res.json(payload);
   } catch (err) {
     console.error('[/home]', err.message ?? err);
@@ -94,12 +97,15 @@ app.get('/home', async (req, res) => {
 });
 
 // ── GET /genres ───────────────────────────────────────────────────────────────
-// Returns albums grouped by genre_label: { Rap: [...], 'R&B': [...], ... }
 
 app.get('/genres', async (req, res) => {
   const CACHE_KEY = 'genres';
-  const cached = cacheGet(CACHE_KEY);
-  if (cached) return res.json(cached);
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const { data, error } = await supabase
@@ -122,6 +128,7 @@ app.get('/genres', async (req, res) => {
     }
 
     cacheSet(CACHE_KEY, grouped, TTL_6H);
+    await setCache(CACHE_KEY, grouped);
     res.json(grouped);
   } catch (err) {
     console.error('[/genres]', err.message ?? err);
@@ -130,12 +137,15 @@ app.get('/genres', async (req, res) => {
 });
 
 // ── GET /decades ──────────────────────────────────────────────────────────────
-// Returns albums grouped by decade_label: { '1950s': [...], '1960s': [...], ... }
 
 app.get('/decades', async (req, res) => {
   const CACHE_KEY = 'decades';
-  const cached = cacheGet(CACHE_KEY);
-  if (cached) return res.json(cached);
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const { data, error } = await supabase
@@ -158,6 +168,7 @@ app.get('/decades', async (req, res) => {
     }
 
     cacheSet(CACHE_KEY, grouped, TTL_6H);
+    await setCache(CACHE_KEY, grouped);
     res.json(grouped);
   } catch (err) {
     console.error('[/decades]', err.message ?? err);
@@ -166,9 +177,6 @@ app.get('/decades', async (req, res) => {
 });
 
 // ── GET /search ───────────────────────────────────────────────────────────────
-// Live Spotify search proxy. Returns normalized arrays — no raw Spotify shape
-// reaches the client.
-// Query params: q (required), type = album | track | artist (required)
 
 app.get('/search', async (req, res) => {
   const { q, type } = req.query;
@@ -178,8 +186,12 @@ app.get('/search', async (req, res) => {
   }
 
   const CACHE_KEY = `search:${type}:${q.trim().toLowerCase()}`;
-  const cached = cacheGet(CACHE_KEY);
-  if (cached) return res.json(cached);
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_10M); return res.json(db); }
 
   try {
     const encoded = encodeURIComponent(q);
@@ -211,6 +223,7 @@ app.get('/search', async (req, res) => {
     }
 
     cacheSet(CACHE_KEY, results, TTL_10M);
+    await setCache(CACHE_KEY, results);
     res.json(results);
   } catch (err) {
     console.error('[/search]', err.message ?? err);
@@ -222,8 +235,12 @@ app.get('/search', async (req, res) => {
 
 app.get('/discover/new-releases', async (req, res) => {
   const CACHE_KEY = 'discover:new-releases';
-  const cached = cacheGet(CACHE_KEY);
-  if (cached) return res.json(cached);
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const data = await spotifyGet('/search?q=tag:new&type=album&limit=10&market=US');
@@ -235,6 +252,7 @@ app.get('/discover/new-releases', async (req, res) => {
       artworkUrl: item.images?.[0]?.url ?? '',
     }));
     cacheSet(CACHE_KEY, results, TTL_6H);
+    await setCache(CACHE_KEY, results);
     res.json(results);
   } catch (err) {
     console.error('[/discover/new-releases]', err.message ?? err);
@@ -246,8 +264,12 @@ app.get('/discover/new-releases', async (req, res) => {
 
 app.get('/discover/popular', async (req, res) => {
   const CACHE_KEY = 'discover:popular';
-  const cached = cacheGet(CACHE_KEY);
-  if (cached) return res.json(cached);
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const year = new Date().getFullYear();
@@ -260,6 +282,7 @@ app.get('/discover/popular', async (req, res) => {
       artworkUrl: item.images?.[0]?.url ?? '',
     }));
     cacheSet(CACHE_KEY, results, TTL_6H);
+    await setCache(CACHE_KEY, results);
     res.json(results);
   } catch (err) {
     console.error('[/discover/popular]', err.message ?? err);
@@ -271,8 +294,12 @@ app.get('/discover/popular', async (req, res) => {
 
 app.get('/discover/coming-soon', async (req, res) => {
   const CACHE_KEY = 'discover:coming-soon';
-  const cached = cacheGet(CACHE_KEY);
-  if (cached) return res.json(cached);
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const year = new Date().getFullYear();
@@ -285,6 +312,7 @@ app.get('/discover/coming-soon', async (req, res) => {
       artworkUrl: item.images?.[0]?.url ?? '',
     }));
     cacheSet(CACHE_KEY, results, TTL_6H);
+    await setCache(CACHE_KEY, results);
     res.json(results);
   } catch (err) {
     console.error('[/discover/coming-soon]', err.message ?? err);
@@ -292,10 +320,150 @@ app.get('/discover/coming-soon', async (req, res) => {
   }
 });
 
+// ── GET /lastfm/artist/:artistName ────────────────────────────────────────────
+// Returns bio, similar artists, tags, and listener count from Last.fm.
+
+app.get('/lastfm/artist/:artistName', async (req, res) => {
+  const artistName = req.params.artistName;
+  const CACHE_KEY = `lastfm_artist_${artistName.toLowerCase()}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const url =
+      `http://ws.audioscrobbler.com/2.0/?method=artist.getinfo` +
+      `&artist=${encodeURIComponent(artistName)}` +
+      `&api_key=${process.env.LASTFM_API_KEY}` +
+      `&format=json`;
+
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Last.fm artist.getinfo → ${resp.status}`);
+    const json = await resp.json();
+
+    if (json.error) throw new Error(`Last.fm error ${json.error}: ${json.message}`);
+
+    const a = json.artist;
+    const payload = {
+      name: a.name,
+      listeners: parseInt(a.stats?.listeners ?? '0', 10),
+      bio: a.bio?.summary ?? '',
+      tags: (a.tags?.tag ?? []).map(t => t.name),
+      similar: (a.similar?.artist ?? []).map(s => ({ name: s.name, url: s.url })),
+    };
+
+    cacheSet(CACHE_KEY, payload, TTL_6H);
+    await setCache(CACHE_KEY, payload);
+    res.json(payload);
+  } catch (err) {
+    console.error('[/lastfm/artist]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /lastfm/album/:artistName/:albumName ──────────────────────────────────
+// Returns album description, tags, and listener count from Last.fm.
+
+app.get('/lastfm/album/:artistName/:albumName', async (req, res) => {
+  const { artistName, albumName } = req.params;
+  const CACHE_KEY = `lastfm_album_${artistName.toLowerCase()}_${albumName.toLowerCase()}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const url =
+      `http://ws.audioscrobbler.com/2.0/?method=album.getinfo` +
+      `&artist=${encodeURIComponent(artistName)}` +
+      `&album=${encodeURIComponent(albumName)}` +
+      `&api_key=${process.env.LASTFM_API_KEY}` +
+      `&format=json`;
+
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Last.fm album.getinfo → ${resp.status}`);
+    const json = await resp.json();
+
+    if (json.error) throw new Error(`Last.fm error ${json.error}: ${json.message}`);
+
+    const al = json.album;
+    const payload = {
+      name: al.name,
+      artist: al.artist,
+      listeners: parseInt(al.listeners ?? '0', 10),
+      description: al.wiki?.summary ?? '',
+      tags: (al.tags?.tag ?? []).map(t => t.name),
+    };
+
+    cacheSet(CACHE_KEY, payload, TTL_6H);
+    await setCache(CACHE_KEY, payload);
+    res.json(payload);
+  } catch (err) {
+    console.error('[/lastfm/album]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /genius/credits/:artistName/:trackName ────────────────────────────────
+// Returns producer and writer credits for a track via Genius API.
+// Returns null fields gracefully if no match is found.
+
+app.get('/genius/credits/:artistName/:trackName', async (req, res) => {
+  const { artistName, trackName } = req.params;
+  const CACHE_KEY = `genius_${artistName.toLowerCase()}_${trackName.toLowerCase()}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const q = encodeURIComponent(`${artistName} ${trackName}`);
+    const searchResp = await fetch(`https://api.genius.com/search?q=${q}`, {
+      headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` },
+    });
+    if (!searchResp.ok) throw new Error(`Genius search → ${searchResp.status}`);
+    const searchJson = await searchResp.json();
+
+    const hit = searchJson.response?.hits?.[0];
+    if (!hit) {
+      const empty = { producers: null, writers: null };
+      cacheSet(CACHE_KEY, empty, TTL_6H);
+      await setCache(CACHE_KEY, empty);
+      return res.json(empty);
+    }
+
+    const songId = hit.result.id;
+    const songResp = await fetch(`https://api.genius.com/songs/${songId}?text_format=plain`, {
+      headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` },
+    });
+    if (!songResp.ok) throw new Error(`Genius song detail → ${songResp.status}`);
+    const songJson = await songResp.json();
+
+    const song = songJson.response?.song;
+    const payload = {
+      title: song?.title ?? hit.result.title,
+      artist: song?.primary_artist?.name ?? hit.result.primary_artist?.name ?? null,
+      producers: (song?.producer_artists ?? []).map(a => a.name),
+      writers: (song?.writer_artists ?? []).map(a => a.name),
+    };
+
+    cacheSet(CACHE_KEY, payload, TTL_6H);
+    await setCache(CACHE_KEY, payload);
+    res.json(payload);
+  } catch (err) {
+    console.error('[/genius/credits]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /refresh ──────────────────────────────────────────────────────────────
-// Manual trigger for seeding or forcing a data update outside the cron schedule.
-// Clears the 6h caches for home/genres/decades so the next request fetches the
-// freshly written Supabase data immediately.
 
 app.get('/refresh', async (req, res) => {
   try {
