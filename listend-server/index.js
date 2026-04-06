@@ -442,7 +442,7 @@ app.get('/genius/credits', async (req, res) => {
 
   console.log(`[/genius/credits] artist="${artistName}" track="${trackName}" GENIUS_ACCESS_TOKEN=${process.env.GENIUS_ACCESS_TOKEN ? 'set' : 'MISSING'}`);
 
-  const CACHE_KEY = `genius_v2_${artistName.toLowerCase()}_${trackName.toLowerCase()}`;
+  const CACHE_KEY = `genius_v3_${artistName.toLowerCase()}_${trackName.toLowerCase()}`;
 
   const mem = cacheGet(CACHE_KEY);
   if (mem) { console.log(`[/genius/credits] cache hit (memory)`); return res.json(mem); }
@@ -491,17 +491,22 @@ app.get('/genius/credits', async (req, res) => {
     console.log(`[/genius/credits] custom_performances entries: ${customPerfs.length}`);
     console.log(`[/genius/credits] custom_performances labels:`, customPerfs.map(p => p.label));
 
+    // Exclude business/legal/publishing roles — keep only music-relevant credits.
+    const EXCLUDE_LABELS = /publisher|published by|under exclusive license|distributed by|copyright|℗|record label|label|℗\s*&\s*©|rights reserved/i;
+
     // Build the structured credits array from custom_performances.
     const credits = customPerfs
       .filter(p => Array.isArray(p.artists) && p.artists.length > 0)
+      .filter(p => !EXCLUDE_LABELS.test(p.label ?? ''))
       .map(p => ({
         label: p.label,
         artists: p.artists.map(a => a.name).filter(Boolean),
       }))
       .filter(p => p.artists.length > 0);
 
-    // Derive flat producers / writers by merging custom_performances labelled
-    // "Produced by" / "Co-produced by" etc. with producer_artists fallback.
+    // Derive flat producers / writers:
+    // - Primary source: filtered credits entries whose label matches /produced/ or /written/
+    // - Fallback: producer_artists / writer_artists from the song object
     const perfProducers = credits
       .filter(p => /produced/i.test(p.label))
       .flatMap(p => p.artists);
@@ -509,11 +514,12 @@ app.get('/genius/credits', async (req, res) => {
     const producers = [...new Set([...perfProducers, ...fallbackProducers])].filter(Boolean);
 
     const perfWriters = credits
-      .filter(p => /written/i.test(p.label))
+      .filter(p => /written|lyrics/i.test(p.label))
       .flatMap(p => p.artists);
     const fallbackWriters = (song?.writer_artists ?? []).map(a => a.name);
     const writers = [...new Set([...perfWriters, ...fallbackWriters])].filter(Boolean);
 
+    console.log(`[/genius/credits] after filtering — ${credits.length} roles kept`);
     console.log(`[/genius/credits] producers (${producers.length}):`, producers);
     console.log(`[/genius/credits] writers   (${writers.length}):`, writers);
     console.log(`[/genius/credits] credits   (${credits.length} roles):`, credits.map(c => `${c.label}: ${c.artists.join(', ')}`));
