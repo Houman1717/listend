@@ -15,7 +15,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useAlbums, PendingAlbum, WantToListenAlbum } from '@/context/AlbumsContext';
+import { useAlbums, PendingAlbum, WantToListenAlbum, Playlist } from '@/context/AlbumsContext';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SearchTab = 'albums' | 'songs' | 'artists' | 'users';
+type SearchTab = 'albums' | 'songs' | 'artists' | 'users' | 'playlists';
 
 type ResultItem =
   | (SpotifyAlbum  & { kind: 'album'  })
@@ -42,10 +42,11 @@ type RecentItem = {
 };
 
 const TABS: { key: SearchTab; label: string }[] = [
-  { key: 'albums',  label: 'Albums'  },
-  { key: 'songs',   label: 'Songs'   },
-  { key: 'artists', label: 'Artists' },
-  { key: 'users',   label: 'Listend Members' },
+  { key: 'albums',    label: 'Albums'          },
+  { key: 'songs',     label: 'Songs'           },
+  { key: 'artists',   label: 'Artists'         },
+  { key: 'users',     label: 'Listend Members' },
+  { key: 'playlists', label: 'Playlists'       },
 ];
 
 const RECENT_KEY = '@listend:recentItems_v2';
@@ -102,12 +103,13 @@ function resultToRecentItem(item: ResultItem): RecentItem {
 // ─── Row components ───────────────────────────────────────────────────────────
 
 function AlbumRow({
-  item, isDark, colors, isBookmarked, onLog, onBookmark, onSaveRecent,
+  item, isDark, colors, isBookmarked, onView, onLog, onBookmark, onSaveRecent,
 }: {
   item: SpotifyAlbum & { kind: 'album' };
   isDark: boolean;
   colors: typeof Colors.light;
   isBookmarked: boolean;
+  onView: () => void;
   onLog: () => void;
   onBookmark: () => void;
   onSaveRecent: () => void;
@@ -119,7 +121,7 @@ function AlbumRow({
           s.resultMain,
           { backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
         ]}
-        onPress={() => { onSaveRecent(); onLog(); }}>
+        onPress={() => { onSaveRecent(); onView(); }}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
         ) : (
@@ -202,6 +204,44 @@ function ArtistRow({ item, isDark, colors, onSaveRecent }: {
   );
 }
 
+// ─── Playlist result row ──────────────────────────────────────────────────────
+
+function PlaylistRow({
+  item,
+  isDark,
+  colors,
+  onPress,
+}: {
+  item: Playlist;
+  isDark: boolean;
+  colors: typeof Colors.light;
+  onPress: () => void;
+}) {
+  const count = item.albumIds.length;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        s.resultRow,
+        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
+      ]}>
+      <View style={s.resultMain}>
+        <View style={[s.playlistIcon, { backgroundColor: isDark ? '#2a2a2a' : '#e8e8e8' }]}>
+          <FontAwesome name="list" size={18} color="#FF3CAC" />
+        </View>
+        <View style={s.resultText}>
+          <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+          <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>
+            {count === 1 ? '1 album' : `${count} albums`}
+            {item.description ? `  ·  ${item.description}` : ''}
+          </Text>
+        </View>
+      </View>
+      <FontAwesome name="chevron-right" size={13} color={isDark ? '#444' : '#ccc'} />
+    </Pressable>
+  );
+}
+
 // ─── Recent item row ──────────────────────────────────────────────────────────
 
 function RecentRow({
@@ -259,11 +299,12 @@ export default function SearchScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { setPendingAlbum, wantToListen, addToWantToListen, removeFromWantToListen } = useAlbums();
+  const { setPendingAlbum, wantToListen, addToWantToListen, removeFromWantToListen, playlists } = useAlbums();
 
   const [activeTab, setActiveTab] = useState<SearchTab>('albums');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ResultItem[]>([]);
+  const [playlistResults, setPlaylistResults] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
@@ -298,9 +339,27 @@ export default function SearchScreen() {
   }
 
   const search = useCallback(async (text: string, tab: SearchTab) => {
-    if (!text.trim()) { setResults([]); setSearched(false); return; }
-    setLoading(true);
+    if (!text.trim()) {
+      setResults([]);
+      setPlaylistResults([]);
+      setSearched(false);
+      return;
+    }
     setSearched(true);
+
+    if (tab === 'playlists') {
+      const q = text.trim().toLowerCase();
+      setPlaylistResults(
+        playlists.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.description ?? '').toLowerCase().includes(q)
+        )
+      );
+      return;
+    }
+
+    setLoading(true);
     try {
       const items = await searchBackend(tab, text);
       setResults(items);
@@ -310,7 +369,7 @@ export default function SearchScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playlists]);
 
   function handleChangeText(text: string) {
     setQuery(text);
@@ -344,6 +403,13 @@ export default function SearchScreen() {
   }
 
   function handleLogAlbum(item: SpotifyAlbum) {
+    router.push({
+      pathname: '/album-detail',
+      params: { id: item.id, title: item.title, artist: item.artist, year: String(item.year), artworkUrl: item.artworkUrl },
+    });
+  }
+
+  function handleLogDirect(item: SpotifyAlbum) {
     const pending: PendingAlbum = {
       spotifyId: item.id,
       title: item.title,
@@ -453,19 +519,29 @@ export default function SearchScreen() {
           <View style={s.emptyState}>
             <FontAwesome name="search" size={36} color={isDark ? '#2a2a2a' : '#ddd'} />
             <Text style={[s.emptyTitle, { color: colors.text }]}>
-              {activeTab === 'users' ? 'Find friends' : `Search ${activeTab}`}
+              {activeTab === 'users' ? 'Find friends'
+               : activeTab === 'playlists' ? 'Search playlists'
+               : `Search ${activeTab}`}
             </Text>
             <Text style={[s.emptySub, { color: colors.subtext }]}>
-              {activeTab === 'albums'  ? 'Find albums to log or save for later.'
+              {activeTab === 'albums'    ? 'Find albums to log or save for later.'
                : activeTab === 'songs'   ? 'Discover songs and explore music.'
                : activeTab === 'artists' ? 'Look up artists and their work.'
+               : activeTab === 'playlists' ? 'Search your playlists by name or description.'
                : 'User profiles coming soon.'}
             </Text>
           </View>
         )
       ) : loading ? (
         <ActivityIndicator style={s.spinner} color="#FF3CAC" />
-      ) : searched && results.length === 0 ? (
+      ) : searched && activeTab === 'playlists' && playlistResults.length === 0 ? (
+        <View style={s.emptyState}>
+          <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists found</Text>
+          <Text style={[s.emptySub, { color: colors.subtext }]}>
+            No playlists match "{query}".
+          </Text>
+        </View>
+      ) : searched && activeTab !== 'playlists' && results.length === 0 ? (
         <View style={s.emptyState}>
           <Text style={[s.emptyTitle, { color: colors.text }]}>No results</Text>
           <Text style={[s.emptySub, { color: colors.subtext }]}>
@@ -474,6 +550,24 @@ export default function SearchScreen() {
               : `No ${activeTab} found for "${query}".`}
           </Text>
         </View>
+      ) : activeTab === 'playlists' ? (
+        <FlatList
+          data={playlistResults}
+          keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 40 }}
+          ItemSeparatorComponent={() => (
+            <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
+          )}
+          renderItem={({ item }) => (
+            <PlaylistRow
+              item={item}
+              isDark={isDark}
+              colors={colors}
+              onPress={() => router.push({ pathname: '/playlist-detail', params: { id: item.id } })}
+            />
+          )}
+        />
       ) : (
         <FlatList
           data={results}
@@ -491,7 +585,8 @@ export default function SearchScreen() {
                   isDark={isDark}
                   colors={colors}
                   isBookmarked={!!wantToListen.find((a) => a.id === item.id)}
-                  onLog={() => handleLogAlbum(item)}
+                  onView={() => handleLogAlbum(item)}
+                  onLog={() => handleLogDirect(item)}
                   onBookmark={() => handleToggleBookmark(item)}
                   onSaveRecent={() => saveRecentItem(item)}
                 />
@@ -531,7 +626,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 12,
-    marginTop: 0,
+    marginTop: 14,
     marginBottom: 8,
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -613,4 +708,13 @@ const s = StyleSheet.create({
   actionBtn: { paddingHorizontal: 8 },
   plusIcon: { fontSize: 24, fontWeight: '300' },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 80 },
+
+  playlistIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 4,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

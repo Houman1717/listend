@@ -12,7 +12,6 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum } from '@/context/SpotifyService';
-import { useAlbums, PendingAlbum } from '@/context/AlbumsContext';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -138,22 +137,15 @@ export default function DiscoverGenresScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
-  const { setPendingAlbum } = useAlbums();
-
   useEffect(() => {
     loadGenres(); // prefetch all genres on mount
   }, []);
 
   function handleAlbumPress(album: SpotifyAlbum) {
-    const pending: PendingAlbum = {
-      spotifyId: album.id,
-      title: album.title,
-      artist: album.artist,
-      year: album.year,
-      artworkUrl: album.artworkUrl,
-    };
-    setPendingAlbum(pending);
-    router.push('/log-album');
+    router.push({
+      pathname: '/album-detail',
+      params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },
+    });
   }
 
   return (

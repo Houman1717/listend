@@ -12,7 +12,6 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum } from '@/context/SpotifyService';
-import { useAlbums, PendingAlbum } from '@/context/AlbumsContext';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -55,8 +54,6 @@ export default function DecadeGridScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { setPendingAlbum } = useAlbums();
-
   const cardSize = (width - 32 - GAP * (COLS - 1)) / COLS;
 
   const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(() => cache[decade ?? ''] ?? []);
@@ -76,15 +73,10 @@ export default function DecadeGridScreen() {
   }, [decade]);
 
   function handlePress(album: SpotifyAlbum) {
-    const pending: PendingAlbum = {
-      spotifyId: album.id,
-      title: album.title,
-      artist: album.artist,
-      year: album.year,
-      artworkUrl: album.artworkUrl,
-    };
-    setPendingAlbum(pending);
-    router.push('/log-album');
+    router.push({
+      pathname: '/album-detail',
+      params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },
+    });
   }
 
   const padded = Array.from({ length: TOTAL }, (_, i) => albums[i] ?? null) as (SpotifyAlbum | null)[];

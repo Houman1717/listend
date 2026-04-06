@@ -11,7 +11,6 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useAlbums, PendingAlbum } from '@/context/AlbumsContext';
 import { SpotifyAlbum } from '@/context/SpotifyService';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
@@ -61,8 +60,6 @@ export default function DiscoverResultsScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { setPendingAlbum } = useAlbums();
-
   const { category, value, title } = useLocalSearchParams<{
     category: string;
     value?: string;
@@ -83,15 +80,10 @@ export default function DiscoverResultsScreen() {
   }, [category, value]);
 
   function handleLog(album: SpotifyAlbum) {
-    const pending: PendingAlbum = {
-      spotifyId: album.id,
-      title: album.title,
-      artist: album.artist,
-      year: album.year,
-      artworkUrl: album.artworkUrl,
-    };
-    setPendingAlbum(pending);
-    router.push('/log-album');
+    router.push({
+      pathname: '/album-detail',
+      params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },
+    });
   }
 
   const showRank = category === 'popular' || category === 'new-releases';
