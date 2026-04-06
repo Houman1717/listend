@@ -5,12 +5,11 @@ import {
   Image,
   Pressable,
   ScrollView,
-  FlatList,
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -108,23 +107,34 @@ export default function ArtistDetailScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
 
-  const params = useLocalSearchParams<{ id?: string; name: string; artworkUrl?: string }>();
+  const params = useLocalSearchParams<{ id?: string; name?: string; artworkUrl?: string }>();
 
-  const artistName     = params.name ?? '';
-  const paramArtworkUrl = params.artworkUrl ?? '';
+  const artistName      = (params.name ?? '').trim();
+  const paramId         = (params.id   ?? '').trim();
+  const paramArtworkUrl = (params.artworkUrl ?? '').trim();
 
-  // Resolved Spotify artist ID (may be missing until search resolves)
-  const [artistId, setArtistId]         = useState(params.id ?? '');
+  // UI state
   const [artworkUrl, setArtworkUrl]     = useState(paramArtworkUrl);
+  const [resolvedId, setResolvedId]     = useState(paramId);
 
-  // Remote data
-  const [lastfm, setLastfm]             = useState<LastfmArtist | null>(null);
+  // Last.fm state
+  const [lastfm, setLastfm]               = useState<LastfmArtist | null>(null);
   const [lastfmLoading, setLastfmLoading] = useState(true);
-  const [topTracks, setTopTracks]       = useState<SpotifyTrack[] | null>(null);
-  const [tracksLoading, setTracksLoading] = useState(false);
-  const [albums, setAlbums]             = useState<SpotifyAlbum[] | null>(null);
-  const [albumsLoading, setAlbumsLoading] = useState(false);
-  const [bioExpanded, setBioExpanded]   = useState(false);
+  const [lastfmError, setLastfmError]     = useState('');
+
+  // Spotify state
+  const [topTracks, setTopTracks]         = useState<SpotifyTrack[] | null>(null);
+  const [tracksLoading, setTracksLoading] = useState(true);
+  const [tracksError, setTracksError]     = useState('');
+
+  const [albums, setAlbums]               = useState<SpotifyAlbum[] | null>(null);
+  const [albumsLoading, setAlbumsLoading] = useState(true);
+  const [albumsError, setAlbumsError]     = useState('');
+
+  const [bioExpanded, setBioExpanded]     = useState(false);
+
+  // Prevent double-firing if effect runs twice (Strict Mode / nav back)
+  const spotifyFetched = useRef(false);
 
   const sectionBg   = isDark ? '#111' : '#f5f5f5';
   const borderColor = isDark ? '#222' : '#e8e8e8';
@@ -136,110 +146,121 @@ export default function ArtistDetailScreen() {
   const GRID_GAP = 12;
   const albumSize = Math.floor((width - GRID_PAD * 2 - GRID_GAP) / COLS);
 
-  // ── Fetch Last.fm ──────────────────────────────────────────────────────────
+  // ── Fetch Last.fm (independent — only needs artistName) ────────────────────
   useEffect(() => {
     if (!artistName) return;
     let cancelled = false;
+    setLastfmLoading(true);
+    setLastfmError('');
     const url = `${API_URL}/lastfm/artist?artist=${encodeURIComponent(artistName)}`;
-    console.log('[artist-detail] fetching Last.fm:', url);
+    console.log('[artist-detail] Last.fm fetch:', url);
     fetch(url)
       .then(r => {
         console.log('[artist-detail] Last.fm status:', r.status);
-        return r.ok ? r.json() : r.json().then(body => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(body)}`));
+        return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
       })
       .then(data => {
-        console.log('[artist-detail] Last.fm data:', JSON.stringify(data).slice(0, 200));
         if (cancelled) return;
         setLastfm({
-          name: data.name ?? artistName,
+          name:     data.name ?? artistName,
           listeners: data.listeners ?? 0,
-          bio: stripHtml(data.bio ?? ''),
-          tags: data.tags ?? [],
-          similar: data.similar ?? [],
+          bio:      stripHtml(data.bio ?? ''),
+          tags:     data.tags ?? [],
+          similar:  data.similar ?? [],
         });
       })
-      .catch(err => console.warn('[artist-detail] Last.fm error:', err))
+      .catch(err => { if (!cancelled) setLastfmError(String(err)); })
       .finally(() => { if (!cancelled) setLastfmLoading(false); });
     return () => { cancelled = true; };
   }, [artistName]);
 
-  // ── Resolve Spotify artist ID if not provided ──────────────────────────────
+  // ── Resolve ID then fetch Spotify data (sequential, single effect) ─────────
   useEffect(() => {
-    if (artistId) {
-      console.log('[artist-detail] artistId already set:', artistId);
-      return;
-    }
-    if (!artistName) {
-      console.warn('[artist-detail] no artistName — cannot resolve ID');
-      return;
-    }
+    if (!artistName) return;
     let cancelled = false;
-    const searchUrl = `${API_URL}/search?q=${encodeURIComponent(artistName)}&type=artist`;
-    console.log('[artist-detail] resolving artist ID via search:', searchUrl);
-    fetch(searchUrl)
-      .then(r => {
-        console.log('[artist-detail] ID search HTTP', r.status);
-        return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
-      })
-      .then((results: { id: string; name: string; artworkUrl: string }[]) => {
-        if (cancelled) return;
-        console.log('[artist-detail] ID search results:', results.length, results[0]?.id, results[0]?.name);
-        if (!results.length) { console.warn('[artist-detail] no results for artist name:', artistName); return; }
-        const match = results[0];
-        setArtistId(match.id);
-        if (!artworkUrl && match.artworkUrl) setArtworkUrl(match.artworkUrl);
-      })
-      .catch(err => console.warn('[artist-detail] ID search error:', err));
-    return () => { cancelled = true; };
-  }, [artistName, artistId]);
+    spotifyFetched.current = false;
 
-  // ── Fetch Spotify data once artist ID is known ─────────────────────────────
-  useEffect(() => {
-    if (!artistId) {
-      console.log('[artist-detail] Spotify fetch skipped — artistId not yet set');
-      return;
+    async function loadSpotifyData() {
+      // ── Step 1: resolve Spotify artist ID ───────────────────────────────────
+      let artistId = paramId;
+
+      if (!artistId) {
+        const searchUrl = `${API_URL}/search?q=${encodeURIComponent(artistName)}&type=artist`;
+        console.log('[artist-detail] resolving ID via search:', searchUrl);
+        try {
+          const r = await fetch(searchUrl);
+          console.log('[artist-detail] search HTTP', r.status);
+          if (!r.ok) throw new Error(`Search HTTP ${r.status}`);
+          const results: { id: string; name: string; artworkUrl: string }[] = await r.json();
+          console.log('[artist-detail] search results:', results.length, results[0]?.id, results[0]?.name);
+          if (!results.length) throw new Error(`No search results for "${artistName}"`);
+          artistId = results[0].id;
+          if (cancelled) return;
+          setResolvedId(artistId);
+          if (!paramArtworkUrl && results[0].artworkUrl) setArtworkUrl(results[0].artworkUrl);
+        } catch (err) {
+          if (!cancelled) {
+            const msg = String(err);
+            console.warn('[artist-detail] ID resolution failed:', msg);
+            setTracksError(`Could not find artist: ${msg}`);
+            setAlbumsError(`Could not find artist: ${msg}`);
+            setTracksLoading(false);
+            setAlbumsLoading(false);
+          }
+          return;
+        }
+      } else {
+        console.log('[artist-detail] artistId provided directly:', artistId);
+      }
+
+      if (cancelled || !artistId) return;
+      if (spotifyFetched.current) return;
+      spotifyFetched.current = true;
+
+      // ── Step 2: fetch top-tracks and albums in parallel ──────────────────────
+      const tracksUrl = `${API_URL}/spotify/artist/${artistId}/top-tracks`;
+      const albumsUrl = `${API_URL}/spotify/artist/${artistId}/albums`;
+      console.log('[artist-detail] fetching top-tracks:', tracksUrl);
+      console.log('[artist-detail] fetching albums:    ', albumsUrl);
+
+      // Top tracks
+      fetch(tracksUrl)
+        .then(r => {
+          console.log('[artist-detail] top-tracks HTTP', r.status);
+          return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
+        })
+        .then(data => {
+          console.log('[artist-detail] top-tracks:', Array.isArray(data) ? `${data.length} tracks` : String(data));
+          if (!cancelled) setTopTracks(Array.isArray(data) ? data : []);
+        })
+        .catch(err => {
+          const msg = String(err);
+          console.warn('[artist-detail] top-tracks error:', msg);
+          if (!cancelled) { setTopTracks([]); setTracksError(msg); }
+        })
+        .finally(() => { if (!cancelled) setTracksLoading(false); });
+
+      // Albums
+      fetch(albumsUrl)
+        .then(r => {
+          console.log('[artist-detail] albums HTTP', r.status);
+          return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
+        })
+        .then(data => {
+          console.log('[artist-detail] albums:', Array.isArray(data) ? `${data.length} albums` : String(data));
+          if (!cancelled) setAlbums(Array.isArray(data) ? data : []);
+        })
+        .catch(err => {
+          const msg = String(err);
+          console.warn('[artist-detail] albums error:', msg);
+          if (!cancelled) { setAlbums([]); setAlbumsError(msg); }
+        })
+        .finally(() => { if (!cancelled) setAlbumsLoading(false); });
     }
-    let cancelled = false;
 
-    const tracksUrl = `${API_URL}/spotify/artist/${artistId}/top-tracks`;
-    const albumsUrl = `${API_URL}/spotify/artist/${artistId}/albums`;
-    console.log('[artist-detail] fetching top-tracks:', tracksUrl);
-    console.log('[artist-detail] fetching albums:', albumsUrl);
-
-    setTracksLoading(true);
-    fetch(tracksUrl)
-      .then(r => {
-        console.log('[artist-detail] top-tracks HTTP', r.status);
-        return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
-      })
-      .then(data => {
-        console.log('[artist-detail] top-tracks received:', Array.isArray(data) ? `${data.length} tracks` : data);
-        if (!cancelled) setTopTracks(data);
-      })
-      .catch(err => {
-        console.warn('[artist-detail] top-tracks error:', err);
-        if (!cancelled) setTopTracks([]);
-      })
-      .finally(() => { if (!cancelled) setTracksLoading(false); });
-
-    setAlbumsLoading(true);
-    fetch(albumsUrl)
-      .then(r => {
-        console.log('[artist-detail] albums HTTP', r.status);
-        return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
-      })
-      .then(data => {
-        console.log('[artist-detail] albums received:', Array.isArray(data) ? `${data.length} albums` : data);
-        if (!cancelled) setAlbums(data);
-      })
-      .catch(err => {
-        console.warn('[artist-detail] albums error:', err);
-        if (!cancelled) setAlbums([]);
-      })
-      .finally(() => { if (!cancelled) setAlbumsLoading(false); });
-
+    loadSpotifyData();
     return () => { cancelled = true; };
-  }, [artistId]);
+  }, [artistName, paramId]); // paramId is stable from route; artistName drives re-run when pushing a new artist
 
   function handleAlbumPress(album: SpotifyAlbum) {
     router.push({
@@ -264,14 +285,16 @@ export default function ArtistDetailScreen() {
           <Image source={{ uri: artworkUrl }} style={sc.avatar} />
         ) : (
           <View style={[sc.avatar, sc.avatarPlaceholder]}>
-            <Text style={sc.avatarInitial}>{artistName.charAt(0)}</Text>
+            <Text style={sc.avatarInitial}>{(artistName || '?').charAt(0)}</Text>
           </View>
         )}
         <Text style={[sc.name, { color: colors.text }]}>{artistName}</Text>
-        {lastfm?.listeners ? (
-          <Text style={[sc.listeners, { color: colors.subtext }]}>{formatListeners(lastfm.listeners)}</Text>
-        ) : lastfmLoading ? (
+        {lastfmLoading ? (
           <ActivityIndicator size="small" color="#FF3CAC" style={{ marginTop: 8 }} />
+        ) : lastfm?.listeners ? (
+          <Text style={[sc.listeners, { color: colors.subtext }]}>{formatListeners(lastfm.listeners)}</Text>
+        ) : lastfmError ? (
+          <Text style={[sc.errorText, { color: '#f87171' }]} numberOfLines={2}>{lastfmError}</Text>
         ) : null}
       </View>
 
@@ -280,6 +303,8 @@ export default function ArtistDetailScreen() {
         <SectionHeader label="Top Tracks" color={colors.subtext} />
         {tracksLoading ? (
           <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
+        ) : tracksError ? (
+          <Text style={[sc.errorText, { color: '#f87171' }]}>{tracksError}</Text>
         ) : topTracks && topTracks.length > 0 ? (
           topTracks.slice(0, 5).map((track, i) => (
             <TrackRow
@@ -291,11 +316,9 @@ export default function ArtistDetailScreen() {
               subColor={colors.subtext}
             />
           ))
-        ) : !tracksLoading && artistId ? (
+        ) : (
           <Text style={[sc.empty, { color: mutedText }]}>No tracks available</Text>
-        ) : !artistId ? (
-          <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
-        ) : null}
+        )}
       </View>
 
       {/* ── 3. Discography ───────────────────────────────────────────────────── */}
@@ -303,6 +326,8 @@ export default function ArtistDetailScreen() {
         <SectionHeader label="Discography" color={colors.subtext} />
         {albumsLoading ? (
           <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
+        ) : albumsError ? (
+          <Text style={[sc.errorText, { color: '#f87171' }]}>{albumsError}</Text>
         ) : albums && albums.length > 0 ? (
           <View style={sc.grid}>
             {albums.map(album => (
@@ -313,7 +338,7 @@ export default function ArtistDetailScreen() {
                 {album.artworkUrl ? (
                   <Image source={{ uri: album.artworkUrl }} style={{ width: albumSize, height: albumSize, borderRadius: 8 }} />
                 ) : (
-                  <View style={[{ width: albumSize, height: albumSize, borderRadius: 8, backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' }]}>
+                  <View style={{ width: albumSize, height: albumSize, borderRadius: 8, backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' }}>
                     <FontAwesome name="music" size={28} color="#444" />
                   </View>
                 )}
@@ -322,11 +347,9 @@ export default function ArtistDetailScreen() {
               </Pressable>
             ))}
           </View>
-        ) : !albumsLoading && artistId ? (
+        ) : (
           <Text style={[sc.empty, { color: mutedText }]}>No albums available</Text>
-        ) : !artistId ? (
-          <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
-        ) : null}
+        )}
       </View>
 
       {/* ── 4. About (collapsible bio) ────────────────────────────────────────── */}
@@ -378,6 +401,9 @@ const sc = StyleSheet.create({
   avatarInitial: { color: '#FF3CAC', fontSize: 44, fontWeight: '700' },
   name: { marginTop: 14, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
   listeners: { marginTop: 4, fontSize: 13 },
+
+  // Error
+  errorText: { fontSize: 12, paddingVertical: 8, lineHeight: 17 },
 
   // Sections
   section: { width: '100%', borderRadius: 14, padding: 16, borderWidth: StyleSheet.hairlineWidth, marginBottom: 16 },

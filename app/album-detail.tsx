@@ -11,8 +11,8 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useRef, useEffect } from 'react';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -286,6 +286,20 @@ export default function AlbumDetailScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      {/* ── Dynamic header: playlist button in top-right (logged albums only) ── */}
+      <Stack.Screen
+        options={{
+          headerRight: () =>
+            isLogged ? (
+              <Pressable
+                onPress={() => setShowPlaylists(true)}
+                hitSlop={12}
+                style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
+                <FontAwesome name="list-alt" size={19} color="#FF3CAC" />
+              </Pressable>
+            ) : null,
+        }}
+      />
       <ScrollView
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={s.container}
@@ -498,16 +512,6 @@ export default function AlbumDetailScreen() {
           </View>
         )}
 
-        {/* ── Add to Playlist (logged albums only) ──────────────────────────── */}
-        {isLogged && (
-          <Pressable
-            style={[s.playlistBtn, { borderColor: isDark ? '#2e2e2e' : '#e0e0e0' }]}
-            onPress={() => setShowPlaylists(true)}>
-            <FontAwesome name="list" size={15} color="#FF3CAC" />
-            <Text style={s.playlistBtnText}>Add to Playlist</Text>
-            <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
-          </Pressable>
-        )}
 
       </ScrollView>
 
@@ -619,9 +623,8 @@ const s = StyleSheet.create({
   similarTitle:  { fontSize: 12, fontWeight: '600' },
   similarArtist: { fontSize: 11 },
 
-  // Playlist button
-  playlistBtn: { marginTop: 14, width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1 },
-  playlistBtnText: { flex: 1, color: '#FF3CAC', fontSize: 15, fontWeight: '500' },
+  // Header button (top-right playlist icon)
+  headerBtn: { paddingHorizontal: 4 },
 
   // Playlist modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
