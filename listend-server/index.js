@@ -10,6 +10,13 @@ const { getCached, setCache, TTL_24H, TTL_7D } = require('./cache');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// ── Startup env check ─────────────────────────────────────────────────────────
+const REQUIRED_VARS = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'LASTFM_API_KEY', 'GENIUS_ACCESS_TOKEN'];
+for (const v of REQUIRED_VARS) {
+  if (!process.env[v]) console.warn(`[startup] WARNING: env var ${v} is not set`);
+  else console.log(`[startup] ${v}: set ✓`);
+}
+
 // ── In-memory response cache ───────────────────────────────────────────────────
 
 const memCache = new Map();
@@ -320,18 +327,22 @@ app.get('/discover/coming-soon', async (req, res) => {
   }
 });
 
-// ── GET /lastfm/artist/:artistName ────────────────────────────────────────────
-// Returns bio, similar artists, tags, and listener count from Last.fm.
+// ── GET /lastfm/artist — ?artist=<name> ───────────────────────────────────────
+// Switched from path params to query params to safely handle names with /&?# etc.
 
-app.get('/lastfm/artist/:artistName', async (req, res) => {
-  const artistName = req.params.artistName;
+app.get('/lastfm/artist', async (req, res) => {
+  const artistName = (req.query.artist ?? '').trim();
+  if (!artistName) return res.status(400).json({ error: 'artist query param required' });
+
+  console.log(`[/lastfm/artist] artist="${artistName}" LASTFM_API_KEY=${process.env.LASTFM_API_KEY ? 'set' : 'MISSING'}`);
+
   const CACHE_KEY = `lastfm_artist_${artistName.toLowerCase()}`;
 
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem) { console.log(`[/lastfm/artist] cache hit (memory)`); return res.json(mem); }
 
   const db = await getCached(CACHE_KEY, TTL_7D);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (db) { console.log(`[/lastfm/artist] cache hit (db)`); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const url =
@@ -340,9 +351,12 @@ app.get('/lastfm/artist/:artistName', async (req, res) => {
       `&api_key=${process.env.LASTFM_API_KEY}` +
       `&format=json`;
 
+    console.log(`[/lastfm/artist] fetching Last.fm for "${artistName}"`);
     const resp = await fetch(url);
+    console.log(`[/lastfm/artist] Last.fm HTTP status: ${resp.status}`);
     if (!resp.ok) throw new Error(`Last.fm artist.getinfo → ${resp.status}`);
     const json = await resp.json();
+    console.log(`[/lastfm/artist] Last.fm response keys:`, Object.keys(json));
 
     if (json.error) throw new Error(`Last.fm error ${json.error}: ${json.message}`);
 
@@ -355,27 +369,32 @@ app.get('/lastfm/artist/:artistName', async (req, res) => {
       similar: (a.similar?.artist ?? []).map(s => ({ name: s.name, url: s.url })),
     };
 
+    console.log(`[/lastfm/artist] success — ${payload.listeners} listeners, ${payload.tags.length} tags`);
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
     res.json(payload);
   } catch (err) {
-    console.error('[/lastfm/artist]', err.message ?? err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('[/lastfm/artist] ERROR:', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Internal server error' });
   }
 });
 
-// ── GET /lastfm/album/:artistName/:albumName ──────────────────────────────────
-// Returns album description, tags, and listener count from Last.fm.
+// ── GET /lastfm/album — ?artist=<name>&album=<name> ──────────────────────────
 
-app.get('/lastfm/album/:artistName/:albumName', async (req, res) => {
-  const { artistName, albumName } = req.params;
+app.get('/lastfm/album', async (req, res) => {
+  const artistName = (req.query.artist ?? '').trim();
+  const albumName  = (req.query.album  ?? '').trim();
+  if (!artistName || !albumName) return res.status(400).json({ error: 'artist and album query params required' });
+
+  console.log(`[/lastfm/album] artist="${artistName}" album="${albumName}" LASTFM_API_KEY=${process.env.LASTFM_API_KEY ? 'set' : 'MISSING'}`);
+
   const CACHE_KEY = `lastfm_album_${artistName.toLowerCase()}_${albumName.toLowerCase()}`;
 
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem) { console.log(`[/lastfm/album] cache hit (memory)`); return res.json(mem); }
 
   const db = await getCached(CACHE_KEY, TTL_7D);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (db) { console.log(`[/lastfm/album] cache hit (db)`); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const url =
@@ -385,9 +404,12 @@ app.get('/lastfm/album/:artistName/:albumName', async (req, res) => {
       `&api_key=${process.env.LASTFM_API_KEY}` +
       `&format=json`;
 
+    console.log(`[/lastfm/album] fetching Last.fm for "${artistName} - ${albumName}"`);
     const resp = await fetch(url);
+    console.log(`[/lastfm/album] Last.fm HTTP status: ${resp.status}`);
     if (!resp.ok) throw new Error(`Last.fm album.getinfo → ${resp.status}`);
     const json = await resp.json();
+    console.log(`[/lastfm/album] Last.fm response keys:`, Object.keys(json));
 
     if (json.error) throw new Error(`Last.fm error ${json.error}: ${json.message}`);
 
@@ -400,66 +422,84 @@ app.get('/lastfm/album/:artistName/:albumName', async (req, res) => {
       tags: (al.tags?.tag ?? []).map(t => t.name),
     };
 
+    console.log(`[/lastfm/album] success — ${payload.listeners} listeners, ${payload.tags.length} tags, desc length=${payload.description.length}`);
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
     res.json(payload);
   } catch (err) {
-    console.error('[/lastfm/album]', err.message ?? err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('[/lastfm/album] ERROR:', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Internal server error' });
   }
 });
 
-// ── GET /genius/credits/:artistName/:trackName ────────────────────────────────
-// Returns producer and writer credits for a track via Genius API.
-// Returns null fields gracefully if no match is found.
+// ── GET /genius/credits — ?artist=<name>&track=<name> ─────────────────────────
+// Switched from path params to query params.
 
-app.get('/genius/credits/:artistName/:trackName', async (req, res) => {
-  const { artistName, trackName } = req.params;
+app.get('/genius/credits', async (req, res) => {
+  const artistName = (req.query.artist ?? '').trim();
+  const trackName  = (req.query.track  ?? '').trim();
+  if (!artistName || !trackName) return res.status(400).json({ error: 'artist and track query params required' });
+
+  console.log(`[/genius/credits] artist="${artistName}" track="${trackName}" GENIUS_ACCESS_TOKEN=${process.env.GENIUS_ACCESS_TOKEN ? 'set' : 'MISSING'}`);
+
   const CACHE_KEY = `genius_${artistName.toLowerCase()}_${trackName.toLowerCase()}`;
 
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem) { console.log(`[/genius/credits] cache hit (memory)`); return res.json(mem); }
 
   const db = await getCached(CACHE_KEY, TTL_7D);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (db) { console.log(`[/genius/credits] cache hit (db)`); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const q = encodeURIComponent(`${artistName} ${trackName}`);
+    console.log(`[/genius/credits] searching Genius for "${artistName} ${trackName}"`);
+
     const searchResp = await fetch(`https://api.genius.com/search?q=${q}`, {
       headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` },
     });
+    console.log(`[/genius/credits] Genius search HTTP status: ${searchResp.status}`);
     if (!searchResp.ok) throw new Error(`Genius search → ${searchResp.status}`);
     const searchJson = await searchResp.json();
 
-    const hit = searchJson.response?.hits?.[0];
+    const hits = searchJson.response?.hits ?? [];
+    console.log(`[/genius/credits] Genius search hits: ${hits.length}`);
+
+    const hit = hits[0];
     if (!hit) {
+      console.log(`[/genius/credits] no hits — returning empty credits`);
       const empty = { producers: null, writers: null };
       cacheSet(CACHE_KEY, empty, TTL_6H);
       await setCache(CACHE_KEY, empty);
       return res.json(empty);
     }
 
+    console.log(`[/genius/credits] top hit: "${hit.result.title}" by "${hit.result.primary_artist?.name}"`);
     const songId = hit.result.id;
     const songResp = await fetch(`https://api.genius.com/songs/${songId}?text_format=plain`, {
       headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` },
     });
+    console.log(`[/genius/credits] Genius song detail HTTP status: ${songResp.status}`);
     if (!songResp.ok) throw new Error(`Genius song detail → ${songResp.status}`);
     const songJson = await songResp.json();
 
     const song = songJson.response?.song;
+    const producers = (song?.producer_artists ?? []).map(a => a.name);
+    const writers   = (song?.writer_artists   ?? []).map(a => a.name);
+    console.log(`[/genius/credits] producers=${producers.length} writers=${writers.length}`);
+
     const payload = {
       title: song?.title ?? hit.result.title,
       artist: song?.primary_artist?.name ?? hit.result.primary_artist?.name ?? null,
-      producers: (song?.producer_artists ?? []).map(a => a.name),
-      writers: (song?.writer_artists ?? []).map(a => a.name),
+      producers: producers.length ? producers : null,
+      writers:   writers.length   ? writers   : null,
     };
 
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
     res.json(payload);
   } catch (err) {
-    console.error('[/genius/credits]', err.message ?? err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('[/genius/credits] ERROR:', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Internal server error' });
   }
 });
 

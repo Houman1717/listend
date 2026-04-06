@@ -153,17 +153,34 @@ export default function AlbumDetailScreen() {
     let cancelled = false;
 
     // Tracklist
-    fetch(`${API_URL}/spotify/album/${albumId}/tracks`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => { if (!cancelled) setTracks(data); })
-      .catch(() => { if (!cancelled) setTracks([]); })
+    const tracksUrl = `${API_URL}/spotify/album/${albumId}/tracks`;
+    console.log('[album-detail] fetching tracklist:', tracksUrl);
+    fetch(tracksUrl)
+      .then(r => {
+        console.log('[album-detail] tracklist status:', r.status);
+        return r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`);
+      })
+      .then(data => {
+        console.log('[album-detail] tracklist received:', Array.isArray(data) ? `${data.length} tracks` : data);
+        if (!cancelled) setTracks(data);
+      })
+      .catch(err => {
+        console.warn('[album-detail] tracklist error:', err);
+        if (!cancelled) setTracks([]);
+      })
       .finally(() => { if (!cancelled) setTracksLoading(false); });
 
-    // Last.fm album info
+    // Last.fm album info — use query params to avoid path-encoding issues
     if (albumArtist && albumTitle) {
-      fetch(`${API_URL}/lastfm/album/${encodeURIComponent(albumArtist)}/${encodeURIComponent(albumTitle)}`)
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      const lastfmUrl = `${API_URL}/lastfm/album?artist=${encodeURIComponent(albumArtist)}&album=${encodeURIComponent(albumTitle)}`;
+      console.log('[album-detail] fetching Last.fm:', lastfmUrl);
+      fetch(lastfmUrl)
+        .then(r => {
+          console.log('[album-detail] Last.fm status:', r.status);
+          return r.ok ? r.json() : r.json().then(body => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(body)}`));
+        })
         .then(data => {
+          console.log('[album-detail] Last.fm data:', JSON.stringify(data).slice(0, 200));
           if (cancelled) return;
           const desc = stripHtml(data.description ?? '');
           setLastfm({
@@ -172,7 +189,9 @@ export default function AlbumDetailScreen() {
             tags: data.tags ?? [],
           });
         })
-        .catch(() => {});
+        .catch(err => console.warn('[album-detail] Last.fm error:', err));
+    } else {
+      console.log('[album-detail] skipping Last.fm — albumArtist:', albumArtist, 'albumTitle:', albumTitle);
     }
 
     return () => { cancelled = true; };
@@ -183,15 +202,21 @@ export default function AlbumDetailScreen() {
     if (!tracks || tracks.length === 0 || !albumArtist) return;
     let cancelled = false;
     const firstTrack = tracks[0];
-    fetch(`${API_URL}/genius/credits/${encodeURIComponent(albumArtist)}/${encodeURIComponent(firstTrack.title)}`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    const geniusUrl = `${API_URL}/genius/credits?artist=${encodeURIComponent(albumArtist)}&track=${encodeURIComponent(firstTrack.title)}`;
+    console.log('[album-detail] fetching Genius:', geniusUrl);
+    fetch(geniusUrl)
+      .then(r => {
+        console.log('[album-detail] Genius status:', r.status);
+        return r.ok ? r.json() : r.json().then(body => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(body)}`));
+      })
       .then(data => {
+        console.log('[album-detail] Genius data:', JSON.stringify(data).slice(0, 200));
         if (!cancelled) {
           const hasCreds = (data.producers?.length || data.writers?.length);
           setGenius(hasCreds ? data : null);
         }
       })
-      .catch(() => {});
+      .catch(err => console.warn('[album-detail] Genius error:', err));
     return () => { cancelled = true; };
   }, [tracks, albumArtist]);
 

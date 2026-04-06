@@ -140,9 +140,15 @@ export default function ArtistDetailScreen() {
   useEffect(() => {
     if (!artistName) return;
     let cancelled = false;
-    fetch(`${API_URL}/lastfm/artist/${encodeURIComponent(artistName)}`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    const url = `${API_URL}/lastfm/artist?artist=${encodeURIComponent(artistName)}`;
+    console.log('[artist-detail] fetching Last.fm:', url);
+    fetch(url)
+      .then(r => {
+        console.log('[artist-detail] Last.fm status:', r.status);
+        return r.ok ? r.json() : r.json().then(body => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(body)}`));
+      })
       .then(data => {
+        console.log('[artist-detail] Last.fm data:', JSON.stringify(data).slice(0, 200));
         if (cancelled) return;
         setLastfm({
           name: data.name ?? artistName,
@@ -152,7 +158,7 @@ export default function ArtistDetailScreen() {
           similar: data.similar ?? [],
         });
       })
-      .catch(() => {})
+      .catch(err => console.warn('[artist-detail] Last.fm error:', err))
       .finally(() => { if (!cancelled) setLastfmLoading(false); });
     return () => { cancelled = true; };
   }, [artistName]);
