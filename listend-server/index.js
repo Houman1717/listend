@@ -679,6 +679,59 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
   }
 });
 
+// ── GET /spotify/recommendations — ?trackIds=id1&trackIds=id2&excludeAlbumId=id ─
+// Seeds Spotify recommendations with up to 2 track IDs. Extracts unique albums
+// from the returned tracks, excluding the source album. Returns [] silently if
+// the endpoint is unavailable (deprecated in some markets / app tiers).
+
+app.get('/spotify/recommendations', async (req, res) => {
+  const rawIds = req.query.trackIds ?? [];
+  const trackIds = (Array.isArray(rawIds) ? rawIds : [rawIds]).filter(Boolean).slice(0, 2);
+  const excludeAlbumId = (req.query.excludeAlbumId ?? '').trim();
+
+  if (!trackIds.length) return res.status(400).json({ error: 'trackIds required' });
+
+  const CACHE_KEY = `spotify_recs_${trackIds.join('_')}_excl_${excludeAlbumId}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) { console.log('[/spotify/recommendations] cache hit (memory)'); return res.json(mem); }
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { console.log('[/spotify/recommendations] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const seeds = trackIds.join(',');
+    console.log(`[/spotify/recommendations] seed_tracks=${seeds} excludeAlbum=${excludeAlbumId}`);
+    const data = await spotifyGet(`/recommendations?seed_tracks=${seeds}&limit=12&market=US`);
+
+    const seen = new Set([excludeAlbumId].filter(Boolean));
+    const albums = [];
+    for (const track of (data.tracks ?? [])) {
+      const alb = track.album;
+      if (!alb || seen.has(alb.id)) continue;
+      seen.add(alb.id);
+      albums.push({
+        id:         alb.id,
+        title:      alb.name,
+        artist:     alb.artists?.[0]?.name ?? '',
+        artworkUrl: alb.images?.[0]?.url ?? '',
+        year:       parseInt(alb.release_date?.slice(0, 4) ?? '0', 10),
+      });
+    }
+
+    const result = albums.slice(0, 8);
+    console.log(`[/spotify/recommendations] returning ${result.length} albums`);
+    cacheSet(CACHE_KEY, result, TTL_6H);
+    await setCache(CACHE_KEY, result);
+    res.json(result);
+  } catch (err) {
+    // Recommendations may return 403 on some Spotify tiers — return empty so
+    // the frontend simply hides the section rather than showing an error.
+    console.warn('[/spotify/recommendations] failed:', err.message ?? err);
+    res.json([]);
+  }
+});
+
 // ── GET /refresh ──────────────────────────────────────────────────────────────
 
 app.get('/refresh', async (req, res) => {

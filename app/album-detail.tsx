@@ -43,6 +43,14 @@ function formatListeners(n: number): string {
   return `${n} listeners`;
 }
 
+function formatRuntime(totalMs: number): string {
+  const totalSec = Math.floor(totalMs / 1000);
+  const hours    = Math.floor(totalSec / 3600);
+  const mins     = Math.round((totalSec % 3600) / 60);
+  if (hours > 0) return `${hours} hr ${mins} min`;
+  return `${mins} min`;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Track = {
@@ -63,6 +71,14 @@ type GeniusCredits = {
   producers: string[] | null;
   writers:   string[] | null;
   credits:   { label: string; artists: string[] }[];
+};
+
+type SimilarAlbum = {
+  id:         string;
+  title:      string;
+  artist:     string;
+  artworkUrl: string;
+  year:       number;
 };
 
 // ─── Rating bar ───────────────────────────────────────────────────────────────
@@ -138,11 +154,12 @@ export default function AlbumDetailScreen() {
   const [showPlaylists, setShowPlaylists] = useState(false);
 
   // Remote data
-  const [tracks, setTracks]           = useState<Track[] | null>(null);
+  const [tracks, setTracks]               = useState<Track[] | null>(null);
   const [tracksLoading, setTracksLoading] = useState(true);
-  const [lastfm, setLastfm]           = useState<LastfmAlbum | null>(null);
-  const [genius, setGenius]           = useState<GeniusCredits | null>(null);
-  const [bioExpanded, setBioExpanded] = useState(false);
+  const [lastfm, setLastfm]               = useState<LastfmAlbum | null>(null);
+  const [genius, setGenius]               = useState<GeniusCredits | null>(null);
+  const [similar, setSimilar]             = useState<SimilarAlbum[] | null>(null);
+  const [bioExpanded, setBioExpanded]     = useState(false);
 
   const isLogged  = !!loggedAlbum;
   const isWanted  = wantToListen.some(a => a.id === albumId);
@@ -221,6 +238,22 @@ export default function AlbumDetailScreen() {
       .catch(err => console.warn('[album-detail] Genius error:', err));
     return () => { cancelled = true; };
   }, [tracks, albumArtist]);
+
+  // ── Fetch similar albums once we have tracks to seed ──────────────────────
+  useEffect(() => {
+    if (!tracks || tracks.length === 0 || !albumId) return;
+    let cancelled = false;
+    const seedIds = tracks.slice(0, 2).map(t => `trackIds=${encodeURIComponent(t.id)}`).join('&');
+    const recUrl  = `${API_URL}/spotify/recommendations?${seedIds}&excludeAlbumId=${encodeURIComponent(albumId)}`;
+    console.log('[album-detail] fetching recommendations:', recUrl);
+    fetch(recUrl)
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then(data => {
+        if (!cancelled && Array.isArray(data) && data.length > 0) setSimilar(data);
+      })
+      .catch(err => console.warn('[album-detail] recommendations error:', err));
+    return () => { cancelled = true; };
+  }, [tracks, albumId]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
   function handleSave() {
@@ -361,7 +394,14 @@ export default function AlbumDetailScreen() {
 
         {/* ── 4. Tracklist ──────────────────────────────────────────────────── */}
         <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
-          <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Tracklist</Text>
+          <View style={s.tracklistHeader}>
+            <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 0 }]}>Tracklist</Text>
+            {tracks && tracks.length > 0 && (
+              <Text style={[s.runtimeText, { color: colors.subtext }]}>
+                {tracks.length} tracks · {formatRuntime(tracks.reduce((sum, t) => sum + t.durationMs, 0))}
+              </Text>
+            )}
+          </View>
           {tracksLoading ? (
             <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
           ) : tracks && tracks.length > 0 ? (
@@ -421,6 +461,34 @@ export default function AlbumDetailScreen() {
             </View>
           );
         })() : null}
+
+        {/* ── 6. Similar Albums ────────────────────────────────────────────── */}
+        {similar && similar.length > 0 && (
+          <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
+            <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Similar Albums</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+              {similar.map(album => (
+                <Pressable
+                  key={album.id}
+                  style={({ pressed }) => [s.similarCard, { opacity: pressed ? 0.7 : 1 }]}
+                  onPress={() => router.push({
+                    pathname: '/album-detail',
+                    params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },
+                  })}>
+                  {album.artworkUrl ? (
+                    <Image source={{ uri: album.artworkUrl }} style={s.similarArt} />
+                  ) : (
+                    <View style={[s.similarArt, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                      <FontAwesome name="music" size={20} color="#555" />
+                    </View>
+                  )}
+                  <Text style={[s.similarTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
+                  <Text style={[s.similarArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* ── Add to Playlist (logged albums only) ──────────────────────────── */}
         {isLogged && (
@@ -520,6 +588,8 @@ const s = StyleSheet.create({
   bioToggle: { color: '#FF3CAC', fontSize: 13, fontWeight: '500', marginTop: 8 },
 
   // Tracklist
+  tracklistHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  runtimeText: { fontSize: 11, fontWeight: '500' },
   trackRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   trackNumber: { width: 24, fontSize: 13, textAlign: 'right', marginRight: 12 },
   trackInfo: { flex: 1, gap: 2 },
@@ -532,6 +602,12 @@ const s = StyleSheet.create({
   creditRow: { marginBottom: 8 },
   creditLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 },
   creditValue: { fontSize: 14 },
+
+  // Similar Albums
+  similarCard:   { width: 110, marginHorizontal: 4, gap: 4 },
+  similarArt:    { width: 110, height: 110, borderRadius: 8 },
+  similarTitle:  { fontSize: 12, fontWeight: '600' },
+  similarArtist: { fontSize: 11 },
 
   // Playlist button
   playlistBtn: { marginTop: 14, width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1 },

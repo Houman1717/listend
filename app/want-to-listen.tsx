@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums, WantToListenAlbum } from '@/context/AlbumsContext';
 
 const PADDING = 16;
@@ -22,17 +23,21 @@ function AlbumCard({
   cardWidth,
   onPress,
   onLongPress,
+  textColor,
+  subColor,
 }: {
   album: WantToListenAlbum;
   cardWidth: number;
   onPress: () => void;
   onLongPress: () => void;
+  textColor: string;
+  subColor: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+      style={({ pressed }) => [s.albumCard, { width: cardWidth, opacity: pressed ? 0.7 : 1 }]}>
       {album.artworkUrl ? (
         <Image
           source={{ uri: album.artworkUrl }}
@@ -41,9 +46,11 @@ function AlbumCard({
         />
       ) : (
         <View style={[s.fallback, { width: cardWidth, height: cardWidth }]}>
-          <Text style={[s.fallbackText, { fontSize: cardWidth * 0.32 }]}>{album.title.charAt(0)}</Text>
+          <FontAwesome name="music" size={cardWidth * 0.28} color="#555" />
         </View>
       )}
+      <Text style={[s.albumTitle, { color: textColor }]} numberOfLines={1}>{album.title}</Text>
+      <Text style={[s.albumArtist, { color: subColor }]} numberOfLines={1}>{album.artist}</Text>
     </Pressable>
   );
 }
@@ -54,17 +61,19 @@ export default function WantToListenScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
-  const { wantToListen, removeFromWantToListen, setPendingAlbum } = useAlbums();
+  const { wantToListen, removeFromWantToListen } = useAlbums();
 
   function handleTap(album: WantToListenAlbum) {
-    setPendingAlbum({
-      spotifyId: album.id,
-      title: album.title,
-      artist: album.artist,
-      year: album.year,
-      artworkUrl: album.artworkUrl,
+    router.push({
+      pathname: '/album-detail',
+      params: {
+        id:         album.id,
+        title:      album.title,
+        artist:     album.artist,
+        year:       String(album.year),
+        artworkUrl: album.artworkUrl,
+      },
     });
-    router.push('/log-album');
   }
 
   function handleLongPress(album: WantToListenAlbum) {
@@ -95,6 +104,8 @@ export default function WantToListenScreen() {
               cardWidth={cardWidth}
               onPress={() => handleTap(album)}
               onLongPress={() => handleLongPress(album)}
+              textColor={colors.text}
+              subColor={colors.subtext}
             />
           ))}
         </View>
@@ -107,6 +118,10 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   gridWrap:  { padding: PADDING, paddingBottom: 48 },
   grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+
+  albumCard:   { gap: 4 },
+  albumTitle:  { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  albumArtist: { fontSize: 11 },
 
   fallback:     { borderRadius: 8, backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
   fallbackText: { color: 'rgba(255,255,255,0.5)', fontWeight: '700' },

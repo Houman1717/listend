@@ -175,16 +175,17 @@ function SongRow({ item, isDark, colors, onSaveRecent }: {
   );
 }
 
-function ArtistRow({ item, isDark, colors, onSaveRecent }: {
+function ArtistRow({ item, isDark, colors, onPress, onSaveRecent }: {
   item: SpotifyArtist & { kind: 'artist' };
   isDark: boolean;
   colors: typeof Colors.light;
+  onPress: () => void;
   onSaveRecent: () => void;
 }) {
   return (
     <Pressable
       style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' }]}
-      onPress={onSaveRecent}>
+      onPress={() => { onSaveRecent(); onPress(); }}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={[s.artwork, { borderRadius: 26 }]} />
@@ -607,6 +608,7 @@ export default function SearchScreen() {
                 item={item}
                 isDark={isDark}
                 colors={colors}
+                onPress={() => router.push({ pathname: '/artist-detail', params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl } })}
                 onSaveRecent={() => saveRecentItem(item)}
               />
             );

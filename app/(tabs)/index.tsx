@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
@@ -81,9 +82,9 @@ function ArtFallback({ size, radius, label }: { size: number; radius: number; la
 
 // ─── Album card ───────────────────────────────────────────────────────────────
 
-function AlbumCard({ item, isDark }: { item: SpotifyAlbum; isDark: boolean }) {
+function AlbumCard({ item, isDark, onPress }: { item: SpotifyAlbum; isDark: boolean; onPress: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [s.card, { width: ALBUM_CARD, opacity: pressed ? 0.7 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ALBUM_CARD, opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
         <Image source={{ uri: item.artworkUrl }} style={{ width: ALBUM_CARD, height: ALBUM_CARD, borderRadius: 6 }} />
       ) : (
@@ -97,9 +98,9 @@ function AlbumCard({ item, isDark }: { item: SpotifyAlbum; isDark: boolean }) {
 
 // ─── Song card ────────────────────────────────────────────────────────────────
 
-function SongCard({ item, index, isDark }: { item: SpotifyTrack; index: number; isDark: boolean }) {
+function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index: number; isDark: boolean; onPress: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [s.card, { width: SONG_CARD, opacity: pressed ? 0.7 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: SONG_CARD, opacity: pressed ? 0.7 : 1 }]}>
       <View>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={{ width: SONG_CARD, height: SONG_CARD, borderRadius: 6 }} />
@@ -118,9 +119,9 @@ function SongCard({ item, index, isDark }: { item: SpotifyTrack; index: number; 
 
 // ─── Artist card (circular) ───────────────────────────────────────────────────
 
-function ArtistCard({ item, isDark }: { item: SpotifyArtist; isDark: boolean }) {
+function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: boolean; onPress: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [s.card, { width: ARTIST_CARD, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ARTIST_CARD, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
         <Image source={{ uri: item.artworkUrl }} style={{ width: ARTIST_CARD, height: ARTIST_CARD, borderRadius: ARTIST_CARD / 2 }} />
       ) : (
@@ -139,15 +140,18 @@ function FriendCard({
   ago,
   isDark,
   colors,
+  onPress,
 }: {
   friend: typeof PLACEHOLDER_FRIENDS[number];
   ago: string;
   isDark: boolean;
   colors: any;
+  onPress: () => void;
 }) {
   const artSize = FRIEND_CARD - 24;
   return (
     <Pressable
+      onPress={onPress}
       style={({ pressed }) => [
         s.friendCard,
         {
@@ -176,6 +180,7 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
+  const router = useRouter();
 
   const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(cache.albums   ?? []);
   const [songs,   setSongs]   = useState<SpotifyTrack[]>(cache.songs    ?? []);
@@ -199,6 +204,28 @@ export default function HomeScreen() {
       .finally(() => setLoading(false));
   }, []);
 
+  function handleAlbumPress(item: SpotifyAlbum) {
+    router.push({
+      pathname: '/album-detail',
+      params: { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl },
+    });
+  }
+
+  function handleArtistPress(item: SpotifyArtist) {
+    router.push({
+      pathname: '/artist-detail',
+      params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl },
+    });
+  }
+
+  function handleSongPress(item: SpotifyTrack) {
+    // Navigate to the artist page since we have the artist name but not the album ID
+    router.push({
+      pathname: '/artist-detail',
+      params: { name: item.artist },
+    });
+  }
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -213,7 +240,9 @@ export default function HomeScreen() {
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
-          renderItem={({ item }) => <AlbumCard item={item} isDark={isDark} />}
+          renderItem={({ item }) => (
+            <AlbumCard item={item} isDark={isDark} onPress={() => handleAlbumPress(item)} />
+          )}
         />
       </Section>
 
@@ -231,6 +260,10 @@ export default function HomeScreen() {
               ago={AGO[index] ?? ''}
               isDark={isDark}
               colors={colors}
+              onPress={() => router.push({
+                pathname: '/album-detail',
+                params: { title: item.album, artist: item.artist, artworkUrl: item.artworkUrl },
+              })}
             />
           )}
         />
@@ -244,7 +277,9 @@ export default function HomeScreen() {
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
-          renderItem={({ item, index }) => <SongCard item={item} index={index} isDark={isDark} />}
+          renderItem={({ item, index }) => (
+            <SongCard item={item} index={index} isDark={isDark} onPress={() => handleSongPress(item)} />
+          )}
         />
       </Section>
 
@@ -256,7 +291,9 @@ export default function HomeScreen() {
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
-          renderItem={({ item }) => <ArtistCard item={item} isDark={isDark} />}
+          renderItem={({ item }) => (
+            <ArtistCard item={item} isDark={isDark} onPress={() => handleArtistPress(item)} />
+          )}
         />
       </Section>
 
