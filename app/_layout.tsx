@@ -74,10 +74,15 @@ function RootLayoutNav() {
           <Stack.Screen name="discover-decade-grid" options={{ headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="discover-genre-grid" options={{ headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="my-listend" options={{ title: 'My Listend', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="my-playlists" options={{ title: 'My Playlists', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="playlist-detail" options={{ title: 'Playlist', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="playlist-add-albums" options={{ title: 'Add Albums', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="my-stats" options={{ title: 'My Stats', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="want-to-listen" options={{ title: 'Want to Listen', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="recent-listens" options={{ title: 'Recent Listens', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="my-reviews" options={{ title: 'My Reviews', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="artist-detail" options={{ title: '', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
         </Stack>
       </ThemeProvider>
     </AlbumsProvider>

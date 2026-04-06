@@ -463,6 +463,98 @@ app.get('/genius/credits/:artistName/:trackName', async (req, res) => {
   }
 });
 
+// ── GET /spotify/album/:id/tracks ────────────────────────────────────────────
+// Returns the full tracklist for an album.
+
+app.get('/spotify/album/:id/tracks', async (req, res) => {
+  const { id } = req.params;
+  const CACHE_KEY = `spotify_album_tracks_${id}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const data = await spotifyGet(`/albums/${id}/tracks?limit=50&market=US`);
+    const tracks = (data.items ?? []).map(t => ({
+      number: t.track_number,
+      id: t.id,
+      title: t.name,
+      durationMs: t.duration_ms,
+      featuredArtists: (t.artists ?? []).slice(1).map(a => a.name),
+    }));
+    cacheSet(CACHE_KEY, tracks, TTL_6H);
+    await setCache(CACHE_KEY, tracks);
+    res.json(tracks);
+  } catch (err) {
+    console.error('[/spotify/album/tracks]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /spotify/artist/:id/top-tracks ────────────────────────────────────────
+
+app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
+  const { id } = req.params;
+  const CACHE_KEY = `spotify_artist_top_tracks_${id}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const data = await spotifyGet(`/artists/${id}/top-tracks?market=US`);
+    const tracks = (data.tracks ?? []).slice(0, 10).map((t, i) => ({
+      number: i + 1,
+      id: t.id,
+      title: t.name,
+      artworkUrl: t.album?.images?.[0]?.url ?? '',
+      albumTitle: t.album?.name ?? '',
+      durationMs: t.duration_ms,
+    }));
+    cacheSet(CACHE_KEY, tracks, TTL_6H);
+    await setCache(CACHE_KEY, tracks);
+    res.json(tracks);
+  } catch (err) {
+    console.error('[/spotify/artist/top-tracks]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /spotify/artist/:id/albums ────────────────────────────────────────────
+
+app.get('/spotify/artist/:id/albums', async (req, res) => {
+  const { id } = req.params;
+  const CACHE_KEY = `spotify_artist_albums_${id}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const data = await spotifyGet(`/artists/${id}/albums?include_groups=album,single&market=US&limit=20`);
+    const albums = (data.items ?? []).map(item => ({
+      id: item.id,
+      title: item.name,
+      artworkUrl: item.images?.[0]?.url ?? '',
+      year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
+      type: item.album_group ?? 'album',
+    }));
+    cacheSet(CACHE_KEY, albums, TTL_6H);
+    await setCache(CACHE_KEY, albums);
+    res.json(albums);
+  } catch (err) {
+    console.error('[/spotify/artist/albums]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /refresh ──────────────────────────────────────────────────────────────
 
 app.get('/refresh', async (req, res) => {
