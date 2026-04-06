@@ -100,9 +100,9 @@ function SongCard({ item, index, isDark }: { item: SpotifyTrack; index: number; 
   );
 }
 
-function ArtistCard({ item, isDark }: { item: SpotifyArtist; isDark: boolean }) {
+function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: boolean; onPress: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [s.card, { width: ARTIST_SIZE, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ARTIST_SIZE, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
         <Image source={{ uri: item.artworkUrl }} style={{ width: ARTIST_SIZE, height: ARTIST_SIZE, borderRadius: ARTIST_SIZE / 2 }} />
       ) : (
@@ -262,7 +262,11 @@ export default function DiscoverScreen() {
             contentContainerStyle={s.row}
             renderItem={({ item }) =>
               item ? (
-                <ArtistCard item={item} isDark={isDark} />
+                <ArtistCard
+                  item={item}
+                  isDark={isDark}
+                  onPress={() => router.push({ pathname: '/artist-detail', params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl } } as any)}
+                />
               ) : (
                 <View style={[s.artistPlaceholder, { backgroundColor: isDark ? '#1e1e2e' : '#e5e5e5' }]} />
               )

@@ -160,6 +160,7 @@ export default function AlbumDetailScreen() {
   const [genius, setGenius]               = useState<GeniusCredits | null>(null);
   const [similar, setSimilar]             = useState<SimilarAlbum[] | null>(null);
   const [bioExpanded, setBioExpanded]     = useState(false);
+  const [creditsExpanded, setCreditsExpanded] = useState(false);
 
   const isLogged  = !!loggedAlbum;
   const isWanted  = wantToListen.some(a => a.id === albumId);
@@ -430,9 +431,6 @@ export default function AlbumDetailScreen() {
 
         {/* ── 5. Credits ────────────────────────────────────────────────────── */}
         {genius && (genius.credits?.length || genius.producers?.length || genius.writers?.length) ? (() => {
-          // Always pin Produced By + Written By at the top from flat arrays,
-          // then append any remaining structured roles from custom_performances,
-          // skipping roles that are already covered by the pinned rows.
           const PRODUCED_RE = /produced/i;
           const WRITTEN_RE  = /written|lyric/i;
 
@@ -441,23 +439,33 @@ export default function AlbumDetailScreen() {
             ...(genius.writers?.length   ? [{ label: 'Written By',  artists: genius.writers   }] : []),
           ];
 
-          // Extra roles from custom_performances — exclude ones already pinned above.
           const extraRows = (genius.credits ?? []).filter(
             row => !PRODUCED_RE.test(row.label) && !WRITTEN_RE.test(row.label)
           );
 
-          const rows = [...pinnedRows, ...extraRows];
-          if (!rows.length) return null;
+          const allRows = [...pinnedRows, ...extraRows];
+          if (!allRows.length) return null;
+
+          const PREVIEW = 4;
+          const visibleRows = creditsExpanded ? allRows : allRows.slice(0, PREVIEW);
+          const hasMore = allRows.length > PREVIEW;
 
           return (
             <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
               <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Credits</Text>
-              {rows.map((row, i) => (
-                <View key={i} style={[s.creditRow, i < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderColor }]}>
+              {visibleRows.map((row, i) => (
+                <View key={i} style={[s.creditRow, i < visibleRows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderColor }]}>
                   <Text style={[s.creditLabel, { color: colors.subtext }]}>{row.label}</Text>
                   <Text style={[s.creditValue, { color: colors.text }]}>{row.artists.join(', ')}</Text>
                 </View>
               ))}
+              {hasMore && (
+                <Pressable onPress={() => setCreditsExpanded(v => !v)} style={s.creditsToggle}>
+                  <Text style={s.creditsToggleText}>
+                    {creditsExpanded ? 'See Less' : `See More (${allRows.length - PREVIEW} more)`}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           );
         })() : null}
@@ -602,6 +610,8 @@ const s = StyleSheet.create({
   creditRow: { marginBottom: 8 },
   creditLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 },
   creditValue: { fontSize: 14 },
+  creditsToggle: { marginTop: 6 },
+  creditsToggleText: { color: '#FF3CAC', fontSize: 13, fontWeight: '500' },
 
   // Similar Albums
   similarCard:   { width: 110, marginHorizontal: 4, gap: 4 },

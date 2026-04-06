@@ -165,38 +165,77 @@ export default function ArtistDetailScreen() {
 
   // ── Resolve Spotify artist ID if not provided ──────────────────────────────
   useEffect(() => {
-    if (artistId) return;
-    if (!artistName) return;
+    if (artistId) {
+      console.log('[artist-detail] artistId already set:', artistId);
+      return;
+    }
+    if (!artistName) {
+      console.warn('[artist-detail] no artistName — cannot resolve ID');
+      return;
+    }
     let cancelled = false;
-    fetch(`${API_URL}/search?q=${encodeURIComponent(artistName)}&type=artist`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    const searchUrl = `${API_URL}/search?q=${encodeURIComponent(artistName)}&type=artist`;
+    console.log('[artist-detail] resolving artist ID via search:', searchUrl);
+    fetch(searchUrl)
+      .then(r => {
+        console.log('[artist-detail] ID search HTTP', r.status);
+        return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
+      })
       .then((results: { id: string; name: string; artworkUrl: string }[]) => {
-        if (cancelled || !results.length) return;
+        if (cancelled) return;
+        console.log('[artist-detail] ID search results:', results.length, results[0]?.id, results[0]?.name);
+        if (!results.length) { console.warn('[artist-detail] no results for artist name:', artistName); return; }
         const match = results[0];
         setArtistId(match.id);
         if (!artworkUrl && match.artworkUrl) setArtworkUrl(match.artworkUrl);
       })
-      .catch(() => {});
+      .catch(err => console.warn('[artist-detail] ID search error:', err));
     return () => { cancelled = true; };
   }, [artistName, artistId]);
 
   // ── Fetch Spotify data once artist ID is known ─────────────────────────────
   useEffect(() => {
-    if (!artistId) return;
+    if (!artistId) {
+      console.log('[artist-detail] Spotify fetch skipped — artistId not yet set');
+      return;
+    }
     let cancelled = false;
 
+    const tracksUrl = `${API_URL}/spotify/artist/${artistId}/top-tracks`;
+    const albumsUrl = `${API_URL}/spotify/artist/${artistId}/albums`;
+    console.log('[artist-detail] fetching top-tracks:', tracksUrl);
+    console.log('[artist-detail] fetching albums:', albumsUrl);
+
     setTracksLoading(true);
-    fetch(`${API_URL}/spotify/artist/${artistId}/top-tracks`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => { if (!cancelled) setTopTracks(data); })
-      .catch(() => { if (!cancelled) setTopTracks([]); })
+    fetch(tracksUrl)
+      .then(r => {
+        console.log('[artist-detail] top-tracks HTTP', r.status);
+        return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
+      })
+      .then(data => {
+        console.log('[artist-detail] top-tracks received:', Array.isArray(data) ? `${data.length} tracks` : data);
+        if (!cancelled) setTopTracks(data);
+      })
+      .catch(err => {
+        console.warn('[artist-detail] top-tracks error:', err);
+        if (!cancelled) setTopTracks([]);
+      })
       .finally(() => { if (!cancelled) setTracksLoading(false); });
 
     setAlbumsLoading(true);
-    fetch(`${API_URL}/spotify/artist/${artistId}/albums`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => { if (!cancelled) setAlbums(data); })
-      .catch(() => { if (!cancelled) setAlbums([]); })
+    fetch(albumsUrl)
+      .then(r => {
+        console.log('[artist-detail] albums HTTP', r.status);
+        return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
+      })
+      .then(data => {
+        console.log('[artist-detail] albums received:', Array.isArray(data) ? `${data.length} albums` : data);
+        if (!cancelled) setAlbums(data);
+      })
+      .catch(err => {
+        console.warn('[artist-detail] albums error:', err);
+        if (!cancelled) setAlbums([]);
+      })
       .finally(() => { if (!cancelled) setAlbumsLoading(false); });
 
     return () => { cancelled = true; };
@@ -242,7 +281,7 @@ export default function ArtistDetailScreen() {
         {tracksLoading ? (
           <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
         ) : topTracks && topTracks.length > 0 ? (
-          topTracks.map((track, i) => (
+          topTracks.slice(0, 5).map((track, i) => (
             <TrackRow
               key={track.id}
               track={track}
