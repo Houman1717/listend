@@ -390,14 +390,25 @@ export default function AlbumDetailScreen() {
 
         {/* ── 5. Credits ────────────────────────────────────────────────────── */}
         {genius && (genius.credits?.length || genius.producers?.length || genius.writers?.length) ? (() => {
-          // Prefer structured credits from custom_performances; fall back to flat arrays.
-          const rows: { label: string; artists: string[] }[] =
-            genius.credits?.length
-              ? genius.credits
-              : [
-                  ...(genius.producers?.length ? [{ label: 'Produced by', artists: genius.producers }] : []),
-                  ...(genius.writers?.length   ? [{ label: 'Written by',  artists: genius.writers   }] : []),
-                ];
+          // Always pin Produced By + Written By at the top from flat arrays,
+          // then append any remaining structured roles from custom_performances,
+          // skipping roles that are already covered by the pinned rows.
+          const PRODUCED_RE = /produced/i;
+          const WRITTEN_RE  = /written|lyric/i;
+
+          const pinnedRows: { label: string; artists: string[] }[] = [
+            ...(genius.producers?.length ? [{ label: 'Produced By', artists: genius.producers }] : []),
+            ...(genius.writers?.length   ? [{ label: 'Written By',  artists: genius.writers   }] : []),
+          ];
+
+          // Extra roles from custom_performances — exclude ones already pinned above.
+          const extraRows = (genius.credits ?? []).filter(
+            row => !PRODUCED_RE.test(row.label) && !WRITTEN_RE.test(row.label)
+          );
+
+          const rows = [...pinnedRows, ...extraRows];
+          if (!rows.length) return null;
+
           return (
             <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
               <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Credits</Text>

@@ -436,7 +436,7 @@ app.get('/lastfm/album', async (req, res) => {
 // Fetches and parses Genius credits for one track. Returns null on any failure.
 // All raw fields are logged so Railway deploy logs show exactly what Genius returns.
 
-const GENIUS_EXCLUDE = /publisher|published by|under exclusive license|distributed by|copyright|℗|record label|label|℗\s*&\s*©|rights reserved/i;
+const GENIUS_EXCLUDE = /publisher|published by|under exclusive license|distributor|distributed by|copyright|℗|record label|label|℗\s*&\s*©|rights reserved/i;
 
 async function fetchSongCredits(artistName, trackName) {
   const query = `${artistName} ${trackName}`;
