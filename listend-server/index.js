@@ -51,24 +51,14 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // ── GET /debug/spotify — raw Spotify proxy for diagnosis ──────────────────────
-// Usage: /debug/spotify?path=/artists/ARTIST_ID/top-tracks%3Fmarket%3DUS
-// Returns the raw Spotify response (or error detail) as JSON.
-// DELETE or gate this endpoint before going to production.
 
 app.get('/debug/spotify', async (req, res) => {
-  const path = (req.query.path ?? '').trim();
-  if (!path) return res.status(400).json({ error: 'path query param required, e.g. /artists/xxx/top-tracks?market=US' });
   try {
-    const token = await getToken();
-    console.log(`[/debug/spotify] calling path="${path}" token_present=${!!token}`);
-    const r = await fetch(`https://api.spotify.com/v1${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    let body;
-    try { body = await r.json(); } catch (_) { body = await r.text(); }
-    res.status(r.status).json({ spotifyStatus: r.status, body });
+    const path = req.query.path;
+    const data = await spotifyGet(path);
+    res.json({ spotifyStatus: 200, body: data });
   } catch (err) {
-    res.status(500).json({ error: err.message ?? String(err) });
+    res.json({ spotifyStatus: err.status || 500, body: err.message, detail: err.responseBody });
   }
 });
 
