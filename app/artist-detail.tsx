@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
@@ -46,7 +45,7 @@ type LastfmArtist = {
   listeners: number;
   bio: string;
   tags: string[];
-  similar: { name: string; url: string }[];
+  similar: { name: string; url: string; imageUrl: string | null }[];
 };
 
 type SpotifyTrack = {
@@ -64,6 +63,12 @@ type SpotifyAlbum = {
   artworkUrl: string;
   year: number;
   type: string;
+};
+
+type SpotifyDiscography = {
+  albums: SpotifyAlbum[];
+  singles: SpotifyAlbum[];
+  compilations: SpotifyAlbum[];
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -105,7 +110,7 @@ export default function ArtistDetailScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { width } = useWindowDimensions();
+
 
   const params = useLocalSearchParams<{ id?: string; name?: string; artworkUrl?: string }>();
 
@@ -127,7 +132,7 @@ export default function ArtistDetailScreen() {
   const [tracksLoading, setTracksLoading] = useState(true);
   const [tracksError, setTracksError]     = useState('');
 
-  const [albums, setAlbums]               = useState<SpotifyAlbum[] | null>(null);
+  const [discography, setDiscography]     = useState<SpotifyDiscography | null>(null);
   const [albumsLoading, setAlbumsLoading] = useState(true);
   const [albumsError, setAlbumsError]     = useState('');
 
@@ -140,11 +145,8 @@ export default function ArtistDetailScreen() {
   const borderColor = isDark ? '#222' : '#e8e8e8';
   const mutedText   = isDark ? '#555' : '#bbb';
 
-  // Album grid column math
-  const COLS = 2;
   const GRID_PAD = 20;
-  const GRID_GAP = 12;
-  const albumSize = Math.floor((width - GRID_PAD * 2 - GRID_GAP) / COLS);
+  const CARD_SIZE = 120;
 
   // ── Fetch Last.fm (independent — only needs artistName) ────────────────────
   useEffect(() => {
@@ -240,20 +242,25 @@ export default function ArtistDetailScreen() {
         })
         .finally(() => { if (!cancelled) setTracksLoading(false); });
 
-      // Albums
+      // Albums (grouped discography)
       fetch(albumsUrl)
         .then(r => {
           console.log('[artist-detail] albums HTTP', r.status);
           return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
         })
         .then(data => {
-          console.log('[artist-detail] albums:', Array.isArray(data) ? `${data.length} albums` : String(data));
-          if (!cancelled) setAlbums(Array.isArray(data) ? data : []);
+          const disc: SpotifyDiscography = {
+            albums:       Array.isArray(data?.albums)       ? data.albums       : [],
+            singles:      Array.isArray(data?.singles)      ? data.singles      : [],
+            compilations: Array.isArray(data?.compilations) ? data.compilations : [],
+          };
+          console.log('[artist-detail] discography:', disc.albums.length, 'albums,', disc.singles.length, 'singles,', disc.compilations.length, 'compilations');
+          if (!cancelled) setDiscography(disc);
         })
         .catch(err => {
           const msg = String(err);
           console.warn('[artist-detail] albums error:', msg);
-          if (!cancelled) { setAlbums([]); setAlbumsError(msg); }
+          if (!cancelled) { setDiscography({ albums: [], singles: [], compilations: [] }); setAlbumsError(msg); }
         })
         .finally(() => { if (!cancelled) setAlbumsLoading(false); });
     }
@@ -267,6 +274,33 @@ export default function ArtistDetailScreen() {
       pathname: '/album-detail',
       params: { id: album.id, title: album.title, artist: artistName, year: String(album.year), artworkUrl: album.artworkUrl },
     });
+  }
+
+  function renderAlbumRow(items: SpotifyAlbum[]) {
+    if (!items.length) return null;
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={sc.albumRowContent}>
+        {items.map(album => (
+          <Pressable
+            key={album.id}
+            style={({ pressed }) => [sc.albumCard, { opacity: pressed ? 0.7 : 1 }]}
+            onPress={() => handleAlbumPress(album)}>
+            {album.artworkUrl ? (
+              <Image source={{ uri: album.artworkUrl }} style={sc.albumArt} />
+            ) : (
+              <View style={[sc.albumArt, { backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' }]}>
+                <FontAwesome name="music" size={24} color="#444" />
+              </View>
+            )}
+            <Text style={[sc.albumTitle, { color: colors.text }]} numberOfLines={2}>{album.title}</Text>
+            <Text style={[sc.albumYear, { color: colors.subtext }]}>{album.year > 0 ? album.year : ''}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    );
   }
 
   function handleSimilarArtistPress(name: string) {
@@ -298,7 +332,22 @@ export default function ArtistDetailScreen() {
         ) : null}
       </View>
 
-      {/* ── 2. Top Tracks ────────────────────────────────────────────────────── */}
+      {/* ── 2. About (collapsible bio) ────────────────────────────────────────── */}
+      {lastfm?.bio ? (
+        <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
+          <SectionHeader label="About" color={colors.subtext} />
+          <Text
+            style={[sc.bioText, { color: colors.text }]}
+            numberOfLines={bioExpanded ? undefined : 3}>
+            {lastfm.bio}
+          </Text>
+          <Pressable onPress={() => setBioExpanded(v => !v)}>
+            <Text style={sc.bioToggle}>{bioExpanded ? 'Show less' : 'Read more'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* ── 3. Top Tracks ────────────────────────────────────────────────────── */}
       <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
         <SectionHeader label="Top Tracks" color={colors.subtext} />
         {tracksLoading ? (
@@ -321,51 +370,38 @@ export default function ArtistDetailScreen() {
         )}
       </View>
 
-      {/* ── 3. Discography ───────────────────────────────────────────────────── */}
+      {/* ── 4. Discography ───────────────────────────────────────────────────── */}
       <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
         <SectionHeader label="Discography" color={colors.subtext} />
         {albumsLoading ? (
           <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
         ) : albumsError ? (
           <Text style={[sc.errorText, { color: '#f87171' }]}>{albumsError}</Text>
-        ) : albums && albums.length > 0 ? (
-          <View style={sc.grid}>
-            {albums.map(album => (
-              <Pressable
-                key={album.id}
-                style={({ pressed }) => [sc.albumCard, { width: albumSize, opacity: pressed ? 0.7 : 1 }]}
-                onPress={() => handleAlbumPress(album)}>
-                {album.artworkUrl ? (
-                  <Image source={{ uri: album.artworkUrl }} style={{ width: albumSize, height: albumSize, borderRadius: 8 }} />
-                ) : (
-                  <View style={{ width: albumSize, height: albumSize, borderRadius: 8, backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' }}>
-                    <FontAwesome name="music" size={28} color="#444" />
-                  </View>
-                )}
-                <Text style={[sc.albumTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
-                <Text style={[sc.albumYear, { color: colors.subtext }]}>{album.year > 0 ? album.year : ''}</Text>
-              </Pressable>
-            ))}
-          </View>
+        ) : discography && (discography.albums.length + discography.singles.length + discography.compilations.length) > 0 ? (
+          <>
+            {discography.albums.length > 0 && (
+              <>
+                <Text style={[sc.discGroupLabel, { color: colors.subtext }]}>Albums</Text>
+                {renderAlbumRow(discography.albums)}
+              </>
+            )}
+            {discography.singles.length > 0 && (
+              <>
+                <Text style={[sc.discGroupLabel, { color: colors.subtext, marginTop: discography.albums.length > 0 ? 16 : 0 }]}>Singles</Text>
+                {renderAlbumRow(discography.singles)}
+              </>
+            )}
+            {discography.compilations.length > 0 && (
+              <>
+                <Text style={[sc.discGroupLabel, { color: colors.subtext, marginTop: (discography.albums.length + discography.singles.length) > 0 ? 16 : 0 }]}>Compilations</Text>
+                {renderAlbumRow(discography.compilations)}
+              </>
+            )}
+          </>
         ) : (
           <Text style={[sc.empty, { color: mutedText }]}>No albums available</Text>
         )}
       </View>
-
-      {/* ── 4. About (collapsible bio) ────────────────────────────────────────── */}
-      {lastfm?.bio ? (
-        <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
-          <SectionHeader label="About" color={colors.subtext} />
-          <Text
-            style={[sc.bioText, { color: colors.text }]}
-            numberOfLines={bioExpanded ? undefined : 3}>
-            {lastfm.bio}
-          </Text>
-          <Pressable onPress={() => setBioExpanded(v => !v)}>
-            <Text style={sc.bioToggle}>{bioExpanded ? 'Show less' : 'Read more'}</Text>
-          </Pressable>
-        </View>
-      ) : null}
 
       {/* ── 5. Similar Artists ────────────────────────────────────────────────── */}
       {lastfm?.similar && lastfm.similar.length > 0 ? (
@@ -375,11 +411,15 @@ export default function ArtistDetailScreen() {
             {lastfm.similar.map(sim => (
               <Pressable
                 key={sim.name}
-                style={({ pressed }) => [sc.similarChip, { opacity: pressed ? 0.6 : 1, borderColor: isDark ? '#333' : '#ddd' }]}
+                style={({ pressed }) => [sc.similarChip, { opacity: pressed ? 0.6 : 1 }]}
                 onPress={() => handleSimilarArtistPress(sim.name)}>
-                <View style={[sc.similarAvatar, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]}>
-                  <Text style={[sc.similarInitial, { color: colors.subtext }]}>{sim.name.charAt(0)}</Text>
-                </View>
+                {sim.imageUrl ? (
+                  <Image source={{ uri: sim.imageUrl }} style={sc.similarAvatar} />
+                ) : (
+                  <View style={[sc.similarAvatar, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={[sc.similarInitial, { color: colors.subtext }]}>{sim.name.charAt(0)}</Text>
+                  </View>
+                )}
                 <Text style={[sc.similarName, { color: colors.text }]} numberOfLines={2}>{sim.name}</Text>
               </Pressable>
             ))}
@@ -419,11 +459,13 @@ const sc = StyleSheet.create({
   trackSub: { fontSize: 12 },
   trackDuration: { fontSize: 13, marginLeft: 8 },
 
-  // Discography grid
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  albumCard: { gap: 5 },
-  albumTitle: { fontSize: 13, fontWeight: '500', marginTop: 4 },
-  albumYear: { fontSize: 12 },
+  // Discography carousel
+  discGroupLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
+  albumRowContent: { paddingRight: 4 },
+  albumCard: { width: 120, marginRight: 12 },
+  albumArt: { width: 120, height: 120, borderRadius: 8 },
+  albumTitle: { fontSize: 12, fontWeight: '500', marginTop: 6, lineHeight: 16 },
+  albumYear: { fontSize: 11, marginTop: 2 },
 
   // Bio
   bioText: { fontSize: 14, lineHeight: 22 },
@@ -432,7 +474,7 @@ const sc = StyleSheet.create({
   // Similar artists
   similarScroll: { marginHorizontal: -4 },
   similarChip: { width: 80, alignItems: 'center', marginHorizontal: 4, gap: 6 },
-  similarAvatar: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
+  similarAvatar: { width: 56, height: 56, borderRadius: 28 },
   similarInitial: { fontSize: 20, fontWeight: '700' },
   similarName: { fontSize: 11, textAlign: 'center', lineHeight: 14 },
 });

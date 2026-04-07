@@ -373,15 +373,32 @@ app.get('/lastfm/artist', async (req, res) => {
     if (json.error) throw new Error(`Last.fm error ${json.error}: ${json.message}`);
 
     const a = json.artist;
+
+    // Fetch Spotify images for each similar artist in parallel
+    const similarRaw = a.similar?.artist ?? [];
+    const similarWithImages = await Promise.all(
+      similarRaw.map(async s => {
+        let imageUrl = null;
+        try {
+          const q = encodeURIComponent(s.name);
+          const sr = await spotifyGet(`/search?q=${q}&type=artist&limit=1`);
+          imageUrl = sr.artists?.items?.[0]?.images?.[0]?.url ?? null;
+        } catch (e) {
+          console.warn(`[/lastfm/artist] Spotify image lookup failed for "${s.name}":`, e.message);
+        }
+        return { name: s.name, url: s.url, imageUrl };
+      })
+    );
+
     const payload = {
       name: a.name,
       listeners: parseInt(a.stats?.listeners ?? '0', 10),
       bio: a.bio?.summary ?? '',
       tags: (a.tags?.tag ?? []).map(t => t.name),
-      similar: (a.similar?.artist ?? []).map(s => ({ name: s.name, url: s.url })),
+      similar: similarWithImages,
     };
 
-    console.log(`[/lastfm/artist] success — ${payload.listeners} listeners, ${payload.tags.length} tags`);
+    console.log(`[/lastfm/artist] success — ${payload.listeners} listeners, ${payload.tags.length} tags, ${payload.similar.length} similar`);
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
     res.json(payload);
@@ -672,15 +689,32 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
       throw new Error(`Last.fm artist.gettoptracks → ${lfmResp.status}: ${body}`);
     }
     const lfmData = await lfmResp.json();
+    const rawTracks = (lfmData.toptracks?.track ?? []).slice(0, 5);
 
-    const tracks = (lfmData.toptracks?.track ?? []).slice(0, 5).map((t, i) => ({
-      number:     i + 1,
-      id:         t.mbid || t.url || `${artistName}-${i}`,
-      title:      t.name ?? null,
-      artworkUrl: t.image?.find(img => img.size === 'large')?.['#text'] || t.image?.[t.image.length - 1]?.['#text'] || null,
-      albumTitle: null,
-      durationMs: t.duration ? parseInt(t.duration, 10) * 1000 : null,
-    }));
+    // Step 3: fetch artwork for each track via Spotify search (in parallel)
+    const tracks = await Promise.all(
+      rawTracks.map(async (t, i) => {
+        let artworkUrl = null;
+        let albumTitle = null;
+        try {
+          const q = encodeURIComponent(`${t.name} ${artistName}`);
+          const sr = await spotifyGet(`/search?q=${q}&type=track&limit=1`);
+          const hit = sr.tracks?.items?.[0];
+          artworkUrl = hit?.album?.images?.[0]?.url ?? null;
+          albumTitle = hit?.album?.name ?? null;
+        } catch (e) {
+          console.warn(`[/spotify/artist/top-tracks] artwork lookup failed for "${t.name}":`, e.message);
+        }
+        return {
+          number:     i + 1,
+          id:         t.mbid || t.url || `${artistName}-${i}`,
+          title:      t.name ?? null,
+          artworkUrl,
+          albumTitle,
+          durationMs: t.duration ? parseInt(t.duration, 10) * 1000 : null,
+        };
+      })
+    );
 
     console.log(`[/spotify/artist/top-tracks] success — ${tracks.length} tracks`);
     cacheSet(CACHE_KEY, tracks, TTL_6H);
@@ -715,27 +749,34 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     const db = await getCached(CACHE_KEY, TTL_24H);
     if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
-    console.log(`[/spotify/artist/albums] calling Spotify /artists/${id}/albums?include_groups=album,single,compilation&limit=10`);
-    const data = await spotifyGet(`/artists/${id}/albums?include_groups=album,single,compilation&limit=10`);
-    console.log(`[/spotify/artist/albums] Spotify response keys: ${Object.keys(data ?? {}).join(', ')}`);
-    console.log(`[/spotify/artist/albums] RAW RESPONSE: ${JSON.stringify(data)}`);
-
+    // Paginate through all releases (Spotify caps limit at 10 in dev mode)
     const toItem = item => ({
       id:         item.id,
       title:      item.name,
       artworkUrl: item.images?.[0]?.url ?? '',
       year:       parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-      type:       item.album_group ?? item.album_type ?? 'album',
+      type:       item.album_group, // strict: only use album_group, never fall back to album_type
     });
 
-    const all = (data.items ?? []).map(toItem);
+    let allItems = [];
+    let nextPath = `/artists/${id}/albums?include_groups=album,single,compilation&limit=10`;
+    let page = 0;
+    while (nextPath && page < 20) {
+      console.log(`[/spotify/artist/albums] fetching page ${page + 1}: ${nextPath}`);
+      const data = await spotifyGet(nextPath);
+      allItems = allItems.concat((data.items ?? []).map(toItem));
+      nextPath = data.next ? data.next.replace('https://api.spotify.com/v1', '') : null;
+      page++;
+    }
+    console.log(`[/spotify/artist/albums] fetched ${allItems.length} total releases across ${page} page(s)`);
+
     const grouped = {
-      albums:       all.filter(a => a.type === 'album'),
-      singles:      all.filter(a => a.type === 'single'),
-      compilations: all.filter(a => a.type === 'compilation'),
+      albums:       allItems.filter(a => a.type === 'album'),
+      singles:      allItems.filter(a => a.type === 'single'),
+      compilations: allItems.filter(a => a.type === 'compilation'),
     };
 
-    console.log(`[/spotify/artist/albums] success — ${all.length} total (${grouped.albums.length} albums, ${grouped.singles.length} singles, ${grouped.compilations.length} compilations)`);
+    console.log(`[/spotify/artist/albums] success — ${allItems.length} total (${grouped.albums.length} albums, ${grouped.singles.length} singles, ${grouped.compilations.length} compilations)`);
     cacheSet(CACHE_KEY, grouped, TTL_6H);
     await setCache(CACHE_KEY, grouped);
     res.json(grouped);
