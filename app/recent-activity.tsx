@@ -47,6 +47,11 @@ type ActivityItem = {
 
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
+function formatDateLabel(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 const MONTH_MAP: Record<string, number> = {
   Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
   Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
@@ -140,7 +145,7 @@ export default function RecentActivityScreen() {
         artworkUrl: a.artworkUrl,
         coverColor: a.coverColor,
         dateMs:     parseDate(a.dateLogged),
-        dateLabel:  a.dateLogged,
+        dateLabel:  formatDateLabel(a.dateLogged),
         rating:     a.rating,
       });
     }

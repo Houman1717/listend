@@ -194,10 +194,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   function logAlbum(rating: number, review: string) {
     if (!pendingAlbum) return;
 
-    const today = new Date();
-    const dateLogged = today.toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-    });
+    const dateLogged = new Date().toISOString();
     const colorIndex = loggedAlbums.length % COVER_COLORS.length;
 
     const newAlbum: LoggedAlbum = {
