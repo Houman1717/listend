@@ -47,9 +47,23 @@ type ActivityItem = {
 
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
+const MONTH_MAP: Record<string, number> = {
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+};
+
 function parseDate(s: string): number | null {
-  const ms = new Date(s).getTime();
-  return isNaN(ms) ? null : ms;
+  if (!s) return null;
+  // ISO format (used by dateAdded on wantToListen items)
+  let ms = new Date(s).getTime();
+  if (!isNaN(ms)) return ms;
+  // "Mar 24, 2026" — toLocaleDateString format; Hermes can't parse this
+  const m = s.match(/^(\w{3})\s+(\d{1,2}),\s+(\d{4})$/);
+  if (m && MONTH_MAP[m[1]] !== undefined) {
+    ms = new Date(parseInt(m[3], 10), MONTH_MAP[m[1]], parseInt(m[2], 10)).getTime();
+    if (!isNaN(ms)) return ms;
+  }
+  return null;
 }
 
 // ─── Row component ────────────────────────────────────────────────────────────
