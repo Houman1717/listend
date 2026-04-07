@@ -131,8 +131,12 @@ export default function RecentActivityScreen() {
       });
     }
 
-    // Want-to-listen items have no timestamp — they sort to the end
+    // Want-to-listen items — use dateAdded if present, otherwise sort to end
     for (const w of wantToListen) {
+      const dateMs = w.dateAdded ? new Date(w.dateAdded).getTime() : null;
+      const dateLabel = w.dateAdded
+        ? new Date(w.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : '';
       items.push({
         key:        `want-${w.id}`,
         type:       'wantToListen',
@@ -142,8 +146,8 @@ export default function RecentActivityScreen() {
         year:       w.year,
         artworkUrl: w.artworkUrl,
         coverColor: undefined,
-        dateMs:     null,
-        dateLabel:  '',
+        dateMs,
+        dateLabel,
         rating:     0,
       });
     }

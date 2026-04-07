@@ -56,6 +56,7 @@ export type WantToListenAlbum = {
   artist: string;
   year: number;
   artworkUrl: string;
+  dateAdded?: string; // ISO string, added when item is saved
 };
 
 export type Playlist = {
@@ -259,7 +260,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   function addToWantToListen(album: WantToListenAlbum) {
     setWantToListen((prev) => {
       if (prev.find((a) => a.id === album.id)) return prev;
-      return [album, ...prev];
+      return [{ ...album, dateAdded: new Date().toISOString() }, ...prev];
     });
   }
 
