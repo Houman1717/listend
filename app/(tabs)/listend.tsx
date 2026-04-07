@@ -369,7 +369,7 @@ export default function ListendScreen() {
       </View>
 
       {/* ── Activity rows (above stats) ─────────────────────────────────────── */}
-      <View style={[s.navGroup, { marginBottom: 12 }]}>
+      <View style={s.navGroup}>
         <NavRow
           icon="comments"
           label="DMs"
@@ -392,7 +392,7 @@ export default function ListendScreen() {
         />
       </View>
 
-      <View style={s.navGroup}>
+      <View style={[s.navGroup, { marginTop: 2 }]}>
         <NavRow
           icon="music"
           label="My Listend"
