@@ -154,7 +154,7 @@ export default function ArtistDetailScreen() {
     let cancelled = false;
     setLastfmLoading(true);
     setLastfmError('');
-    const url = `${API_URL}/lastfm/artist?artist=${encodeURIComponent(artistName)}`;
+    const url = `${API_URL}/lastfm/artist?artist=${encodeURIComponent(artistName)}&bust=1`;
     console.log('[artist-detail] Last.fm fetch:', url);
     fetch(url)
       .then(r => {
@@ -163,6 +163,7 @@ export default function ArtistDetailScreen() {
       })
       .then(data => {
         if (cancelled) return;
+        console.log('[artist-detail] first similar artist:', JSON.stringify(data.similar?.[0]));
         setLastfm({
           name:     data.name ?? artistName,
           listeners: data.listeners ?? 0,
@@ -220,8 +221,8 @@ export default function ArtistDetailScreen() {
       spotifyFetched.current = true;
 
       // ── Step 2: fetch top-tracks and albums in parallel ──────────────────────
-      const tracksUrl = `${API_URL}/spotify/artist/${artistId}/top-tracks`;
-      const albumsUrl = `${API_URL}/spotify/artist/${artistId}/albums`;
+      const tracksUrl = `${API_URL}/spotify/artist/${artistId}/top-tracks?bust=1`;
+      const albumsUrl = `${API_URL}/spotify/artist/${artistId}/albums?bust=1`;
       console.log('[artist-detail] fetching top-tracks:', tracksUrl);
       console.log('[artist-detail] fetching albums:    ', albumsUrl);
 
