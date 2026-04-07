@@ -715,8 +715,8 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     const db = await getCached(CACHE_KEY, TTL_24H);
     if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
-    console.log(`[/spotify/artist/albums] calling Spotify /artists/${id}/albums?include_groups=album,single,compilation&limit=20`);
-    const data = await spotifyGet(`/artists/${id}/albums?include_groups=album,single,compilation&limit=20`);
+    console.log(`[/spotify/artist/albums] calling Spotify /artists/${id}/albums?include_groups=album,single,compilation&limit=10`);
+    const data = await spotifyGet(`/artists/${id}/albums?include_groups=album,single,compilation&limit=10`);
     console.log(`[/spotify/artist/albums] Spotify response keys: ${Object.keys(data ?? {}).join(', ')}`);
     console.log(`[/spotify/artist/albums] RAW RESPONSE: ${JSON.stringify(data)}`);
 
