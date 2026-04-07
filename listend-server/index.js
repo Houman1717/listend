@@ -344,17 +344,20 @@ app.get('/discover/coming-soon', async (req, res) => {
 
 app.get('/lastfm/artist', async (req, res) => {
   const artistName = (req.query.artist ?? '').trim();
+  const bust = req.query.bust === '1';
   if (!artistName) return res.status(400).json({ error: 'artist query param required' });
 
-  console.log(`[/lastfm/artist] artist="${artistName}" LASTFM_API_KEY=${process.env.LASTFM_API_KEY ? 'set' : 'MISSING'}`);
+  console.log(`[/lastfm/artist] artist="${artistName}" bust=${bust} LASTFM_API_KEY=${process.env.LASTFM_API_KEY ? 'set' : 'MISSING'}`);
 
   const CACHE_KEY = `lastfm_artist_${artistName.toLowerCase()}`;
 
-  const mem = cacheGet(CACHE_KEY);
-  if (mem) { console.log(`[/lastfm/artist] cache hit (memory)`); return res.json(mem); }
+  if (!bust) {
+    const mem = cacheGet(CACHE_KEY);
+    if (mem) { console.log(`[/lastfm/artist] cache hit (memory)`); return res.json(mem); }
 
-  const db = await getCached(CACHE_KEY, TTL_7D);
-  if (db) { console.log(`[/lastfm/artist] cache hit (db)`); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+    const db = await getCached(CACHE_KEY, TTL_7D);
+    if (db) { console.log(`[/lastfm/artist] cache hit (db)`); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  }
 
   try {
     const url =
@@ -377,10 +380,14 @@ app.get('/lastfm/artist', async (req, res) => {
     // Fetch Spotify images for each similar artist — allSettled so one failure doesn't break the list
     const similarRaw = a.similar?.artist ?? [];
     const imageResults = await Promise.allSettled(
-      similarRaw.map(async s => {
+      similarRaw.map(async (s, i) => {
         const q = encodeURIComponent(s.name);
         const sr = await spotifyGet(`/search?q=${q}&type=artist&limit=1`);
+        if (i === 0) {
+          console.log(`[/lastfm/artist] first similar artist Spotify result (${s.name}):`, JSON.stringify(sr.artists?.items?.[0]));
+        }
         const imageUrl = sr.artists?.items?.[0]?.images?.[0]?.url ?? null;
+        console.log(`[/lastfm/artist] similar artist "${s.name}" imageUrl: ${imageUrl}`);
         return { name: s.name, url: s.url, imageUrl };
       })
     );
@@ -654,7 +661,8 @@ app.get('/spotify/album/:id/tracks', async (req, res) => {
 
 app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
   const { id } = req.params;
-  console.log(`[/spotify/artist/top-tracks] ── START id="${id}"`);
+  const bust = req.query.bust === '1';
+  console.log(`[/spotify/artist/top-tracks] ── START id="${id}" bust=${bust}`);
 
   if (!id || id === 'undefined') {
     return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
@@ -663,11 +671,13 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
   const CACHE_KEY = `spotify_artist_top_tracks_${id}`;
 
   try {
-    const mem = cacheGet(CACHE_KEY);
-    if (mem) { console.log('[/spotify/artist/top-tracks] cache hit (memory)'); return res.json(mem); }
+    if (!bust) {
+      const mem = cacheGet(CACHE_KEY);
+      if (mem) { console.log('[/spotify/artist/top-tracks] cache hit (memory)'); return res.json(mem); }
 
-    const db = await getCached(CACHE_KEY, TTL_24H);
-    if (db) { console.log('[/spotify/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+      const db = await getCached(CACHE_KEY, TTL_24H);
+      if (db) { console.log('[/spotify/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+    }
 
     // Step 1: resolve artist name from Spotify
     console.log(`[/spotify/artist/top-tracks] resolving artist name for id="${id}"`);
@@ -752,7 +762,8 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
 
 app.get('/spotify/artist/:id/albums', async (req, res) => {
   const { id } = req.params;
-  console.log(`[/spotify/artist/albums] ── START id="${id}"`);
+  const bust = req.query.bust === '1';
+  console.log(`[/spotify/artist/albums] ── START id="${id}" bust=${bust}`);
 
   if (!id || id === 'undefined') {
     return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
@@ -761,29 +772,38 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
   const CACHE_KEY = `spotify_artist_albums_${id}`;
 
   try {
-    const mem = cacheGet(CACHE_KEY);
-    if (mem) { console.log('[/spotify/artist/albums] cache hit (memory)'); return res.json(mem); }
+    if (!bust) {
+      const mem = cacheGet(CACHE_KEY);
+      if (mem) { console.log('[/spotify/artist/albums] cache hit (memory)'); return res.json(mem); }
 
-    const db = await getCached(CACHE_KEY, TTL_24H);
-    if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+      const db = await getCached(CACHE_KEY, TTL_24H);
+      if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+    }
 
-    // Paginate through all releases (Spotify caps limit at 10 in dev mode)
-    const toItem = item => ({
-      id:         item.id,
-      title:      item.name,
-      artworkUrl: item.images?.[0]?.url ?? '',
-      year:       parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-      type:       item.album_group, // strict: only use album_group, never fall back to album_type
-    });
+    // Paginate through all releases — singles excluded at the Spotify level
+    const toItem = item => {
+      // Log first item on first page so we can see the real field names in Railway logs
+      return {
+        id:         item.id,
+        title:      item.name,
+        artworkUrl: item.images?.[0]?.url ?? '',
+        year:       parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
+        // Normalise to lowercase and prefer album_group; fall back to album_type
+        type:       (item.album_group ?? item.album_type ?? '').toLowerCase(),
+      };
+    };
 
     let allItems = [];
-    let nextPath = `/artists/${id}/albums?include_groups=album,single,compilation&limit=10`;
+    let nextPath = `/artists/${id}/albums?include_groups=album,compilation&limit=10`;
     let page = 0;
     const PAGE_CAP = 5;
     while (nextPath && page < PAGE_CAP) {
       console.log(`[/spotify/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
       try {
         const data = await spotifyGet(nextPath);
+        if (page === 0 && data.items?.[0]) {
+          console.log(`[/spotify/artist/albums] first item raw fields: ${JSON.stringify(data.items[0])}`);
+        }
         allItems = allItems.concat((data.items ?? []).map(toItem));
         nextPath = data.next ? data.next.replace('https://api.spotify.com/v1', '') : null;
       } catch (pageErr) {
@@ -793,14 +813,15 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       page++;
     }
     console.log(`[/spotify/artist/albums] fetched ${allItems.length} total releases across ${page} page(s)`);
+    console.log(`[/spotify/artist/albums] distinct type values: ${[...new Set(allItems.map(a => a.type))].join(', ')}`);
 
     const grouped = {
       albums:       allItems.filter(a => a.type === 'album'),
-      singles:      allItems.filter(a => a.type === 'single'),
+      singles:      [],
       compilations: allItems.filter(a => a.type === 'compilation'),
     };
 
-    console.log(`[/spotify/artist/albums] success — ${allItems.length} total (${grouped.albums.length} albums, ${grouped.singles.length} singles, ${grouped.compilations.length} compilations)`);
+    console.log(`[/spotify/artist/albums] success — ${allItems.length} total (${grouped.albums.length} albums, ${grouped.compilations.length} compilations)`);
     cacheSet(CACHE_KEY, grouped, TTL_6H);
     await setCache(CACHE_KEY, grouped);
     res.json(grouped);
