@@ -631,6 +631,9 @@ app.get('/spotify/album/:id/tracks', async (req, res) => {
 });
 
 // ── GET /spotify/artist/:id/top-tracks ────────────────────────────────────────
+// Workaround for dev-mode 403 on /artists/{id}/top-tracks:
+// 1. Resolve artist name via Spotify GET /artists/{id}
+// 2. Fetch top tracks from Last.fm artist.gettoptracks
 
 app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
   const { id } = req.params;
@@ -649,18 +652,36 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
     const db = await getCached(CACHE_KEY, TTL_24H);
     if (db) { console.log('[/spotify/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
-    console.log(`[/spotify/artist/top-tracks] calling Spotify /artists/${id}/top-tracks?market=US`);
-    const data = await spotifyGet(`/artists/${id}/top-tracks?market=US`);
-    console.log(`[/spotify/artist/top-tracks] Spotify response keys: ${Object.keys(data ?? {}).join(', ')}`);
+    // Step 1: resolve artist name from Spotify
+    console.log(`[/spotify/artist/top-tracks] resolving artist name for id="${id}"`);
+    const artist = await spotifyGet(`/artists/${id}`);
+    const artistName = artist.name;
+    console.log(`[/spotify/artist/top-tracks] artist name="${artistName}"`);
 
-    const tracks = (data.tracks ?? []).slice(0, 10).map((t, i) => ({
+    // Step 2: fetch top tracks from Last.fm
+    const lfmUrl =
+      `http://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks` +
+      `&artist=${encodeURIComponent(artistName)}` +
+      `&api_key=${process.env.LASTFM_API_KEY}` +
+      `&format=json&limit=5`;
+    console.log(`[/spotify/artist/top-tracks] calling Last.fm artist.gettoptracks for "${artistName}"`);
+    const lfmResp = await fetch(lfmUrl);
+    console.log(`[/spotify/artist/top-tracks] Last.fm HTTP status: ${lfmResp.status}`);
+    if (!lfmResp.ok) {
+      const body = await lfmResp.text().catch(() => '');
+      throw new Error(`Last.fm artist.gettoptracks → ${lfmResp.status}: ${body}`);
+    }
+    const lfmData = await lfmResp.json();
+
+    const tracks = (lfmData.toptracks?.track ?? []).slice(0, 5).map((t, i) => ({
       number:     i + 1,
-      id:         t.id,
-      title:      t.name,
-      artworkUrl: t.album?.images?.[0]?.url ?? '',
-      albumTitle: t.album?.name ?? '',
-      durationMs: t.duration_ms,
+      id:         t.mbid || t.url || `${artistName}-${i}`,
+      title:      t.name ?? null,
+      artworkUrl: t.image?.find(img => img.size === 'large')?.['#text'] || t.image?.[t.image.length - 1]?.['#text'] || null,
+      albumTitle: null,
+      durationMs: t.duration ? parseInt(t.duration, 10) * 1000 : null,
     }));
+
     console.log(`[/spotify/artist/top-tracks] success — ${tracks.length} tracks`);
     cacheSet(CACHE_KEY, tracks, TTL_6H);
     await setCache(CACHE_KEY, tracks);
@@ -674,6 +695,8 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
 });
 
 // ── GET /spotify/artist/:id/albums ────────────────────────────────────────────
+// Returns discography grouped by type: { albums, singles, compilations }.
+// Uses /artists/{id}/albums which is available in Spotify dev mode.
 
 app.get('/spotify/artist/:id/albums', async (req, res) => {
   const { id } = req.params;
@@ -692,21 +715,29 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     const db = await getCached(CACHE_KEY, TTL_24H);
     if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
-    console.log(`[/spotify/artist/albums] calling Spotify /artists/${id}/albums?include_groups=album,single&market=US&limit=20`);
-    const data = await spotifyGet(`/artists/${id}/albums?include_groups=album,single&market=US&limit=20`);
+    console.log(`[/spotify/artist/albums] calling Spotify /artists/${id}/albums?include_groups=album,single,compilation&limit=20`);
+    const data = await spotifyGet(`/artists/${id}/albums?include_groups=album,single,compilation&limit=20`);
     console.log(`[/spotify/artist/albums] Spotify response keys: ${Object.keys(data ?? {}).join(', ')}`);
 
-    const albums = (data.items ?? []).map(item => ({
+    const toItem = item => ({
       id:         item.id,
       title:      item.name,
       artworkUrl: item.images?.[0]?.url ?? '',
       year:       parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-      type:       item.album_group ?? 'album',
-    }));
-    console.log(`[/spotify/artist/albums] success — ${albums.length} albums`);
-    cacheSet(CACHE_KEY, albums, TTL_6H);
-    await setCache(CACHE_KEY, albums);
-    res.json(albums);
+      type:       item.album_group ?? item.album_type ?? 'album',
+    });
+
+    const all = (data.items ?? []).map(toItem);
+    const grouped = {
+      albums:       all.filter(a => a.type === 'album'),
+      singles:      all.filter(a => a.type === 'single'),
+      compilations: all.filter(a => a.type === 'compilation'),
+    };
+
+    console.log(`[/spotify/artist/albums] success — ${all.length} total (${grouped.albums.length} albums, ${grouped.singles.length} singles, ${grouped.compilations.length} compilations)`);
+    cacheSet(CACHE_KEY, grouped, TTL_6H);
+    await setCache(CACHE_KEY, grouped);
+    res.json(grouped);
   } catch (err) {
     const msg = err.message ?? String(err);
     console.error('[/spotify/artist/albums] ERROR:', msg);
