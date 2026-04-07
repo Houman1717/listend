@@ -4,201 +4,102 @@ import {
   Text,
   Image,
   Pressable,
-  ScrollView,
+  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useAlbums, LoggedAlbum, WantToListenAlbum } from '@/context/AlbumsContext';
+import { useAlbums } from '@/context/AlbumsContext';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
 const DARK_BG = '#0d0d0d';
-const CARD_BG  = '#111';
 const BORDER   = '#1e1e1e';
 const TEXT     = '#f0f0f0';
 const SUBTEXT  = '#777';
 
-// One accent per activity type
-const COLORS = {
-  listened:     { pill: '#FF3CAC', dim: '#1a0810' }, // pink
-  rated:        { pill: '#c084fc', dim: '#150d1e' }, // purple
-  reviewed:     { pill: '#818cf8', dim: '#0e1020' }, // indigo
-  wantToListen: { pill: '#34d399', dim: '#061812' }, // emerald
+const TYPE_META = {
+  reviewed:     { label: 'Reviewed',       color: '#818cf8', icon: 'pencil'     },
+  rated:        { label: 'Rated',           color: '#c084fc', icon: 'star'       },
+  listened:     { label: 'Listened',        color: '#FF3CAC', icon: 'headphones' },
+  wantToListen: { label: 'Want to Listen',  color: '#34d399', icon: 'bookmark'   },
+} as const;
+
+type ActivityType = keyof typeof TYPE_META;
+
+// ─── Unified activity item type ───────────────────────────────────────────────
+
+type ActivityItem = {
+  key:        string;
+  type:       ActivityType;
+  id:         string;
+  title:      string;
+  artist:     string;
+  year:       number;
+  artworkUrl: string | undefined;
+  coverColor: string | undefined;
+  dateMs:     number | null; // null = no timestamp (want-to-listen)
+  dateLabel:  string;
+  rating:     number;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
-function sortByDate(albums: LoggedAlbum[]): LoggedAlbum[] {
-  return [...albums].sort((a, b) => {
-    const ta = new Date(a.dateLogged).getTime();
-    const tb = new Date(b.dateLogged).getTime();
-    return (isNaN(tb) ? 0 : tb) - (isNaN(ta) ? 0 : ta);
-  });
+function parseDate(s: string): number | null {
+  const ms = new Date(s).getTime();
+  return isNaN(ms) ? null : ms;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Row component ────────────────────────────────────────────────────────────
 
-function TypePill({ label, color }: { label: string; color: string }) {
+function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => void }) {
+  const meta = TYPE_META[item.type];
+
   return (
-    <View style={[tp.pill, { borderColor: color }]}>
-      <Text style={[tp.text, { color }]}>{label}</Text>
-    </View>
-  );
-}
-const tp = StyleSheet.create({
-  pill: {
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    alignSelf: 'flex-start',
-  },
-  text: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
-});
+    <Pressable
+      style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]}
+      onPress={onPress}>
 
-function RatingMini({ rating }: { rating: number }) {
-  if (!rating) return null;
-  return (
-    <View style={rm.wrap}>
-      <FontAwesome name="volume-up" size={9} color={COLORS.rated.pill} />
-      <View style={rm.bars}>
-        {BAR_HEIGHTS.map((h, i) => (
-          <View
-            key={i}
-            style={[rm.bar, { height: h, backgroundColor: i + 1 <= rating ? COLORS.rated.pill : '#2e2e2e' }]}
-          />
-        ))}
-      </View>
-      <Text style={rm.num}>{rating}</Text>
-    </View>
-  );
-}
-const rm = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
-  bar:  { width: 2.5, borderRadius: 1 },
-  num:  { color: COLORS.rated.pill, fontSize: 9, fontWeight: '700', lineHeight: 14 },
-});
+      {/* Artwork */}
+      {item.artworkUrl ? (
+        <Image source={{ uri: item.artworkUrl }} style={s.art} />
+      ) : (
+        <View style={[s.art, { backgroundColor: item.coverColor ?? '#2a2a2a', justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={s.artInitial}>{item.title.charAt(0)}</Text>
+        </View>
+      )}
 
-// Artwork or colour-initial fallback
-function AlbumThumb({ artworkUrl, coverColor, title }: {
-  artworkUrl?: string;
-  coverColor?: string;
-  title: string;
-}) {
-  if (artworkUrl) {
-    return <Image source={{ uri: artworkUrl }} style={s.art} />;
-  }
-  return (
-    <View style={[s.art, { backgroundColor: coverColor ?? '#2a2a2a', justifyContent: 'center', alignItems: 'center' }]}>
-      <Text style={s.artInitial}>{title.charAt(0)}</Text>
-    </View>
-  );
-}
-
-// Section header
-function SectionHead({ icon, label, count, color }: {
-  icon: React.ComponentProps<typeof FontAwesome>['name'];
-  label: string;
-  count: number;
-  color: string;
-}) {
-  return (
-    <View style={sh.row}>
-      <View style={[sh.iconWrap, { backgroundColor: color + '22' }]}>
-        <FontAwesome name={icon} size={13} color={color} />
-      </View>
-      <Text style={sh.label}>{label}</Text>
-      <View style={[sh.countBadge, { backgroundColor: color + '22' }]}>
-        <Text style={[sh.countText, { color }]}>{count}</Text>
-      </View>
-    </View>
-  );
-}
-const sh = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 28,
-    paddingBottom: 12,
-  },
-  iconWrap: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  label: { color: TEXT, fontSize: 15, fontWeight: '700', flex: 1 },
-  countBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  countText: { fontSize: 12, fontWeight: '700' },
-});
-
-// ─── Row variants ─────────────────────────────────────────────────────────────
-
-function ListenedRow({ album, onPress }: { album: LoggedAlbum; onPress: () => void }) {
-  return (
-    <Pressable style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]} onPress={onPress}>
-      <AlbumThumb artworkUrl={album.artworkUrl} coverColor={album.coverColor} title={album.title} />
+      {/* Text block */}
       <View style={s.info}>
-        <Text style={s.title} numberOfLines={1}>{album.title}</Text>
-        <Text style={s.artist} numberOfLines={1}>{album.artist}{album.year ? ` · ${album.year}` : ''}</Text>
-        <Text style={s.date}>{album.dateLogged}</Text>
+        <Text style={s.title} numberOfLines={1}>{item.title}</Text>
+        <Text style={s.artist} numberOfLines={1}>{item.artist}{item.year ? ` · ${item.year}` : ''}</Text>
+        <View style={s.meta}>
+          {/* Type pill */}
+          <View style={[s.typePill, { borderColor: meta.color }]}>
+            <FontAwesome name={meta.icon as any} size={9} color={meta.color} />
+            <Text style={[s.typeLabel, { color: meta.color }]}>{meta.label}</Text>
+          </View>
+          {/* Date */}
+          {item.dateLabel ? (
+            <Text style={s.date}>{item.dateLabel}</Text>
+          ) : null}
+        </View>
       </View>
-      <TypePill label="LISTENED" color={COLORS.listened.pill} />
+
+      {/* Rating bars (rated items only) */}
+      {item.type === 'rated' && item.rating > 0 && (
+        <View style={s.bars}>
+          {BAR_HEIGHTS.map((h, i) => (
+            <View
+              key={i}
+              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? '#c084fc' : '#252525' }]}
+            />
+          ))}
+        </View>
+      )}
     </Pressable>
-  );
-}
-
-function RatedRow({ album, onPress }: { album: LoggedAlbum; onPress: () => void }) {
-  return (
-    <Pressable style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]} onPress={onPress}>
-      <AlbumThumb artworkUrl={album.artworkUrl} coverColor={album.coverColor} title={album.title} />
-      <View style={s.info}>
-        <Text style={s.title} numberOfLines={1}>{album.title}</Text>
-        <Text style={s.artist} numberOfLines={1}>{album.artist}</Text>
-        <Text style={s.date}>{album.dateLogged}</Text>
-      </View>
-      <RatingMini rating={album.rating} />
-    </Pressable>
-  );
-}
-
-function ReviewedRow({ album, onPress }: { album: LoggedAlbum; onPress: () => void }) {
-  return (
-    <Pressable style={({ pressed }) => [s.row, s.reviewRow, { opacity: pressed ? 0.7 : 1 }]} onPress={onPress}>
-      <AlbumThumb artworkUrl={album.artworkUrl} coverColor={album.coverColor} title={album.title} />
-      <View style={s.info}>
-        <Text style={s.title} numberOfLines={1}>{album.title}</Text>
-        <Text style={s.artist} numberOfLines={1}>{album.artist}</Text>
-        {album.review ? (
-          <Text style={s.reviewSnippet} numberOfLines={2}>{album.review}</Text>
-        ) : null}
-      </View>
-      <TypePill label="REVIEW" color={COLORS.reviewed.pill} />
-    </Pressable>
-  );
-}
-
-function WantRow({ album, onPress }: { album: WantToListenAlbum; onPress: () => void }) {
-  return (
-    <Pressable style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]} onPress={onPress}>
-      <AlbumThumb artworkUrl={album.artworkUrl} title={album.title} />
-      <View style={s.info}>
-        <Text style={s.title} numberOfLines={1}>{album.title}</Text>
-        <Text style={s.artist} numberOfLines={1}>{album.artist}{album.year ? ` · ${album.year}` : ''}</Text>
-      </View>
-      <TypePill label="SAVED" color={COLORS.wantToListen.pill} />
-    </Pressable>
-  );
-}
-
-// ─── Section card wrapper ─────────────────────────────────────────────────────
-
-function SectionCard({ children }: { children: React.ReactNode }) {
-  return (
-    <View style={s.card}>
-      {children}
-    </View>
   );
 }
 
@@ -208,19 +109,60 @@ export default function RecentActivityScreen() {
   const router = useRouter();
   const { loggedAlbums, wantToListen } = useAlbums();
 
-  const reviewed     = useMemo(() => sortByDate(loggedAlbums.filter(a => !!a.review)),   [loggedAlbums]);
-  const rated        = useMemo(() => sortByDate(loggedAlbums.filter(a => a.rating > 0)), [loggedAlbums]);
-  const listened     = useMemo(() => sortByDate(loggedAlbums),                            [loggedAlbums]);
-  const totalItems   = reviewed.length + rated.length + listened.length + wantToListen.length;
+  const feed = useMemo((): ActivityItem[] => {
+    const items: ActivityItem[] = [];
 
-  function goAlbum(id: string) {
-    router.push({ pathname: '/album-detail', params: { id } });
-  }
+    // Each logged album gets exactly one entry using the most specific type:
+    // reviewed > rated > listened
+    for (const a of loggedAlbums) {
+      const type: ActivityType = a.review ? 'reviewed' : a.rating > 0 ? 'rated' : 'listened';
+      items.push({
+        key:        `logged-${a.id}`,
+        type,
+        id:         a.id,
+        title:      a.title,
+        artist:     a.artist,
+        year:       a.year,
+        artworkUrl: a.artworkUrl,
+        coverColor: a.coverColor,
+        dateMs:     parseDate(a.dateLogged),
+        dateLabel:  a.dateLogged,
+        rating:     a.rating,
+      });
+    }
 
-  if (totalItems === 0) {
+    // Want-to-listen items have no timestamp — they sort to the end
+    for (const w of wantToListen) {
+      items.push({
+        key:        `want-${w.id}`,
+        type:       'wantToListen',
+        id:         w.id,
+        title:      w.title,
+        artist:     w.artist,
+        year:       w.year,
+        artworkUrl: w.artworkUrl,
+        coverColor: undefined,
+        dateMs:     null,
+        dateLabel:  '',
+        rating:     0,
+      });
+    }
+
+    // Sort: dated items newest-first, undated items fall to the end
+    items.sort((a, b) => {
+      if (a.dateMs === null && b.dateMs === null) return 0;
+      if (a.dateMs === null) return 1;
+      if (b.dateMs === null) return -1;
+      return b.dateMs - a.dateMs;
+    });
+
+    return items;
+  }, [loggedAlbums, wantToListen]);
+
+  if (feed.length === 0) {
     return (
       <View style={s.emptyWrap}>
-        <View style={s.emptyIconRing}>
+        <View style={s.emptyRing}>
           <FontAwesome name="clock-o" size={36} color="#FF3CAC" />
         </View>
         <Text style={s.emptyTitle}>No activity yet</Text>
@@ -230,92 +172,20 @@ export default function RecentActivityScreen() {
   }
 
   return (
-    <ScrollView
+    <FlatList
+      data={feed}
+      keyExtractor={item => item.key}
       style={s.container}
-      contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}>
-
-      {/* ── Recent Reviews ───────────────────────────────────────────────────── */}
-      {reviewed.length > 0 && (
-        <>
-          <SectionHead
-            icon="pencil"
-            label="Recent Reviews"
-            count={reviewed.length}
-            color={COLORS.reviewed.pill}
-          />
-          <SectionCard>
-            {reviewed.map((album, i) => (
-              <View key={album.id}>
-                <ReviewedRow album={album} onPress={() => goAlbum(album.id)} />
-                {i < reviewed.length - 1 && <View style={s.sep} />}
-              </View>
-            ))}
-          </SectionCard>
-        </>
+      contentContainerStyle={s.list}
+      showsVerticalScrollIndicator={false}
+      ItemSeparatorComponent={() => <View style={s.sep} />}
+      renderItem={({ item }) => (
+        <ActivityRow
+          item={item}
+          onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
+        />
       )}
-
-      {/* ── Recent Ratings ───────────────────────────────────────────────────── */}
-      {rated.length > 0 && (
-        <>
-          <SectionHead
-            icon="star"
-            label="Recent Ratings"
-            count={rated.length}
-            color={COLORS.rated.pill}
-          />
-          <SectionCard>
-            {rated.map((album, i) => (
-              <View key={album.id}>
-                <RatedRow album={album} onPress={() => goAlbum(album.id)} />
-                {i < rated.length - 1 && <View style={s.sep} />}
-              </View>
-            ))}
-          </SectionCard>
-        </>
-      )}
-
-      {/* ── Recent Listened ──────────────────────────────────────────────────── */}
-      {listened.length > 0 && (
-        <>
-          <SectionHead
-            icon="headphones"
-            label="Recent Listened"
-            count={listened.length}
-            color={COLORS.listened.pill}
-          />
-          <SectionCard>
-            {listened.map((album, i) => (
-              <View key={album.id}>
-                <ListenedRow album={album} onPress={() => goAlbum(album.id)} />
-                {i < listened.length - 1 && <View style={s.sep} />}
-              </View>
-            ))}
-          </SectionCard>
-        </>
-      )}
-
-      {/* ── Recent Want to Listen ────────────────────────────────────────────── */}
-      {wantToListen.length > 0 && (
-        <>
-          <SectionHead
-            icon="bookmark"
-            label="Recent Want to Listen"
-            count={wantToListen.length}
-            color={COLORS.wantToListen.pill}
-          />
-          <SectionCard>
-            {wantToListen.map((album, i) => (
-              <View key={album.id}>
-                <WantRow album={album} onPress={() => goAlbum(album.id)} />
-                {i < wantToListen.length - 1 && <View style={s.sep} />}
-              </View>
-            ))}
-          </SectionCard>
-        </>
-      )}
-
-    </ScrollView>
+    />
   );
 }
 
@@ -323,36 +193,39 @@ export default function RecentActivityScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: DARK_BG },
-  content:   { paddingBottom: 48 },
-
-  card: {
-    marginHorizontal: 16,
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    overflow: 'hidden',
-  },
+  list:      { paddingVertical: 8, paddingBottom: 48 },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 13,
-    gap: 12,
+    gap: 13,
   },
-  reviewRow: { alignItems: 'flex-start' },
+  art:        { width: 52, height: 52, borderRadius: 8, flexShrink: 0 },
+  artInitial: { color: 'rgba(255,255,255,0.45)', fontSize: 18, fontWeight: '700' },
 
-  art:        { width: 48, height: 48, borderRadius: 7, flexShrink: 0 },
-  artInitial: { color: 'rgba(255,255,255,0.45)', fontSize: 17, fontWeight: '700' },
+  info:   { flex: 1, gap: 3 },
+  title:  { color: TEXT, fontSize: 14, fontWeight: '600' },
+  artist: { color: SUBTEXT, fontSize: 12 },
 
-  info:          { flex: 1, gap: 2 },
-  title:         { color: TEXT, fontSize: 14, fontWeight: '600' },
-  artist:        { color: SUBTEXT, fontSize: 12 },
-  date:          { color: SUBTEXT, fontSize: 11, marginTop: 2 },
-  reviewSnippet: { color: '#aaa', fontSize: 12, lineHeight: 17, marginTop: 3 },
+  meta:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3, flexWrap: 'wrap' },
+  typePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  typeLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+  date:      { color: SUBTEXT, fontSize: 11 },
 
-  sep: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginLeft: 76 },
+  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5, flexShrink: 0 },
+  bar:  { width: 2.5, borderRadius: 1 },
+
+  sep: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginLeft: 83 },
 
   emptyWrap: {
     flex: 1,
@@ -361,7 +234,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
-  emptyIconRing: {
+  emptyRing: {
     width: 84,
     height: 84,
     borderRadius: 42,
