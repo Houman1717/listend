@@ -99,6 +99,13 @@ export default function SessionsScreen() {
     }).length;
   }, [loggedAlbums, viewYear]);
 
+  const monthlyAlbums = useMemo(() => {
+    return loggedAlbums.filter(a => {
+      const d = parseLogged(a.dateLogged);
+      return d && d.getFullYear() === viewYear && d.getMonth() === viewMonth;
+    });
+  }, [loggedAlbums, viewYear, viewMonth]);
+
   // Navigate months
   function prevMonth() {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -184,6 +191,38 @@ export default function SessionsScreen() {
             </Pressable>
           );
         })}
+      </View>
+
+      {/* ── This Month ───────────────────────────────────────────────────────── */}
+      <View style={s.monthSection}>
+        <Text style={s.monthSectionTitle}>
+          {MONTH_NAMES[viewMonth]} {viewYear}
+        </Text>
+        {monthlyAlbums.length === 0 ? (
+          <Text style={s.noMonthAlbums}>No albums logged this month.</Text>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.monthRow}>
+            {monthlyAlbums.map(album => (
+              <Pressable
+                key={album.id}
+                style={({ pressed }) => [s.monthCard, { opacity: pressed ? 0.7 : 1 }]}
+                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}>
+                {album.artworkUrl ? (
+                  <Image source={{ uri: album.artworkUrl }} style={s.monthArt} />
+                ) : (
+                  <View style={[s.monthArt, { backgroundColor: album.coverColor ?? '#2a2a2a', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={s.monthArtInitial}>{album.title.charAt(0)}</Text>
+                  </View>
+                )}
+                <Text style={s.monthCardTitle} numberOfLines={1}>{album.title}</Text>
+                <Text style={s.monthCardArtist} numberOfLines={1}>{album.artist}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       {/* ── Selected date albums ─────────────────────────────────────────────── */}
@@ -286,6 +325,51 @@ const s = StyleSheet.create({
   dayNumToday:    { color: ACCENT },
   dot:         { width: 4, height: 4, borderRadius: 2, backgroundColor: ACCENT },
   dotSelected: { backgroundColor: '#fff' },
+
+  // This Month section
+  monthSection: {
+    marginHorizontal: 20,
+    marginTop: 24,
+  },
+  monthSectionTitle: {
+    color: TEXT,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 14,
+    letterSpacing: -0.2,
+  },
+  noMonthAlbums: {
+    color: SUBTEXT,
+    fontSize: 14,
+  },
+  monthRow: {
+    gap: 12,
+    paddingBottom: 4,
+  },
+  monthCard: {
+    width: 100,
+  },
+  monthArt: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  monthArtInitial: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  monthCardTitle: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  monthCardArtist: {
+    color: SUBTEXT,
+    fontSize: 11,
+    marginTop: 1,
+  },
 
   // Day detail
   dayDetail: {
