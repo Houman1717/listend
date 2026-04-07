@@ -83,6 +83,9 @@ function RootLayoutNav() {
           <Stack.Screen name="my-reviews" options={{ title: 'My Reviews', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="artist-detail" options={{ title: '', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="dms" options={{ title: 'Messages', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="sessions" options={{ title: 'Sessions', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="recent-activity" options={{ title: 'Recent Activity', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
         </Stack>
       </ThemeProvider>
     </AlbumsProvider>

@@ -368,6 +368,30 @@ export default function ListendScreen() {
         </View>
       </View>
 
+      {/* ── Activity rows (above stats) ─────────────────────────────────────── */}
+      <View style={[s.navGroup, { marginBottom: 12 }]}>
+        <NavRow
+          icon="comments"
+          label="DMs"
+          sub="Messages"
+          onPress={() => router.push('/dms')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="calendar"
+          label="Sessions"
+          sub="Your listening diary"
+          onPress={() => router.push('/sessions')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="clock-o"
+          label="Recent Activity"
+          sub={`${loggedAlbums.length} logged albums`}
+          onPress={() => router.push('/recent-activity')}
+        />
+      </View>
+
       <View style={s.navGroup}>
         <NavRow
           icon="music"
