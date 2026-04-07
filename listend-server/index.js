@@ -374,21 +374,21 @@ app.get('/lastfm/artist', async (req, res) => {
 
     const a = json.artist;
 
-    // Fetch Spotify images for each similar artist in parallel
+    // Fetch Spotify images for each similar artist — allSettled so one failure doesn't break the list
     const similarRaw = a.similar?.artist ?? [];
-    const similarWithImages = await Promise.all(
+    const imageResults = await Promise.allSettled(
       similarRaw.map(async s => {
-        let imageUrl = null;
-        try {
-          const q = encodeURIComponent(s.name);
-          const sr = await spotifyGet(`/search?q=${q}&type=artist&limit=1`);
-          imageUrl = sr.artists?.items?.[0]?.images?.[0]?.url ?? null;
-        } catch (e) {
-          console.warn(`[/lastfm/artist] Spotify image lookup failed for "${s.name}":`, e.message);
-        }
+        const q = encodeURIComponent(s.name);
+        const sr = await spotifyGet(`/search?q=${q}&type=artist&limit=1`);
+        const imageUrl = sr.artists?.items?.[0]?.images?.[0]?.url ?? null;
         return { name: s.name, url: s.url, imageUrl };
       })
     );
+    const similarWithImages = imageResults.map((r, i) => {
+      if (r.status === 'fulfilled') return r.value;
+      console.warn(`[/lastfm/artist] Spotify image lookup failed for "${similarRaw[i]?.name}":`, r.reason?.message);
+      return { name: similarRaw[i].name, url: similarRaw[i].url, imageUrl: null };
+    });
 
     const payload = {
       name: a.name,
@@ -691,19 +691,32 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
     const lfmData = await lfmResp.json();
     const rawTracks = (lfmData.toptracks?.track ?? []).slice(0, 5);
 
-    // Step 3: fetch artwork for each track via Spotify search (in parallel)
-    const tracks = await Promise.all(
+    // Step 3: fetch artwork for each track via Spotify search (two-pass fallback)
+    const results = await Promise.allSettled(
       rawTracks.map(async (t, i) => {
         let artworkUrl = null;
         let albumTitle = null;
+        // Pass 1: fielded search — most precise
         try {
-          const q = encodeURIComponent(`${t.name} ${artistName}`);
-          const sr = await spotifyGet(`/search?q=${q}&type=track&limit=1`);
-          const hit = sr.tracks?.items?.[0];
-          artworkUrl = hit?.album?.images?.[0]?.url ?? null;
-          albumTitle = hit?.album?.name ?? null;
+          const q1 = encodeURIComponent(`track:${t.name} artist:${artistName}`);
+          const sr1 = await spotifyGet(`/search?q=${q1}&type=track&limit=1`);
+          const hit1 = sr1.tracks?.items?.[0];
+          artworkUrl = hit1?.album?.images?.[0]?.url ?? null;
+          albumTitle = hit1?.album?.name ?? null;
         } catch (e) {
-          console.warn(`[/spotify/artist/top-tracks] artwork lookup failed for "${t.name}":`, e.message);
+          console.warn(`[/spotify/artist/top-tracks] pass-1 artwork lookup failed for "${t.name}":`, e.message);
+        }
+        // Pass 2: plain keyword fallback if pass 1 yielded nothing
+        if (!artworkUrl) {
+          try {
+            const q2 = encodeURIComponent(t.name);
+            const sr2 = await spotifyGet(`/search?q=${q2}&type=track&limit=1`);
+            const hit2 = sr2.tracks?.items?.[0];
+            artworkUrl = hit2?.album?.images?.[0]?.url ?? null;
+            albumTitle = albumTitle ?? hit2?.album?.name ?? null;
+          } catch (e) {
+            console.warn(`[/spotify/artist/top-tracks] pass-2 artwork lookup failed for "${t.name}":`, e.message);
+          }
         }
         return {
           number:     i + 1,
@@ -714,6 +727,11 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
           durationMs: t.duration ? parseInt(t.duration, 10) * 1000 : null,
         };
       })
+    );
+    const tracks = results.map((r, i) =>
+      r.status === 'fulfilled'
+        ? r.value
+        : { number: i + 1, id: `${artistName}-${i}`, title: rawTracks[i]?.name ?? null, artworkUrl: null, albumTitle: null, durationMs: null }
     );
 
     console.log(`[/spotify/artist/top-tracks] success — ${tracks.length} tracks`);
@@ -761,11 +779,17 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     let allItems = [];
     let nextPath = `/artists/${id}/albums?include_groups=album,single,compilation&limit=10`;
     let page = 0;
-    while (nextPath && page < 20) {
-      console.log(`[/spotify/artist/albums] fetching page ${page + 1}: ${nextPath}`);
-      const data = await spotifyGet(nextPath);
-      allItems = allItems.concat((data.items ?? []).map(toItem));
-      nextPath = data.next ? data.next.replace('https://api.spotify.com/v1', '') : null;
+    const PAGE_CAP = 5;
+    while (nextPath && page < PAGE_CAP) {
+      console.log(`[/spotify/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
+      try {
+        const data = await spotifyGet(nextPath);
+        allItems = allItems.concat((data.items ?? []).map(toItem));
+        nextPath = data.next ? data.next.replace('https://api.spotify.com/v1', '') : null;
+      } catch (pageErr) {
+        console.warn(`[/spotify/artist/albums] page ${page + 1} failed, stopping pagination:`, pageErr.message);
+        nextPath = null;
+      }
       page++;
     }
     console.log(`[/spotify/artist/albums] fetched ${allItems.length} total releases across ${page} page(s)`);
