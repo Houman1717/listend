@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -51,6 +51,14 @@ function formatRuntime(totalMs: number): string {
   return `${mins} min`;
 }
 
+function formatLoggedDate(raw: string): string {
+  const d = new Date(raw);
+  if (!isNaN(d.getTime())) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  return raw;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Track = {
@@ -81,12 +89,12 @@ type SimilarAlbum = {
   year:       number;
 };
 
-// ─── Rating bar ───────────────────────────────────────────────────────────────
+// ─── Rating picker ────────────────────────────────────────────────────────────
 
 const RATING_LABELS: Record<number, string> = {
-  1: 'Skip', 2: 'Dust Collector', 3: 'Static', 4: 'Passable',
-  5: 'In the Rotation', 6: 'Keeper', 7: 'Mainstay', 8: 'Daily Spin',
-  9: 'Total Fixation', 10: 'Timeless / No Skips',
+  1: 'Skip', 2: 'Rough', 3: 'Forgettable', 4: 'Underwhelming',
+  5: 'Basic', 6: 'Likable', 7: 'Strong', 8: 'Standout',
+  9: 'Classic', 10: 'Timeless / No Skips',
 };
 const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
 
@@ -120,6 +128,155 @@ function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: 
   );
 }
 
+// ─── Mini rating bar (read-only display) ─────────────────────────────────────
+
+function MiniRatingBar({ rating, isDark }: { rating: number; isDark: boolean }) {
+  const activeColor = '#FF3CAC';
+  const inactiveColor = isDark ? '#333' : '#ddd';
+  return (
+    <View style={s.miniBarRow}>
+      <View style={s.miniBarTrack}>
+        {BAR_HEIGHTS.map((h, i) => (
+          <View
+            key={i}
+            style={[s.miniBar, { height: Math.round(h * 0.55), backgroundColor: i + 1 <= rating ? activeColor : inactiveColor }]}
+          />
+        ))}
+      </View>
+      <Text style={[s.miniBarNum, { color: activeColor }]}>{rating}</Text>
+    </View>
+  );
+}
+
+// ─── Community Rating ─────────────────────────────────────────────────────────
+
+// Mock distribution: index i = rating (i+1), value = count of ratings at that score
+// In production this would come from an API
+const COMMUNITY_DISTRIBUTION = [2, 3, 5, 8, 14, 22, 35, 48, 62, 41];
+const COMMUNITY_TOTAL = COMMUNITY_DISTRIBUTION.reduce((a, b) => a + b, 0);
+const COMMUNITY_AVG = (
+  COMMUNITY_DISTRIBUTION.reduce((sum, count, i) => sum + count * (i + 1), 0) / COMMUNITY_TOTAL
+).toFixed(1);
+
+function CommunityRatingSection({
+  isDark,
+  colors,
+  sectionBg,
+  borderColor,
+}: {
+  isDark: boolean;
+  colors: { text: string; subtext: string; background: string };
+  sectionBg: string;
+  borderColor: string;
+}) {
+  const fillLevel = parseFloat(COMMUNITY_AVG); // e.g. 7.7
+  const activeColor = '#FF3CAC';
+  const inactiveColor = isDark ? '#2e2e2e' : '#e0e0e0';
+
+  return (
+    <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
+      <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Community Rating</Text>
+
+      <View style={s.communityRow}>
+        {/* Avg score */}
+        <View style={s.communityAvgBlock}>
+          <Text style={[s.communityAvg, { color: colors.text }]}>{COMMUNITY_AVG}</Text>
+          <Text style={[s.communityAvgSub, { color: colors.subtext }]}>
+            {COMMUNITY_TOTAL} ratings
+          </Text>
+        </View>
+
+        {/* Volume bar — filled to avg, same visual language as the rating picker */}
+        <View style={s.communityVolumeWrap}>
+          <FontAwesome name="volume-up" size={18} color={activeColor} />
+          <View style={s.communityVolumeTrack}>
+            {BAR_HEIGHTS.map((h, i) => {
+              const scaledH = Math.round(h * 1.35);
+              const isActive  = i + 1 <= Math.floor(fillLevel);
+              const isPartial = i === Math.floor(fillLevel);
+              const frac = fillLevel % 1;
+              return (
+                <View
+                  key={i}
+                  style={[
+                    s.communityVolumeBar,
+                    {
+                      height: scaledH,
+                      backgroundColor: (isActive || isPartial) ? activeColor : inactiveColor,
+                      opacity: isPartial ? Math.max(0.25, frac) : 1,
+                    },
+                  ]}
+                />
+              );
+            })}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Review Card ──────────────────────────────────────────────────────────────
+
+function ReviewCard({
+  username,
+  rating,
+  text,
+  dateStr,
+  isOwn,
+  isDark,
+  colors,
+  sectionBg,
+  borderColor,
+}: {
+  username: string;
+  rating: number;
+  text?: string;
+  dateStr?: string;
+  isOwn?: boolean;
+  isDark: boolean;
+  colors: { text: string; subtext: string; background: string };
+  sectionBg: string;
+  borderColor: string;
+}) {
+  return (
+    <View
+      style={[
+        s.reviewCard,
+        { backgroundColor: sectionBg, borderColor },
+        isOwn && s.reviewCardOwn,
+      ]}>
+      <View style={s.reviewCardHeader}>
+        <Text style={[s.reviewCardUsername, { color: isOwn ? '#FF3CAC' : colors.text }]}>
+          {username}
+        </Text>
+        <View style={s.ratingBadge}>
+          <Text style={s.ratingBadgeText}>{rating}</Text>
+        </View>
+      </View>
+      {text ? (
+        <Text style={[s.reviewCardText, { color: colors.text }]} numberOfLines={4}>
+          {text}
+        </Text>
+      ) : (
+        <Text style={[s.reviewCardNoText, { color: colors.subtext }]}>No review written.</Text>
+      )}
+      {dateStr && (
+        <Text style={[s.reviewCardDate, { color: colors.subtext }]}>{dateStr}</Text>
+      )}
+    </View>
+  );
+}
+
+// Mock community reviews (would come from API in production)
+const MOCK_REVIEWS = [
+  { id: 'r1', username: 'matthewd', rating: 9, text: 'An absolute masterpiece. Every track flows seamlessly into the next.' },
+  { id: 'r2', username: 'sara_l', rating: 8, text: 'Some of the best production of the decade. Standout front to back.' },
+  { id: 'r3', username: 'jkfilm', rating: 7, text: 'Really strong. A few tracks I could skip but overall an excellent listen.' },
+  { id: 'r4', username: 'audiophile99', rating: 10, text: 'Timeless. Been on repeat since day one. A genuine classic of the era.' },
+  { id: 'r5', username: 'cass_r', rating: 6, text: 'Solid effort that grows on you. Not an instant favourite but it rewards patience.' },
+];
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AlbumDetailScreen() {
@@ -140,7 +297,6 @@ export default function AlbumDetailScreen() {
 
   const loggedAlbum = loggedAlbums.find(a => a.id === params.id);
 
-  // Resolve album display data from params or logged context
   const albumId       = params.id ?? '';
   const albumTitle    = params.title    ?? loggedAlbum?.title    ?? '';
   const albumArtist   = params.artist   ?? loggedAlbum?.artist   ?? '';
@@ -148,10 +304,12 @@ export default function AlbumDetailScreen() {
   const albumArtwork  = params.artworkUrl ?? loggedAlbum?.artworkUrl ?? '';
   const albumCoverColor = loggedAlbum?.coverColor ?? '#1a1a1a';
 
-  // Editor state (only used when logged)
+  // Edit state (logged albums only)
   const [rating, setRating]       = useState(loggedAlbum?.rating ?? 0);
   const [review, setReview]       = useState(loggedAlbum?.review ?? '');
+  const [editMode, setEditMode]         = useState(false);
   const [showPlaylists, setShowPlaylists] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   // Remote data
   const [tracks, setTracks]               = useState<Track[] | null>(null);
@@ -162,96 +320,57 @@ export default function AlbumDetailScreen() {
   const [bioExpanded, setBioExpanded]     = useState(false);
   const [creditsExpanded, setCreditsExpanded] = useState(false);
 
-  const isLogged  = !!loggedAlbum;
-  const isWanted  = wantToListen.some(a => a.id === albumId);
-  const dirty     = isLogged && (rating !== loggedAlbum!.rating || review !== (loggedAlbum!.review ?? ''));
+  const isLogged = !!loggedAlbum;
+  const isWanted = wantToListen.some(a => a.id === albumId);
+  const dirty    = isLogged && (rating !== loggedAlbum!.rating || review !== (loggedAlbum!.review ?? ''));
 
-  // ── Fetch tracklist + Last.fm in parallel ──────────────────────────────────
+  // ── Fetch tracklist + Last.fm ──────────────────────────────────────────────
   useEffect(() => {
     if (!albumId) return;
     let cancelled = false;
 
-    // Tracklist
-    const tracksUrl = `${API_URL}/spotify/album/${albumId}/tracks`;
-    console.log('[album-detail] fetching tracklist:', tracksUrl);
-    fetch(tracksUrl)
-      .then(r => {
-        console.log('[album-detail] tracklist status:', r.status);
-        return r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`);
-      })
-      .then(data => {
-        console.log('[album-detail] tracklist received:', Array.isArray(data) ? `${data.length} tracks` : data);
-        if (!cancelled) setTracks(data);
-      })
-      .catch(err => {
-        console.warn('[album-detail] tracklist error:', err);
-        if (!cancelled) setTracks([]);
-      })
+    fetch(`${API_URL}/spotify/album/${albumId}/tracks`)
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then(data => { if (!cancelled) setTracks(data); })
+      .catch(err => { console.warn('[album-detail] tracklist error:', err); if (!cancelled) setTracks([]); })
       .finally(() => { if (!cancelled) setTracksLoading(false); });
 
-    // Last.fm album info — use query params to avoid path-encoding issues
     if (albumArtist && albumTitle) {
-      const lastfmUrl = `${API_URL}/lastfm/album?artist=${encodeURIComponent(albumArtist)}&album=${encodeURIComponent(albumTitle)}`;
-      console.log('[album-detail] fetching Last.fm:', lastfmUrl);
-      fetch(lastfmUrl)
-        .then(r => {
-          console.log('[album-detail] Last.fm status:', r.status);
-          return r.ok ? r.json() : r.json().then(body => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(body)}`));
-        })
+      const url = `${API_URL}/lastfm/album?artist=${encodeURIComponent(albumArtist)}&album=${encodeURIComponent(albumTitle)}`;
+      fetch(url)
+        .then(r => r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`)))
         .then(data => {
-          console.log('[album-detail] Last.fm data:', JSON.stringify(data).slice(0, 200));
           if (cancelled) return;
-          const desc = stripHtml(data.description ?? '');
-          setLastfm({
-            listeners: data.listeners ?? 0,
-            description: desc,
-            tags: data.tags ?? [],
-          });
+          setLastfm({ listeners: data.listeners ?? 0, description: stripHtml(data.description ?? ''), tags: data.tags ?? [] });
         })
         .catch(err => console.warn('[album-detail] Last.fm error:', err));
-    } else {
-      console.log('[album-detail] skipping Last.fm — albumArtist:', albumArtist, 'albumTitle:', albumTitle);
     }
 
     return () => { cancelled = true; };
   }, [albumId, albumArtist, albumTitle]);
 
-  // ── Fetch Genius credits when tracks are known ──────────────────────────────
+  // ── Fetch Genius credits ───────────────────────────────────────────────────
   useEffect(() => {
     if (!tracks || tracks.length === 0 || !albumArtist) return;
     let cancelled = false;
-    const candidateTracks = tracks.slice(0, 3);
-    const trackParams = candidateTracks.map(t => `tracks=${encodeURIComponent(t.title)}`).join('&');
-    const geniusUrl = `${API_URL}/genius/credits?artist=${encodeURIComponent(albumArtist)}&${trackParams}`;
-    console.log('[album-detail] fetching Genius:', geniusUrl);
-    fetch(geniusUrl)
-      .then(r => {
-        console.log('[album-detail] Genius status:', r.status);
-        return r.ok ? r.json() : r.json().then(body => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(body)}`));
-      })
+    const trackParams = tracks.slice(0, 3).map(t => `tracks=${encodeURIComponent(t.title)}`).join('&');
+    fetch(`${API_URL}/genius/credits?artist=${encodeURIComponent(albumArtist)}&${trackParams}`)
+      .then(r => r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`)))
       .then(data => {
-        console.log('[album-detail] Genius data:', JSON.stringify(data).slice(0, 200));
-        if (!cancelled) {
-          const hasCreds = (data.producers?.length || data.writers?.length);
-          setGenius(hasCreds ? data : null);
-        }
+        if (!cancelled && (data.producers?.length || data.writers?.length)) setGenius(data);
       })
       .catch(err => console.warn('[album-detail] Genius error:', err));
     return () => { cancelled = true; };
   }, [tracks, albumArtist]);
 
-  // ── Fetch similar albums once we have tracks to seed ──────────────────────
+  // ── Fetch similar albums ───────────────────────────────────────────────────
   useEffect(() => {
     if (!tracks || tracks.length === 0 || !albumId) return;
     let cancelled = false;
     const seedIds = tracks.slice(0, 2).map(t => `trackIds=${encodeURIComponent(t.id)}`).join('&');
-    const recUrl  = `${API_URL}/spotify/recommendations?${seedIds}&excludeAlbumId=${encodeURIComponent(albumId)}`;
-    console.log('[album-detail] fetching recommendations:', recUrl);
-    fetch(recUrl)
+    fetch(`${API_URL}/spotify/recommendations?${seedIds}&excludeAlbumId=${encodeURIComponent(albumId)}`)
       .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
-      .then(data => {
-        if (!cancelled && Array.isArray(data) && data.length > 0) setSimilar(data);
-      })
+      .then(data => { if (!cancelled && Array.isArray(data) && data.length > 0) setSimilar(data); })
       .catch(err => console.warn('[album-detail] recommendations error:', err));
     return () => { cancelled = true; };
   }, [tracks, albumId]);
@@ -259,7 +378,13 @@ export default function AlbumDetailScreen() {
   // ── Actions ────────────────────────────────────────────────────────────────
   function handleSave() {
     updateReview(albumId, rating, review);
-    router.back();
+    setEditMode(false);
+  }
+
+  function handleCancelEdit() {
+    setRating(loggedAlbum?.rating ?? 0);
+    setReview(loggedAlbum?.review ?? '');
+    setEditMode(false);
   }
 
   function handleLog() {
@@ -279,14 +404,12 @@ export default function AlbumDetailScreen() {
     router.push({ pathname: '/artist-detail', params: { name: albumArtist } });
   }
 
-  const cardBg     = isDark ? '#141414' : '#fff';
   const sectionBg  = isDark ? '#111' : '#f5f5f5';
   const borderColor = isDark ? '#222' : '#e8e8e8';
   const mutedText  = isDark ? '#666' : '#bbb';
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      {/* ── Dynamic header: playlist button in top-right (logged albums only) ── */}
       <Stack.Screen
         options={{
           headerRight: () =>
@@ -323,7 +446,6 @@ export default function AlbumDetailScreen() {
           </Text>
         </Pressable>
 
-        {/* Genre pills + listener count */}
         {(lastfm?.tags?.length || lastfm?.listeners) ? (
           <View style={s.metaRow}>
             {lastfm?.tags?.slice(0, 4).map(tag => (
@@ -339,42 +461,70 @@ export default function AlbumDetailScreen() {
           </View>
         ) : null}
 
-        {/* Date logged (only if logged) */}
-        {isLogged && (
-          <Text style={[s.dateLogged, { color: colors.subtext }]}>
-            Logged {loggedAlbum!.dateLogged}
-          </Text>
-        )}
-
-        {/* ── 2. CTA buttons ───────────────────────────────────────────────── */}
-        {isLogged ? (
-          <>
-            <Text style={[s.sectionLabel, { color: colors.subtext }]}>Rating</Text>
-            <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
-
-            <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 24 }]}>
-              Review <Text style={{ fontWeight: '400' }}>(optional)</Text>
+        {/* ── 2. About This Album ───────────────────────────────────────────── */}
+        {lastfm?.description ? (
+          <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
+            <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>About This Album</Text>
+            <Text
+              style={[s.bioText, { color: colors.text }]}
+              numberOfLines={bioExpanded ? undefined : 3}>
+              {lastfm.description}
             </Text>
-            <TextInput
-              style={[s.reviewInput, { color: colors.text, backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2', borderColor: isDark ? '#333' : '#e0e0e0' }]}
-              placeholder="What did you think?"
-              placeholderTextColor={colors.subtext}
-              value={review}
-              onChangeText={setReview}
-              multiline
-              textAlignVertical="top"
-              maxLength={500}
-            />
-            {review.length > 0 && (
-              <Text style={[s.charCount, { color: colors.subtext }]}>{review.length}/500</Text>
-            )}
-            <Pressable
-              style={[s.primaryBtn, { backgroundColor: dirty ? '#FF3CAC' : (isDark ? '#2a2a2a' : '#ddd') }]}
-              onPress={handleSave}
-              disabled={!dirty}>
-              <Text style={[s.primaryBtnText, { color: dirty ? '#fff' : colors.subtext }]}>Save</Text>
+            <Pressable onPress={() => setBioExpanded(v => !v)}>
+              <Text style={s.bioToggle}>{bioExpanded ? 'Show less' : 'Read more'}</Text>
             </Pressable>
-          </>
+          </View>
+        ) : null}
+
+        {/* ── 3. Log / Save buttons ─────────────────────────────────────────── */}
+        {isLogged ? (
+          editMode ? (
+            <View style={s.editBlock}>
+              <Text style={[s.sectionLabel, { color: colors.subtext }]}>Rating</Text>
+              <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
+              <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 20 }]}>
+                Review <Text style={{ fontWeight: '400' }}>(optional)</Text>
+              </Text>
+              <TextInput
+                style={[s.reviewInput, { color: colors.text, backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2', borderColor: isDark ? '#333' : '#e0e0e0' }]}
+                placeholder="What did you think?"
+                placeholderTextColor={colors.subtext}
+                value={review}
+                onChangeText={setReview}
+                multiline
+                textAlignVertical="top"
+                maxLength={500}
+              />
+              {review.length > 0 && (
+                <Text style={[s.charCount, { color: colors.subtext }]}>{review.length}/500</Text>
+              )}
+              <View style={s.editBtnRow}>
+                <Pressable
+                  style={[s.primaryBtn, s.editBtnFlex, { backgroundColor: '#FF3CAC' }]}
+                  onPress={handleSave}>
+                  <Text style={[s.primaryBtnText, { color: '#fff' }]}>Save</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.secondaryBtn, s.editBtnFlex, { borderColor: isDark ? '#333' : '#ddd' }]}
+                  onPress={handleCancelEdit}>
+                  <Text style={[s.secondaryBtnText, { color: colors.subtext }]}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <View style={s.editLogRow}>
+              <Text style={[s.editLogDate, { color: colors.subtext }]}>
+                Logged {formatLoggedDate(loggedAlbum!.dateLogged)}
+              </Text>
+              <View style={s.editLogRight}>
+                <FontAwesome name="volume-up" size={14} color="#FF3CAC" />
+                <MiniRatingBar rating={loggedAlbum!.rating} isDark={isDark} />
+                <Pressable onPress={() => setEditMode(true)} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
+                  <FontAwesome name="pencil" size={13} color={colors.subtext} />
+                </Pressable>
+              </View>
+            </View>
+          )
         ) : (
           <View style={s.ctaRow}>
             <Pressable style={[s.primaryBtn, s.ctaFlex, { backgroundColor: '#FF3CAC' }]} onPress={handleLog}>
@@ -392,22 +542,62 @@ export default function AlbumDetailScreen() {
           </View>
         )}
 
-        {/* ── 3. About this album ───────────────────────────────────────────── */}
-        {lastfm?.description ? (
-          <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
-            <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>About This Album</Text>
-            <Text
-              style={[s.bioText, { color: colors.text }]}
-              numberOfLines={bioExpanded ? undefined : 3}>
-              {lastfm.description}
-            </Text>
-            <Pressable onPress={() => setBioExpanded(v => !v)}>
-              <Text style={s.bioToggle}>{bioExpanded ? 'Show less' : 'Read more'}</Text>
-            </Pressable>
-          </View>
-        ) : null}
+        {/* ── 4. Community Rating ───────────────────────────────────────────── */}
+        <CommunityRatingSection
+          isDark={isDark}
+          colors={colors}
+          sectionBg={sectionBg}
+          borderColor={borderColor}
+        />
 
-        {/* ── 4. Tracklist ──────────────────────────────────────────────────── */}
+        {/* ── 5. Reviews ────────────────────────────────────────────────────── */}
+        <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
+          <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 12 }]}>Reviews</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.reviewsScroll}
+            style={s.reviewsScrollView}>
+            {isLogged && !!loggedAlbum!.review && (
+              <ReviewCard
+                username="You"
+                rating={loggedAlbum!.rating}
+                text={loggedAlbum!.review}
+                dateStr={formatLoggedDate(loggedAlbum!.dateLogged)}
+                isOwn
+                isDark={isDark}
+                colors={colors}
+                sectionBg={isDark ? '#1a1a1a' : '#fff'}
+                borderColor={borderColor}
+              />
+            )}
+            {MOCK_REVIEWS.slice(0, 3).map(r => (
+              <ReviewCard
+                key={r.id}
+                username={r.username}
+                rating={r.rating}
+                text={r.text}
+                isDark={isDark}
+                colors={colors}
+                sectionBg={isDark ? '#1a1a1a' : '#fff'}
+                borderColor={borderColor}
+              />
+            ))}
+            {/* Show More card */}
+            <Pressable
+              style={({ pressed }) => [
+                s.reviewCard,
+                s.showMoreCard,
+                { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor, opacity: pressed ? 0.7 : 1 },
+              ]}
+              onPress={() => setShowAllReviews(true)}>
+              <FontAwesome name="comments" size={22} color={isDark ? '#555' : '#bbb'} />
+              <Text style={[s.showMoreText, { color: colors.subtext }]}>Show{'\n'}More</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+
+        {/* ── 6. Tracklist ──────────────────────────────────────────────────── */}
         <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
           <View style={s.tracklistHeader}>
             <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 0 }]}>Tracklist</Text>
@@ -443,7 +633,7 @@ export default function AlbumDetailScreen() {
           )}
         </View>
 
-        {/* ── 5. Credits ────────────────────────────────────────────────────── */}
+        {/* ── Credits ───────────────────────────────────────────────────────── */}
         {genius && (genius.credits?.length || genius.producers?.length || genius.writers?.length) ? (() => {
           const PRODUCED_RE = /produced/i;
           const WRITTEN_RE  = /written|lyric/i;
@@ -452,11 +642,9 @@ export default function AlbumDetailScreen() {
             ...(genius.producers?.length ? [{ label: 'Produced By', artists: genius.producers }] : []),
             ...(genius.writers?.length   ? [{ label: 'Written By',  artists: genius.writers   }] : []),
           ];
-
           const extraRows = (genius.credits ?? []).filter(
             row => !PRODUCED_RE.test(row.label) && !WRITTEN_RE.test(row.label)
           );
-
           const allRows = [...pinnedRows, ...extraRows];
           if (!allRows.length) return null;
 
@@ -484,7 +672,7 @@ export default function AlbumDetailScreen() {
           );
         })() : null}
 
-        {/* ── 6. Similar Albums ────────────────────────────────────────────── */}
+        {/* ── Similar Albums ────────────────────────────────────────────────── */}
         {similar && similar.length > 0 && (
           <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
             <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Similar Albums</Text>
@@ -512,8 +700,48 @@ export default function AlbumDetailScreen() {
           </View>
         )}
 
-
       </ScrollView>
+
+      {/* ── All Reviews modal ────────────────────────────────────────────────── */}
+      <Modal visible={showAllReviews} animationType="slide" onRequestClose={() => setShowAllReviews(false)}>
+        <View style={[s.allReviewsModal, { backgroundColor: colors.background }]}>
+          <View style={[s.allReviewsHeader, { borderBottomColor: isDark ? '#222' : '#eee' }]}>
+            <Text style={[s.allReviewsTitle, { color: colors.text }]}>Reviews</Text>
+            <Pressable onPress={() => setShowAllReviews(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
+              <FontAwesome name="times" size={20} color={colors.subtext} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={s.allReviewsList} showsVerticalScrollIndicator={false}>
+            {isLogged && !!loggedAlbum!.review && (
+              <View style={[s.allReviewRow, { borderBottomColor: isDark ? '#1f1f1f' : '#f0f0f0' }]}>
+                <View style={s.allReviewTop}>
+                  <Text style={[s.allReviewUsername, { color: '#FF3CAC' }]}>You</Text>
+                  <View style={s.ratingBadge}>
+                    <Text style={s.ratingBadgeText}>{loggedAlbum!.rating}</Text>
+                  </View>
+                </View>
+                {loggedAlbum!.review ? (
+                  <Text style={[s.allReviewText, { color: colors.text }]}>{loggedAlbum!.review}</Text>
+                ) : (
+                  <Text style={[s.allReviewNoText, { color: colors.subtext }]}>No review written.</Text>
+                )}
+                <Text style={[s.allReviewDate, { color: colors.subtext }]}>{formatLoggedDate(loggedAlbum!.dateLogged)}</Text>
+              </View>
+            )}
+            {MOCK_REVIEWS.map(r => (
+              <View key={r.id} style={[s.allReviewRow, { borderBottomColor: isDark ? '#1f1f1f' : '#f0f0f0' }]}>
+                <View style={s.allReviewTop}>
+                  <Text style={[s.allReviewUsername, { color: colors.text }]}>{r.username}</Text>
+                  <View style={s.ratingBadge}>
+                    <Text style={s.ratingBadgeText}>{r.rating}</Text>
+                  </View>
+                </View>
+                <Text style={[s.allReviewText, { color: colors.text }]}>{r.text}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* ── Playlist picker modal ─────────────────────────────────────────────── */}
       <Modal visible={showPlaylists} transparent animationType="slide" onRequestClose={() => setShowPlaylists(false)}>
@@ -563,7 +791,6 @@ const s = StyleSheet.create({
   artworkInitial: { color: 'rgba(255,255,255,0.7)', fontSize: 60, fontWeight: '700' },
   title: { marginTop: 20, fontSize: 20, fontWeight: '700', textAlign: 'center', letterSpacing: -0.5 },
   artist: { marginTop: 4, fontSize: 14, fontWeight: '500', textAlign: 'center' },
-  dateLogged: { marginTop: 4, fontSize: 12, textAlign: 'center' },
 
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 12 },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
@@ -573,18 +800,14 @@ const s = StyleSheet.create({
   // Section label
   sectionLabel: { marginTop: 24, alignSelf: 'flex-start', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10 },
 
-  // Rating
-  ratingContainer: { width: '100%', marginTop: 10 },
-  ratingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
-  barsTrack: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4, paddingBottom: 2 },
-  bar: { flex: 1, borderRadius: 2 },
-  ratingHint: { marginTop: 10, fontSize: 13, textAlign: 'center', height: 18 },
+  // Content sections
+  section: { width: '100%', marginTop: 20, borderRadius: 14, padding: 16, borderWidth: StyleSheet.hairlineWidth },
 
-  // Review
-  reviewInput: { width: '100%', minHeight: 90, marginTop: 10, borderRadius: 10, borderWidth: 1, padding: 12, fontSize: 15, lineHeight: 22 },
-  charCount: { alignSelf: 'flex-end', fontSize: 12, marginTop: 4 },
+  // About
+  bioText: { fontSize: 14, lineHeight: 22 },
+  bioToggle: { color: '#FF3CAC', fontSize: 13, fontWeight: '500', marginTop: 8 },
 
-  // Buttons
+  // Log / Edit buttons
   ctaRow: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 20 },
   ctaFlex: { flex: 1, marginTop: 0 },
   primaryBtn: { marginTop: 20, width: '100%', height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
@@ -592,12 +815,75 @@ const s = StyleSheet.create({
   secondaryBtn: { height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderWidth: 1 },
   secondaryBtnText: { fontSize: 15, fontWeight: '500' },
 
-  // Content sections
-  section: { width: '100%', marginTop: 20, borderRadius: 14, padding: 16, borderWidth: StyleSheet.hairlineWidth },
+  // Logged / edit
+  editLogRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', width: '100%', marginTop: 16 },
+  editLogDate: { fontSize: 13 },
+  editLogRight: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
 
-  // About
-  bioText: { fontSize: 14, lineHeight: 22 },
-  bioToggle: { color: '#FF3CAC', fontSize: 13, fontWeight: '500', marginTop: 8 },
+  editBlock: { width: '100%', marginTop: 16 },
+  editBtnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  editBtnFlex: { flex: 1, marginTop: 0 },
+
+  // Rating picker
+  ratingContainer: { width: '100%', marginTop: 10 },
+  ratingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
+  barsTrack: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4, paddingBottom: 2 },
+  bar: { flex: 1, borderRadius: 2 },
+  ratingHint: { marginTop: 10, fontSize: 13, textAlign: 'center', height: 18 },
+
+  // Review input
+  reviewInput: { width: '100%', minHeight: 90, marginTop: 10, borderRadius: 10, borderWidth: 1, padding: 12, fontSize: 15, lineHeight: 22 },
+  charCount: { alignSelf: 'flex-end', fontSize: 12, marginTop: 4 },
+
+  // Mini rating bar (logged date row)
+  miniBarRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  miniBarTrack: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
+  miniBar: { width: 4, borderRadius: 1 },
+  miniBarNum: { fontSize: 13, fontWeight: '700', lineHeight: 15 },
+
+  // Community Rating (volume bar style)
+  communityRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
+  communityAvgBlock: { alignItems: 'flex-start', minWidth: 52 },
+  communityAvg: { fontSize: 38, fontWeight: '700', letterSpacing: -1, lineHeight: 44 },
+  communityAvgSub: { fontSize: 11, marginTop: 2 },
+  communityVolumeWrap: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  communityVolumeTrack: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  communityVolumeBar: { flex: 1, borderRadius: 2 },
+
+  // Reviews
+  reviewsScrollView: { marginHorizontal: -4 },
+  reviewsScroll: { paddingHorizontal: 4, gap: 10 },
+  reviewCard: {
+    width: 210,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    gap: 8,
+  },
+  reviewCardOwn: { borderLeftWidth: 2, borderLeftColor: '#FF3CAC' },
+  reviewCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reviewCardUsername: { fontSize: 13, fontWeight: '700', flex: 1, marginRight: 8 },
+  ratingBadge: { backgroundColor: '#FF3CAC', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, minWidth: 26, alignItems: 'center' },
+  ratingBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  reviewCardText: { fontSize: 13, lineHeight: 19 },
+  reviewCardNoText: { fontSize: 13, fontStyle: 'italic' },
+  reviewCardDate: { fontSize: 11, marginTop: 2 },
+
+  // Show More card
+  showMoreCard: { justifyContent: 'center', alignItems: 'center', gap: 8 },
+  showMoreText: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 17 },
+
+  // All Reviews modal
+  allReviewsModal: { flex: 1 },
+  allReviewsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  allReviewsTitle: { fontSize: 18, fontWeight: '700' },
+  allReviewsList: { paddingBottom: 40 },
+  allReviewRow: { paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, gap: 6 },
+  allReviewTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  allReviewUsername: { fontSize: 14, fontWeight: '700' },
+  allReviewText: { fontSize: 14, lineHeight: 21 },
+  allReviewNoText: { fontSize: 14, fontStyle: 'italic' },
+  allReviewDate: { fontSize: 12, marginTop: 2 },
 
   // Tracklist
   tracklistHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
@@ -623,7 +909,7 @@ const s = StyleSheet.create({
   similarTitle:  { fontSize: 12, fontWeight: '600' },
   similarArtist: { fontSize: 11 },
 
-  // Header button (top-right playlist icon)
+  // Header button
   headerBtn: { paddingHorizontal: 4 },
 
   // Playlist modal

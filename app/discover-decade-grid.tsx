@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
-  Image,
-  Pressable,
   ScrollView,
   ActivityIndicator,
   useWindowDimensions,
@@ -12,6 +10,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum } from '@/context/SpotifyService';
+import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -41,8 +40,6 @@ function loadDecades(): Promise<void> {
 
 // ─── Grid constants ───────────────────────────────────────────────────────────
 
-const GAP = 12;
-const COLS = 3;
 const TOTAL = 48;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -54,7 +51,7 @@ export default function DecadeGridScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const cardSize = (width - 32 - GAP * (COLS - 1)) / COLS;
+  const cw = cardWidth(width);
 
   const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(() => cache[decade ?? ''] ?? []);
   const [loading, setLoading] = useState(!cache[decade ?? '']);
@@ -97,21 +94,17 @@ export default function DecadeGridScreen() {
           <View style={s.grid}>
             {padded.map((item, i) =>
               item ? (
-                <Pressable
+                <AlbumGridCard
                   key={item.id}
-                  style={({ pressed }) => [{ width: cardSize, height: cardSize, borderRadius: 8, overflow: 'hidden', opacity: pressed ? 0.8 : 1 }]}
-                  onPress={() => handlePress(item)}>
-                  {item.artworkUrl ? (
-                    <Image source={{ uri: item.artworkUrl }} style={{ width: cardSize, height: cardSize }} />
-                  ) : (
-                    <View style={{ flex: 1, backgroundColor: isDark ? '#1e1e1e' : '#e0e0e0' }} />
-                  )}
-                </Pressable>
-              ) : (
-                <View
-                  key={`placeholder-${i}`}
-                  style={{ width: cardSize, height: cardSize, borderRadius: 8, backgroundColor: isDark ? '#1e1e1e' : '#e0e0e0' }}
+                  album={item}
+                  width={cw}
+                  onPress={() => handlePress(item)}
+                  textColor={colors.text}
+                  subColor={colors.subtext}
+                  isDark={isDark}
                 />
+              ) : (
+                <AlbumGridCardPlaceholder key={`placeholder-${i}`} width={cw} isDark={isDark} />
               )
             )}
           </View>
@@ -125,6 +118,6 @@ export default function DecadeGridScreen() {
 
 const s = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  gridWrap: { padding: 16, paddingBottom: 48 },
+  gridWrap: { padding: PADDING, paddingBottom: 48 },
   grid:     { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
 });

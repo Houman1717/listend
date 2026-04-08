@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AlbumsProvider } from '@/context/AlbumsContext';
+import { FlipProvider } from '@/context/FlipContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -53,6 +54,7 @@ function RootLayoutNav() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <AlbumsProvider>
+    <FlipProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -88,6 +90,7 @@ function RootLayoutNav() {
           <Stack.Screen name="recent-activity" options={{ title: 'Recent Activity', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
         </Stack>
       </ThemeProvider>
+    </FlipProvider>
     </AlbumsProvider>
     </GestureHandlerRootView>
   );

@@ -19,14 +19,14 @@ import { useAlbums } from '@/context/AlbumsContext';
 
 const RATING_LABELS: Record<number, string> = {
   1:  'Skip',
-  2:  'Dust Collector',
-  3:  'Static',
-  4:  'Passable',
-  5:  'In the Rotation',
-  6:  'Keeper',
-  7:  'Mainstay',
-  8:  'Daily Spin',
-  9:  'Total Fixation',
+  2:  'Rough',
+  3:  'Forgettable',
+  4:  'Underwhelming',
+  5:  'Basic',
+  6:  'Likable',
+  7:  'Strong',
+  8:  'Standout',
+  9:  'Classic',
   10: 'Timeless / No Skips',
 };
 

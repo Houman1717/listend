@@ -1,27 +1,28 @@
-import { StyleSheet, View, Pressable, ScrollView, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, ScrollView, useWindowDimensions } from 'react-native';
 import { Stack } from 'expo-router';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
+import { AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
 
-const GAP = 12;
-const COLS = 3;
 const PLACEHOLDER_COUNT = 48;
 
 export default function DiscoverAllTimeClassicsScreen() {
   const { width } = useWindowDimensions();
-  const cardSize = (width - 32 - GAP * (COLS - 1)) / COLS;
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  const isDark = colorScheme === 'dark';
+  const cw = cardWidth(width);
 
   return (
     <>
       <Stack.Screen options={{ title: 'All-Time Classics' }} />
       <ScrollView
-        style={s.container}
+        style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}
         showsVerticalScrollIndicator={false}>
         <View style={s.grid}>
           {Array.from({ length: PLACEHOLDER_COUNT }).map((_, i) => (
-            <Pressable
-              key={i}
-              style={({ pressed }) => [s.card, { width: cardSize, height: cardSize, opacity: pressed ? 0.7 : 1 }]}
-            />
+            <AlbumGridCardPlaceholder key={i} width={cw} isDark={isDark} />
           ))}
         </View>
       </ScrollView>
@@ -30,8 +31,6 @@ export default function DiscoverAllTimeClassicsScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d0d' },
-  gridWrap:  { padding: 16, paddingBottom: 48 },
-  grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-  card:      { backgroundColor: '#1e1e1e', borderRadius: 8 },
+  gridWrap: { padding: PADDING, paddingBottom: 48 },
+  grid:     { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
 });

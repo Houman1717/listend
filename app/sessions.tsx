@@ -231,6 +231,9 @@ export default function SessionsScreen() {
           <Text style={s.dayDetailTitle}>
             {MONTH_NAMES[viewMonth]} {parseInt(selectedKey.split('-')[2], 10)}, {viewYear}
           </Text>
+          <Text style={s.dayAlbumCount}>
+            {selectedAlbums.length === 1 ? '1 album' : `${selectedAlbums.length} albums`}
+          </Text>
           {selectedAlbums.length === 0 ? (
             <Text style={s.noAlbums}>No albums logged this day.</Text>
           ) : (
@@ -385,6 +388,11 @@ const s = StyleSheet.create({
     color: TEXT,
     fontSize: 14,
     fontWeight: '700',
+    marginBottom: 2,
+  },
+  dayAlbumCount: {
+    color: SUBTEXT,
+    fontSize: 12,
     marginBottom: 12,
   },
   noAlbums: { color: SUBTEXT, fontSize: 14 },
