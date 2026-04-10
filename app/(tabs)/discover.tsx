@@ -10,12 +10,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
-import { useFlip, FlippedRecord, FlipStatus } from '@/context/FlipContext';
-import { useAlbums } from '@/context/AlbumsContext';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -49,14 +49,6 @@ const PLACEHOLDER_COLORS = ['#1e1e2e', '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatCountdown(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
@@ -72,190 +64,6 @@ function ArtFallback({ size, radius, label }: { size: number; radius: number; la
   return (
     <View style={[s.fallback, { width: size, height: size, borderRadius: radius }]}>
       <Text style={[s.fallbackText, { fontSize: size * 0.32 }]}>{label[0]?.toUpperCase()}</Text>
-    </View>
-  );
-}
-
-// ─── Flip helpers ─────────────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: FlipStatus }) {
-  const config: Record<FlipStatus, { label: string; bg: string; text: string }> = {
-    logged:       { label: 'Logged',          bg: '#0f2e1a', text: '#4ade80' },
-    didnt_listen: { label: "Didn't Listen",   bg: '#1e1e1e', text: '#888'    },
-    pending:      { label: 'Pending',          bg: '#2e1f00', text: '#f59e0b' },
-  };
-  const { label, bg, text } = config[status];
-  return (
-    <View style={[sf.badge, { backgroundColor: bg }]}>
-      <Text style={[sf.badgeText, { color: text }]}>{label}</Text>
-    </View>
-  );
-}
-
-// ─── Flip a Record section ────────────────────────────────────────────────────
-
-function FlipSection() {
-  const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
-  const isDark      = colorScheme === 'dark';
-  const router      = useRouter();
-
-  const { history, cooldownUntil, currentFlip, poolExhausted, flip, markLogged, markDidntListen } = useFlip();
-  const { setPendingAlbum, addToWantToListen } = useAlbums();
-
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const cooldownActive  = cooldownUntil !== null && now < cooldownUntil;
-  const remainingMs     = cooldownActive ? cooldownUntil - now : 0;
-  const hasPendingFlip  = currentFlip?.status === 'pending';
-  const showAlbumCard   = cooldownActive && hasPendingFlip;
-  const showHowWas      = !cooldownActive && hasPendingFlip;
-  const showFlipButton  = !poolExhausted && !showAlbumCard && !showHowWas;
-
-  const cardBg     = isDark ? '#111' : '#f2f2f2';
-  const borderCol  = isDark ? '#222' : '#e0e0e0';
-  const subBg      = isDark ? '#1a1a1a' : '#fff';
-
-  return (
-    <View style={sf.wrapper}>
-
-      {/* ── Main flip card ──────────────────────────────────────────────────── */}
-      <View style={[sf.flipCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
-
-        {/* Pool exhausted */}
-        {poolExhausted && (
-          <View style={sf.centeredBlock}>
-            <FontAwesome name="trophy" size={30} color="#FF3CAC" />
-            <Text style={[sf.emptyTitle, { color: colors.text }]}>You've flipped every record!</Text>
-            <Text style={[sf.emptySubtext, { color: colors.subtext }]}>
-              Albums return to the pool once you dismiss or log them.
-            </Text>
-          </View>
-        )}
-
-        {/* Flip button */}
-        {showFlipButton && (
-          <Pressable
-            style={({ pressed }) => [sf.flipBtn, { opacity: pressed ? 0.85 : 1 }]}
-            onPress={flip}>
-            <FontAwesome name="random" size={18} color="#fff" />
-            <Text style={sf.flipBtnText}>Flip a Record</Text>
-          </Pressable>
-        )}
-
-        {/* Active cooldown — show the flipped album */}
-        {showAlbumCard && currentFlip && (
-          <View style={sf.albumBlock}>
-            <View style={[sf.albumArtwork, { backgroundColor: currentFlip.coverColor }]}>
-              <Text style={sf.albumArtworkLetter}>{currentFlip.title.charAt(0)}</Text>
-            </View>
-            <Text style={[sf.albumTitle, { color: colors.text }]} numberOfLines={2}>
-              {currentFlip.title}
-            </Text>
-            <Text style={[sf.albumArtist, { color: colors.subtext }]}>
-              {currentFlip.artist} · {currentFlip.year}
-            </Text>
-            <View style={sf.albumActions}>
-              <Pressable
-                style={({ pressed }) => [sf.actionPrimary, { opacity: pressed ? 0.8 : 1 }]}
-                onPress={() =>
-                  addToWantToListen({
-                    id: currentFlip.id,
-                    title: currentFlip.title,
-                    artist: currentFlip.artist,
-                    year: currentFlip.year,
-                    artworkUrl: '',
-                  })
-                }>
-                <FontAwesome name="bookmark-o" size={13} color="#fff" />
-                <Text style={sf.actionPrimaryText}>Want to Listen</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [sf.actionSecondary, { borderColor: borderCol, opacity: pressed ? 0.8 : 1 }]}>
-                <FontAwesome name="headphones" size={13} color={colors.subtext} />
-                <Text style={[sf.actionSecondaryText, { color: colors.subtext }]}>Open in Streaming</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        {/* Cooldown expired — ask how it was */}
-        {showHowWas && currentFlip && (
-          <View style={sf.howWasBlock}>
-            <Text style={[sf.howWasHeading, { color: colors.text }]}>
-              How was it?
-            </Text>
-            <Text style={[sf.howWasAlbum, { color: '#FF3CAC' }]} numberOfLines={1}>
-              "{currentFlip.title}"
-            </Text>
-            <View style={sf.howWasActions}>
-              <Pressable
-                style={({ pressed }) => [sf.actionPrimary, sf.flex1, { opacity: pressed ? 0.8 : 1 }]}
-                onPress={() => {
-                  markLogged(currentFlip.id);
-                  setPendingAlbum({
-                    spotifyId: currentFlip.id,
-                    title: currentFlip.title,
-                    artist: currentFlip.artist,
-                    year: currentFlip.year,
-                    artworkUrl: '',
-                  });
-                  router.push('/log-album');
-                }}>
-                <FontAwesome name="plus" size={13} color="#fff" />
-                <Text style={sf.actionPrimaryText}>Log It</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [sf.actionSecondary, sf.flex1, { borderColor: borderCol, opacity: pressed ? 0.8 : 1 }]}
-                onPress={() => markDidntListen(currentFlip.id)}>
-                <Text style={[sf.actionSecondaryText, { color: colors.subtext }]}>Didn't Listen</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        {/* Live countdown */}
-        {cooldownActive && (
-          <Text style={[sf.countdown, { color: colors.subtext }]}>
-            Come back in {formatCountdown(remainingMs)}
-          </Text>
-        )}
-      </View>
-
-      {/* ── Previously Flipped ───────────────────────────────────────────────── */}
-      {history.length > 0 && (
-        <View style={sf.historySection}>
-          <Text style={[sf.historyHeading, { color: colors.text }]}>Previously Flipped</Text>
-          <View style={[sf.historyList, { backgroundColor: subBg, borderColor: borderCol }]}>
-            {history.map((record, i) => (
-              <View
-                key={`${record.id}-${record.flippedAt}`}
-                style={[
-                  sf.historyRow,
-                  { borderBottomColor: borderCol },
-                  i === history.length - 1 && sf.historyRowLast,
-                ]}>
-                <View style={[sf.historyArt, { backgroundColor: record.coverColor }]}>
-                  <Text style={sf.historyArtLetter}>{record.title.charAt(0)}</Text>
-                </View>
-                <View style={sf.historyInfo}>
-                  <Text style={[sf.historyTitle, { color: colors.text }]} numberOfLines={1}>
-                    {record.title}
-                  </Text>
-                  <Text style={[sf.historyArtist, { color: colors.subtext }]} numberOfLines={1}>
-                    {record.artist} · {record.year}
-                  </Text>
-                </View>
-                <StatusBadge status={record.status} />
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -364,6 +172,95 @@ function Chip({ label, onPress, isDark }: { label: string; onPress: () => void; 
   );
 }
 
+// ─── Bird's-eye turntable icon ────────────────────────────────────────────────
+// Pure RN views — no SVG dependency needed.
+// Layout (40×40): platter circle → groove ring → pink label → tonearm shaft → pivot dot
+
+function TurntableIcon() {
+  return (
+    <View style={{ width: 40, height: 40 }}>
+      {/* Platter */}
+      <View style={{
+        position: 'absolute', top: 0, left: 0, width: 40, height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.13)',
+        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.55)',
+      }} />
+      {/* Groove ring */}
+      <View style={{
+        position: 'absolute', top: 6, left: 6, width: 28, height: 28,
+        borderRadius: 14, borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.25)', backgroundColor: 'transparent',
+      }} />
+      {/* Label (centre circle, pink) */}
+      <View style={{
+        position: 'absolute', top: 14, left: 14, width: 12, height: 12,
+        borderRadius: 6, backgroundColor: '#FF3CAC', opacity: 0.9,
+      }} />
+      {/* Spindle dot */}
+      <View style={{
+        position: 'absolute', top: 18.5, left: 18.5, width: 3, height: 3,
+        borderRadius: 1.5, backgroundColor: 'rgba(0,0,0,0.55)',
+      }} />
+      {/* Tonearm shaft — top end = pivot (upper-right), bottom end = needle (near label) */}
+      {/* Center of 2×20 rect at (29,12); rotate +37° → top end ≈(35,4), bottom end ≈(23,20) */}
+      <View style={{
+        position: 'absolute', top: 2, left: 28, width: 2, height: 20,
+        borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.9)',
+        transform: [{ rotate: '37deg' }],
+      }} />
+      {/* Pivot dot */}
+      <View style={{
+        position: 'absolute', top: 1, left: 32, width: 6, height: 6,
+        borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.85)',
+      }} />
+    </View>
+  );
+}
+
+// ─── Flip entry card ─────────────────────────────────────────────────────────
+
+function FlipEntryCard({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [se.card, { opacity: pressed ? 0.88 : 1 }]}>
+
+      {/* Dark gradient background — always dark regardless of color scheme */}
+      <LinearGradient
+        colors={['#0d0d14', '#131325', '#1a1035']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Pink left-edge accent bar */}
+      <View style={se.accentBar} />
+
+      {/* Top row: icon + badge */}
+      <View style={se.topRow}>
+        <View style={se.iconWrap}>
+          <TurntableIcon />
+        </View>
+        <View style={se.badge}>
+          <Text style={se.badgeText}>1001 Albums</Text>
+        </View>
+      </View>
+
+      {/* Title + subtitle */}
+      <View style={se.textBlock}>
+        <Text style={se.title}>Flip a Record</Text>
+        <Text style={se.subtitle}>Discover a random album from the 1001 list</Text>
+      </View>
+
+      {/* Bottom CTA */}
+      <View style={se.bottomRow}>
+        <Text style={se.cta}>Try it →</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function DiscoverScreen() {
@@ -397,8 +294,10 @@ export default function DiscoverScreen() {
 
       <Text style={[s.heading, { color: colors.text }]}>Discover</Text>
 
-      {/* ── Flip a Record ── */}
-      <FlipSection />
+      {/* ── Flip a Record entry ── */}
+      <View style={{ paddingHorizontal: 16 }}>
+        <FlipEntryCard onPress={() => router.push('/flip-a-record' as any)} />
+      </View>
 
       {/* ── New Releases ── */}
       <Section title="New Releases">
@@ -514,7 +413,7 @@ export default function DiscoverScreen() {
   );
 }
 
-// ─── Discover screen styles ───────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   content: { paddingTop: 20, paddingBottom: 48, gap: 32 },
@@ -537,7 +436,7 @@ const s = StyleSheet.create({
   rankBadge: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
   rankText:  { color: '#fff', fontSize: 10, fontWeight: '700' },
 
-  placeholderCard: { width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 },
+  placeholderCard:   { width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 },
   artistPlaceholder: { width: ARTIST_SIZE, height: ARTIST_SIZE, borderRadius: ARTIST_SIZE / 2 },
 
   seeMoreBtn:  { justifyContent: 'center', alignItems: 'center' },
@@ -547,85 +446,63 @@ const s = StyleSheet.create({
   chipText: { fontSize: 15, fontWeight: '600' },
 });
 
-// ─── Flip section styles ──────────────────────────────────────────────────────
+// ─── Flip entry card styles ───────────────────────────────────────────────────
 
-const sf = StyleSheet.create({
-  wrapper: { paddingHorizontal: 16, gap: 16 },
-
-  // Main card
-  flipCard: {
+const se = StyleSheet.create({
+  card: {
     borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 20,
-    alignItems: 'center',
-    gap: 16,
+    overflow: 'hidden',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    gap: 14,
+    // Glow shadow using pink
+    shadowColor: '#FF3CAC',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
 
-  // Centred empty/exhausted state
-  centeredBlock: { alignItems: 'center', gap: 10, paddingVertical: 8 },
-  emptyTitle:    { fontSize: 16, fontWeight: '700', textAlign: 'center' },
-  emptySubtext:  { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  // Vertical pink accent bar on the left edge
+  accentBar: {
+    position: 'absolute',
+    left: 0, top: 0, bottom: 0,
+    width: 4,
+    backgroundColor: '#FF3CAC',
+  },
 
-  // Flip button
-  flipBtn: {
+  // Top row: icon on left, badge on right
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FF3CAC',
-    paddingHorizontal: 28,
-    paddingVertical: 14,
+    justifyContent: 'space-between',
+  },
+  iconWrap: {
+    width: 52,
+    height: 52,
     borderRadius: 14,
+    backgroundColor: 'rgba(255,60,172,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,60,172,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  flipBtnText: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
-
-  // Album card (shown during cooldown)
-  albumBlock:        { alignItems: 'center', gap: 10, width: '100%' },
-  albumArtwork:      { width: 120, height: 120, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  albumArtworkLetter:{ color: 'rgba(255,255,255,0.7)', fontSize: 48, fontWeight: '700' },
-  albumTitle:        { fontSize: 17, fontWeight: '700', textAlign: 'center', letterSpacing: -0.3 },
-  albumArtist:       { fontSize: 14, textAlign: 'center' },
-  albumActions:      { flexDirection: 'column', gap: 8, width: '100%', marginTop: 4 },
-
-  // How was prompt
-  howWasBlock:   { alignItems: 'center', gap: 8, width: '100%' },
-  howWasHeading: { fontSize: 18, fontWeight: '700' },
-  howWasAlbum:   { fontSize: 14, fontWeight: '500' },
-  howWasActions: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
-
-  // Shared action buttons
-  actionPrimary: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: '#FF3CAC', borderRadius: 12,
-    paddingVertical: 12, paddingHorizontal: 16,
+  badge: {
+    backgroundColor: 'rgba(255,60,172,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,60,172,0.3)',
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  actionPrimaryText:   { color: '#fff', fontSize: 14, fontWeight: '600' },
-  actionSecondary: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, borderRadius: 12, borderWidth: 1,
-    paddingVertical: 12, paddingHorizontal: 16,
-  },
-  actionSecondaryText: { fontSize: 14, fontWeight: '500' },
-  flex1: { flex: 1 },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#FF3CAC', letterSpacing: 0.2 },
 
-  // Countdown
-  countdown: { fontSize: 13, fontWeight: '500', letterSpacing: -0.1 },
+  // Title + subtitle
+  textBlock: { gap: 5 },
+  title:     { fontSize: 20, fontWeight: '800', color: '#fff', letterSpacing: -0.4 },
+  subtitle:  { fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 18 },
 
-  // Previously Flipped
-  historySection: { gap: 10 },
-  historyHeading: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
-  historyList:    { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  historyRow:     {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 12, borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  historyRowLast:   { borderBottomWidth: 0 },
-  historyArt:       { width: 44, height: 44, borderRadius: 6, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-  historyArtLetter: { color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: '700' },
-  historyInfo:      { flex: 1, gap: 2 },
-  historyTitle:     { fontSize: 14, fontWeight: '600' },
-  historyArtist:    { fontSize: 12 },
-
-  // Status badge
-  badge:     { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { fontSize: 11, fontWeight: '700' },
+  // Bottom CTA row
+  bottomRow: { flexDirection: 'row', alignItems: 'center' },
+  cta:       { fontSize: 13, fontWeight: '700', color: '#FF3CAC', letterSpacing: 0.1 },
 });

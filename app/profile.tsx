@@ -7,11 +7,14 @@ import {
   ScrollView,
   Alert,
   Dimensions,
+  Modal,
+  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
+import { useState } from 'react';
 
 const GRADIENT: [string, string, string] = ['#FF3CAC', '#784BA0', '#2B86C5'];
 const DARK_BG = '#0d0d0d';
@@ -91,11 +94,80 @@ function FavSlot({
   );
 }
 
+// ─── Rating distribution modal ────────────────────────────────────────────────
+
+function RatingModal({
+  visible,
+  onClose,
+  avgRating,
+  distribution,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  avgRating: string;
+  distribution: { rating: number; count: number }[];
+}) {
+  const maxCount = Math.max(...distribution.map(d => d.count), 1);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}>
+      <Pressable style={rm.backdrop} onPress={onClose} />
+      <SafeAreaView style={rm.sheet}>
+        {/* Handle */}
+        <View style={rm.handle} />
+
+        {/* Header */}
+        <View style={rm.header}>
+          <Text style={rm.headerTitle}>Rating Breakdown</Text>
+          <Pressable onPress={onClose} hitSlop={12} style={rm.closeBtn}>
+            <FontAwesome name="times" size={16} color={SUBTEXT} />
+          </Pressable>
+        </View>
+
+        {/* Average */}
+        <View style={rm.avgBlock}>
+          <Text style={rm.avgValue}>{avgRating}</Text>
+          <Text style={rm.avgLabel}>average rating</Text>
+        </View>
+
+        {/* Distribution bars — ratings 10 down to 1 */}
+        <View style={rm.distBlock}>
+          {[...distribution].reverse().map(({ rating, count }) => {
+            const pct = maxCount > 0 ? count / maxCount : 0;
+            return (
+              <View key={rating} style={rm.distRow}>
+                <Text style={rm.distRating}>{rating}</Text>
+                <View style={rm.barTrack}>
+                  <View
+                    style={[
+                      rm.barFill,
+                      {
+                        width: `${Math.max(pct * 100, count > 0 ? 2 : 0)}%`,
+                        opacity: 0.4 + pct * 0.6,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={rm.distCount}>{count}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { loggedAlbums, topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, wantToListen } = useAlbums();
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
 
   const avgRating = loggedAlbums.length
     ? (loggedAlbums.reduce((sum, a) => sum + a.rating, 0) / loggedAlbums.length).toFixed(1)
@@ -104,6 +176,11 @@ export default function ProfileScreen() {
   const thisYear = loggedAlbums.filter((a) =>
     a.dateLogged.includes(new Date().getFullYear().toString())
   ).length;
+
+  const ratingDistribution = Array.from({ length: 10 }, (_, i) => ({
+    rating: i + 1,
+    count: loggedAlbums.filter(a => a.rating === i + 1).length,
+  }));
 
   function confirmRemoveAlbum(id: string, title: string) {
     Alert.alert('Remove', `Remove "${title}" from Favourites?`, [
@@ -132,12 +209,13 @@ export default function ProfileScreen() {
       contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}>
 
-      {/* Header gradient banner */}
+      {/* Header gradient banner — pointerEvents="none" so it never intercepts taps */}
       <LinearGradient
         colors={['#FF3CAC18', '#784BA012', '#2B86C508']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={s.banner}
+        pointerEvents="none"
       />
 
       {/* Avatar + name */}
@@ -153,17 +231,41 @@ export default function ProfileScreen() {
 
       {/* Stats row */}
       <View style={s.statsRow}>
-        {[
-          { value: String(loggedAlbums.length), label: 'Albums' },
-          { value: String(thisYear), label: 'This Year' },
-          { value: avgRating, label: 'Avg Rating' },
-        ].map((stat, i) => (
-          <View key={i} style={s.statItem}>
-            <Text style={s.statValue}>{stat.value}</Text>
-            <Text style={s.statLabel}>{stat.label}</Text>
-          </View>
-        ))}
+        <Pressable
+          style={({ pressed }) => [s.statItem, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={() => {
+            console.log('[Profile] Albums tapped');
+            router.push('/my-listend');
+          }}>
+          <Text style={s.statValue}>{loggedAlbums.length}</Text>
+          <Text style={s.statLabel}>Albums</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [s.statItem, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={() => {
+            console.log('[Profile] This Year tapped');
+            router.push('/sessions');
+          }}>
+          <Text style={s.statValue}>{thisYear}</Text>
+          <Text style={s.statLabel}>This Year</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [s.statItem, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={() => {
+            console.log('[Profile] Avg Rating tapped');
+            setRatingModalVisible(true);
+          }}>
+          <Text style={s.statValue}>{avgRating}</Text>
+          <Text style={s.statLabel}>Avg Rating</Text>
+        </Pressable>
       </View>
+
+      <RatingModal
+        visible={ratingModalVisible}
+        onClose={() => setRatingModalVisible(false)}
+        avgRating={avgRating}
+        distribution={ratingDistribution}
+      />
 
       <View style={[s.rule, { backgroundColor: BORDER }]} />
 
@@ -443,4 +545,101 @@ const s = StyleSheet.create({
   recentInfo: { flex: 1 },
   recentTitle: { color: TEXT, fontSize: 14, fontWeight: '600' },
   recentArtist: { color: SUBTEXT, fontSize: 12, marginTop: 2 },
+});
+
+// ─── Rating modal styles ──────────────────────────────────────────────────────
+
+const rm = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  sheet: {
+    backgroundColor: '#161616',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: BORDER,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#444',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+  },
+  headerTitle: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  avgBlock: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+    marginBottom: 20,
+  },
+  avgValue: {
+    color: '#FF3CAC',
+    fontSize: 56,
+    fontWeight: '700',
+    letterSpacing: -2,
+    lineHeight: 62,
+  },
+  avgLabel: {
+    color: SUBTEXT,
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  distBlock: {
+    gap: 10,
+  },
+  distRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  distRating: {
+    color: SUBTEXT,
+    fontSize: 13,
+    fontWeight: '600',
+    width: 16,
+    textAlign: 'right',
+  },
+  barTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2a2a2a',
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: '#FF3CAC',
+  },
+  distCount: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: '600',
+    width: 24,
+    textAlign: 'right',
+  },
 });

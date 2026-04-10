@@ -12,6 +12,7 @@ export type FlippedRecord = {
   artist: string;
   year: number;
   coverColor: string;
+  genre?: string; // optional for backward-compat with stored records
   flippedAt: number; // Unix ms
   status: FlipStatus;
 };
@@ -88,6 +89,7 @@ export function FlipProvider({ children }: { children: ReactNode }) {
       artist:      album.artist,
       year:        album.year,
       coverColor:  album.coverColor,
+      genre:       album.genre,
       flippedAt:   Date.now(),
       status:      'pending',
     };

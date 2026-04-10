@@ -7,7 +7,10 @@ import {
   ScrollView,
   Alert,
   Dimensions,
+  Modal,
+  SafeAreaView,
 } from 'react-native';
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
@@ -18,16 +21,90 @@ const BORDER = '#2a2a2a';
 const TEXT = '#f0f0f0';
 const SUBTEXT = '#888';
 
+// ─── Rating distribution modal ────────────────────────────────────────────────
+
+function RatingModal({
+  visible,
+  onClose,
+  avgRating,
+  distribution,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  avgRating: string;
+  distribution: { rating: number; count: number }[];
+}) {
+  const maxCount = Math.max(...distribution.map(d => d.count), 1);
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      {/*
+        Single flex:1 container fills the whole modal overlay and gives every
+        descendant a resolved width to work against — this is what makes
+        flex:1 on barTrack (and percentage widths on barFill) work correctly.
+        justifyContent:'flex-end' pushes the sheet to the bottom.
+        The backdrop sits as absoluteFill behind the sheet.
+      */}
+      <View style={rm.container}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <SafeAreaView style={rm.sheet}>
+          <View style={rm.handle} />
+          <View style={rm.header}>
+            <Text style={rm.headerTitle}>Rating Breakdown</Text>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="times" size={16} color={SUBTEXT} />
+            </Pressable>
+          </View>
+          <View style={rm.avgBlock}>
+            <Text style={rm.avgValue}>{avgRating}</Text>
+            <Text style={rm.avgLabel}>average rating</Text>
+          </View>
+          <View style={rm.distBlock}>
+            {[...distribution].reverse().map(({ rating, count }) => {
+              // pct as a 0-1 ratio; ensure a sliver for non-zero counts
+              const filled = count > 0 ? Math.max(count / maxCount, 0.02) : 0;
+              const empty  = 1 - filled;
+              return (
+                <View key={rating} style={rm.distRow}>
+                  {/* Fixed-width rating label */}
+                  <Text style={rm.distRating}>{rating}</Text>
+
+                  {/* Flex-based bar — filled + empty flex segments, no % widths */}
+                  <View style={rm.barTrack}>
+                    <View style={[rm.barFilled, {
+                      flex: filled,
+                      opacity: 0.4 + (count / maxCount) * 0.6,
+                    }]} />
+                    {empty > 0 && <View style={{ flex: empty }} />}
+                  </View>
+
+                  {/* Fixed-width count label */}
+                  <Text style={rm.distCount}>{count}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Profile header ───────────────────────────────────────────────────────────
 
 function ProfileHeader({
   albumCount,
   thisYearCount,
   avgRating,
+  onPressAlbums,
+  onPressThisYear,
+  onPressAvgRating,
 }: {
   albumCount: number;
   thisYearCount: number;
   avgRating: string;
+  onPressAlbums: () => void;
+  onPressThisYear: () => void;
+  onPressAvgRating: () => void;
 }) {
   return (
     <View style={ph.container}>
@@ -51,22 +128,28 @@ function ProfileHeader({
         <Text style={ph.socialLabel}> Followers</Text>
       </View>
 
-      {/* Stats row */}
+      {/* Stats row — each box is a Pressable */}
       <View style={ph.statsRow}>
-        <View style={ph.statBox}>
+        <Pressable
+          style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={onPressAlbums}>
           <Text style={ph.statValue}>{albumCount}</Text>
           <Text style={ph.statLabel}>Albums</Text>
-        </View>
+        </Pressable>
         <View style={ph.statDivider} />
-        <View style={ph.statBox}>
+        <Pressable
+          style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={onPressThisYear}>
           <Text style={ph.statValue}>{thisYearCount}</Text>
           <Text style={ph.statLabel}>This Year</Text>
-        </View>
+        </Pressable>
         <View style={ph.statDivider} />
-        <View style={ph.statBox}>
+        <Pressable
+          style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={onPressAvgRating}>
           <Text style={ph.statValue}>{avgRating}</Text>
           <Text style={ph.statLabel}>Avg Rating</Text>
-        </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -246,6 +329,7 @@ function NavRow({
 export default function ListendScreen() {
   const router = useRouter();
   const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, loggedAlbums, wantToListen } = useAlbums();
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
 
   const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
 
@@ -259,6 +343,10 @@ export default function ListendScreen() {
   const avgRating = ratedAlbums.length > 0
     ? (ratedAlbums.reduce((sum, a) => sum + a.rating, 0) / ratedAlbums.length).toFixed(1)
     : '—';
+  const ratingDistribution = Array.from({ length: 10 }, (_, i) => ({
+    rating: i + 1,
+    count: loggedAlbums.filter(a => a.rating === i + 1).length,
+  }));
 
   function confirmRemoveAlbum(id: string, title: string) {
     Alert.alert('Remove', `Remove "${title}" from Top 5?`, [
@@ -292,6 +380,16 @@ export default function ListendScreen() {
         albumCount={loggedAlbums.length}
         thisYearCount={thisYearCount}
         avgRating={avgRating}
+        onPressAlbums={() => router.push('/my-listend')}
+        onPressThisYear={() => router.push('/sessions')}
+        onPressAvgRating={() => setRatingModalVisible(true)}
+      />
+
+      <RatingModal
+        visible={ratingModalVisible}
+        onClose={() => setRatingModalVisible(false)}
+        avgRating={avgRating}
+        distribution={ratingDistribution}
       />
 
       {/* Top 5 Albums */}
@@ -499,4 +597,85 @@ const s = StyleSheet.create({
   navLabel: { color: TEXT, fontSize: 16, fontWeight: '600' },
   navSub: { color: SUBTEXT, fontSize: 13 },
   navSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: '#222', marginLeft: 58 },
+});
+
+// ─── Rating modal styles ──────────────────────────────────────────────────────
+
+const rm = StyleSheet.create({
+  // Modal root: flex:1 fills the overlay, justifyContent:'flex-end' pins the
+  // sheet to the bottom. width:'100%' + overflow:'hidden' hard-clips any bleed.
+  container: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    overflow: 'hidden',
+  },
+  // Sheet: outermost content container — paddingHorizontal:16 here (not on
+  // any inner view) is the single source of horizontal inset for all content.
+  sheet: {
+    width: '100%',
+    alignSelf: 'stretch',
+    backgroundColor: '#161616',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+    overflow: 'hidden',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: BORDER,
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: '#444',
+    alignSelf: 'center',
+    marginTop: 10, marginBottom: 4,
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingVertical: 16,
+  },
+  headerTitle: { color: TEXT, fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
+  avgBlock: {
+    alignItems: 'center', paddingVertical: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
+    marginBottom: 20,
+  },
+  avgValue: { color: '#FF3CAC', fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
+  avgLabel: { color: SUBTEXT, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
+  distBlock: { width: '100%', gap: 10 },
+  // Row: [fixed rating] [flex bar with its own marginHorizontal] [fixed count]
+  // No margins on the labels — spacing comes from marginHorizontal on barTrack
+  distRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // Left anchor — fixed width, no margin (bar provides its own left margin)
+  distRating: {
+    color: SUBTEXT, fontSize: 13, fontWeight: '600',
+    width: 20, textAlign: 'right',
+  },
+  // Bar — flex:1 fills all space between the two labels; marginHorizontal:8
+  // creates the gap on both sides without adding to the labels' footprint
+  barTrack: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2a2a2a',
+    overflow: 'hidden',
+    marginHorizontal: 8,
+  },
+  // Filled segment — flex value set inline per row
+  barFilled: {
+    height: 8,
+    backgroundColor: '#FF3CAC',
+    borderRadius: 4,
+  },
+  // Right anchor — fixed width 32 with textAlign:'right'; no margin (bar provides it)
+  distCount: {
+    color: TEXT, fontSize: 13, fontWeight: '600',
+    width: 32, textAlign: 'right',
+  },
 });
