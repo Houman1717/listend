@@ -1,7 +1,6 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Tabs, useRouter } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Tabs } from 'expo-router';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -17,7 +16,6 @@ function TabBarIcon(props: {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const router = useRouter();
 
   return (
     <Tabs
@@ -67,14 +65,7 @@ export default function TabLayout() {
           headerTitle: 'Listend',
           headerStyle: { backgroundColor: '#0d0d0d' },
           headerTintColor: '#f0f0f0',
-          headerRight: () => (
-            <Pressable
-              onPress={() => router.push('/dms')}
-              style={{ marginRight: 16 }}
-              hitSlop={12}>
-              <FontAwesome name="comment" size={20} color="#FF3CAC" />
-            </Pressable>
-          ),
+          // headerRight is injected dynamically from listend.tsx via useNavigation().setOptions
         }}
       />
 

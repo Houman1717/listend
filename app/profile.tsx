@@ -14,7 +14,9 @@ import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
-import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { useState, useEffect } from 'react';
 
 const GRADIENT: [string, string, string] = ['#FF3CAC', '#784BA0', '#2B86C5'];
 const DARK_BG = '#0d0d0d';
@@ -166,16 +168,79 @@ function RatingModal({
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, signOut } = useAuth();
   const { loggedAlbums, topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, wantToListen } = useAlbums();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  const avgRating = loggedAlbums.length
-    ? (loggedAlbums.reduce((sum, a) => sum + a.rating, 0) / loggedAlbums.length).toFixed(1)
+  // Album stats fetched from Supabase, scoped to the logged-in user_id.
+  // Falls back to local AlbumsContext values if the query fails.
+  const localCount     = loggedAlbums.length;
+  const localThisYear  = loggedAlbums.filter(a =>
+    a.dateLogged.includes(new Date().getFullYear().toString())).length;
+  const localAvgRating = localCount
+    ? (loggedAlbums.reduce((s, a) => s + a.rating, 0) / localCount).toFixed(1)
     : '—';
 
-  const thisYear = loggedAlbums.filter((a) =>
-    a.dateLogged.includes(new Date().getFullYear().toString())
-  ).length;
+  const [albumCount,    setAlbumCount]    = useState<number>(localCount);
+  const [thisYear,      setThisYear]      = useState<number>(localThisYear);
+  const [avgRating,     setAvgRating]     = useState<string>(localAvgRating);
+
+  // Fetch profile row (display_name, username, avatar_url)
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('profiles')
+      .select('username, display_name, avatar_url')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setDisplayName(data.display_name || data.username || '');
+          setUsername(data.username || '');
+          setAvatarUrl(data.avatar_url ?? null);
+        }
+      });
+  }, [user]);
+
+  // Fetch album stats scoped to user_id from Supabase
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('logged_albums')
+      .select('rating, logged_at')
+      .eq('user_id', user.id)
+      .then(({ data, error }) => {
+        if (error || !data || data.length === 0) return; // keep local fallback
+        const count = data.length;
+        const year  = new Date().getFullYear().toString();
+        const yearCount = data.filter(
+          (a: { logged_at: string }) => a.logged_at?.startsWith(year)
+        ).length;
+        const avg = (
+          data.reduce((s: number, a: { rating: number }) => s + (a.rating ?? 0), 0) / count
+        ).toFixed(1);
+        setAlbumCount(count);
+        setThisYear(yearCount);
+        setAvgRating(avg);
+      });
+  }, [user]);
+
+  async function handleSignOut() {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await signOut();
+          // AuthGate in _layout.tsx redirects to /login
+        },
+      },
+    ]);
+  }
 
   const ratingDistribution = Array.from({ length: 10 }, (_, i) => ({
     rating: i + 1,
@@ -220,12 +285,18 @@ export default function ProfileScreen() {
 
       {/* Avatar + name */}
       <View style={s.profileRow}>
-        <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.avatar}>
-          <Text style={s.avatarInitial}>H</Text>
-        </LinearGradient>
+        {avatarUrl ? (
+          <Image source={{ uri: avatarUrl }} style={s.avatar} resizeMode="cover" />
+        ) : (
+          <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.avatar}>
+            <Text style={s.avatarInitial}>
+              {(displayName || username || user?.email || '?').charAt(0).toUpperCase()}
+            </Text>
+          </LinearGradient>
+        )}
         <View style={s.nameBlock}>
-          <Text style={s.displayName}>Houman</Text>
-          <Text style={s.handle}>@houman</Text>
+          <Text style={s.displayName}>{displayName || username || user?.email || ''}</Text>
+          {username ? <Text style={s.handle}>@{username}</Text> : null}
         </View>
       </View>
 
@@ -237,7 +308,7 @@ export default function ProfileScreen() {
             console.log('[Profile] Albums tapped');
             router.push('/my-listend');
           }}>
-          <Text style={s.statValue}>{loggedAlbums.length}</Text>
+          <Text style={s.statValue}>{albumCount}</Text>
           <Text style={s.statLabel}>Albums</Text>
         </Pressable>
         <Pressable
@@ -248,6 +319,7 @@ export default function ProfileScreen() {
           }}>
           <Text style={s.statValue}>{thisYear}</Text>
           <Text style={s.statLabel}>This Year</Text>
+
         </Pressable>
         <Pressable
           style={({ pressed }) => [s.statItem, { opacity: pressed ? 0.7 : 1 }]}
@@ -361,7 +433,7 @@ export default function ProfileScreen() {
       <View style={s.gridSection}>
         <View style={s.favHeader}>
           <Text style={s.favTitle}>LISTENED</Text>
-          <Text style={s.albumCount}>{loggedAlbums.length} albums</Text>
+          <Text style={s.albumCount}>{albumCount} albums</Text>
         </View>
         {loggedAlbums.length === 0 ? (
           <Text style={s.gridEmpty}>No albums logged yet.</Text>
@@ -384,6 +456,16 @@ export default function ProfileScreen() {
           </View>
         )}
       </View>
+
+      <View style={[s.rule, { backgroundColor: BORDER }]} />
+
+      {/* Sign Out */}
+      <Pressable
+        style={({ pressed }) => [s.signOutRow, { opacity: pressed ? 0.7 : 1 }]}
+        onPress={handleSignOut}>
+        <FontAwesome name="sign-out" size={14} color="#FF3CAC" style={{ marginTop: 1 }} />
+        <Text style={s.signOutLabel}>Sign Out</Text>
+      </Pressable>
 
       <View style={[s.rule, { backgroundColor: BORDER }]} />
 
@@ -480,6 +562,15 @@ const s = StyleSheet.create({
   },
   wantLabel: { flex: 1, color: TEXT, fontSize: 15, fontWeight: '500' },
   wantCount: { color: SUBTEXT, fontSize: 15, marginRight: 2 },
+
+  signOutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  signOutLabel: { color: '#FF3CAC', fontSize: 15, fontWeight: '500' },
 
   favSection: { paddingHorizontal: 20, paddingVertical: 16 },
   favHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },

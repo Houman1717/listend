@@ -9,17 +9,25 @@ import {
   Dimensions,
   Modal,
   SafeAreaView,
+  Switch,
 } from 'react-native';
-import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
-const DARK_BG = '#0d0d0d';
-const CARD_BG = '#1a1a1a';
-const BORDER = '#2a2a2a';
-const TEXT = '#f0f0f0';
-const SUBTEXT = '#888';
+const DARK_BG   = '#0d0d0d';
+const CARD_BG   = '#1a1a1a';
+const BORDER    = '#2a2a2a';
+const TEXT      = '#f0f0f0';
+const SUBTEXT   = '#888';
+const ACCENT    = '#FF3CAC';
+
+// COVER_H removed — cover now uses aspectRatio: 16/9
+const AVATAR_SIZE = 80;
 
 // ─── Rating distribution modal ────────────────────────────────────────────────
 
@@ -60,15 +68,11 @@ function RatingModal({
           </View>
           <View style={rm.distBlock}>
             {[...distribution].reverse().map(({ rating, count }) => {
-              // pct as a 0-1 ratio; ensure a sliver for non-zero counts
               const filled = count > 0 ? Math.max(count / maxCount, 0.02) : 0;
               const empty  = 1 - filled;
               return (
                 <View key={rating} style={rm.distRow}>
-                  {/* Fixed-width rating label */}
                   <Text style={rm.distRating}>{rating}</Text>
-
-                  {/* Flex-based bar — filled + empty flex segments, no % widths */}
                   <View style={rm.barTrack}>
                     <View style={[rm.barFilled, {
                       flex: filled,
@@ -76,8 +80,6 @@ function RatingModal({
                     }]} />
                     {empty > 0 && <View style={{ flex: empty }} />}
                   </View>
-
-                  {/* Fixed-width count label */}
                   <Text style={rm.distCount}>{count}</Text>
                 </View>
               );
@@ -92,6 +94,14 @@ function RatingModal({
 // ─── Profile header ───────────────────────────────────────────────────────────
 
 function ProfileHeader({
+  displayName,
+  username,
+  avatarUrl,
+  bio,
+  coverPhotoUrl,
+  isOwnProfile,
+  currentUserId,
+  profileUserId,
   albumCount,
   thisYearCount,
   avgRating,
@@ -99,6 +109,14 @@ function ProfileHeader({
   onPressThisYear,
   onPressAvgRating,
 }: {
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+  bio: string;
+  coverPhotoUrl: string | null;
+  isOwnProfile: boolean;
+  currentUserId: string;
+  profileUserId: string;
   albumCount: number;
   thisYearCount: number;
   avgRating: string;
@@ -106,118 +124,262 @@ function ProfileHeader({
   onPressThisYear: () => void;
   onPressAvgRating: () => void;
 }) {
+  const router  = useRouter();
+  const initial = (displayName || username || '?').charAt(0).toUpperCase();
+  const [isFollowing,    setIsFollowing]    = useState(false);
+  const [followLoading,  setFollowLoading]  = useState(false);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+
+  // Fetch follow counts + current follow state on mount / profile change
+  useEffect(() => {
+    if (!profileUserId) return;
+
+    // Followers: rows where following_id = this profile
+    supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('following_id', profileUserId)
+      .then(({ count }) => setFollowersCount(count ?? 0));
+
+    // Following: rows where follower_id = this profile
+    supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('follower_id', profileUserId)
+      .then(({ count }) => setFollowingCount(count ?? 0));
+
+    // Current user's follow state (only relevant on other profiles)
+    if (!isOwnProfile && currentUserId) {
+      supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('follower_id', currentUserId)
+        .eq('following_id', profileUserId)
+        .maybeSingle()
+        .then(({ data }) => setIsFollowing(!!data));
+    }
+  }, [isOwnProfile, currentUserId, profileUserId]);
+
+  async function handleFollow() {
+    if (!currentUserId || !profileUserId || followLoading) return;
+    setFollowLoading(true);
+    if (isFollowing) {
+      await supabase
+        .from('follows')
+        .delete()
+        .eq('follower_id', currentUserId)
+        .eq('following_id', profileUserId);
+      setIsFollowing(false);
+      setFollowersCount((n) => Math.max(0, n - 1));
+    } else {
+      await supabase
+        .from('follows')
+        .insert({ follower_id: currentUserId, following_id: profileUserId });
+      setIsFollowing(true);
+      setFollowersCount((n) => n + 1);
+    }
+    setFollowLoading(false);
+  }
+
   return (
-    <View style={ph.container}>
-      {/* Avatar */}
-      <View style={ph.avatarWrap}>
-        <View style={ph.avatar}>
-          <Text style={ph.avatarInitial}>H</Text>
+    <View style={ph.outer}>
+
+      {/* ── Cover photo — only rendered when a URL exists ────────────────── */}
+      {coverPhotoUrl ? (
+        <View style={ph.cover}>
+          <Image source={{ uri: coverPhotoUrl }} style={ph.coverImg} resizeMode="cover" />
+          <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 100 }}>
+            <LinearGradient
+              colors={['transparent', '#000000']}
+              style={{ flex: 1 }}
+            />
+          </View>
         </View>
-      </View>
+      ) : null}
 
-      {/* Name + username */}
-      <Text style={ph.name}>Houman</Text>
-      <Text style={ph.username}>@houman</Text>
+      {/* ── Body (avatar + text + buttons) ───────────────────────────────── */}
+      <View style={[ph.body, !coverPhotoUrl && ph.bodyNoCover]}>
 
-      {/* Following / Followers */}
-      <View style={ph.socialRow}>
-        <Text style={ph.socialCount}>0</Text>
-        <Text style={ph.socialLabel}> Following</Text>
-        <Text style={ph.socialDot}> · </Text>
-        <Text style={ph.socialCount}>0</Text>
-        <Text style={ph.socialLabel}> Followers</Text>
-      </View>
+        {/* Avatar — straddles cover edge when cover exists; sits at top otherwise */}
+        <View style={[ph.avatarWrap, !coverPhotoUrl && ph.avatarWrapNoCover]}>
+          {avatarUrl
+            ? <Image source={{ uri: avatarUrl }} style={ph.avatarImg} resizeMode="cover" />
+            : <View style={ph.avatarFallback}>
+                <Text style={ph.avatarInitial}>{initial}</Text>
+              </View>
+          }
+        </View>
 
-      {/* Stats row — each box is a Pressable */}
-      <View style={ph.statsRow}>
-        <Pressable
-          style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
-          onPress={onPressAlbums}>
-          <Text style={ph.statValue}>{albumCount}</Text>
-          <Text style={ph.statLabel}>Albums</Text>
-        </Pressable>
-        <View style={ph.statDivider} />
-        <Pressable
-          style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
-          onPress={onPressThisYear}>
-          <Text style={ph.statValue}>{thisYearCount}</Text>
-          <Text style={ph.statLabel}>This Year</Text>
-        </Pressable>
-        <View style={ph.statDivider} />
-        <Pressable
-          style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
-          onPress={onPressAvgRating}>
-          <Text style={ph.statValue}>{avgRating}</Text>
-          <Text style={ph.statLabel}>Avg Rating</Text>
-        </Pressable>
+        {/* Name */}
+        <Text style={ph.name}>{displayName || username || ''}</Text>
+
+        {/* Username */}
+        {username ? <Text style={ph.username}>@{username}</Text> : null}
+
+        {/* Bio */}
+        {bio ? <Text style={ph.bio}>{bio}</Text> : null}
+
+        {/* Following / Followers */}
+        <View style={ph.socialRow}>
+          <Pressable
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            onPress={() => router.push({ pathname: '/followers-following', params: { userId: profileUserId, type: 'following' } })}>
+            <Text style={ph.socialCount}>{followingCount}</Text>
+          </Pressable>
+          <Text style={ph.socialLabel}> Following</Text>
+          <Text style={ph.socialDot}> · </Text>
+          <Pressable
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            onPress={() => router.push({ pathname: '/followers-following', params: { userId: profileUserId, type: 'followers' } })}>
+            <Text style={ph.socialCount}>{followersCount}</Text>
+          </Pressable>
+          <Text style={ph.socialLabel}> Followers</Text>
+        </View>
+
+        {/* Follow button — only shown when viewing another user's profile */}
+        {!isOwnProfile && (
+          <Pressable
+            style={({ pressed }) => [
+              ph.followBtn,
+              isFollowing && ph.followBtnActive,
+              { opacity: pressed || followLoading ? 0.7 : 1 },
+            ]}
+            onPress={handleFollow}
+            disabled={followLoading}>
+            <Text style={[ph.followBtnText, isFollowing && ph.followBtnTextActive]}>
+              {isFollowing ? 'Following' : 'Follow'}
+            </Text>
+          </Pressable>
+        )}
+
+        {/* Stats row */}
+        <View style={ph.statsRow}>
+          <Pressable
+            style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
+            onPress={onPressAlbums}>
+            <Text style={ph.statValue}>{albumCount}</Text>
+            <Text style={ph.statLabel}>Albums</Text>
+          </Pressable>
+          <View style={ph.statDivider} />
+          <Pressable
+            style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
+            onPress={onPressThisYear}>
+            <Text style={ph.statValue}>{thisYearCount}</Text>
+            <Text style={ph.statLabel}>This Year</Text>
+          </Pressable>
+          <View style={ph.statDivider} />
+          <Pressable
+            style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
+            onPress={onPressAvgRating}>
+            <Text style={ph.statValue}>{avgRating}</Text>
+            <Text style={ph.statLabel}>Avg Rating</Text>
+          </Pressable>
+        </View>
+
       </View>
     </View>
   );
 }
 
 const ph = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    paddingTop: 28,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
+  outer: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#2a2a2a',
+    borderBottomColor: BORDER,
   },
-  avatarWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    overflow: 'hidden',
-    marginBottom: 12,
-    backgroundColor: '#2a2a2a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FF3CAC',
-  },
-  avatar: {
+
+  // ── Cover ───────────────────────────────────────────────────────────────────
+  cover: {
     width: '100%',
-    height: '100%',
-    backgroundColor: '#1f1f1f',
-    justifyContent: 'center',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#111',
+    overflow: 'hidden',
+  },
+  coverImg: { width: '100%', height: '100%' },
+
+  // ── Body ────────────────────────────────────────────────────────────────────
+  body: {
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
-  avatarInitial: {
-    color: '#FF3CAC',
-    fontSize: 32,
-    fontWeight: '700',
+  bodyNoCover: {
+    paddingTop: 24,
   },
+
+  // ── Avatar ──────────────────────────────────────────────────────────────────
+  avatarWrap: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    overflow: 'hidden',
+    marginTop: -(AVATAR_SIZE / 2),  // pulls avatar up so it straddles the cover edge
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#333',
+    backgroundColor: '#222',
+  },
+  avatarWrapNoCover: {
+    marginTop: 0,  // no cover to straddle — sit flush at the top of body
+  },
+  avatarImg: { width: '100%', height: '100%' },
+  avatarFallback: {
+    flex: 1,
+    backgroundColor: '#1f1f1f',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: { color: ACCENT, fontSize: 36, fontWeight: '700' },
+
+  // ── Text ────────────────────────────────────────────────────────────────────
   name: {
     color: TEXT,
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
   username: {
     color: SUBTEXT,
     fontSize: 14,
-    marginTop: 2,
-    marginBottom: 10,
+    marginTop: 3,
+    marginBottom: 6,
   },
+  bio: {
+    color: SUBTEXT,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+  },
+
+  // ── Social row ───────────────────────────────────────────────────────────────
   socialRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 14,
+  },
+  socialCount: { color: TEXT,    fontSize: 13, fontWeight: '700' },
+  socialLabel: { color: SUBTEXT, fontSize: 13 },
+  socialDot:   { color: SUBTEXT, fontSize: 13 },
+
+  // ── Follow button ────────────────────────────────────────────────────────────
+  followBtn: {
+    backgroundColor: ACCENT,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 32,
     marginBottom: 16,
   },
-  socialCount: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: '700',
+  followBtnActive: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: ACCENT,
   },
-  socialLabel: {
-    color: SUBTEXT,
-    fontSize: 13,
-  },
-  socialDot: {
-    color: SUBTEXT,
-    fontSize: 13,
-  },
+  followBtnText:       { color: '#fff',  fontSize: 14, fontWeight: '700' },
+  followBtnTextActive: { color: ACCENT },
+
+  // ── Stats ────────────────────────────────────────────────────────────────────
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -226,29 +388,12 @@ const ph = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 8,
     width: '100%',
+    marginTop: 4,
   },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 3,
-  },
-  statValue: {
-    color: TEXT,
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  statLabel: {
-    color: SUBTEXT,
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 32,
-    backgroundColor: BORDER,
-  },
+  statBox: { flex: 1, alignItems: 'center', gap: 3 },
+  statValue: { color: TEXT,    fontSize: 20, fontWeight: '700' },
+  statLabel: { color: SUBTEXT, fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.8 },
+  statDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: BORDER },
 });
 
 const FAV_GAP = 3;
@@ -324,12 +469,181 @@ function NavRow({
   );
 }
 
+// ─── Settings sheet ───────────────────────────────────────────────────────────
+
+function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const router = useRouter();
+  const { signOut } = useAuth();
+  const [notificationsOn, setNotificationsOn] = useState(false);
+
+  async function handleSignOut() {
+    onClose();
+    // Small delay so sheet has time to close before alert appears
+    setTimeout(() => {
+      Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
+      ]);
+    }, 300);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={ss.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <SafeAreaView style={ss.sheet}>
+          {/* Drag handle */}
+          <View style={ss.handle} />
+
+          {/* Edit Profile */}
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => { onClose(); router.push('/edit-profile'); }}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="user-o" size={16} color="#FF3CAC" />
+            </View>
+            <Text style={ss.rowLabel}>Edit Profile</Text>
+            <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+          </Pressable>
+
+          <View style={ss.separator} />
+
+          {/* Notifications */}
+          <View style={ss.row}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="bell-o" size={16} color="#FF3CAC" />
+            </View>
+            <Text style={ss.rowLabel}>Notifications</Text>
+            <Switch
+              value={notificationsOn}
+              onValueChange={setNotificationsOn}
+              trackColor={{ false: '#333', true: '#FF3CAC' }}
+              thumbColor="#fff"
+            />
+          </View>
+
+          <View style={ss.separator} />
+
+          {/* Subscription */}
+          <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="star-o" size={16} color="#FF3CAC" />
+            </View>
+            <Text style={ss.rowLabel}>Subscription</Text>
+            <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+          </Pressable>
+
+          <View style={ss.separator} />
+
+          {/* Help & Feedback */}
+          <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="question-circle-o" size={16} color="#FF3CAC" />
+            </View>
+            <Text style={ss.rowLabel}>Help &amp; Feedback</Text>
+            <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+          </Pressable>
+
+          <View style={ss.divider} />
+
+          {/* Sign Out */}
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={handleSignOut}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="sign-out" size={16} color="#FF4444" />
+            </View>
+            <Text style={[ss.rowLabel, ss.signOutLabel]}>Sign Out</Text>
+          </Pressable>
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
+const ss = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  sheet: {
+    backgroundColor: '#161616',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#2a2a2a',
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: '#444',
+    alignSelf: 'center',
+    marginTop: 10, marginBottom: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    gap: 14,
+  },
+  iconWrap: { width: 24, alignItems: 'center' },
+  rowLabel: { flex: 1, color: TEXT, fontSize: 16, fontWeight: '500' },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#222', marginLeft: 58 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#333', marginVertical: 8, marginHorizontal: 20 },
+  signOutLabel: { color: '#FF4444' },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ListendScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const { user } = useAuth();
   const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, loggedAlbums, wantToListen } = useAlbums();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+
+  // Profile data — re-fetched each time the tab comes into focus
+  // so updates from edit-profile are reflected immediately
+  const [profileDisplayName, setProfileDisplayName] = useState('');
+  const [profileUsername,    setProfileUsername]    = useState('');
+  const [profileAvatarUrl,   setProfileAvatarUrl]   = useState<string | null>(null);
+  const [profileBio,         setProfileBio]         = useState('');
+  const [profileCoverUrl,    setProfileCoverUrl]    = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      supabase
+        .from('profiles')
+        .select('display_name, username, avatar_url, bio, cover_photo_url')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setProfileDisplayName(data.display_name    ?? '');
+            setProfileUsername(   data.username        ?? '');
+            setProfileAvatarUrl(  data.avatar_url      ?? null);
+            setProfileBio(        data.bio             ?? '');
+            setProfileCoverUrl(   data.cover_photo_url ?? null);
+          }
+        });
+    }, [user])
+  );
+
+  // Inject hamburger button into the tab header
+  const openSettings = useCallback(() => setSettingsVisible(true), []);
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable onPress={openSettings} style={{ marginRight: 16 }} hitSlop={12}>
+          <FontAwesome name="bars" size={20} color="#f0f0f0" />
+        </Pressable>
+      ),
+    });
+  }, [navigation, openSettings]);
 
   const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
 
@@ -377,6 +691,14 @@ export default function ListendScreen() {
 
       {/* Profile header */}
       <ProfileHeader
+        displayName={profileDisplayName}
+        username={profileUsername}
+        avatarUrl={profileAvatarUrl}
+        bio={profileBio}
+        coverPhotoUrl={profileCoverUrl}
+        isOwnProfile={true}
+        currentUserId={user?.id ?? ''}
+        profileUserId={user?.id ?? ''}
         albumCount={loggedAlbums.length}
         thisYearCount={thisYearCount}
         avgRating={avgRating}
@@ -390,6 +712,11 @@ export default function ListendScreen() {
         onClose={() => setRatingModalVisible(false)}
         avgRating={avgRating}
         distribution={ratingDistribution}
+      />
+
+      <SettingsSheet
+        visible={settingsVisible}
+        onClose={() => setSettingsVisible(false)}
       />
 
       {/* Top 5 Albums */}
@@ -635,7 +962,11 @@ const rm = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', paddingVertical: 16,
   },
-  headerTitle: { color: TEXT, fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
+  headerTitle: {
+    position: 'absolute', left: 0, right: 0,
+    color: TEXT, fontSize: 17, fontWeight: '700', letterSpacing: -0.2,
+    textAlign: 'center',
+  },
   avgBlock: {
     alignItems: 'center', paddingVertical: 20,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
@@ -643,39 +974,32 @@ const rm = StyleSheet.create({
   },
   avgValue: { color: '#FF3CAC', fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
   avgLabel: { color: SUBTEXT, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
-  distBlock: { width: '100%', gap: 10 },
-  // Row: [fixed rating] [flex bar with its own marginHorizontal] [fixed count]
-  // No margins on the labels — spacing comes from marginHorizontal on barTrack
+  distBlock: { gap: 10 },
   distRow: {
-    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
-  // Left anchor — fixed width, no margin (bar provides its own left margin)
   distRating: {
     color: SUBTEXT, fontSize: 13, fontWeight: '600',
-    width: 20, textAlign: 'right',
+    width: 24, textAlign: 'right',
   },
-  // Bar — flex:1 fills all space between the two labels; marginHorizontal:8
-  // creates the gap on both sides without adding to the labels' footprint
   barTrack: {
     flex: 1,
     flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#2a2a2a',
     overflow: 'hidden',
     marginHorizontal: 8,
   },
-  // Filled segment — flex value set inline per row
   barFilled: {
-    height: 8,
+    height: 6,
     backgroundColor: '#FF3CAC',
-    borderRadius: 4,
+    borderRadius: 3,
   },
-  // Right anchor — fixed width 32 with textAlign:'right'; no margin (bar provides it)
   distCount: {
     color: TEXT, fontSize: 13, fontWeight: '600',
-    width: 32, textAlign: 'right',
+    width: 28, textAlign: 'right',
   },
 });

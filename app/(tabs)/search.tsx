@@ -17,6 +17,8 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, PendingAlbum, WantToListenAlbum, Playlist } from '@/context/AlbumsContext';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -25,6 +27,13 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SearchTab = 'albums' | 'songs' | 'artists' | 'users' | 'playlists';
+
+type UserProfile = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+};
 
 type ResultItem =
   | (SpotifyAlbum  & { kind: 'album'  })
@@ -293,6 +302,51 @@ function RecentRow({
   );
 }
 
+// ─── User result row ──────────────────────────────────────────────────────────
+
+function UserRow({
+  item,
+  isDark,
+  colors,
+  onPress,
+}: {
+  item: UserProfile;
+  isDark: boolean;
+  colors: typeof Colors.light;
+  onPress: () => void;
+}) {
+  const name    = item.display_name || item.username || 'Unknown';
+  const initial = name.charAt(0).toUpperCase();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        s.resultRow,
+        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
+      ]}>
+      <View style={s.resultMain}>
+        {/* Avatar */}
+        {item.avatar_url ? (
+          <Image source={{ uri: item.avatar_url }} style={s.userAvatar} />
+        ) : (
+          <View style={[s.userAvatar, s.userAvatarFallback, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]}>
+            <Text style={[s.userAvatarInitial, { color: colors.subtext }]}>{initial}</Text>
+          </View>
+        )}
+        {/* Text */}
+        <View style={s.resultText}>
+          <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{name}</Text>
+          {item.username ? (
+            <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
+          ) : null}
+        </View>
+        <FontAwesome name="chevron-right" size={13} color={isDark ? '#444' : '#ccc'} />
+      </View>
+    </Pressable>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function SearchScreen() {
@@ -300,12 +354,14 @@ export default function SearchScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
+  const { user } = useAuth();
   const { setPendingAlbum, wantToListen, addToWantToListen, removeFromWantToListen, playlists } = useAlbums();
 
   const [activeTab, setActiveTab] = useState<SearchTab>('albums');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ResultItem[]>([]);
   const [playlistResults, setPlaylistResults] = useState<Playlist[]>([]);
+  const [userResults, setUserResults] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
@@ -343,6 +399,7 @@ export default function SearchScreen() {
     if (!text.trim()) {
       setResults([]);
       setPlaylistResults([]);
+      setUserResults([]);
       setSearched(false);
       return;
     }
@@ -360,6 +417,36 @@ export default function SearchScreen() {
       return;
     }
 
+    if (tab === 'users') {
+      // Require at least 2 characters before querying
+      if (text.trim().length < 2) {
+        setUserResults([]);
+        setSearched(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const pattern = `%${text.trim()}%`;
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
+          .limit(30);
+
+        if (error) throw error;
+
+        // Filter out the current user's own profile
+        const filtered = (data ?? []).filter((u) => u.id !== user?.id);
+        setUserResults(filtered);
+      } catch (e) {
+        console.error('[Search] User search error:', e);
+        setUserResults([]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoading(true);
     try {
       const items = await searchBackend(tab, text);
@@ -370,7 +457,7 @@ export default function SearchScreen() {
     } finally {
       setLoading(false);
     }
-  }, [playlists]);
+  }, [playlists, user?.id]);
 
   function handleChangeText(text: string) {
     setQuery(text);
@@ -383,11 +470,12 @@ export default function SearchScreen() {
     search(query, activeTab);
   }
 
-  function handleClear() { setQuery(''); setResults([]); setSearched(false); }
+  function handleClear() { setQuery(''); setResults([]); setUserResults([]); setSearched(false); }
 
   function handleTabChange(tab: SearchTab) {
     setActiveTab(tab);
     setResults([]);
+    setUserResults([]);
     setSearched(false);
     if (query.trim()) {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -520,7 +608,7 @@ export default function SearchScreen() {
           <View style={s.emptyState}>
             <FontAwesome name="search" size={36} color={isDark ? '#2a2a2a' : '#ddd'} />
             <Text style={[s.emptyTitle, { color: colors.text }]}>
-              {activeTab === 'users' ? 'Find friends'
+              {activeTab === 'users' ? 'Find people'
                : activeTab === 'playlists' ? 'Search playlists'
                : `Search ${activeTab}`}
             </Text>
@@ -529,12 +617,38 @@ export default function SearchScreen() {
                : activeTab === 'songs'   ? 'Discover songs and explore music.'
                : activeTab === 'artists' ? 'Look up artists and their work.'
                : activeTab === 'playlists' ? 'Search your playlists by name or description.'
-               : 'User profiles coming soon.'}
+               : 'Search for Listend members by name or username.'}
             </Text>
           </View>
         )
       ) : loading ? (
         <ActivityIndicator style={s.spinner} color="#FF3CAC" />
+      ) : searched && activeTab === 'users' && userResults.length === 0 ? (
+        <View style={s.emptyState}>
+          <FontAwesome name="user-o" size={36} color={isDark ? '#2a2a2a' : '#ddd'} />
+          <Text style={[s.emptyTitle, { color: colors.text }]}>No users found</Text>
+          <Text style={[s.emptySub, { color: colors.subtext }]}>
+            No one matched "{query}". Try a different name or username.
+          </Text>
+        </View>
+      ) : searched && activeTab === 'users' ? (
+        <FlatList
+          data={userResults}
+          keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 40 }}
+          ItemSeparatorComponent={() => (
+            <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
+          )}
+          renderItem={({ item }) => (
+            <UserRow
+              item={item}
+              isDark={isDark}
+              colors={colors}
+              onPress={() => router.push({ pathname: '/user-profile', params: { userId: item.id } })}
+            />
+          )}
+        />
       ) : searched && activeTab === 'playlists' && playlistResults.length === 0 ? (
         <View style={s.emptyState}>
           <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists found</Text>
@@ -546,9 +660,7 @@ export default function SearchScreen() {
         <View style={s.emptyState}>
           <Text style={[s.emptyTitle, { color: colors.text }]}>No results</Text>
           <Text style={[s.emptySub, { color: colors.subtext }]}>
-            {activeTab === 'users'
-              ? 'User search is coming soon.'
-              : `No ${activeTab} found for "${query}".`}
+            No {activeTab} found for "{query}".
           </Text>
         </View>
       ) : activeTab === 'playlists' ? (
@@ -718,5 +830,21 @@ const s = StyleSheet.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // ── User rows ────────────────────────────────────────────────────────────────
+  userAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    flexShrink: 0,
+  },
+  userAvatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userAvatarInitial: {
+    fontSize: 18,
+    fontWeight: '700',
   },
 });
