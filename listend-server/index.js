@@ -977,6 +977,32 @@ app.post('/api/upload-cover', async (req, res) => {
   return res.json({ url });
 });
 
+// ── POST /api/delete-cover ────────────────────────────────────────────────────
+// Accepts { user_id }, removes the user's cover.jpg from the 'cover photos'
+// bucket using the service-role key (bypasses RLS).
+
+app.post('/api/delete-cover', async (req, res) => {
+  const { user_id } = req.body;
+  if (!user_id) {
+    return res.status(400).json({ error: 'Missing user_id' });
+  }
+
+  const path = `${user_id}/cover.jpg`;
+  console.log(`[delete-cover] user_id=${user_id} path=${path}`);
+
+  const { error } = await supabase.storage
+    .from('cover photos')
+    .remove([path]);
+
+  if (error) {
+    console.error('[delete-cover] storage error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+
+  console.log(`[delete-cover] success → ${path} removed`);
+  return res.json({ success: true });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
