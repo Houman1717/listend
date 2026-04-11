@@ -44,8 +44,14 @@ function cacheClear(...keys) {
 // Allow any origin — the client is a mobile app, not a browser page
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+// Parse JSON bodies — limit raised to 10 MB to handle base64-encoded images
+app.use(express.json({ limit: '10mb' }));
 
 // ── GET /health ───────────────────────────────────────────────────────────────
 
@@ -911,6 +917,64 @@ cron.schedule('0 */6 * * *', () => {
                'discover:new-releases', 'discover:popular', 'discover:coming-soon');
     console.log('[cron] Cache cleared after refresh.');
   });
+});
+
+// ── POST /api/upload-avatar ───────────────────────────────────────────────────
+// Accepts { user_id, image_base64 }, uploads to the 'avatars' bucket using the
+// service-role key (bypasses RLS), returns { url }.
+
+app.post('/api/upload-avatar', async (req, res) => {
+  const { user_id, image_base64 } = req.body;
+  if (!user_id || !image_base64) {
+    return res.status(400).json({ error: 'Missing user_id or image_base64' });
+  }
+
+  const path   = `${user_id}/avatar.jpg`;
+  const buffer = Buffer.from(image_base64, 'base64');
+  console.log(`[upload-avatar] user_id=${user_id} path=${path} bytes=${buffer.length}`);
+
+  const { error } = await supabase.storage
+    .from('avatars')
+    .upload(path, buffer, { contentType: 'image/jpeg', upsert: true });
+
+  if (error) {
+    console.error('[upload-avatar] storage error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  const url = `${data.publicUrl}?t=${Date.now()}`;
+  console.log(`[upload-avatar] success → ${url}`);
+  return res.json({ url });
+});
+
+// ── POST /api/upload-cover ────────────────────────────────────────────────────
+// Accepts { user_id, image_base64 }, uploads to the 'cover photos' bucket using
+// the service-role key, returns { url }.
+
+app.post('/api/upload-cover', async (req, res) => {
+  const { user_id, image_base64 } = req.body;
+  if (!user_id || !image_base64) {
+    return res.status(400).json({ error: 'Missing user_id or image_base64' });
+  }
+
+  const path   = `${user_id}/cover.jpg`;
+  const buffer = Buffer.from(image_base64, 'base64');
+  console.log(`[upload-cover] user_id=${user_id} path=${path} bytes=${buffer.length}`);
+
+  const { error } = await supabase.storage
+    .from('cover photos')
+    .upload(path, buffer, { contentType: 'image/jpeg', upsert: true });
+
+  if (error) {
+    console.error('[upload-cover] storage error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+
+  const { data } = supabase.storage.from('cover photos').getPublicUrl(path);
+  const url = `${data.publicUrl}?t=${Date.now()}`;
+  console.log(`[upload-cover] success → ${url}`);
+  return res.json({ url });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
