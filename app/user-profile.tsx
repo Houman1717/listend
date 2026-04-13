@@ -46,10 +46,44 @@ type Profile = {
   bio: string | null;
   avatar_url: string | null;
   cover_photo_url: string | null;
-  top_albums:  FavAlbum[]  | null;
-  top_songs:   FavSong[]   | null;
-  top_artists: FavArtist[] | null;
+  top_albums:  FavAlbum[];
+  top_songs:   FavSong[];
+  top_artists: FavArtist[];
 };
+
+// ─── JSONB normalisers ────────────────────────────────────────────────────────
+// The JSONB stored in Supabase may use camelCase (artworkUrl) from newer saves
+// or snake_case (artwork_url) from older saves. Normalise both so images always
+// resolve regardless of which format a user's data was written in.
+
+function normaliseTopAlbums(raw: any): FavAlbum[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item: any) => ({
+    id:         String(item.id         ?? ''),
+    title:      String(item.title      ?? ''),
+    artist:     String(item.artist     ?? ''),
+    artworkUrl: item.artworkUrl || item.artwork_url || '',
+  }));
+}
+
+function normaliseTopSongs(raw: any): FavSong[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item: any) => ({
+    id:         String(item.id         ?? ''),
+    title:      String(item.title      ?? ''),
+    artist:     String(item.artist     ?? ''),
+    artworkUrl: item.artworkUrl || item.artwork_url || '',
+  }));
+}
+
+function normaliseTopArtists(raw: any): FavArtist[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item: any) => ({
+    id:         String(item.id         ?? ''),
+    name:       String(item.name ?? item.title ?? ''),
+    artworkUrl: item.artworkUrl || item.artwork_url || '',
+  }));
+}
 
 type RatingDist = { rating: number; count: number };
 
@@ -113,13 +147,17 @@ function RatingModal({
 function FavSlotReadOnly({
   item,
   circular = false,
+  onPress,
 }: {
   item?: { artworkUrl?: string; title: string };
   circular?: boolean;
+  onPress?: () => void;
 }) {
   const radius = circular ? FAV_SLOT_SIZE / 2 : 3;
+
+  let inner: React.ReactNode;
   if (item?.artworkUrl) {
-    return (
+    inner = (
       <View style={[s.favSlot, { borderRadius: radius }]}>
         <Image
           source={{ uri: item.artworkUrl }}
@@ -128,18 +166,27 @@ function FavSlotReadOnly({
         />
       </View>
     );
-  }
-  if (item) {
-    return (
+  } else if (item) {
+    inner = (
       <View style={[s.favSlot, { borderRadius: radius }]}>
         <View style={[s.favInitialBg, { borderRadius: radius }]}>
           <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
         </View>
       </View>
     );
+  } else {
+    // Empty slot — read-only, no "+" button
+    return <View style={[s.favSlot, s.favEmpty, { borderRadius: radius }]} />;
   }
-  // Empty slot — read-only, no "+" button
-  return <View style={[s.favSlot, s.favEmpty, { borderRadius: radius }]} />;
+
+  if (onPress) {
+    return (
+      <Pressable style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })} onPress={onPress}>
+        {inner}
+      </Pressable>
+    );
+  }
+  return <>{inner}</>;
 }
 
 // ─── Nav row ──────────────────────────────────────────────────────────────────
@@ -240,9 +287,9 @@ export default function UserProfileScreen() {
 
           setProfile({
             ...prof,
-            top_albums:  favData?.top_albums  ?? null,
-            top_songs:   favData?.top_songs   ?? null,
-            top_artists: favData?.top_artists ?? null,
+            top_albums:  normaliseTopAlbums(favData?.top_albums),
+            top_songs:   normaliseTopSongs(favData?.top_songs),
+            top_artists: normaliseTopArtists(favData?.top_artists),
           });
           navigation.setOptions({
             title: prof.display_name || prof.username || 'Profile',
@@ -376,6 +423,14 @@ export default function UserProfileScreen() {
         console.log('[UserProfile] followed successfully');
         setIsFollowing(true);
         setFollowersCount(n => n + 1);
+        // Notify the followed user
+        supabase.from('notifications').insert({
+          user_id:  viewedUserId,
+          type:     'follow',
+          actor_id: currentUserId,
+        }).then(({ error: notifErr }) => {
+          if (notifErr) console.error('[UserProfile] notification insert error:', notifErr.message);
+        });
         // Check if they already follow us back — if so, it's now mutual
         const { data: incoming } = await supabase
           .from('follows')
@@ -526,11 +581,12 @@ export default function UserProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const a = (profile.top_albums ?? [])[i];
+            const a = profile.top_albums[i];
             return (
               <FavSlotReadOnly
                 key={i}
                 item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
+                onPress={a ? () => router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, artworkUrl: a.artworkUrl } }) : undefined}
               />
             );
           })}
@@ -546,11 +602,12 @@ export default function UserProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const sg = (profile.top_songs ?? [])[i];
+            const sg = profile.top_songs[i];
             return (
               <FavSlotReadOnly
                 key={i}
                 item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
+                onPress={sg ? () => router.push({ pathname: '/artist-detail', params: { name: sg.artist } }) : undefined}
               />
             );
           })}
@@ -566,12 +623,13 @@ export default function UserProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const ar = (profile.top_artists ?? [])[i];
+            const ar = profile.top_artists[i];
             return (
               <FavSlotReadOnly
                 key={i}
                 item={ar ? { artworkUrl: ar.artworkUrl, title: ar.name } : undefined}
                 circular
+                onPress={ar ? () => router.push({ pathname: '/artist-detail', params: { id: ar.id, name: ar.name, artworkUrl: ar.artworkUrl } }) : undefined}
               />
             );
           })}

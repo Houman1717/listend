@@ -17,6 +17,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
+import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -69,6 +70,7 @@ export default function DMConversationScreen() {
   const { userId: otherUserId } = useLocalSearchParams<{ userId: string }>();
   const { user }   = useAuth();
   const { loggedAlbums } = useAlbums();
+  const { markMessagesRead } = useNotifications();
   const navigation = useNavigation();
   const router     = useRouter();
 
@@ -116,6 +118,12 @@ export default function DMConversationScreen() {
     };
   }, [user, otherUserId]);
 
+  // ── Mark any unread message notifications from this sender as read ───────────
+  useEffect(() => {
+    if (!user || !otherUserId) return;
+    markMessagesRead(otherUserId);
+  }, [user?.id, otherUserId]);
+
   async function fetchMessages() {
     if (!user || !otherUserId) return;
 
@@ -134,6 +142,29 @@ export default function DMConversationScreen() {
       setMessages(data ?? []);
     }
     setLoadingMsgs(false);
+  }
+
+  // ── Notification helper ──────────────────────────────────────────────────────
+  // Inserts a 'message' notification for the recipient only if they have no
+  // existing unread message notification from us — prevents spam.
+  async function notifyRecipient() {
+    if (!user || !otherUserId) return;
+    const { count } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', otherUserId)
+      .eq('type', 'message')
+      .eq('actor_id', user.id)
+      .eq('read', false);
+    if ((count ?? 0) === 0) {
+      supabase.from('notifications').insert({
+        user_id:  otherUserId,
+        type:     'message',
+        actor_id: user.id,
+      }).then(({ error }) => {
+        if (error) console.error('[DMConversation] notification insert error:', error.message);
+      });
+    }
   }
 
   // ── Send text message ────────────────────────────────────────────────────────
@@ -155,6 +186,7 @@ export default function DMConversationScreen() {
       setInputText(text); // restore on failure
     } else {
       fetchMessages();
+      notifyRecipient();
     }
     setSending(false);
   }
@@ -186,6 +218,7 @@ export default function DMConversationScreen() {
       console.error('[DMConversation] send album error:', error);
     } else {
       fetchMessages();
+      notifyRecipient();
     }
   }
 

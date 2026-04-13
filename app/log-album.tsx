@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -128,10 +128,13 @@ export default function LogAlbumScreen() {
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
 
-  if (!pendingAlbum) {
-    router.back();
-    return null;
-  }
+  useEffect(() => {
+    if (!pendingAlbum) {
+      router.back();
+    }
+  }, [pendingAlbum]);
+
+  if (!pendingAlbum) return null;
 
   function handleLog() {
     logAlbum(rating, review);

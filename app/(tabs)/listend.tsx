@@ -9,7 +9,6 @@ import {
   Dimensions,
   Modal,
   SafeAreaView,
-  Switch,
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
@@ -17,6 +16,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 
 const DARK_BG   = '#0d0d0d';
@@ -474,7 +474,6 @@ function NavRow({
 function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const router = useRouter();
   const { signOut } = useAuth();
-  const [notificationsOn, setNotificationsOn] = useState(false);
 
   async function handleSignOut() {
     onClose();
@@ -505,22 +504,6 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             <Text style={ss.rowLabel}>Edit Profile</Text>
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
           </Pressable>
-
-          <View style={ss.separator} />
-
-          {/* Notifications */}
-          <View style={ss.row}>
-            <View style={ss.iconWrap}>
-              <FontAwesome name="bell-o" size={16} color="#FF3CAC" />
-            </View>
-            <Text style={ss.rowLabel}>Notifications</Text>
-            <Switch
-              value={notificationsOn}
-              onValueChange={setNotificationsOn}
-              trackColor={{ false: '#333', true: '#FF3CAC' }}
-              thumbColor="#fff"
-            />
-          </View>
 
           <View style={ss.separator} />
 
@@ -601,6 +584,7 @@ export default function ListendScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
   const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, loggedAlbums, wantToListen } = useAlbums();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -612,6 +596,22 @@ export default function ListendScreen() {
   const [profileAvatarUrl,   setProfileAvatarUrl]   = useState<string | null>(null);
   const [profileBio,         setProfileBio]         = useState('');
   const [profileCoverUrl,    setProfileCoverUrl]    = useState<string | null>(null);
+  const [thisYearCount,      setThisYearCount]      = useState(0);
+
+  // Fetch "This Year" count directly from user_albums.listened_at —
+  // identical to the query used by the other-user profile path.
+  useEffect(() => {
+    if (!user) return;
+    const yearStart = `${new Date().getFullYear()}-01-01`;
+    supabase
+      .from('user_albums')
+      .select('listened_at', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('listened_at', yearStart)
+      .then(({ count, error }) => {
+        if (!error && count !== null) setThisYearCount(count);
+      });
+  }, [user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -633,26 +633,39 @@ export default function ListendScreen() {
     }, [user])
   );
 
-  // Inject hamburger button into the tab header
+  // Inject bell + hamburger into the tab header
   const openSettings = useCallback(() => setSettingsVisible(true), []);
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Pressable onPress={openSettings} style={{ marginRight: 16 }} hitSlop={12}>
-          <FontAwesome name="bars" size={20} color="#f0f0f0" />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginRight: 16 }}>
+          {/* Bell icon with unread badge */}
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            hitSlop={12}
+            style={{ position: 'relative' }}>
+            <FontAwesome name="bell-o" size={20} color="#f0f0f0" />
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute',
+                top: -4, right: -4,
+                width: 8, height: 8, borderRadius: 4,
+                backgroundColor: '#FF3CAC',
+              }} />
+            )}
+          </Pressable>
+          {/* Hamburger */}
+          <Pressable onPress={openSettings} hitSlop={12}>
+            <FontAwesome name="bars" size={20} color="#f0f0f0" />
+          </Pressable>
+        </View>
       ),
     });
-  }, [navigation, openSettings]);
+  }, [navigation, openSettings, unreadCount, router]);
 
   const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
 
   // ── Profile stats ────────────────────────────────────────────────────────────
-  const currentYear = new Date().getFullYear();
-  const thisYearCount = loggedAlbums.filter((a) => {
-    const y = parseInt(a.dateLogged?.split(', ')[1] ?? '0', 10);
-    return y === currentYear;
-  }).length;
   const ratedAlbums = loggedAlbums.filter((a) => a.rating > 0);
   const avgRating = ratedAlbums.length > 0
     ? (ratedAlbums.reduce((sum, a) => sum + a.rating, 0) / ratedAlbums.length).toFixed(1)

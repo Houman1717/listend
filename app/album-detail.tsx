@@ -17,6 +17,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -87,6 +89,17 @@ type SimilarAlbum = {
   artist:     string;
   artworkUrl: string;
   year:       number;
+};
+
+type LikeState = { liked: boolean; count: number };
+
+type CommunityReview = {
+  id:       string;   // target_id = `${userId}_${albumId}`
+  userId:   string;
+  username: string;
+  rating:   number;
+  text?:    string;
+  dateStr?: string;
 };
 
 // ─── Rating picker ────────────────────────────────────────────────────────────
@@ -228,6 +241,9 @@ function ReviewCard({
   colors,
   sectionBg,
   borderColor,
+  likeCount = 0,
+  isLiked = false,
+  onLike,
 }: {
   username: string;
   rating: number;
@@ -238,6 +254,10 @@ function ReviewCard({
   colors: { text: string; subtext: string; background: string };
   sectionBg: string;
   borderColor: string;
+  likeCount?: number;
+  isLiked?: boolean;
+  /** Defined only when the viewer can like this review (i.e. belongs to another user). */
+  onLike?: () => void;
 }) {
   return (
     <View
@@ -264,18 +284,32 @@ function ReviewCard({
       {dateStr && (
         <Text style={[s.reviewCardDate, { color: colors.subtext }]}>{dateStr}</Text>
       )}
+      {(onLike !== undefined || likeCount > 0) && (
+        <View style={s.reviewCardLikeRow}>
+          {onLike !== undefined ? (
+            <Pressable onPress={onLike} hitSlop={8} style={s.reviewCardLikeBtn}>
+              <FontAwesome
+                name={isLiked ? 'heart' : 'heart-o'}
+                size={12}
+                color={isLiked ? '#FF3CAC' : '#666'}
+              />
+              {likeCount > 0 && (
+                <Text style={[s.reviewCardLikeCount, { color: isLiked ? '#FF3CAC' : '#666' }]}>
+                  {likeCount}
+                </Text>
+              )}
+            </Pressable>
+          ) : likeCount > 0 ? (
+            <View style={s.reviewCardLikeBtn}>
+              <FontAwesome name="heart" size={12} color="#FF3CAC" />
+              <Text style={[s.reviewCardLikeCount, { color: '#FF3CAC' }]}>{likeCount}</Text>
+            </View>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 }
-
-// Mock community reviews (would come from API in production)
-const MOCK_REVIEWS = [
-  { id: 'r1', username: 'matthewd', rating: 9, text: 'An absolute masterpiece. Every track flows seamlessly into the next.' },
-  { id: 'r2', username: 'sara_l', rating: 8, text: 'Some of the best production of the decade. Standout front to back.' },
-  { id: 'r3', username: 'jkfilm', rating: 7, text: 'Really strong. A few tracks I could skip but overall an excellent listen.' },
-  { id: 'r4', username: 'audiophile99', rating: 10, text: 'Timeless. Been on repeat since day one. A genuine classic of the era.' },
-  { id: 'r5', username: 'cass_r', rating: 6, text: 'Solid effort that grows on you. Not an instant favourite but it rewards patience.' },
-];
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -288,6 +322,8 @@ export default function AlbumDetailScreen() {
   const params = useLocalSearchParams<{
     id: string; title?: string; artist?: string; year?: string; artworkUrl?: string;
   }>();
+
+  const { user } = useAuth();
 
   const {
     loggedAlbums, updateReview, playlists, addAlbumToPlaylist, removeAlbumFromPlaylist,
@@ -319,6 +355,10 @@ export default function AlbumDetailScreen() {
   const [similar, setSimilar]             = useState<SimilarAlbum[] | null>(null);
   const [bioExpanded, setBioExpanded]     = useState(false);
   const [creditsExpanded, setCreditsExpanded] = useState(false);
+
+  // Community reviews + likes
+  const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
+  const [reviewLikesMap, setReviewLikesMap]     = useState<Map<string, LikeState>>(new Map());
 
   const isLogged = !!loggedAlbum;
   const isWanted = wantToListen.some(a => a.id === albumId);
@@ -374,6 +414,120 @@ export default function AlbumDetailScreen() {
       .catch(err => console.warn('[album-detail] recommendations error:', err));
     return () => { cancelled = true; };
   }, [tracks, albumId]);
+
+  // ── Fetch community reviews for this album ─────────────────────────────────
+  useEffect(() => {
+    if (!albumId) return;
+
+    async function loadCommunityReviews() {
+      // 1. Fetch all rows for this album that have a review, excluding the current user
+      let query = supabase
+        .from('user_albums')
+        .select('user_id, rating, review, listened_at')
+        .eq('spotify_id', albumId)
+        .not('review', 'is', null)
+        .order('listened_at', { ascending: false });
+
+      if (user?.id) query = query.neq('user_id', user.id);
+
+      const { data: rows } = await query;
+      if (!rows || rows.length === 0) { setCommunityReviews([]); return; }
+
+      // 2. Batch-fetch profiles for the reviewers
+      const userIds = [...new Set(rows.map((r: any) => r.user_id as string))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', userIds);
+
+      const profileMap = new Map<string, string>();
+      for (const p of (profiles ?? []) as any[]) {
+        profileMap.set(p.id, p.username ?? p.id);
+      }
+
+      setCommunityReviews(rows.map((r: any) => ({
+        id:      `${r.user_id}_${albumId}`,
+        userId:  r.user_id,
+        username: profileMap.get(r.user_id) ?? r.user_id,
+        rating:  r.rating ?? 0,
+        text:    r.review ?? undefined,
+        dateStr: r.listened_at ? formatLoggedDate(r.listened_at) : undefined,
+      })));
+    }
+
+    loadCommunityReviews();
+  }, [albumId, user?.id]);
+
+  // ── Fetch like state for this album's reviews ──────────────────────────────
+  useEffect(() => {
+    if (!albumId) return;
+
+    supabase
+      .from('likes')
+      .select('user_id, target_id')
+      .eq('target_type', 'review')
+      .like('target_id', `%_${albumId}`)
+      .then(({ data }) => {
+        const newMap = new Map<string, LikeState>();
+        for (const like of (data ?? []) as any[]) {
+          const existing = newMap.get(like.target_id) ?? { liked: false, count: 0 };
+          newMap.set(like.target_id, {
+            count: existing.count + 1,
+            liked: existing.liked || like.user_id === user?.id,
+          });
+        }
+        setReviewLikesMap(newMap);
+      });
+  }, [albumId, user?.id]);
+
+  // ── Toggle like on a community review ─────────────────────────────────────
+  async function handleToggleLike(review: CommunityReview) {
+    if (!user) return;
+    const targetId = review.id; // already `${userId}_${albumId}`
+    const current  = reviewLikesMap.get(targetId) ?? { liked: false, count: 0 };
+
+    // Optimistic update
+    const updated = new Map(reviewLikesMap);
+    updated.set(targetId, {
+      liked: !current.liked,
+      count: Math.max(0, current.liked ? current.count - 1 : current.count + 1),
+    });
+    setReviewLikesMap(updated);
+
+    if (current.liked) {
+      const { error } = await supabase
+        .from('likes')
+        .delete()
+        .eq('user_id',     user.id)
+        .eq('target_type', 'review')
+        .eq('target_id',   targetId);
+      if (error) {
+        console.error('[album-detail] unlike error:', error.message);
+        setReviewLikesMap(new Map(reviewLikesMap)); // revert
+      }
+    } else {
+      const { error } = await supabase
+        .from('likes')
+        .insert({
+          user_id:         user.id,
+          target_type:     'review',
+          target_id:       targetId,
+          target_owner_id: review.userId,
+        });
+      if (error) {
+        console.error('[album-detail] like error:', error.message);
+        setReviewLikesMap(new Map(reviewLikesMap)); // revert
+      } else {
+        supabase.from('notifications').insert({
+          user_id:  review.userId,
+          type:     'like_review',
+          actor_id: user.id,
+        }).then(({ error: notifErr }) => {
+          if (notifErr) console.error('[album-detail] notification error:', notifErr.message);
+        });
+      }
+    }
+  }
 
   // ── Actions ────────────────────────────────────────────────────────────────
   function handleSave() {
@@ -571,18 +725,25 @@ export default function AlbumDetailScreen() {
                 borderColor={borderColor}
               />
             )}
-            {MOCK_REVIEWS.slice(0, 3).map(r => (
-              <ReviewCard
-                key={r.id}
-                username={r.username}
-                rating={r.rating}
-                text={r.text}
-                isDark={isDark}
-                colors={colors}
-                sectionBg={isDark ? '#1a1a1a' : '#fff'}
-                borderColor={borderColor}
-              />
-            ))}
+            {communityReviews.slice(0, 3).map(r => {
+              const likeState = reviewLikesMap.get(r.id) ?? { liked: false, count: 0 };
+              return (
+                <ReviewCard
+                  key={r.id}
+                  username={r.username}
+                  rating={r.rating}
+                  text={r.text}
+                  dateStr={r.dateStr}
+                  isDark={isDark}
+                  colors={colors}
+                  sectionBg={isDark ? '#1a1a1a' : '#fff'}
+                  borderColor={borderColor}
+                  likeCount={likeState.count}
+                  isLiked={likeState.liked}
+                  onLike={() => handleToggleLike(r)}
+                />
+              );
+            })}
             {/* Show More card */}
             <Pressable
               style={({ pressed }) => [
@@ -728,17 +889,39 @@ export default function AlbumDetailScreen() {
                 <Text style={[s.allReviewDate, { color: colors.subtext }]}>{formatLoggedDate(loggedAlbum!.dateLogged)}</Text>
               </View>
             )}
-            {MOCK_REVIEWS.map(r => (
-              <View key={r.id} style={[s.allReviewRow, { borderBottomColor: isDark ? '#1f1f1f' : '#f0f0f0' }]}>
-                <View style={s.allReviewTop}>
-                  <Text style={[s.allReviewUsername, { color: colors.text }]}>{r.username}</Text>
-                  <View style={s.ratingBadge}>
-                    <Text style={s.ratingBadgeText}>{r.rating}</Text>
+            {communityReviews.map(r => {
+              const likeState = reviewLikesMap.get(r.id) ?? { liked: false, count: 0 };
+              return (
+                <View key={r.id} style={[s.allReviewRow, { borderBottomColor: isDark ? '#1f1f1f' : '#f0f0f0' }]}>
+                  <View style={s.allReviewTop}>
+                    <Text style={[s.allReviewUsername, { color: colors.text }]}>{r.username}</Text>
+                    <View style={s.ratingBadge}>
+                      <Text style={s.ratingBadgeText}>{r.rating}</Text>
+                    </View>
                   </View>
+                  {r.text ? (
+                    <Text style={[s.allReviewText, { color: colors.text }]}>{r.text}</Text>
+                  ) : (
+                    <Text style={[s.allReviewNoText, { color: colors.subtext }]}>No review written.</Text>
+                  )}
+                  {r.dateStr && (
+                    <Text style={[s.allReviewDate, { color: colors.subtext }]}>{r.dateStr}</Text>
+                  )}
+                  <Pressable onPress={() => handleToggleLike(r)} hitSlop={8} style={s.allReviewLikeBtn}>
+                    <FontAwesome
+                      name={likeState.liked ? 'heart' : 'heart-o'}
+                      size={13}
+                      color={likeState.liked ? '#FF3CAC' : '#666'}
+                    />
+                    {likeState.count > 0 && (
+                      <Text style={[s.allReviewLikeCount, { color: likeState.liked ? '#FF3CAC' : '#666' }]}>
+                        {likeState.count}
+                      </Text>
+                    )}
+                  </Pressable>
                 </View>
-                <Text style={[s.allReviewText, { color: colors.text }]}>{r.text}</Text>
-              </View>
-            ))}
+              );
+            })}
           </ScrollView>
         </View>
       </Modal>
@@ -868,6 +1051,9 @@ const s = StyleSheet.create({
   reviewCardText: { fontSize: 13, lineHeight: 19 },
   reviewCardNoText: { fontSize: 13, fontStyle: 'italic' },
   reviewCardDate: { fontSize: 11, marginTop: 2 },
+  reviewCardLikeRow: { marginTop: 2 },
+  reviewCardLikeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  reviewCardLikeCount: { fontSize: 11, fontWeight: '600' },
 
   // Show More card
   showMoreCard: { justifyContent: 'center', alignItems: 'center', gap: 8 },
@@ -884,6 +1070,8 @@ const s = StyleSheet.create({
   allReviewText: { fontSize: 14, lineHeight: 21 },
   allReviewNoText: { fontSize: 14, fontStyle: 'italic' },
   allReviewDate: { fontSize: 12, marginTop: 2 },
+  allReviewLikeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 4 },
+  allReviewLikeCount: { fontSize: 12, fontWeight: '600' },
 
   // Tracklist
   tracklistHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },

@@ -36,6 +36,10 @@ function VolumeBadge({ rating }: { rating: number }) {
   );
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type LikeState = { liked: boolean; count: number };
+
 // ─── Review row ───────────────────────────────────────────────────────────────
 
 function ReviewRow({
@@ -43,11 +47,18 @@ function ReviewRow({
   colors,
   isDark,
   onPress,
+  likeCount = 0,
+  isLiked = false,
+  onLike,
 }: {
   album: LoggedAlbum;
   colors: typeof Colors.light;
   isDark: boolean;
   onPress: () => void;
+  likeCount?: number;
+  isLiked?: boolean;
+  /** Defined only when the viewer can like this review (i.e. it belongs to another user). */
+  onLike?: () => void;
 }) {
   return (
     <Pressable
@@ -74,6 +85,33 @@ function ReviewRow({
         <Text style={[s.review, { color: isDark ? '#aaa' : '#555' }]}>
           {album.review}
         </Text>
+
+        {/* Like button (other's reviews) or read-only count (own reviews) */}
+        {(onLike !== undefined || likeCount > 0) && (
+          <View style={s.likeRow}>
+            {onLike !== undefined ? (
+              // Interactive — viewer can toggle like
+              <Pressable onPress={onLike} hitSlop={8} style={s.likeBtn}>
+                <FontAwesome
+                  name={isLiked ? 'heart' : 'heart-o'}
+                  size={13}
+                  color={isLiked ? '#FF3CAC' : '#666'}
+                />
+                {likeCount > 0 && (
+                  <Text style={[s.likeCount, { color: isLiked ? '#FF3CAC' : '#666' }]}>
+                    {likeCount}
+                  </Text>
+                )}
+              </Pressable>
+            ) : likeCount > 0 ? (
+              // Read-only — own review, just show how many people liked it
+              <View style={s.likeBtn}>
+                <FontAwesome name="heart" size={13} color="#FF3CAC" />
+                <Text style={[s.likeCount, { color: '#FF3CAC' }]}>{likeCount}</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -94,34 +132,137 @@ export default function MyReviewsScreen() {
 
   const viewingOther = paramUserId || null;
   const [otherReviews, setOtherReviews] = useState<LoggedAlbum[]>([]);
+  const [likesMap, setLikesMap] = useState<Map<string, LikeState>>(new Map());
 
+  // ── Load other user's reviews + like state ────────────────────────────────
   useEffect(() => {
     if (!viewingOther) return;
-    supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
-      .eq('user_id', viewingOther)
-      .not('review', 'is', null)
-      .order('listened_at', { ascending: false })
-      .then(({ data }) => {
-        if (!data) return;
-        setOtherReviews(data.map((a, i) => ({
-          id:         a.spotify_id,
-          title:      a.title      ?? '',
-          artist:     a.artist     ?? '',
-          year:       a.year       ?? 0,
-          rating:     a.rating     ?? 0,
-          review:     a.review     ?? undefined,
-          dateLogged: a.listened_at ?? new Date().toISOString(),
-          artworkUrl: a.artwork_url ?? undefined,
-          coverColor: COVER_COLORS[i % COVER_COLORS.length],
-        })));
-      });
-  }, [viewingOther]);
 
+    async function loadReviewsAndLikes() {
+      // 1. Fetch the reviews
+      const { data } = await supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+        .eq('user_id', viewingOther!)
+        .not('review', 'is', null)
+        .order('listened_at', { ascending: false });
+
+      if (!data) return;
+      setOtherReviews(data.map((a, i) => ({
+        id:         a.spotify_id,
+        title:      a.title      ?? '',
+        artist:     a.artist     ?? '',
+        year:       a.year       ?? 0,
+        rating:     a.rating     ?? 0,
+        review:     a.review     ?? undefined,
+        dateLogged: a.listened_at ?? new Date().toISOString(),
+        artworkUrl: a.artwork_url ?? undefined,
+        coverColor: COVER_COLORS[i % COVER_COLORS.length],
+      })));
+
+      // 2. Fetch all likes for this user's reviews (one query for counts + own state)
+      const { data: allLikes } = await supabase
+        .from('likes')
+        .select('user_id, target_id')
+        .eq('target_type', 'review')
+        .eq('target_owner_id', viewingOther!);
+
+      const newMap = new Map<string, LikeState>();
+      for (const like of (allLikes ?? []) as any[]) {
+        const existing = newMap.get(like.target_id) ?? { liked: false, count: 0 };
+        newMap.set(like.target_id, {
+          count: existing.count + 1,
+          liked: existing.liked || like.user_id === user?.id,
+        });
+      }
+      setLikesMap(newMap);
+    }
+
+    loadReviewsAndLikes();
+  }, [viewingOther, user?.id]);
+
+  // ── Load like counts for own reviews (informational, no button) ───────────
+  useEffect(() => {
+    if (viewingOther || !user) return;
+
+    supabase
+      .from('likes')
+      .select('target_id')
+      .eq('target_type', 'review')
+      .eq('target_owner_id', user.id)
+      .then(({ data }) => {
+        const newMap = new Map<string, LikeState>();
+        for (const like of (data ?? []) as any[]) {
+          const existing = newMap.get(like.target_id) ?? { liked: false, count: 0 };
+          newMap.set(like.target_id, { count: existing.count + 1, liked: false });
+        }
+        setLikesMap(newMap);
+      });
+  }, [viewingOther, user?.id]);
+
+  // ── Toggle like on another user's review ─────────────────────────────────
+  async function handleToggleLike(album: LoggedAlbum) {
+    if (!user || !viewingOther) return;
+    const targetId = `${viewingOther}_${album.id}`;
+    const current  = likesMap.get(targetId) ?? { liked: false, count: 0 };
+
+    // Optimistic update
+    const updated = new Map(likesMap);
+    updated.set(targetId, {
+      liked: !current.liked,
+      count: Math.max(0, current.liked ? current.count - 1 : current.count + 1),
+    });
+    setLikesMap(updated);
+
+    if (current.liked) {
+      // Unlike
+      const { error } = await supabase
+        .from('likes')
+        .delete()
+        .eq('user_id',     user.id)
+        .eq('target_type', 'review')
+        .eq('target_id',   targetId);
+      if (error) {
+        console.error('[Reviews] unlike error:', error.message);
+        setLikesMap(new Map(likesMap)); // revert
+      }
+    } else {
+      // Like
+      const { error } = await supabase
+        .from('likes')
+        .insert({
+          user_id:         user.id,
+          target_type:     'review',
+          target_id:       targetId,
+          target_owner_id: viewingOther,
+        });
+      if (error) {
+        console.error('[Reviews] like error:', error.message);
+        setLikesMap(new Map(likesMap)); // revert
+      } else {
+        // Notify the review owner
+        supabase.from('notifications').insert({
+          user_id:  viewingOther,   // recipient = review owner (user B)
+          type:     'like_review',
+          actor_id: user.id,        // sender   = liker        (user A)
+        }).then(({ error: notifErr }) => {
+          if (notifErr) {
+            console.error('[Reviews] notification insert error:', notifErr.message, notifErr.code, notifErr.details);
+          } else {
+            console.log('[Reviews] notification inserted — user_id (owner):', viewingOther, 'actor_id (liker):', user.id);
+          }
+        });
+      }
+    }
+  }
+
+  // ── Data ──────────────────────────────────────────────────────────────────
   const reviewed = viewingOther
     ? otherReviews
     : loggedAlbums.filter((a) => !!a.review);
+
+  // Build the target_id prefix used for likes map lookups
+  const ownerId = viewingOther ?? user?.id ?? '';
 
   return (
     <FlatList
@@ -141,45 +282,59 @@ export default function MyReviewsScreen() {
           </Text>
         </View>
       )}
-      renderItem={({ item }) => (
-        <ReviewRow
-          album={item}
-          colors={colors}
-          isDark={isDark}
-          onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
-        />
-      )}
+      renderItem={({ item }) => {
+        const targetId  = `${ownerId}_${item.id}`;
+        const likeState = likesMap.get(targetId) ?? { liked: false, count: 0 };
+        return (
+          <ReviewRow
+            album={item}
+            colors={colors}
+            isDark={isDark}
+            onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
+            likeCount={likeState.count}
+            isLiked={likeState.liked}
+            onLike={viewingOther ? () => handleToggleLike(item) : undefined}
+          />
+        );
+      }}
     />
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   container:   { flex: 1 },
   listContent: { paddingVertical: 8, paddingBottom: 48 },
 
   // Row
-  row:  { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 16, gap: 14 },
+  row:       { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 16, gap: 14 },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 94 },
 
   // Thumbnail
-  thumb:        { width: 64, height: 64, borderRadius: 6, flexShrink: 0 },
-  thumbFallback:{ justifyContent: 'center', alignItems: 'center' },
-  thumbInitial: { color: 'rgba(255,255,255,0.5)', fontSize: 22, fontWeight: '700' },
+  thumb:         { width: 64, height: 64, borderRadius: 6, flexShrink: 0 },
+  thumbFallback: { justifyContent: 'center', alignItems: 'center' },
+  thumbInitial:  { color: 'rgba(255,255,255,0.5)', fontSize: 22, fontWeight: '700' },
 
-  // Text
+  // Text block
   info:   { flex: 1, gap: 4 },
   title:  { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
   artist: { fontSize: 13 },
   review: { fontSize: 13, lineHeight: 20, fontStyle: 'italic', marginTop: 2 },
 
   // Volume badge
-  badge:    { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  badgeBars:{ flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
-  badgeBar: { width: 2.5, borderRadius: 1 },
-  badgeNum: { color: '#FF3CAC', fontSize: 10, fontWeight: '700', lineHeight: 15 },
+  badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
+  badgeBar:  { width: 2.5, borderRadius: 1 },
+  badgeNum:  { color: '#FF3CAC', fontSize: 10, fontWeight: '700', lineHeight: 15 },
+
+  // Like
+  likeRow:   { marginTop: 4 },
+  likeBtn:   { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  likeCount: { fontSize: 12, fontWeight: '600' },
 
   // Empty state
-  empty:       { alignItems: 'center', marginTop: 80, paddingHorizontal: 32 },
-  emptyTitle:  { fontSize: 17, fontWeight: '600', marginBottom: 8 },
-  emptySubtext:{ fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  empty:        { alignItems: 'center', marginTop: 80, paddingHorizontal: 32 },
+  emptyTitle:   { fontSize: 17, fontWeight: '600', marginBottom: 8 },
+  emptySubtext: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

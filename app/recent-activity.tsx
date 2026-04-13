@@ -28,6 +28,12 @@ const TYPE_META = {
   wantToListen: { label: 'Want to Listen',  color: '#34d399', icon: 'bookmark'   },
 } as const;
 
+const TOP5_CATEGORY_LABEL: Record<string, string> = {
+  albums:  'Top 5 Albums',
+  songs:   'Top 5 Songs',
+  artists: 'Top 5 Artists',
+};
+
 type ActivityType = keyof typeof TYPE_META;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -56,7 +62,22 @@ type FollowItem = {
   dateLabel:  string;
 };
 
-type FeedItem = { kind: 'activity'; data: ActivityItem } | { kind: 'follow'; data: FollowItem };
+type Top5ChangeItem = {
+  key:          string;
+  category:     string; // 'albums' | 'songs' | 'artists'
+  itemId:       string;
+  itemName:     string;
+  itemArtist:   string | null;
+  itemImageUrl: string | null;
+  position:     number;
+  dateMs:       number;
+  dateLabel:    string;
+};
+
+type FeedItem =
+  | { kind: 'activity'; data: ActivityItem }
+  | { kind: 'follow';   data: FollowItem }
+  | { kind: 'top5';     data: Top5ChangeItem };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -179,6 +200,30 @@ async function fetchActivityForUser(uid: string): Promise<ActivityItem[]> {
   return items;
 }
 
+/** Fetch Top 5 change events for a user. */
+async function fetchTop5ChangesForUser(uid: string): Promise<Top5ChangeItem[]> {
+  const { data, error } = await supabase
+    .from('top5_changes')
+    .select('id, category, item_id, item_name, item_image_url, position, changed_at')
+    .eq('user_id', uid)
+    .order('changed_at', { ascending: false })
+    .limit(30);
+
+  if (error || !data) return [];
+
+  return data.map((r: any): Top5ChangeItem => ({
+    key:          `top5-${r.id}`,
+    category:     r.category,
+    itemId:       r.item_id,
+    itemName:     r.item_name,
+    itemArtist:   null,           // not in schema — omitted
+    itemImageUrl: r.item_image_url ?? null,
+    position:     r.position,
+    dateMs:       new Date(r.changed_at).getTime(),
+    dateLabel:    formatDateLabel(r.changed_at),
+  }));
+}
+
 // ─── Row components ───────────────────────────────────────────────────────────
 
 function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => void }) {
@@ -250,6 +295,44 @@ function FollowRow({ item, onPress }: { item: FollowItem; onPress: () => void })
   );
 }
 
+const TOP5_COLOR = '#f59e0b';
+
+function Top5Row({ item, onPress }: { item: Top5ChangeItem; onPress: () => void }) {
+  const catLabel = TOP5_CATEGORY_LABEL[item.category] ?? 'Top 5';
+  return (
+    <Pressable
+      style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]}
+      onPress={onPress}>
+      {item.itemImageUrl ? (
+        <Image
+          source={{ uri: item.itemImageUrl }}
+          style={[s.art, item.category === 'artists' ? s.artCircle : null]}
+        />
+      ) : (
+        <View style={[s.art, { backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
+          item.category === 'artists' ? s.artCircle : null]}>
+          <Text style={s.artInitial}>{item.itemName.charAt(0)}</Text>
+        </View>
+      )}
+      <View style={s.info}>
+        <Text style={s.title} numberOfLines={1}>{item.itemName}</Text>
+        {item.itemArtist ? (
+          <Text style={s.artist} numberOfLines={1}>{item.itemArtist}</Text>
+        ) : null}
+        <View style={s.meta}>
+          <View style={[s.typePill, { borderColor: TOP5_COLOR }]}>
+            <FontAwesome name="list-ol" size={9} color={TOP5_COLOR} />
+            <Text style={[s.typeLabel, { color: TOP5_COLOR }]}>
+              {`Updated ${catLabel} · #${item.position}`}
+            </Text>
+          </View>
+          {item.dateLabel ? <Text style={s.date}>{item.dateLabel}</Text> : null}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function RecentActivityScreen() {
@@ -263,27 +346,32 @@ export default function RecentActivityScreen() {
 
   // ── Own-feed follow items (fetched from Supabase for current user) ───────────
   const [ownFollowItems,   setOwnFollowItems]   = useState<FollowItem[]>([]);
+  const [ownTop5Items,     setOwnTop5Items]     = useState<Top5ChangeItem[]>([]);
   // ── Other-user feed (activity + follows, fetched from Supabase) ─────────────
   const [otherActivity,    setOtherActivity]    = useState<ActivityItem[]>([]);
   const [otherFollows,     setOtherFollows]     = useState<FollowItem[]>([]);
+  const [otherTop5Items,   setOtherTop5Items]   = useState<Top5ChangeItem[]>([]);
   const [loadingOther,     setLoadingOther]     = useState(false);
 
-  // Fetch current user's recent follows
+  // Fetch current user's recent follows + top5 changes
   useEffect(() => {
     if (!user || viewingOther) return;
     fetchFollowsForUser(user.id).then(setOwnFollowItems);
+    fetchTop5ChangesForUser(user.id).then(setOwnTop5Items);
   }, [user?.id, viewingOther]);
 
-  // Fetch another user's full activity + follows
+  // Fetch another user's full activity + follows + top5 changes
   useEffect(() => {
     if (!viewingOther) return;
     setLoadingOther(true);
     Promise.all([
       fetchActivityForUser(viewingOther),
       fetchFollowsForUser(viewingOther),
-    ]).then(([activity, follows]) => {
+      fetchTop5ChangesForUser(viewingOther),
+    ]).then(([activity, follows, top5]) => {
       setOtherActivity(activity);
       setOtherFollows(follows);
+      setOtherTop5Items(top5);
       setLoadingOther(false);
     });
   }, [viewingOther]);
@@ -334,12 +422,14 @@ export default function RecentActivityScreen() {
 
   // ── Merge into final sorted feed ──────────────────────────────────────────────
   const feed = useMemo((): FeedItem[] => {
-    const activityItems  = viewingOther ? otherActivity   : ownActivityItems;
-    const followItems    = viewingOther ? otherFollows    : ownFollowItems;
+    const activityItems = viewingOther ? otherActivity   : ownActivityItems;
+    const followItems   = viewingOther ? otherFollows    : ownFollowItems;
+    const top5Items     = viewingOther ? otherTop5Items  : ownTop5Items;
 
     const combined: FeedItem[] = [
       ...activityItems.map(d => ({ kind: 'activity' as const, data: d })),
-      ...followItems.map(d  => ({ kind: 'follow'   as const, data: d })),
+      ...followItems.map(d   => ({ kind: 'follow'   as const, data: d })),
+      ...top5Items.map(d     => ({ kind: 'top5'     as const, data: d })),
     ];
 
     combined.sort((a, b) => {
@@ -352,7 +442,7 @@ export default function RecentActivityScreen() {
     });
 
     return combined;
-  }, [ownActivityItems, otherActivity, ownFollowItems, otherFollows, viewingOther]);
+  }, [ownActivityItems, otherActivity, ownFollowItems, otherFollows, ownTop5Items, otherTop5Items, viewingOther]);
 
   // ── Loading spinner (other-user fetch only) ───────────────────────────────────
   if (loadingOther) {
@@ -379,6 +469,17 @@ export default function RecentActivityScreen() {
     );
   }
 
+  function handleTop5Press(item: Top5ChangeItem) {
+    if (item.category === 'albums') {
+      router.push({ pathname: '/album-detail', params: { id: item.itemId } });
+    } else if (item.category === 'artists') {
+      router.push({ pathname: '/artist-detail', params: { id: item.itemId, name: item.itemName } });
+    } else {
+      // songs — navigate to artist detail using artist name
+      router.push({ pathname: '/artist-detail', params: { name: item.itemArtist ?? item.itemName } });
+    }
+  }
+
   return (
     <FlatList
       data={feed}
@@ -395,6 +496,14 @@ export default function RecentActivityScreen() {
               onPress={() =>
                 router.push({ pathname: '/user-profile', params: { userId: item.data.followedId } })
               }
+            />
+          );
+        }
+        if (item.kind === 'top5') {
+          return (
+            <Top5Row
+              item={item.data}
+              onPress={() => handleTop5Press(item.data)}
             />
           );
         }
@@ -430,6 +539,7 @@ const s = StyleSheet.create({
     gap: 13,
   },
   art:        { width: 52, height: 52, borderRadius: 8, flexShrink: 0 },
+  artCircle:  { borderRadius: 26 },
   artInitial: { color: 'rgba(255,255,255,0.45)', fontSize: 18, fontWeight: '700' },
 
   info:   { flex: 1, gap: 3 },

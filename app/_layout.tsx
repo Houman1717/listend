@@ -11,6 +11,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { AlbumsProvider } from '@/context/AlbumsContext';
 import { FlipProvider } from '@/context/FlipContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { NotificationsProvider } from '@/context/NotificationsContext';
 import { FavoritesSyncer } from '@/components/FavoritesSyncer';
 
 export {
@@ -77,6 +78,7 @@ function RootLayoutNav() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <AuthProvider>
+    <NotificationsProvider>
     <AlbumsProvider>
     <FlipProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -120,10 +122,12 @@ function RootLayoutNav() {
           <Stack.Screen name="dm-conversation" options={{ title: '', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="sessions" options={{ title: 'Sessions', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="recent-activity" options={{ title: 'Recent Activity', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="notifications" options={{ title: 'Notifications', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
         </Stack>
       </ThemeProvider>
     </FlipProvider>
     </AlbumsProvider>
+    </NotificationsProvider>
     </AuthProvider>
     </GestureHandlerRootView>
   );

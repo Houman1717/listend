@@ -21,6 +21,10 @@ import { useAlbums, LoggedAlbum, Playlist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type LikeState = { liked: boolean; count: number };
+
 // ─── Playlist artwork mosaic (2×2 grid of first 4 covers) ────────────────────
 
 function PlaylistMosaic({
@@ -29,10 +33,10 @@ function PlaylistMosaic({
   size,
 }: {
   albumIds: string[];
-  albumMap: Map<string, string | undefined>; // spotify_id → artwork_url
+  albumMap: Map<string, string | undefined>;
   size: number;
 }) {
-  const half = size / 2;
+  const half  = size / 2;
   const slots = Array.from({ length: 4 }, (_, i) => albumIds[i] ?? null);
 
   return (
@@ -61,14 +65,24 @@ function PlaylistCard({
   onPress,
   isDark,
   colors,
+  likeCount,
+  isLiked,
+  onLike,
 }: {
   playlist: Playlist;
   albumMap: Map<string, string | undefined>;
   onPress: () => void;
   isDark: boolean;
   colors: any;
+  /** Total like count to display. Pass undefined to hide the like area. */
+  likeCount?: number;
+  isLiked?: boolean;
+  /** Defined when the viewer can toggle the like (i.e. other user's playlist). */
+  onLike?: () => void;
 }) {
-  const count = playlist.albumIds.length;
+  const count    = playlist.albumIds.length;
+  const showLike = onLike !== undefined || (likeCount ?? 0) > 0;
+
   return (
     <Pressable
       onPress={onPress}
@@ -76,8 +90,8 @@ function PlaylistCard({
         s.playlistCard,
         {
           backgroundColor: isDark ? '#111' : '#f7f7f7',
-          borderColor: isDark ? '#222' : '#e8e8e8',
-          opacity: pressed ? 0.7 : 1,
+          borderColor:     isDark ? '#222' : '#e8e8e8',
+          opacity:         pressed ? 0.7 : 1,
         },
       ]}>
       <PlaylistMosaic albumIds={playlist.albumIds} albumMap={albumMap} size={64} />
@@ -94,6 +108,30 @@ function PlaylistCard({
           </Text>
         ) : null}
       </View>
+      {/* Like button (other user's playlists) or count display */}
+      {showLike && (
+        onLike ? (
+          <Pressable onPress={onLike} hitSlop={8} style={s.likeBtn}>
+            <FontAwesome
+              name={isLiked ? 'heart' : 'heart-o'}
+              size={16}
+              color={isLiked ? '#FF3CAC' : '#666'}
+            />
+            {(likeCount ?? 0) > 0 && (
+              <Text style={[s.likeCount, { color: isLiked ? '#FF3CAC' : '#666' }]}>
+                {likeCount}
+              </Text>
+            )}
+          </Pressable>
+        ) : (
+          <View style={s.likeBtn}>
+            <FontAwesome name="heart" size={16} color="#FF3CAC" />
+            {(likeCount ?? 0) > 0 && (
+              <Text style={[s.likeCount, { color: '#FF3CAC' }]}>{likeCount}</Text>
+            )}
+          </View>
+        )
+      )}
       <FontAwesome name="chevron-right" size={13} color={isDark ? '#444' : '#bbb'} />
     </Pressable>
   );
@@ -183,26 +221,39 @@ function NewPlaylistModal({
 
 export default function MyPlaylistsScreen() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-  const isDark = colorScheme === 'dark';
-  const router = useRouter();
+  const colors      = Colors[colorScheme ?? 'light'];
+  const isDark      = colorScheme === 'dark';
+  const router      = useRouter();
   const { loggedAlbums, playlists, createPlaylist, deletePlaylist } = useAlbums();
-  const { user } = useAuth();
+  const { user }    = useAuth();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = paramUserId || null;
+
+  // ── Own user — tab state ──────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'mine' | 'liked'>('mine');
+
+  // ── Liked playlists (own user, liked tab) ─────────────────────────────────
+  const [likedPlaylists,      setLikedPlaylists]      = useState<Playlist[]>([]);
+  const [likedAlbumMap,       setLikedAlbumMap]       = useState<Map<string, string | undefined>>(new Map());
+  const [likedPlaylistOwners, setLikedPlaylistOwners] = useState<Map<string, string>>(new Map()); // playlist.id → owner user_id
+  const [likedLoading,        setLikedLoading]        = useState(false);
 
   // ── Other user's playlists fetched from Supabase ──────────────────────────
   const [otherPlaylists, setOtherPlaylists] = useState<Playlist[]>([]);
   const [otherAlbumMap,  setOtherAlbumMap]  = useState<Map<string, string | undefined>>(new Map());
   const [loadingOther,   setLoadingOther]   = useState(false);
 
+  // ── Like state for other user's playlists ─────────────────────────────────
+  const [playlistLikesMap, setPlaylistLikesMap] = useState<Map<string, LikeState>>(new Map());
+
+  // ── Fetch other user's playlists + like state ─────────────────────────────
   useEffect(() => {
     if (!viewingOther) return;
     setLoadingOther(true);
 
     (async () => {
-      // Fetch playlists
+      // Playlists
       const { data: pls } = await supabase
         .from('playlists')
         .select('id, name, description, created_at')
@@ -217,14 +268,14 @@ export default function MyPlaylistsScreen() {
 
       const playlistIds = pls.map((p: any) => p.id);
 
-      // Fetch playlist→album membership
+      // Album membership
       const { data: pas } = await supabase
         .from('playlist_albums')
         .select('playlist_id, spotify_id, position')
         .in('playlist_id', playlistIds)
         .order('position', { ascending: true });
 
-      // Fetch viewed user's album artwork
+      // Artwork
       const { data: uas } = await supabase
         .from('user_albums')
         .select('spotify_id, artwork_url')
@@ -247,19 +298,182 @@ export default function MyPlaylistsScreen() {
 
       setOtherPlaylists(built);
       setOtherAlbumMap(artMap);
+
+      // Like state for each playlist
+      const { data: allLikes } = await supabase
+        .from('likes')
+        .select('user_id, target_id')
+        .eq('target_type', 'playlist')
+        .eq('target_owner_id', viewingOther);
+
+      const likeMap = new Map<string, LikeState>();
+      for (const like of (allLikes ?? []) as any[]) {
+        const existing = likeMap.get(like.target_id) ?? { liked: false, count: 0 };
+        likeMap.set(like.target_id, {
+          count: existing.count + 1,
+          liked: existing.liked || like.user_id === user?.id,
+        });
+      }
+      setPlaylistLikesMap(likeMap);
       setLoadingOther(false);
     })();
-  }, [viewingOther]);
+  }, [viewingOther, user?.id]);
 
-  // ── Own user album artwork map (spotify_id → artwork_url) ─────────────────
+  // ── Fetch liked playlists (own user, liked tab) ───────────────────────────
+  useEffect(() => {
+    if (viewingOther || !user || activeTab !== 'liked') return;
+    setLikedLoading(true);
+
+    (async () => {
+      // 1. Get liked playlist IDs + their owners from likes table
+      const { data: likedRows } = await supabase
+        .from('likes')
+        .select('target_id, target_owner_id')
+        .eq('user_id', user.id)
+        .eq('target_type', 'playlist');
+
+      if (!likedRows || likedRows.length === 0) {
+        setLikedPlaylists([]);
+        setLikedLoading(false);
+        return;
+      }
+
+      const playlistIds = likedRows.map((r: any) => r.target_id);
+
+      // 2. Fetch the actual playlists
+      const { data: pls } = await supabase
+        .from('playlists')
+        .select('id, name, description, created_at, user_id')
+        .in('id', playlistIds);
+
+      if (!pls || pls.length === 0) {
+        setLikedPlaylists([]);
+        setLikedLoading(false);
+        return;
+      }
+
+      // 3. Fetch album membership
+      const { data: pas } = await supabase
+        .from('playlist_albums')
+        .select('playlist_id, spotify_id, position')
+        .in('playlist_id', playlistIds)
+        .order('position', { ascending: true });
+
+      // 4. Collect all spotify IDs and fetch artwork (one cross-owner query,
+      //    artwork for the same track is identical regardless of who logged it)
+      const allSpotifyIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id))];
+      const artMap = new Map<string, string | undefined>();
+      if (allSpotifyIds.length > 0) {
+        const { data: uas } = await supabase
+          .from('user_albums')
+          .select('spotify_id, artwork_url')
+          .in('spotify_id', allSpotifyIds);
+        for (const a of (uas ?? []) as any[]) {
+          if (!artMap.has(a.spotify_id)) {
+            artMap.set(a.spotify_id, a.artwork_url ?? undefined);
+          }
+        }
+      }
+
+      // Build owner map (playlist.id → owner user_id) for navigation
+      const ownersById = new Map<string, string>(pls.map((p: any) => [p.id, p.user_id]));
+
+      const built: Playlist[] = pls.map((p: any) => ({
+        id:          p.id,
+        name:        p.name,
+        description: p.description ?? undefined,
+        albumIds:    (pas ?? [])
+          .filter((a: any) => a.playlist_id === p.id)
+          .map((a: any) => a.spotify_id),
+        createdAt:   p.created_at,
+      }));
+
+      setLikedPlaylists(built);
+      setLikedAlbumMap(artMap);
+      setLikedPlaylistOwners(ownersById);
+      setLikedLoading(false);
+    })();
+  }, [viewingOther, user?.id, activeTab]);
+
+  // ── Toggle like on another user's playlist ────────────────────────────────
+  async function handleTogglePlaylistLike(playlist: Playlist) {
+    if (!user || !viewingOther) return;
+    const targetId = playlist.id;
+    const current  = playlistLikesMap.get(targetId) ?? { liked: false, count: 0 };
+
+    // Optimistic update
+    const updated = new Map(playlistLikesMap);
+    updated.set(targetId, {
+      liked: !current.liked,
+      count: Math.max(0, current.liked ? current.count - 1 : current.count + 1),
+    });
+    setPlaylistLikesMap(updated);
+
+    if (current.liked) {
+      const { error } = await supabase
+        .from('likes')
+        .delete()
+        .eq('user_id',     user.id)
+        .eq('target_type', 'playlist')
+        .eq('target_id',   targetId);
+      if (error) {
+        console.error('[Playlists] unlike error:', error.message);
+        setPlaylistLikesMap(new Map(playlistLikesMap)); // revert
+      }
+    } else {
+      const { error } = await supabase
+        .from('likes')
+        .insert({
+          user_id:         user.id,
+          target_type:     'playlist',
+          target_id:       targetId,
+          target_owner_id: viewingOther,
+        });
+      if (error) {
+        console.error('[Playlists] like error:', error.message);
+        setPlaylistLikesMap(new Map(playlistLikesMap)); // revert
+      } else {
+        supabase.from('notifications').insert({
+          user_id:  viewingOther,   // recipient = playlist owner (user B)
+          type:     'like_playlist',
+          actor_id: user.id,        // sender   = liker          (user A)
+        }).then(({ error: notifErr }) => {
+          if (notifErr) {
+            console.error('[Playlists] notification insert error:', notifErr.message, notifErr.code, notifErr.details);
+          } else {
+            console.log('[Playlists] notification inserted — user_id (owner):', viewingOther, 'actor_id (liker):', user.id);
+          }
+        });
+      }
+    }
+  }
+
+  // ── Unlike a playlist from the liked tab (removes it from the list) ───────
+  async function handleUnlikeLikedPlaylist(playlist: Playlist) {
+    if (!user) return;
+    // Optimistic removal
+    setLikedPlaylists(prev => prev.filter(p => p.id !== playlist.id));
+
+    const { error } = await supabase
+      .from('likes')
+      .delete()
+      .eq('user_id',     user.id)
+      .eq('target_type', 'playlist')
+      .eq('target_id',   playlist.id);
+
+    if (error) {
+      console.error('[Playlists] unlike (liked tab) error:', error.message);
+      // Revert — put the playlist back
+      setLikedPlaylists(prev => [playlist, ...prev]);
+    }
+  }
+
+  // ── Own user album artwork map ────────────────────────────────────────────
   const ownAlbumMap = new Map<string, string | undefined>(
     loggedAlbums.map((a) => [a.id, a.artworkUrl])
   );
 
-  // ── Display data ──────────────────────────────────────────────────────────
-  const displayPlaylists = viewingOther ? otherPlaylists : playlists;
-  const displayAlbumMap  = viewingOther ? otherAlbumMap  : ownAlbumMap;
-
+  // ── New playlist modal ────────────────────────────────────────────────────
   const [showNewPlaylist, setShowNewPlaylist] = useState(false);
 
   function handleCreate(name: string, desc: string) {
@@ -278,6 +492,7 @@ export default function MyPlaylistsScreen() {
     );
   }
 
+  // ── Loading spinner for other user ────────────────────────────────────────
   if (loadingOther) {
     return (
       <View style={[s.root, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
@@ -286,10 +501,32 @@ export default function MyPlaylistsScreen() {
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      {/* New Playlist button — own user only */}
+
+      {/* Tab bar — own user only */}
       {!viewingOther && (
+        <View style={[s.tabRow, { borderBottomColor: isDark ? '#1e1e1e' : '#e8e8e8' }]}>
+          <Pressable
+            onPress={() => setActiveTab('mine')}
+            style={[s.tab, activeTab === 'mine' && s.tabActive]}>
+            <Text style={[s.tabText, { color: activeTab === 'mine' ? '#FF3CAC' : '#888' }]}>
+              My Playlists
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setActiveTab('liked')}
+            style={[s.tab, activeTab === 'liked' && s.tabActive]}>
+            <Text style={[s.tabText, { color: activeTab === 'liked' ? '#FF3CAC' : '#888' }]}>
+              Liked Playlists
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* New Playlist button — own user, My Playlists tab only */}
+      {!viewingOther && activeTab === 'mine' && (
         <Pressable
           onPress={() => setShowNewPlaylist(true)}
           style={({ pressed }) => [s.newBtn, { opacity: pressed ? 0.7 : 1 }]}>
@@ -298,37 +535,115 @@ export default function MyPlaylistsScreen() {
         </Pressable>
       )}
 
-      <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
-        {displayPlaylists.length === 0 ? (
-          <View style={s.emptyWrap}>
-            <FontAwesome name="list" size={36} color={isDark ? '#333' : '#ddd'} />
-            <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
-            <Text style={[s.emptySub, { color: colors.subtext }]}>
-              {viewingOther
-                ? 'This user has no playlists.'
-                : 'Create one to start organising your albums.'}
-            </Text>
+      {/* ── Other user's playlists ──────────────────────────────────────── */}
+      {viewingOther ? (
+        <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
+          {otherPlaylists.length === 0 ? (
+            <View style={s.emptyWrap}>
+              <FontAwesome name="list" size={36} color={isDark ? '#333' : '#ddd'} />
+              <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
+              <Text style={[s.emptySub, { color: colors.subtext }]}>
+                This user has no playlists.
+              </Text>
+            </View>
+          ) : (
+            otherPlaylists.map((playlist) => {
+              const likeState = playlistLikesMap.get(playlist.id) ?? { liked: false, count: 0 };
+              return (
+                <PlaylistCard
+                  key={playlist.id}
+                  playlist={playlist}
+                  albumMap={otherAlbumMap}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/playlist-detail',
+                      params: { id: playlist.id, userId: viewingOther },
+                    })
+                  }
+                  isDark={isDark}
+                  colors={colors}
+                  likeCount={likeState.count}
+                  isLiked={likeState.liked}
+                  onLike={() => handleTogglePlaylistLike(playlist)}
+                />
+              );
+            })
+          )}
+        </ScrollView>
+
+      ) : activeTab === 'mine' ? (
+        /* ── Own playlists ─────────────────────────────────────────────── */
+        <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
+          {playlists.length === 0 ? (
+            <View style={s.emptyWrap}>
+              <FontAwesome name="list" size={36} color={isDark ? '#333' : '#ddd'} />
+              <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
+              <Text style={[s.emptySub, { color: colors.subtext }]}>
+                Create one to start organising your albums.
+              </Text>
+            </View>
+          ) : (
+            playlists.map((playlist) => (
+              <PlaylistCard
+                key={playlist.id}
+                playlist={playlist}
+                albumMap={ownAlbumMap}
+                onPress={() =>
+                  router.push({
+                    pathname: '/playlist-detail',
+                    params: { id: playlist.id },
+                  })
+                }
+                isDark={isDark}
+                colors={colors}
+              />
+            ))
+          )}
+        </ScrollView>
+
+      ) : (
+        /* ── Liked playlists ───────────────────────────────────────────── */
+        likedLoading ? (
+          <View style={s.likedLoadingWrap}>
+            <ActivityIndicator color="#FF3CAC" size="large" />
           </View>
         ) : (
-          displayPlaylists.map((playlist) => (
-            <PlaylistCard
-              key={playlist.id}
-              playlist={playlist}
-              albumMap={displayAlbumMap}
-              onPress={() =>
-                router.push({
-                  pathname: '/playlist-detail',
-                  params: { id: playlist.id, ...(viewingOther ? { userId: viewingOther } : {}) },
-                })
-              }
-              isDark={isDark}
-              colors={colors}
-            />
-          ))
-        )}
-      </ScrollView>
+          <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
+            {likedPlaylists.length === 0 ? (
+              <View style={s.emptyWrap}>
+                <FontAwesome name="heart-o" size={36} color={isDark ? '#333' : '#ddd'} />
+                <Text style={[s.emptyTitle, { color: colors.text }]}>No liked playlists</Text>
+                <Text style={[s.emptySub, { color: colors.subtext }]}>
+                  Like playlists from other users to find them here.
+                </Text>
+              </View>
+            ) : (
+              likedPlaylists.map((playlist) => (
+                <PlaylistCard
+                  key={playlist.id}
+                  playlist={playlist}
+                  albumMap={likedAlbumMap}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/playlist-detail',
+                      params: {
+                        id:     playlist.id,
+                        userId: likedPlaylistOwners.get(playlist.id) ?? '',
+                      },
+                    })
+                  }
+                  isDark={isDark}
+                  colors={colors}
+                  isLiked={true}
+                  onLike={() => handleUnlikeLikedPlaylist(playlist)}
+                />
+              ))
+            )}
+          </ScrollView>
+        )
+      )}
 
-      {/* Modal — own user only */}
+      {/* New Playlist modal — own user only */}
       {!viewingOther && (
         <NewPlaylistModal
           visible={showNewPlaylist}
@@ -342,8 +657,30 @@ export default function MyPlaylistsScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const s = StyleSheet.create({
   root: { flex: 1 },
+
+  // ── Tab bar ──────────────────────────────────────────────────────────────────
+  tabRow: {
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: '#FF3CAC',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
 
   // ── New button ───────────────────────────────────────────────────────────────
   newBtn: {
@@ -370,7 +707,19 @@ const s = StyleSheet.create({
   playlistInfo: { flex: 1, gap: 3 },
   playlistName: { fontSize: 15, fontWeight: '600' },
   playlistMeta: { fontSize: 12 },
-  playlistDesc:  { fontSize: 12 },
+  playlistDesc: { fontSize: 12 },
+
+  // Like button inside playlist card
+  likeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 4,
+  },
+  likeCount: { fontSize: 13, fontWeight: '600' },
+
+  // ── Liked playlists loading ───────────────────────────────────────────────────
+  likedLoadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // ── Empty state ──────────────────────────────────────────────────────────────
   emptyWrap:  { alignItems: 'center', paddingTop: 80, gap: 10 },
