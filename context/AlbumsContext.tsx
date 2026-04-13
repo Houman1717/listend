@@ -440,26 +440,36 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       return [{ ...album, dateAdded }, ...prev];
     });
 
-    // Write to Supabase so it's visible when viewing this user's profile.
-    // Use insert and ignore 23505 (unique_violation) in case already exists.
-    if (user) {
-      supabase
-        .from('want_to_listen')
-        .insert({
-          id:          album.id,
-          user_id:     user.id,
-          title:       album.title,
-          artist:      album.artist,
-          year:        album.year,
-          artwork_url: album.artworkUrl || null,
-          created_at:  dateAdded,
-        })
-        .then(({ error }) => {
-          if (error && error.code !== '23505') {
-            console.error('[AlbumsContext] addToWantToListen insert error:', error.message, error.code);
-          }
-        });
+    // Confirm the auth user is present before attempting any DB write.
+    if (!user) {
+      console.warn('[WantToListen] addToWantToListen called with no authenticated user — skipping insert');
+      return;
     }
+
+    const payload = {
+      id:          album.id,
+      user_id:     user.id,
+      title:       album.title,
+      artist:      album.artist,
+      year:        album.year,
+      artwork_url: album.artworkUrl || null,
+      created_at:  dateAdded,
+    };
+
+    console.log('[WantToListen] inserting:', JSON.stringify(payload));
+
+    supabase
+      .from('want_to_listen')
+      .insert(payload)
+      .select()               // returns the inserted row — proves it landed in the DB
+      .then(({ data, error }) => {
+        if (error) {
+          // Log every error including 23505 (duplicate) so nothing is swallowed silently.
+          console.error('[WantToListen] insert error — code:', error.code, 'message:', error.message, 'details:', error.details, 'hint:', error.hint);
+        } else {
+          console.log('[WantToListen] insert result:', JSON.stringify(data));
+        }
+      });
   }
 
   function removeFromWantToListen(id: string) {
