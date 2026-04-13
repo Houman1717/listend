@@ -199,9 +199,8 @@ export default function UserProfileScreen() {
   const [wantCount,     setWantCount]     = useState(0);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
 
-  // Top 5 derived from user_albums (not JSONB columns — those are only populated for own user)
-  const [derivedTopAlbums,  setDerivedTopAlbums]  = useState<FavAlbum[]>([]);
-  const [derivedTopArtists, setDerivedTopArtists] = useState<FavArtist[]>([]);
+  // Top 5 come from the profiles JSONB columns (top_albums, top_songs, top_artists).
+  // derivedTopAlbums/Artists are no longer used — profile.top_albums etc. are used directly.
 
   // ── Load all data ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -319,29 +318,8 @@ export default function UserProfileScreen() {
             setRatingDist(dist);
           }
 
-          // Top 5 Albums — highest rated
-          const top5Albums: FavAlbum[] = [...userAlbums as any[]]
-            .filter((a: any) => a.rating > 0)
-            .sort((a: any, b: any) => b.rating - a.rating)
-            .slice(0, 5)
-            .map((a: any) => ({
-              id:         a.spotify_id,
-              title:      a.title      ?? '',
-              artist:     a.artist     ?? '',
-              artworkUrl: a.artwork_url ?? '',
-            }));
-          setDerivedTopAlbums(top5Albums);
-
-          // Top 5 Artists — most albums logged
-          const artistCount = new Map<string, number>();
-          for (const a of userAlbums as any[]) {
-            if (a.artist) artistCount.set(a.artist, (artistCount.get(a.artist) ?? 0) + 1);
-          }
-          const top5Artists: FavArtist[] = [...artistCount.entries()]
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5)
-            .map(([name]) => ({ id: name, name, artworkUrl: '' }));
-          setDerivedTopArtists(top5Artists);
+          // Top 5 Albums and Artists are read from profiles JSONB (see step 1 above),
+          // not derived from user_albums, so no further action needed here.
         }
 
         // 5. Want-to-listen count
@@ -548,7 +526,7 @@ export default function UserProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const a = derivedTopAlbums[i];
+            const a = (profile.top_albums ?? [])[i];
             return (
               <FavSlotReadOnly
                 key={i}
@@ -588,7 +566,7 @@ export default function UserProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const ar = derivedTopArtists[i];
+            const ar = (profile.top_artists ?? [])[i];
             return (
               <FavSlotReadOnly
                 key={i}

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@/context/AuthContext';
 import { FLIP_POOL } from '@/constants/FlipPool';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -30,7 +31,9 @@ type FlipContextType = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY  = '@listend:flipData_v1';
+// Storage key is user-scoped so switching accounts never shares flip history.
+const flipKey = (uid: string) => `@listend:flipData_v1_${uid}`;
+
 const COOLDOWN_MS  = 1 * 60 * 1000; // TEMP: 1 min for testing — change back to 12 * 60 * 60 * 1000 for production
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -38,31 +41,44 @@ const COOLDOWN_MS  = 1 * 60 * 1000; // TEMP: 1 min for testing — change back t
 const FlipContext = createContext<FlipContextType | null>(null);
 
 export function FlipProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+
   const [history, setHistory]           = useState<FlippedRecord[]>([]);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [isLoaded, setIsLoaded]         = useState(false);
 
-  // ── Load persisted state ──────────────────────────────────────────────────
+  // ── Reload whenever the signed-in user changes ────────────────────────────
+  // Clears current state first so Account A's history never bleeds to Account B.
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
+    setHistory([]);
+    setCooldownUntil(null);
+    setIsLoaded(false);
+
+    if (!user) {
+      setIsLoaded(true);
+      return;
+    }
+
+    const uid = user.id;
+    AsyncStorage.getItem(flipKey(uid))
       .then(raw => {
         if (raw) {
           const data = JSON.parse(raw);
           setHistory(data.history ?? []);
-          // DEV ONLY: always start with a fresh cooldown so testing isn't
-          // blocked by a stale timestamp written when COOLDOWN_MS was 12 h.
+          // DEV: always start with fresh cooldown so testing isn't blocked
+          // by a stale timestamp written when COOLDOWN_MS was 12 h.
           setCooldownUntil(__DEV__ ? null : (data.cooldownUntil ?? null));
         }
       })
       .catch(() => {})
       .finally(() => setIsLoaded(true));
-  }, []);
+  }, [user?.id]);
 
   // ── Persist on change ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isLoaded) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ history, cooldownUntil })).catch(() => {});
-  }, [history, cooldownUntil, isLoaded]);
+    if (!isLoaded || !user?.id) return;
+    AsyncStorage.setItem(flipKey(user.id), JSON.stringify({ history, cooldownUntil })).catch(() => {});
+  }, [history, cooldownUntil, isLoaded, user?.id]);
 
   // ── Derived values ────────────────────────────────────────────────────────
 

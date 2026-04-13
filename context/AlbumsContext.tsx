@@ -440,11 +440,12 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       return [{ ...album, dateAdded }, ...prev];
     });
 
-    // Write to Supabase so it's visible when viewing this user's profile
+    // Write to Supabase so it's visible when viewing this user's profile.
+    // Use insert and ignore 23505 (unique_violation) in case already exists.
     if (user) {
       supabase
         .from('want_to_listen')
-        .upsert({
+        .insert({
           id:          album.id,
           user_id:     user.id,
           title:       album.title,
@@ -452,9 +453,11 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           year:        album.year,
           artwork_url: album.artworkUrl || null,
           created_at:  dateAdded,
-        }, { onConflict: 'id,user_id' })
+        })
         .then(({ error }) => {
-          if (error) console.error('[AlbumsContext] addToWantToListen upsert error:', error.message);
+          if (error && error.code !== '23505') {
+            console.error('[AlbumsContext] addToWantToListen insert error:', error.message, error.code);
+          }
         });
     }
   }

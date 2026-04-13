@@ -73,20 +73,25 @@ export default function WantToListenScreen() {
 
   useEffect(() => {
     if (!viewingOther) return;
+    console.log('[WantToListen] fetching for user:', viewingOther);
     supabase
       .from('want_to_listen')
       .select('id, title, artist, year, artwork_url, created_at')
       .eq('user_id', viewingOther)
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (!data) return;
-        setOtherList(data.map(w => ({
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[WantToListen] fetch error:', error.message, error.code);
+          return;
+        }
+        console.log('[WantToListen] fetched', data?.length ?? 0, 'items for user:', viewingOther);
+        setOtherList((data ?? []).map((w: any) => ({
           id:         w.id,
-          title:      w.title      ?? '',
-          artist:     w.artist     ?? '',
-          year:       w.year       ?? 0,
+          title:      w.title       ?? '',
+          artist:     w.artist      ?? '',
+          year:       w.year        ?? 0,
           artworkUrl: w.artwork_url ?? '',
-          dateAdded:  w.created_at ?? undefined,
+          dateAdded:  w.created_at  ?? undefined,
         })));
       });
   }, [viewingOther]);
