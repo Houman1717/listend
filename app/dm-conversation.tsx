@@ -16,6 +16,7 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
+import { useAlbums } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -48,6 +49,8 @@ type Message = {
     artist: string;
     artworkUrl: string;
     year?: number;
+    sender_rating?: number;
+    sender_review?: string;
   } | null;
   created_at: string;
 };
@@ -65,6 +68,7 @@ type AlbumResult = {
 export default function DMConversationScreen() {
   const { userId: otherUserId } = useLocalSearchParams<{ userId: string }>();
   const { user }   = useAuth();
+  const { loggedAlbums } = useAlbums();
   const navigation = useNavigation();
   const router     = useRouter();
 
@@ -162,12 +166,20 @@ export default function DMConversationScreen() {
     setAlbumQuery('');
     setAlbumResults([]);
 
+    // Attach sender's rating/review if they've logged this album
+    const loggedEntry = loggedAlbums.find(a => a.id === album.id);
+    const albumDataWithRating = {
+      ...album,
+      ...(loggedEntry && loggedEntry.rating > 0 ? { sender_rating: loggedEntry.rating } : {}),
+      ...(loggedEntry?.review ? { sender_review: loggedEntry.review } : {}),
+    };
+
     const { error } = await supabase.from('messages').insert({
       sender_id:   user.id,
       receiver_id: otherUserId,
       content:     album.title,
       type:        'album',
-      album_data:  album,
+      album_data:  albumDataWithRating,
     });
 
     if (error) {
@@ -253,6 +265,8 @@ export default function DMConversationScreen() {
                 <AlbumCard
                   album={item.album_data}
                   isMe={isMe}
+                  senderRating={item.album_data.sender_rating}
+                  senderReview={item.album_data.sender_review}
                   onPress={() =>
                     router.push({
                       pathname: '/album-detail',
@@ -397,13 +411,19 @@ function TextBubble({ text, isMe, time }: { text: string; isMe: boolean; time: s
   );
 }
 
+const RATING_DOT_COUNT = 10;
+
 function AlbumCard({
   album,
   isMe,
+  senderRating,
+  senderReview,
   onPress,
 }: {
   album: { id: string; title: string; artist: string; artworkUrl: string; year?: number };
   isMe: boolean;
+  senderRating?: number;
+  senderReview?: string;
   onPress: () => void;
 }) {
   return (
@@ -422,6 +442,20 @@ function AlbumCard({
           <Text style={b.albumTitle} numberOfLines={2}>{album.title}</Text>
           <Text style={b.albumArtist} numberOfLines={1}>{album.artist}</Text>
           {album.year ? <Text style={b.albumYear}>{album.year}</Text> : null}
+          {senderRating ? (
+            <View style={b.ratingRow}>
+              {Array.from({ length: RATING_DOT_COUNT }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[b.ratingDot, { backgroundColor: i < senderRating ? '#FF3CAC' : 'rgba(255,255,255,0.2)' }]}
+                />
+              ))}
+              <Text style={b.ratingNum}>{senderRating}/10</Text>
+            </View>
+          ) : null}
+          {senderReview ? (
+            <Text style={b.reviewText} numberOfLines={2}>"{senderReview}"</Text>
+          ) : null}
         </View>
         <FontAwesome name="chevron-right" size={12} color={SUBTEXT} style={{ alignSelf: 'center' }} />
       </Pressable>
@@ -535,6 +569,12 @@ const b = StyleSheet.create({
   albumTitle:  { color: TEXT,    fontSize: 14, fontWeight: '700', lineHeight: 18 },
   albumArtist: { color: SUBTEXT, fontSize: 12 },
   albumYear:   { color: SUBTEXT, fontSize: 11 },
+
+  // Sender rating/review
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 5 },
+  ratingDot: { width: 5, height: 5, borderRadius: 2.5 },
+  ratingNum: { color: 'rgba(255,255,255,0.7)', fontSize: 10, marginLeft: 4 },
+  reviewText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontStyle: 'italic', lineHeight: 15, marginTop: 3 },
 });
 
 // Album search sheet styles

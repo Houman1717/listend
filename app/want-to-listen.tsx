@@ -8,11 +8,14 @@ import {
   Alert,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useState, useEffect } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums, WantToListenAlbum } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -62,6 +65,33 @@ export default function WantToListenScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
   const { wantToListen, removeFromWantToListen } = useAlbums();
+  const { user } = useAuth();
+  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
+
+  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const [otherList, setOtherList] = useState<WantToListenAlbum[]>([]);
+
+  useEffect(() => {
+    if (!viewingOther) return;
+    supabase
+      .from('want_to_listen')
+      .select('id, title, artist, year, artwork_url, created_at')
+      .eq('user_id', viewingOther)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        setOtherList(data.map(w => ({
+          id:         w.id,
+          title:      w.title      ?? '',
+          artist:     w.artist     ?? '',
+          year:       w.year       ?? 0,
+          artworkUrl: w.artwork_url ?? '',
+          dateAdded:  w.created_at ?? undefined,
+        })));
+      });
+  }, [viewingOther]);
+
+  const displayList = viewingOther ? otherList : wantToListen;
 
   function handleTap(album: WantToListenAlbum) {
     router.push({
@@ -88,22 +118,24 @@ export default function WantToListenScreen() {
       style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.gridWrap}
       showsVerticalScrollIndicator={false}>
-      {wantToListen.length === 0 ? (
+      {displayList.length === 0 ? (
         <View style={s.empty}>
           <Text style={[s.emptyTitle, { color: colors.text }]}>Nothing here yet</Text>
           <Text style={[s.emptySubtext, { color: colors.subtext }]}>
-            Tap the bookmark icon on any album in Search to save it here.
+            {viewingOther
+              ? 'This user has nothing saved yet.'
+              : 'Tap the bookmark icon on any album in Search to save it here.'}
           </Text>
         </View>
       ) : (
         <View style={s.grid}>
-          {wantToListen.map((album) => (
+          {displayList.map((album) => (
             <AlbumCard
               key={album.id}
               album={album}
               cardWidth={cardWidth}
               onPress={() => handleTap(album)}
-              onLongPress={() => handleLongPress(album)}
+              onLongPress={() => !viewingOther && handleLongPress(album)}
               textColor={colors.text}
               subColor={colors.subtext}
             />

@@ -6,11 +6,14 @@ import {
   Pressable,
   FlatList,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useState, useEffect } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
 
@@ -78,14 +81,47 @@ function ReviewRow({
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
+const COVER_COLORS = ['#2d5a27','#7a4a2e','#1e3a5f','#d4a017','#5c2d82','#8b1a1a','#1a5a5a','#4a2d7a'];
+
 export default function MyReviewsScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { loggedAlbums } = useAlbums();
+  const { user } = useAuth();
+  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
-  const reviewed = loggedAlbums.filter((a) => !!a.review);
+  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const [otherReviews, setOtherReviews] = useState<LoggedAlbum[]>([]);
+
+  useEffect(() => {
+    if (!viewingOther) return;
+    supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+      .eq('user_id', viewingOther)
+      .not('review', 'is', null)
+      .order('listened_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        setOtherReviews(data.map((a, i) => ({
+          id:         a.spotify_id,
+          title:      a.title      ?? '',
+          artist:     a.artist     ?? '',
+          year:       a.year       ?? 0,
+          rating:     a.rating     ?? 0,
+          review:     a.review     ?? undefined,
+          dateLogged: a.listened_at ?? new Date().toISOString(),
+          artworkUrl: a.artwork_url ?? undefined,
+          coverColor: COVER_COLORS[i % COVER_COLORS.length],
+        })));
+      });
+  }, [viewingOther]);
+
+  const reviewed = viewingOther
+    ? otherReviews
+    : loggedAlbums.filter((a) => !!a.review);
 
   return (
     <FlatList

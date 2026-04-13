@@ -35,6 +35,10 @@ const FAV_SLOT_SIZE = Math.floor(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type FavAlbum  = { id: string; title: string; artist: string; artworkUrl: string };
+type FavSong   = { id: string; title: string; artist: string; artworkUrl: string };
+type FavArtist = { id: string; name: string; artworkUrl: string };
+
 type Profile = {
   id: string;
   display_name: string | null;
@@ -42,6 +46,9 @@ type Profile = {
   bio: string | null;
   avatar_url: string | null;
   cover_photo_url: string | null;
+  top_albums:  FavAlbum[]  | null;
+  top_songs:   FavSong[]   | null;
+  top_artists: FavArtist[] | null;
 };
 
 type RatingDist = { rating: number; count: number };
@@ -167,10 +174,11 @@ function NavRow({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function UserProfileScreen() {
-  const { userId } = useLocalSearchParams<{ userId: string }>();
-  const { user }   = useAuth();
-  const navigation = useNavigation();
-  const router     = useRouter();
+  const { userId }     = useLocalSearchParams<{ userId: string }>();
+  const viewedUserId   = userId; // alias — makes nav params and logs unambiguous
+  const { user }       = useAuth();
+  const navigation     = useNavigation();
+  const router         = useRouter();
 
   const [profile,        setProfile]        = useState<Profile | null>(null);
   const [loading,        setLoading]        = useState(true);
@@ -191,6 +199,10 @@ export default function UserProfileScreen() {
   const [wantCount,     setWantCount]     = useState(0);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
 
+  // Top 5 derived from user_albums (not JSONB columns — those are only populated for own user)
+  const [derivedTopAlbums,  setDerivedTopAlbums]  = useState<FavAlbum[]>([]);
+  const [derivedTopArtists, setDerivedTopArtists] = useState<FavArtist[]>([]);
+
   // ── Load all data ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
@@ -204,16 +216,35 @@ export default function UserProfileScreen() {
     async function load() {
       setLoading(true);
       try {
-        // 1. Profile row
+        // 1. Profile row — core columns only (top_albums/top_songs/top_artists
+        //    are fetched separately so a missing-column error doesn't block the
+        //    whole profile from loading).
         const { data: prof, error: profErr } = await supabase
           .from('profiles')
           .select('id, display_name, username, bio, avatar_url, cover_photo_url')
           .eq('id', viewedUserId)
           .single();
 
+        console.log('[UserProfile] profile data :', JSON.stringify(prof));
+        console.log('[UserProfile] profile error:', JSON.stringify(profErr));
+
         if (profErr) console.error('[UserProfile] profile fetch error:', profErr);
         if (prof) {
-          setProfile(prof);
+          // Try to fetch top-5 favourites separately; ignore errors if columns
+          // haven't been added to the DB yet.
+          const { data: favData, error: favErr } = await supabase
+            .from('profiles')
+            .select('top_albums, top_songs, top_artists')
+            .eq('id', viewedUserId)
+            .single();
+          console.log('[UserProfile] top5 result:', JSON.stringify(favData), JSON.stringify(favErr));
+
+          setProfile({
+            ...prof,
+            top_albums:  favData?.top_albums  ?? null,
+            top_songs:   favData?.top_songs   ?? null,
+            top_artists: favData?.top_artists ?? null,
+          });
           navigation.setOptions({
             title: prof.display_name || prof.username || 'Profile',
           });
@@ -261,32 +292,56 @@ export default function UserProfileScreen() {
           setIsMutual(currentFollowsViewed && viewedFollowsCurrent);
         }
 
-        // 4. Album stats from logged_albums
-        const { data: albums, error: albumsErr } = await supabase
-          .from('logged_albums')
-          .select('rating, created_at, review')
-          .eq('user_id', viewedUserId);
-
-        if (albumsErr) console.error('[UserProfile] albums fetch error:', albumsErr);
-        if (albums) {
-          const currentYear = new Date().getFullYear();
-          setAlbumCount(albums.length);
-          setThisYearCount(
-            albums.filter(a => new Date(a.created_at).getFullYear() === currentYear).length
-          );
-          setReviewCount(albums.filter(a => !!a.review).length);
-          const rated = albums.filter(a => a.rating > 0);
-          setAvgRating(
-            rated.length > 0
-              ? (rated.reduce((sum, a) => sum + a.rating, 0) / rated.length).toFixed(1)
-              : '—'
-          );
-          setRatingDist(
-            Array.from({ length: 10 }, (_, i) => ({
+        // 4. Album stats + Top 5 Albums/Artists derived from user_albums
+        const { data: userAlbums, error: albumsErr } = await supabase
+          .from('user_albums')
+          .select('spotify_id, title, artist, artwork_url, rating, review, year, listened_at')
+          .eq('user_id', viewedUserId)
+          .order('listened_at', { ascending: false });
+        console.log('[UserProfile] user_albums result:', JSON.stringify(userAlbums), JSON.stringify(albumsErr));
+        if (albumsErr) console.error('[UserProfile] user_albums error:', albumsErr);
+        if (userAlbums) {
+          const thisYear = new Date().getFullYear();
+          const withRating = userAlbums.filter((a: any) => a.rating > 0);
+          setAlbumCount(userAlbums.length);
+          setThisYearCount(userAlbums.filter((a: any) => {
+            const y = a.listened_at ? new Date(a.listened_at).getFullYear() : a.year;
+            return y === thisYear;
+          }).length);
+          setReviewCount(userAlbums.filter((a: any) => a.review).length);
+          if (withRating.length > 0) {
+            const sum = withRating.reduce((acc: number, a: any) => acc + a.rating, 0);
+            setAvgRating((sum / withRating.length).toFixed(1));
+            const dist: RatingDist[] = Array.from({ length: 10 }, (_, i) => ({
               rating: i + 1,
-              count: albums.filter(a => a.rating === i + 1).length,
-            }))
-          );
+              count: withRating.filter((a: any) => a.rating === i + 1).length,
+            }));
+            setRatingDist(dist);
+          }
+
+          // Top 5 Albums — highest rated
+          const top5Albums: FavAlbum[] = [...userAlbums as any[]]
+            .filter((a: any) => a.rating > 0)
+            .sort((a: any, b: any) => b.rating - a.rating)
+            .slice(0, 5)
+            .map((a: any) => ({
+              id:         a.spotify_id,
+              title:      a.title      ?? '',
+              artist:     a.artist     ?? '',
+              artworkUrl: a.artwork_url ?? '',
+            }));
+          setDerivedTopAlbums(top5Albums);
+
+          // Top 5 Artists — most albums logged
+          const artistCount = new Map<string, number>();
+          for (const a of userAlbums as any[]) {
+            if (a.artist) artistCount.set(a.artist, (artistCount.get(a.artist) ?? 0) + 1);
+          }
+          const top5Artists: FavArtist[] = [...artistCount.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([name]) => ({ id: name, name, artworkUrl: '' }));
+          setDerivedTopArtists(top5Artists);
         }
 
         // 5. Want-to-listen count
@@ -419,14 +474,14 @@ export default function UserProfileScreen() {
         <View style={s.socialRow}>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-            onPress={() => router.push({ pathname: '/followers-following', params: { userId, type: 'following' } })}>
+            onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'following' } })}>
             <Text style={s.socialCount}>{followingCount}</Text>
           </Pressable>
           <Text style={s.socialLabel}> Following</Text>
           <Text style={s.socialDot}> · </Text>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-            onPress={() => router.push({ pathname: '/followers-following', params: { userId, type: 'followers' } })}>
+            onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'followers' } })}>
             <Text style={s.socialCount}>{followersCount}</Text>
           </Pressable>
           <Text style={s.socialLabel}> Followers</Text>
@@ -451,7 +506,7 @@ export default function UserProfileScreen() {
           {isMutual && (
             <Pressable
               style={({ pressed }) => [s.messageBtn, { opacity: pressed ? 0.7 : 1 }]}
-              onPress={() => router.push({ pathname: '/dm-conversation', params: { userId } })}>
+              onPress={() => router.push({ pathname: '/dm-conversation', params: { userId: viewedUserId } })}>
               <Text style={s.messageBtnText}>Message</Text>
             </Pressable>
           )}
@@ -492,9 +547,15 @@ export default function UserProfileScreen() {
           <Text style={s.sectionTitle}>TOP 5 ALBUMS</Text>
         </View>
         <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <FavSlotReadOnly key={i} />
-          ))}
+          {Array.from({ length: 5 }).map((_, i) => {
+            const a = derivedTopAlbums[i];
+            return (
+              <FavSlotReadOnly
+                key={i}
+                item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
+              />
+            );
+          })}
         </View>
       </View>
 
@@ -506,9 +567,15 @@ export default function UserProfileScreen() {
           <Text style={s.sectionTitle}>TOP 5 SONGS</Text>
         </View>
         <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <FavSlotReadOnly key={i} />
-          ))}
+          {Array.from({ length: 5 }).map((_, i) => {
+            const sg = (profile.top_songs ?? [])[i];
+            return (
+              <FavSlotReadOnly
+                key={i}
+                item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
+              />
+            );
+          })}
         </View>
       </View>
 
@@ -520,9 +587,16 @@ export default function UserProfileScreen() {
           <Text style={s.sectionTitle}>TOP 5 ARTISTS</Text>
         </View>
         <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <FavSlotReadOnly key={i} circular />
-          ))}
+          {Array.from({ length: 5 }).map((_, i) => {
+            const ar = derivedTopArtists[i];
+            return (
+              <FavSlotReadOnly
+                key={i}
+                item={ar ? { artworkUrl: ar.artworkUrl, title: ar.name } : undefined}
+                circular
+              />
+            );
+          })}
         </View>
       </View>
 
@@ -532,14 +606,14 @@ export default function UserProfileScreen() {
           icon="calendar"
           label="Sessions"
           sub="Listening diary"
-          onPress={() => router.push({ pathname: '/sessions', params: { userId } })}
+          onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}
         />
         <View style={s.navSeparator} />
         <NavRow
           icon="clock-o"
           label="Recent Activity"
           sub={`${albumCount} logged albums`}
-          onPress={() => router.push({ pathname: '/recent-activity', params: { userId } })}
+          onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })}
         />
       </View>
 
@@ -548,35 +622,35 @@ export default function UserProfileScreen() {
           icon="music"
           label="Listend"
           sub={`${albumCount} albums`}
-          onPress={() => router.push({ pathname: '/my-listend', params: { userId } })}
+          onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId } })}
         />
         <View style={s.navSeparator} />
         <NavRow
           icon="bookmark-o"
           label="Want to Listen"
           sub={`${wantCount} saved`}
-          onPress={() => router.push({ pathname: '/want-to-listen', params: { userId } })}
+          onPress={() => router.push({ pathname: '/want-to-listen', params: { userId: viewedUserId } })}
         />
         <View style={s.navSeparator} />
         <NavRow
           icon="pencil"
           label="Reviews"
           sub={`${reviewCount} reviews`}
-          onPress={() => router.push({ pathname: '/my-reviews', params: { userId } })}
+          onPress={() => router.push({ pathname: '/my-reviews', params: { userId: viewedUserId } })}
         />
         <View style={s.navSeparator} />
         <NavRow
           icon="list"
           label="Playlists"
           sub="Album lists"
-          onPress={() => router.push({ pathname: '/my-playlists', params: { userId } })}
+          onPress={() => router.push({ pathname: '/my-playlists', params: { userId: viewedUserId } })}
         />
         <View style={s.navSeparator} />
         <NavRow
           icon="bar-chart"
           label="Stats"
           sub="Listening insights"
-          onPress={() => router.push({ pathname: '/my-stats', params: { userId } })}
+          onPress={() => router.push({ pathname: '/my-stats', params: { userId: viewedUserId } })}
         />
       </View>
 

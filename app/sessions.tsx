@@ -7,10 +7,12 @@ import {
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useState, useMemo } from 'react';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useState, useMemo, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const DARK_BG = '#0d0d0d';
 const CARD_BG  = '#111';
@@ -58,10 +60,41 @@ const rb = StyleSheet.create({
   text: { color: ACCENT, fontSize: 11, fontWeight: '700' },
 });
 
+const COVER_COLORS = ['#2d5a27','#7a4a2e','#1e3a5f','#d4a017','#5c2d82','#8b1a1a','#1a5a5a','#4a2d7a'];
+
 export default function SessionsScreen() {
   const { width } = useWindowDimensions();
   const router    = useRouter();
   const { loggedAlbums } = useAlbums();
+  const { user } = useAuth();
+  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
+
+  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
+
+  useEffect(() => {
+    if (!viewingOther) return;
+    supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, artwork_url, year, rating, listened_at')
+      .eq('user_id', viewingOther)
+      .order('listened_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        setOtherAlbums(data.map((a, i) => ({
+          id:         a.spotify_id,
+          title:      a.title      ?? '',
+          artist:     a.artist     ?? '',
+          year:       a.year       ?? 0,
+          rating:     a.rating     ?? 0,
+          dateLogged: a.listened_at ?? new Date().toISOString(),
+          artworkUrl: a.artwork_url ?? undefined,
+          coverColor: COVER_COLORS[i % COVER_COLORS.length],
+        })));
+      });
+  }, [viewingOther]);
+
+  const sourceAlbums = viewingOther ? otherAlbums : loggedAlbums;
 
   // Calendar navigation state — start at current month
   const now = new Date();
@@ -72,7 +105,7 @@ export default function SessionsScreen() {
   // Build lookup: dateKey → albums[]
   const albumsByDate = useMemo(() => {
     const map = new Map<string, LoggedAlbum[]>();
-    for (const album of loggedAlbums) {
+    for (const album of sourceAlbums) {
       const d = parseLogged(album.dateLogged);
       if (!d) continue;
       const k = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
@@ -80,31 +113,31 @@ export default function SessionsScreen() {
       map.get(k)!.push(album);
     }
     return map;
-  }, [loggedAlbums]);
+  }, [sourceAlbums]);
 
   // Monthly & yearly stats
   const monthlyCount = useMemo(() => {
     let n = 0;
-    for (const album of loggedAlbums) {
+    for (const album of sourceAlbums) {
       const d = parseLogged(album.dateLogged);
       if (d && d.getFullYear() === viewYear && d.getMonth() === viewMonth) n++;
     }
     return n;
-  }, [loggedAlbums, viewYear, viewMonth]);
+  }, [sourceAlbums, viewYear, viewMonth]);
 
   const yearlyCount = useMemo(() => {
-    return loggedAlbums.filter(a => {
+    return sourceAlbums.filter(a => {
       const d = parseLogged(a.dateLogged);
       return d && d.getFullYear() === viewYear;
     }).length;
-  }, [loggedAlbums, viewYear]);
+  }, [sourceAlbums, viewYear]);
 
   const monthlyAlbums = useMemo(() => {
-    return loggedAlbums.filter(a => {
+    return sourceAlbums.filter(a => {
       const d = parseLogged(a.dateLogged);
       return d && d.getFullYear() === viewYear && d.getMonth() === viewMonth;
     });
-  }, [loggedAlbums, viewYear, viewMonth]);
+  }, [sourceAlbums, viewYear, viewMonth]);
 
   // Navigate months
   function prevMonth() {

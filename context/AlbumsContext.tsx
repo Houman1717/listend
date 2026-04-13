@@ -6,6 +6,8 @@ import React, {
   ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,6 +125,8 @@ const INITIAL_ALBUMS: LoggedAlbum[] = [
 const AlbumsContext = createContext<AlbumsContextType | null>(null);
 
 export function AlbumsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+
   const [loggedAlbums, setLoggedAlbums] = useState<LoggedAlbum[]>(INITIAL_ALBUMS);
   const [topAlbums, setTopAlbums] = useState<TopAlbum[]>([]);
   const [topSongs, setTopSongs] = useState<TopSong[]>([]);
@@ -157,6 +161,40 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, []);
+
+  // ── Sync logged albums FROM Supabase when user signs in ───────────────────
+  // Supabase is the source of truth. AsyncStorage is a local cache.
+  useEffect(() => {
+    if (!user) return;
+
+    supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+      .eq('user_id', user.id)
+      .order('listened_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[AlbumsContext] user_albums sync error:', error.message);
+          return;
+        }
+        if (!data || data.length === 0) return; // Keep local cache if Supabase is empty
+
+        const albums: LoggedAlbum[] = data.map((row, i) => ({
+          id:         row.spotify_id,
+          title:      row.title       ?? '',
+          artist:     row.artist      ?? '',
+          year:       row.year        ?? 0,
+          rating:     row.rating      ?? 0,
+          review:     row.review      ?? undefined,
+          dateLogged: row.listened_at ?? new Date().toISOString(),
+          artworkUrl: row.artwork_url ?? undefined,
+          coverColor: COVER_COLORS[i % COVER_COLORS.length],
+        }));
+
+        setLoggedAlbums(albums);
+        AsyncStorage.setItem(STORAGE_KEYS.LOGGED, JSON.stringify(albums)).catch(() => {});
+      });
+  }, [user?.id]);
 
   // ── Persist on every change (after initial load) ──────────────────────────
   useEffect(() => {
@@ -198,12 +236,12 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     const colorIndex = loggedAlbums.length % COVER_COLORS.length;
 
     const newAlbum: LoggedAlbum = {
-      id: pendingAlbum.spotifyId,
-      title: pendingAlbum.title,
-      artist: pendingAlbum.artist,
-      year: pendingAlbum.year,
+      id:         pendingAlbum.spotifyId,
+      title:      pendingAlbum.title,
+      artist:     pendingAlbum.artist,
+      year:       pendingAlbum.year,
       rating,
-      review: review.trim() || undefined,
+      review:     review.trim() || undefined,
       dateLogged,
       artworkUrl: pendingAlbum.artworkUrl || undefined,
       coverColor: COVER_COLORS[colorIndex],
@@ -211,6 +249,26 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
     setLoggedAlbums((prev) => [newAlbum, ...prev]);
     setPendingAlbum(null);
+
+    // Write to Supabase
+    if (user) {
+      supabase
+        .from('user_albums')
+        .upsert({
+          user_id:     user.id,
+          spotify_id:  newAlbum.id,
+          title:       newAlbum.title,
+          artist:      newAlbum.artist,
+          artwork_url: newAlbum.artworkUrl ?? null,
+          year:        newAlbum.year,
+          rating:      newAlbum.rating,
+          review:      newAlbum.review ?? null,
+          listened_at: dateLogged,
+        }, { onConflict: 'user_id,spotify_id' })
+        .then(({ error }) => {
+          if (error) console.error('[AlbumsContext] logAlbum upsert error:', error.message);
+        });
+    }
   }
 
   function updateReview(id: string, rating: number, review: string) {
@@ -219,6 +277,17 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         a.id === id ? { ...a, rating, review: review.trim() || undefined } : a
       )
     );
+
+    // Update in Supabase
+    if (user) {
+      supabase
+        .from('user_albums')
+        .update({ rating, review: review.trim() || null })
+        .match({ user_id: user.id, spotify_id: id })
+        .then(({ error }) => {
+          if (error) console.error('[AlbumsContext] updateReview error:', error.message);
+        });
+    }
   }
 
   function addTopAlbum(album: TopAlbum) {

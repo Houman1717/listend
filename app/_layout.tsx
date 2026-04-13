@@ -11,6 +11,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { AlbumsProvider } from '@/context/AlbumsContext';
 import { FlipProvider } from '@/context/FlipContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { FavoritesSyncer } from '@/components/FavoritesSyncer';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -80,6 +81,7 @@ function RootLayoutNav() {
     <FlipProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AuthGate />
+        <FavoritesSyncer />
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />

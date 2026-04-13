@@ -175,18 +175,15 @@ export default function ProfileScreen() {
   const [username, setUsername] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  // Album stats fetched from Supabase, scoped to the logged-in user_id.
-  // Falls back to local AlbumsContext values if the query fails.
-  const localCount     = loggedAlbums.length;
-  const localThisYear  = loggedAlbums.filter(a =>
-    a.dateLogged.includes(new Date().getFullYear().toString())).length;
-  const localAvgRating = localCount
-    ? (loggedAlbums.reduce((s, a) => s + a.rating, 0) / localCount).toFixed(1)
+  // Stats derived directly from loggedAlbums (synced from user_albums on load)
+  const albumCount = loggedAlbums.length;
+  const thisYear   = loggedAlbums.filter(a => {
+    const y = new Date(a.dateLogged).getFullYear();
+    return !isNaN(y) && y === new Date().getFullYear();
+  }).length;
+  const avgRating  = albumCount
+    ? (loggedAlbums.reduce((s, a) => s + a.rating, 0) / albumCount).toFixed(1)
     : '—';
-
-  const [albumCount,    setAlbumCount]    = useState<number>(localCount);
-  const [thisYear,      setThisYear]      = useState<number>(localThisYear);
-  const [avgRating,     setAvgRating]     = useState<string>(localAvgRating);
 
   // Fetch profile row (display_name, username, avatar_url)
   useEffect(() => {
@@ -202,29 +199,6 @@ export default function ProfileScreen() {
           setUsername(data.username || '');
           setAvatarUrl(data.avatar_url ?? null);
         }
-      });
-  }, [user]);
-
-  // Fetch album stats scoped to user_id from Supabase
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from('logged_albums')
-      .select('rating, logged_at')
-      .eq('user_id', user.id)
-      .then(({ data, error }) => {
-        if (error || !data || data.length === 0) return; // keep local fallback
-        const count = data.length;
-        const year  = new Date().getFullYear().toString();
-        const yearCount = data.filter(
-          (a: { logged_at: string }) => a.logged_at?.startsWith(year)
-        ).length;
-        const avg = (
-          data.reduce((s: number, a: { rating: number }) => s + (a.rating ?? 0), 0) / count
-        ).toFixed(1);
-        setAlbumCount(count);
-        setThisYear(yearCount);
-        setAvgRating(avg);
       });
   }, [user]);
 

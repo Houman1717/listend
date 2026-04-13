@@ -5,11 +5,14 @@ import {
   Image,
   Pressable,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useMemo, useState, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
@@ -27,7 +30,7 @@ const TYPE_META = {
 
 type ActivityType = keyof typeof TYPE_META;
 
-// ─── Unified activity item type ───────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type ActivityItem = {
   key:        string;
@@ -38,10 +41,22 @@ type ActivityItem = {
   year:       number;
   artworkUrl: string | undefined;
   coverColor: string | undefined;
-  dateMs:     number | null; // null = no timestamp (want-to-listen)
+  dateMs:     number | null;
   dateLabel:  string;
   rating:     number;
 };
+
+type FollowItem = {
+  key:        string;
+  followedId: string;
+  name:       string;
+  username:   string | null;
+  avatarUrl:  string | null;
+  dateMs:     number;
+  dateLabel:  string;
+};
+
+type FeedItem = { kind: 'activity'; data: ActivityItem } | { kind: 'follow'; data: FollowItem };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,10 +74,9 @@ const MONTH_MAP: Record<string, number> = {
 
 function parseDate(s: string): number | null {
   if (!s) return null;
-  // ISO format (used by dateAdded on wantToListen items)
   let ms = new Date(s).getTime();
   if (!isNaN(ms)) return ms;
-  // "Mar 24, 2026" — toLocaleDateString format; Hermes can't parse this
+  // "Mar 24, 2026" — toLocaleDateString format; Hermes can't parse this directly
   const m = s.match(/^(\w{3})\s+(\d{1,2}),\s+(\d{4})$/);
   if (m && MONTH_MAP[m[1]] !== undefined) {
     ms = new Date(parseInt(m[3], 10), MONTH_MAP[m[1]], parseInt(m[2], 10)).getTime();
@@ -71,17 +85,109 @@ function parseDate(s: string): number | null {
   return null;
 }
 
-// ─── Row component ────────────────────────────────────────────────────────────
+/** Fetch the 20 most-recent people a user has followed + resolve their profiles. */
+async function fetchFollowsForUser(uid: string): Promise<FollowItem[]> {
+  const { data: followRows, error } = await supabase
+    .from('follows')
+    .select('following_id, created_at')
+    .eq('follower_id', uid)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error || !followRows || followRows.length === 0) return [];
+
+  const ids = followRows.map((r: any) => r.following_id);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, display_name, username, avatar_url')
+    .in('id', ids);
+
+  if (!profiles) return [];
+
+  return followRows.map((r: any): FollowItem => {
+    const prof = profiles.find((p: any) => p.id === r.following_id);
+    const ms = new Date(r.created_at).getTime();
+    return {
+      key:        `follow-${r.following_id}`,
+      followedId: r.following_id,
+      name:       prof?.display_name || prof?.username || 'User',
+      username:   prof?.username    ?? null,
+      avatarUrl:  prof?.avatar_url  ?? null,
+      dateMs:     ms,
+      dateLabel:  new Date(r.created_at).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+      }),
+    };
+  });
+}
+
+/** Fetch another user's logged albums + want-to-listen from Supabase. */
+async function fetchActivityForUser(uid: string): Promise<ActivityItem[]> {
+  const items: ActivityItem[] = [];
+
+  // Logged albums from user_albums (per-user Supabase table)
+  const { data: logged } = await supabase
+    .from('user_albums')
+    .select('spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
+    .eq('user_id', uid)
+    .order('listened_at', { ascending: false });
+
+  if (logged) {
+    for (const a of logged) {
+      const type: ActivityType = a.review ? 'reviewed' : a.rating > 0 ? 'rated' : 'listened';
+      items.push({
+        key:        `logged-${a.spotify_id}`,
+        type,
+        id:         a.spotify_id,
+        title:      a.title      ?? '',
+        artist:     a.artist     ?? '',
+        year:       a.year       ?? 0,
+        artworkUrl: a.artwork_url ?? undefined,
+        coverColor: undefined,
+        dateMs:     a.listened_at ? new Date(a.listened_at).getTime() : null,
+        dateLabel:  a.listened_at ? formatDateLabel(a.listened_at) : '',
+        rating:     a.rating     ?? 0,
+      });
+    }
+  }
+
+  // Want-to-listen
+  const { data: want } = await supabase
+    .from('want_to_listen')
+    .select('id, title, artist, year, artwork_url, created_at')
+    .eq('user_id', uid)
+    .order('created_at', { ascending: false });
+
+  if (want) {
+    for (const w of want) {
+      items.push({
+        key:        `want-${w.id}`,
+        type:       'wantToListen',
+        id:         w.id,
+        title:      w.title      ?? '',
+        artist:     w.artist     ?? '',
+        year:       w.year       ?? 0,
+        artworkUrl: w.artwork_url ?? undefined,
+        coverColor: undefined,
+        dateMs:     w.created_at ? new Date(w.created_at).getTime() : null,
+        dateLabel:  w.created_at ? formatDateLabel(w.created_at) : '',
+        rating:     0,
+      });
+    }
+  }
+
+  return items;
+}
+
+// ─── Row components ───────────────────────────────────────────────────────────
 
 function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => void }) {
   const meta = TYPE_META[item.type];
-
   return (
     <Pressable
       style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]}
       onPress={onPress}>
 
-      {/* Artwork */}
       {item.artworkUrl ? (
         <Image source={{ uri: item.artworkUrl }} style={s.art} />
       ) : (
@@ -90,24 +196,18 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => voi
         </View>
       )}
 
-      {/* Text block */}
       <View style={s.info}>
         <Text style={s.title} numberOfLines={1}>{item.title}</Text>
         <Text style={s.artist} numberOfLines={1}>{item.artist}{item.year ? ` · ${item.year}` : ''}</Text>
         <View style={s.meta}>
-          {/* Type pill */}
           <View style={[s.typePill, { borderColor: meta.color }]}>
             <FontAwesome name={meta.icon as any} size={9} color={meta.color} />
             <Text style={[s.typeLabel, { color: meta.color }]}>{meta.label}</Text>
           </View>
-          {/* Date */}
-          {item.dateLabel ? (
-            <Text style={s.date}>{item.dateLabel}</Text>
-          ) : null}
+          {item.dateLabel ? <Text style={s.date}>{item.dateLabel}</Text> : null}
         </View>
       </View>
 
-      {/* Rating bars (rated items only) */}
       {item.type === 'rated' && item.rating > 0 && (
         <View style={s.bars}>
           {BAR_HEIGHTS.map((h, i) => (
@@ -122,17 +222,77 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => voi
   );
 }
 
+function FollowRow({ item, onPress }: { item: FollowItem; onPress: () => void }) {
+  const initial = item.name.charAt(0).toUpperCase();
+  return (
+    <Pressable
+      style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]}
+      onPress={onPress}>
+      {item.avatarUrl ? (
+        <Image source={{ uri: item.avatarUrl }} style={s.followAvatar} />
+      ) : (
+        <View style={[s.followAvatar, s.followAvatarFallback]}>
+          <Text style={s.followInitial}>{initial}</Text>
+        </View>
+      )}
+      <View style={s.info}>
+        <Text style={s.title} numberOfLines={1}>{item.name}</Text>
+        {item.username ? <Text style={s.artist} numberOfLines={1}>@{item.username}</Text> : null}
+        <View style={s.meta}>
+          <View style={[s.typePill, { borderColor: '#38bdf8' }]}>
+            <FontAwesome name="user-plus" size={9} color="#38bdf8" />
+            <Text style={[s.typeLabel, { color: '#38bdf8' }]}>Followed</Text>
+          </View>
+          {item.dateLabel ? <Text style={s.date}>{item.dateLabel}</Text> : null}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function RecentActivityScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { loggedAlbums, wantToListen } = useAlbums();
+  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
-  const feed = useMemo((): ActivityItem[] => {
+  // If a userId param is present and it isn't ours, we're viewing someone else.
+  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+
+  // ── Own-feed follow items (fetched from Supabase for current user) ───────────
+  const [ownFollowItems,   setOwnFollowItems]   = useState<FollowItem[]>([]);
+  // ── Other-user feed (activity + follows, fetched from Supabase) ─────────────
+  const [otherActivity,    setOtherActivity]    = useState<ActivityItem[]>([]);
+  const [otherFollows,     setOtherFollows]     = useState<FollowItem[]>([]);
+  const [loadingOther,     setLoadingOther]     = useState(false);
+
+  // Fetch current user's recent follows
+  useEffect(() => {
+    if (!user || viewingOther) return;
+    fetchFollowsForUser(user.id).then(setOwnFollowItems);
+  }, [user?.id, viewingOther]);
+
+  // Fetch another user's full activity + follows
+  useEffect(() => {
+    if (!viewingOther) return;
+    setLoadingOther(true);
+    Promise.all([
+      fetchActivityForUser(viewingOther),
+      fetchFollowsForUser(viewingOther),
+    ]).then(([activity, follows]) => {
+      setOtherActivity(activity);
+      setOtherFollows(follows);
+      setLoadingOther(false);
+    });
+  }, [viewingOther]);
+
+  // ── Build own-user feed from AlbumsContext ────────────────────────────────────
+  const ownActivityItems = useMemo((): ActivityItem[] => {
+    if (viewingOther) return [];
     const items: ActivityItem[] = [];
 
-    // Each logged album gets exactly one entry using the most specific type:
-    // reviewed > rated > listened
     for (const a of loggedAlbums) {
       const type: ActivityType = a.review ? 'reviewed' : a.rating > 0 ? 'rated' : 'listened';
       items.push({
@@ -150,12 +310,8 @@ export default function RecentActivityScreen() {
       });
     }
 
-    // Want-to-listen items — use dateAdded if present, otherwise sort to end
     for (const w of wantToListen) {
       const dateMs = w.dateAdded ? new Date(w.dateAdded).getTime() : null;
-      const dateLabel = w.dateAdded
-        ? new Date(w.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : '';
       items.push({
         key:        `want-${w.id}`,
         type:       'wantToListen',
@@ -166,21 +322,46 @@ export default function RecentActivityScreen() {
         artworkUrl: w.artworkUrl,
         coverColor: undefined,
         dateMs,
-        dateLabel,
+        dateLabel:  w.dateAdded
+          ? new Date(w.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : '',
         rating:     0,
       });
     }
 
-    // Sort: dated items newest-first, undated items fall to the end
-    items.sort((a, b) => {
-      if (a.dateMs === null && b.dateMs === null) return 0;
-      if (a.dateMs === null) return 1;
-      if (b.dateMs === null) return -1;
-      return b.dateMs - a.dateMs;
+    return items;
+  }, [loggedAlbums, wantToListen, viewingOther]);
+
+  // ── Merge into final sorted feed ──────────────────────────────────────────────
+  const feed = useMemo((): FeedItem[] => {
+    const activityItems  = viewingOther ? otherActivity   : ownActivityItems;
+    const followItems    = viewingOther ? otherFollows    : ownFollowItems;
+
+    const combined: FeedItem[] = [
+      ...activityItems.map(d => ({ kind: 'activity' as const, data: d })),
+      ...followItems.map(d  => ({ kind: 'follow'   as const, data: d })),
+    ];
+
+    combined.sort((a, b) => {
+      const msA = a.data.dateMs;
+      const msB = b.data.dateMs;
+      if (msA === null && msB === null) return 0;
+      if (msA === null) return 1;
+      if (msB === null) return -1;
+      return msB - msA;
     });
 
-    return items;
-  }, [loggedAlbums, wantToListen]);
+    return combined;
+  }, [ownActivityItems, otherActivity, ownFollowItems, otherFollows, viewingOther]);
+
+  // ── Loading spinner (other-user fetch only) ───────────────────────────────────
+  if (loadingOther) {
+    return (
+      <View style={s.loadingWrap}>
+        <ActivityIndicator color="#FF3CAC" size="large" />
+      </View>
+    );
+  }
 
   if (feed.length === 0) {
     return (
@@ -189,7 +370,11 @@ export default function RecentActivityScreen() {
           <FontAwesome name="clock-o" size={36} color="#FF3CAC" />
         </View>
         <Text style={s.emptyTitle}>No activity yet</Text>
-        <Text style={s.emptySub}>Log your first album to see{'\n'}your activity here.</Text>
+        <Text style={s.emptySub}>
+          {viewingOther
+            ? 'This user has no public activity yet.'
+            : 'Log your first album to see\nyour activity here.'}
+        </Text>
       </View>
     );
   }
@@ -197,17 +382,31 @@ export default function RecentActivityScreen() {
   return (
     <FlatList
       data={feed}
-      keyExtractor={item => item.key}
+      keyExtractor={item => item.data.key}
       style={s.container}
       contentContainerStyle={s.list}
       showsVerticalScrollIndicator={false}
       ItemSeparatorComponent={() => <View style={s.sep} />}
-      renderItem={({ item }) => (
-        <ActivityRow
-          item={item}
-          onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
-        />
-      )}
+      renderItem={({ item }) => {
+        if (item.kind === 'follow') {
+          return (
+            <FollowRow
+              item={item.data}
+              onPress={() =>
+                router.push({ pathname: '/user-profile', params: { userId: item.data.followedId } })
+              }
+            />
+          );
+        }
+        return (
+          <ActivityRow
+            item={item.data}
+            onPress={() =>
+              router.push({ pathname: '/album-detail', params: { id: item.data.id } })
+            }
+          />
+        );
+      }}
     />
   );
 }
@@ -217,6 +416,11 @@ export default function RecentActivityScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: DARK_BG },
   list:      { paddingVertical: 8, paddingBottom: 48 },
+
+  loadingWrap: {
+    flex: 1, backgroundColor: DARK_BG,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   row: {
     flexDirection: 'row',
@@ -250,6 +454,11 @@ const s = StyleSheet.create({
 
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginLeft: 83 },
 
+  // Follow row
+  followAvatar:        { width: 52, height: 52, borderRadius: 26, flexShrink: 0 },
+  followAvatarFallback:{ backgroundColor: '#1e1e1e', alignItems: 'center', justifyContent: 'center' },
+  followInitial:       { color: 'rgba(255,255,255,0.45)', fontSize: 18, fontWeight: '700' },
+
   emptyWrap: {
     flex: 1,
     backgroundColor: DARK_BG,
@@ -258,16 +467,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyRing: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: 84, height: 84, borderRadius: 42,
     backgroundColor: '#1a0d14',
-    borderWidth: 1,
-    borderColor: '#3a1a2a',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 1, borderColor: '#3a1a2a',
+    justifyContent: 'center', alignItems: 'center',
     marginBottom: 20,
   },
-  emptyTitle: { color: TEXT, fontSize: 18, fontWeight: '700', marginBottom: 10 },
-  emptySub:   { color: SUBTEXT, fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  emptyTitle: { color: TEXT,    fontSize: 18, fontWeight: '700', marginBottom: 10 },
+  emptySub:   { color: SUBTEXT, fontSize: 14, lineHeight: 21,    textAlign: 'center' },
 });

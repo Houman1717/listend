@@ -7,12 +7,14 @@ import {
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -107,6 +109,8 @@ function FilterPills({
   );
 }
 
+const COVER_COLORS = ['#2d5a27','#7a4a2e','#1e3a5f','#d4a017','#5c2d82','#8b1a1a','#1a5a5a','#4a2d7a'];
+
 export default function MyListendScreen() {
   const { width } = useWindowDimensions();
   const cardWidth = (width - PADDING * 2 - GAP * (COLS - 1)) / COLS;
@@ -115,11 +119,41 @@ export default function MyListendScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { loggedAlbums } = useAlbums();
+  const { user } = useAuth();
+  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
+
+  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
+
+  useEffect(() => {
+    if (!viewingOther) return;
+    supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+      .eq('user_id', viewingOther)
+      .order('listened_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        setOtherAlbums(data.map((a, i) => ({
+          id:         a.spotify_id,
+          title:      a.title      ?? '',
+          artist:     a.artist     ?? '',
+          year:       a.year       ?? 0,
+          rating:     a.rating     ?? 0,
+          review:     a.review     ?? undefined,
+          dateLogged: a.listened_at ?? new Date().toISOString(),
+          artworkUrl: a.artwork_url ?? undefined,
+          coverColor: COVER_COLORS[i % COVER_COLORS.length],
+        })));
+      });
+  }, [viewingOther]);
+
+  const sourceAlbums = viewingOther ? otherAlbums : loggedAlbums;
 
   const [activeFilter, setActiveFilter] = useState<FilterKey>('recent');
 
   const filteredAlbums = useMemo(() => {
-    const arr = [...loggedAlbums];
+    const arr = [...sourceAlbums];
     switch (activeFilter) {
       case 'top_rated': return arr.sort((a, b) => b.rating - a.rating);
       case 'a_z':       return arr.sort((a, b) => a.title.localeCompare(b.title));
@@ -127,7 +161,7 @@ export default function MyListendScreen() {
       case 'by_genre':  return arr.sort((a, b) => a.artist.localeCompare(b.artist));
       default:          return arr;
     }
-  }, [loggedAlbums, activeFilter]);
+  }, [sourceAlbums, activeFilter]);
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
@@ -139,9 +173,9 @@ export default function MyListendScreen() {
           </Text>
         ) : (
           <View style={s.grid}>
-            {filteredAlbums.map((album) => (
+            {filteredAlbums.map((album, index) => (
               <AlbumCard
-                key={album.id}
+                key={`${album.id}-${index}`}
                 album={album}
                 cardWidth={cardWidth}
                 onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
