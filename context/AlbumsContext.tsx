@@ -53,12 +53,12 @@ export type TopArtist = {
 };
 
 export type WantToListenAlbum = {
-  id: string;
+  id: string;          // spotify_id
   title: string;
   artist: string;
   year: number;
   artworkUrl: string;
-  dateAdded?: string; // ISO string, added when item is saved
+  dateAdded?: string;
 };
 
 export type Playlist = {
@@ -95,29 +95,25 @@ type AlbumsContextType = {
   isLoaded: boolean;
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── User-scoped storage keys ─────────────────────────────────────────────────
+// Each account gets its own cache so switching accounts never bleeds data.
 
-const STORAGE_KEYS = {
-  LOGGED: '@listend:loggedAlbums_v1',
-  TOP_ALBUMS: '@listend:topAlbums_v1',
-  TOP_SONGS: '@listend:topSongs_v1',
-  TOP_ARTISTS: '@listend:topArtists_v1',
-  WANT_TO_LISTEN: '@listend:wantToListen_v1',
-  PLAYLISTS: '@listend:playlists_v1',
+function sk(base: string, uid: string) {
+  return `${base}_${uid}`;
+}
+
+const KEY = {
+  LOGGED:       '@listend:loggedAlbums_v2',
+  TOP_ALBUMS:   '@listend:topAlbums_v2',
+  TOP_SONGS:    '@listend:topSongs_v2',
+  TOP_ARTISTS:  '@listend:topArtists_v2',
+  WANT:         '@listend:wantToListen_v2',
+  PLAYLISTS:    '@listend:playlists_v2',
 };
 
 const COVER_COLORS = [
   '#2d5a27', '#7a4a2e', '#1e3a5f', '#d4a017',
   '#5c2d82', '#8b1a1a', '#1a5a5a', '#4a2d7a',
-];
-
-const INITIAL_ALBUMS: LoggedAlbum[] = [
-  { id: '1', title: 'To Pimp a Butterfly', artist: 'Kendrick Lamar', year: 2015, rating: 5, dateLogged: 'Mar 24, 2026', coverColor: '#2d5a27' },
-  { id: '2', title: 'Fetch the Bolt Cutters', artist: 'Fiona Apple', year: 2020, rating: 5, dateLogged: 'Mar 21, 2026', coverColor: '#7a4a2e' },
-  { id: '3', title: 'In Rainbows', artist: 'Radiohead', year: 2007, rating: 4, dateLogged: 'Mar 18, 2026', coverColor: '#1e3a5f' },
-  { id: '4', title: 'Blonde', artist: 'Frank Ocean', year: 2016, rating: 5, dateLogged: 'Mar 15, 2026', coverColor: '#d4a017' },
-  { id: '5', title: 'Javelin', artist: 'Sufjan Stevens', year: 2023, rating: 4, dateLogged: 'Mar 10, 2026', coverColor: '#5c2d82' },
-  { id: '6', title: 'Ctrl', artist: 'SZA', year: 2017, rating: 4, dateLogged: 'Mar 5, 2026', coverColor: '#8b1a1a' },
 ];
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -127,140 +123,221 @@ const AlbumsContext = createContext<AlbumsContextType | null>(null);
 export function AlbumsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
 
-  const [loggedAlbums, setLoggedAlbums] = useState<LoggedAlbum[]>(INITIAL_ALBUMS);
-  const [topAlbums, setTopAlbums] = useState<TopAlbum[]>([]);
-  const [topSongs, setTopSongs] = useState<TopSong[]>([]);
-  const [topArtists, setTopArtists] = useState<TopArtist[]>([]);
+  // Start empty — no INITIAL_ALBUMS seed (would show on every account)
+  const [loggedAlbums, setLoggedAlbums] = useState<LoggedAlbum[]>([]);
+  const [topAlbums,    setTopAlbums]    = useState<TopAlbum[]>([]);
+  const [topSongs,     setTopSongs]     = useState<TopSong[]>([]);
+  const [topArtists,   setTopArtists]   = useState<TopArtist[]>([]);
   const [wantToListen, setWantToListen] = useState<WantToListenAlbum[]>([]);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlists,    setPlaylists]    = useState<Playlist[]>([]);
   const [pendingAlbum, setPendingAlbum] = useState<PendingAlbum | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded,     setIsLoaded]     = useState(false);
 
-  // ── Load persisted data on mount ──────────────────────────────────────────
+  // ── Load + sync whenever the signed-in user changes ───────────────────────
+  // This single effect handles:
+  //   1. Clearing stale state from the previous account
+  //   2. Fast restore from user-scoped AsyncStorage cache
+  //   3. Authoritative sync from Supabase (overwrites cache)
   useEffect(() => {
+    // ── Step 1: Clear everything immediately ─────────────────────────────────
+    setLoggedAlbums([]);
+    setTopAlbums([]);
+    setTopSongs([]);
+    setTopArtists([]);
+    setWantToListen([]);
+    setPlaylists([]);
+    setIsLoaded(false);
+
+    if (!user) {
+      console.log('[AlbumsContext] no user — state cleared');
+      setIsLoaded(true);
+      return;
+    }
+
+    const uid = user.id;
+    console.log('[AlbumsContext] loading all data for user:', uid);
+
+    // Guard against race conditions if the user changes before async ops finish
+    let cancelled = false;
+
     (async () => {
+      // ── Step 2: Fast restore from user-scoped AsyncStorage ─────────────────
       try {
-        const [albumsStr, topAlbumsStr, topSongsStr, topArtistsStr, wantStr, playlistsStr] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEYS.LOGGED),
-          AsyncStorage.getItem(STORAGE_KEYS.TOP_ALBUMS),
-          AsyncStorage.getItem(STORAGE_KEYS.TOP_SONGS),
-          AsyncStorage.getItem(STORAGE_KEYS.TOP_ARTISTS),
-          AsyncStorage.getItem(STORAGE_KEYS.WANT_TO_LISTEN),
-          AsyncStorage.getItem(STORAGE_KEYS.PLAYLISTS),
-        ]);
-        if (albumsStr !== null) setLoggedAlbums(JSON.parse(albumsStr));
+        const [albumsStr, topAlbumsStr, topSongsStr, topArtistsStr, wantStr, playlistsStr] =
+          await Promise.all([
+            AsyncStorage.getItem(sk(KEY.LOGGED,     uid)),
+            AsyncStorage.getItem(sk(KEY.TOP_ALBUMS,  uid)),
+            AsyncStorage.getItem(sk(KEY.TOP_SONGS,   uid)),
+            AsyncStorage.getItem(sk(KEY.TOP_ARTISTS, uid)),
+            AsyncStorage.getItem(sk(KEY.WANT,        uid)),
+            AsyncStorage.getItem(sk(KEY.PLAYLISTS,   uid)),
+          ]);
+
+        if (cancelled) return;
+
+        if (albumsStr  !== null) setLoggedAlbums(JSON.parse(albumsStr));
         if (topAlbumsStr !== null) setTopAlbums(JSON.parse(topAlbumsStr));
-        if (topSongsStr !== null) setTopSongs(JSON.parse(topSongsStr));
+        if (topSongsStr  !== null) setTopSongs(JSON.parse(topSongsStr));
         if (topArtistsStr !== null) setTopArtists(JSON.parse(topArtistsStr));
-        if (wantStr !== null) setWantToListen(JSON.parse(wantStr));
+        if (wantStr      !== null) setWantToListen(JSON.parse(wantStr));
         if (playlistsStr !== null) setPlaylists(JSON.parse(playlistsStr));
       } catch {
-        // Fallback to initial state
-      } finally {
-        setIsLoaded(true);
+        // cache miss — no problem, Supabase will fill in below
       }
-    })();
-  }, []);
 
-  // ── Sync FROM Supabase when user signs in (albums + playlists) ────────────
-  // Supabase is the source of truth. AsyncStorage is a local cache.
-  useEffect(() => {
-    if (!user) return;
+      setIsLoaded(true);
 
-    // --- Logged albums ---
-    supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
-      .eq('user_id', user.id)
-      .order('listened_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('[AlbumsContext] user_albums sync error:', error.message);
-          return;
+      // ── Step 3: Authoritative Supabase sync ──────────────────────────────────
+
+      // 3a. Logged albums
+      const { data: albumData, error: albumErr } = await supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+        .eq('user_id', uid)
+        .order('listened_at', { ascending: false });
+
+      if (!cancelled) {
+        if (albumErr) {
+          console.error('[AlbumsContext] user_albums sync error:', albumErr.message);
+        } else {
+          // Always set — even if empty — so a new account doesn't keep old data
+          const albums: LoggedAlbum[] = (albumData ?? []).map((row, i) => ({
+            id:         row.spotify_id,
+            title:      row.title       ?? '',
+            artist:     row.artist      ?? '',
+            year:       row.year        ?? 0,
+            rating:     row.rating      ?? 0,
+            review:     row.review      ?? undefined,
+            dateLogged: row.listened_at ?? new Date().toISOString(),
+            artworkUrl: row.artwork_url ?? undefined,
+            coverColor: COVER_COLORS[i % COVER_COLORS.length],
+          }));
+          console.log('[AlbumsContext] user_albums loaded:', albums.length, 'for user:', uid);
+          setLoggedAlbums(albums);
+          AsyncStorage.setItem(sk(KEY.LOGGED, uid), JSON.stringify(albums)).catch(() => {});
         }
-        if (!data || data.length === 0) return;
+      }
 
-        const albums: LoggedAlbum[] = data.map((row, i) => ({
-          id:         row.spotify_id,
-          title:      row.title       ?? '',
-          artist:     row.artist      ?? '',
-          year:       row.year        ?? 0,
-          rating:     row.rating      ?? 0,
-          review:     row.review      ?? undefined,
-          dateLogged: row.listened_at ?? new Date().toISOString(),
-          artworkUrl: row.artwork_url ?? undefined,
-          coverColor: COVER_COLORS[i % COVER_COLORS.length],
-        }));
+      // 3b. Playlists
+      const { data: remotePlaylists, error: plErr } = await supabase
+        .from('playlists')
+        .select('id, name, description, created_at')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false });
 
-        setLoggedAlbums(albums);
-        AsyncStorage.setItem(STORAGE_KEYS.LOGGED, JSON.stringify(albums)).catch(() => {});
-      });
-
-    // --- Playlists ---
-    supabase
-      .from('playlists')
-      .select('id, name, description, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(async ({ data: remotePlaylists, error: plErr }) => {
+      if (!cancelled) {
         if (plErr) {
           console.error('[AlbumsContext] playlists sync error:', plErr.message);
-          return;
+        } else if (remotePlaylists && remotePlaylists.length > 0) {
+          const playlistIds = remotePlaylists.map((p: any) => p.id);
+          const { data: remoteAlbums } = await supabase
+            .from('playlist_albums')
+            .select('playlist_id, spotify_id, position')
+            .in('playlist_id', playlistIds)
+            .order('position', { ascending: true });
+
+          if (!cancelled) {
+            const synced: Playlist[] = remotePlaylists.map((p: any) => ({
+              id:          p.id,
+              name:        p.name,
+              description: p.description ?? undefined,
+              albumIds:    (remoteAlbums ?? [])
+                .filter((a: any) => a.playlist_id === p.id)
+                .map((a: any) => a.spotify_id),
+              createdAt:   p.created_at,
+            }));
+            setPlaylists(synced);
+            AsyncStorage.setItem(sk(KEY.PLAYLISTS, uid), JSON.stringify(synced)).catch(() => {});
+          }
+        } else {
+          // No playlists — make sure state is empty
+          if (!cancelled) setPlaylists([]);
         }
-        if (!remotePlaylists || remotePlaylists.length === 0) return;
+      }
 
-        const playlistIds = remotePlaylists.map((p: any) => p.id);
-        const { data: remoteAlbums } = await supabase
-          .from('playlist_albums')
-          .select('playlist_id, spotify_id, position')
-          .in('playlist_id', playlistIds)
-          .order('position', { ascending: true });
+      // 3c. Want to Listen
+      const { data: wantData, error: wantErr } = await supabase
+        .from('want_to_listen')
+        .select('id, title, artist, year, artwork_url, created_at')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false });
 
-        const synced: Playlist[] = remotePlaylists.map((p: any) => ({
-          id:          p.id,
-          name:        p.name,
-          description: p.description ?? undefined,
-          albumIds:    (remoteAlbums ?? [])
-            .filter((a: any) => a.playlist_id === p.id)
-            .map((a: any) => a.spotify_id),
-          createdAt:   p.created_at,
-        }));
+      if (!cancelled) {
+        if (wantErr) {
+          console.error('[AlbumsContext] want_to_listen sync error:', wantErr.message);
+        } else {
+          const want: WantToListenAlbum[] = (wantData ?? []).map((w: any) => ({
+            id:         w.id,
+            title:      w.title       ?? '',
+            artist:     w.artist      ?? '',
+            year:       w.year        ?? 0,
+            artworkUrl: w.artwork_url ?? '',
+            dateAdded:  w.created_at  ?? undefined,
+          }));
+          console.log('[AlbumsContext] want_to_listen loaded:', want.length, 'for user:', uid);
+          setWantToListen(want);
+          AsyncStorage.setItem(sk(KEY.WANT, uid), JSON.stringify(want)).catch(() => {});
+        }
+      }
 
-        setPlaylists(synced);
-        AsyncStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(synced)).catch(() => {});
-      });
+      // 3d. Top Favourites from profiles JSONB columns
+      const { data: profData, error: profErr } = await supabase
+        .from('profiles')
+        .select('top_albums, top_songs, top_artists')
+        .eq('id', uid)
+        .single();
+
+      if (!cancelled) {
+        if (profErr && profErr.code !== 'PGRST116') {
+          console.error('[AlbumsContext] profiles top5 sync error:', profErr.message);
+        } else if (profData) {
+          console.log('[Top5] loading for user:', uid, profData);
+          if (Array.isArray(profData.top_albums))  setTopAlbums(profData.top_albums);
+          if (Array.isArray(profData.top_songs))   setTopSongs(profData.top_songs);
+          if (Array.isArray(profData.top_artists)) setTopArtists(profData.top_artists);
+
+          AsyncStorage.setItem(sk(KEY.TOP_ALBUMS,  uid), JSON.stringify(profData.top_albums  ?? [])).catch(() => {});
+          AsyncStorage.setItem(sk(KEY.TOP_SONGS,   uid), JSON.stringify(profData.top_songs   ?? [])).catch(() => {});
+          AsyncStorage.setItem(sk(KEY.TOP_ARTISTS, uid), JSON.stringify(profData.top_artists ?? [])).catch(() => {});
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [user?.id]);
 
-  // ── Persist on every change (after initial load) ──────────────────────────
-  useEffect(() => {
-    if (!isLoaded) return;
-    AsyncStorage.setItem(STORAGE_KEYS.LOGGED, JSON.stringify(loggedAlbums)).catch(() => {});
-  }, [loggedAlbums, isLoaded]);
+  // ── Persist changes to user-scoped AsyncStorage ───────────────────────────
+  // These run whenever a value changes AFTER the initial load.
 
   useEffect(() => {
-    if (!isLoaded) return;
-    AsyncStorage.setItem(STORAGE_KEYS.TOP_ALBUMS, JSON.stringify(topAlbums)).catch(() => {});
-  }, [topAlbums, isLoaded]);
+    if (!isLoaded || !user?.id) return;
+    AsyncStorage.setItem(sk(KEY.LOGGED, user.id), JSON.stringify(loggedAlbums)).catch(() => {});
+  }, [loggedAlbums, isLoaded, user?.id]);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    AsyncStorage.setItem(STORAGE_KEYS.TOP_SONGS, JSON.stringify(topSongs)).catch(() => {});
-  }, [topSongs, isLoaded]);
+    if (!isLoaded || !user?.id) return;
+    AsyncStorage.setItem(sk(KEY.TOP_ALBUMS, user.id), JSON.stringify(topAlbums)).catch(() => {});
+  }, [topAlbums, isLoaded, user?.id]);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    AsyncStorage.setItem(STORAGE_KEYS.TOP_ARTISTS, JSON.stringify(topArtists)).catch(() => {});
-  }, [topArtists, isLoaded]);
+    if (!isLoaded || !user?.id) return;
+    AsyncStorage.setItem(sk(KEY.TOP_SONGS, user.id), JSON.stringify(topSongs)).catch(() => {});
+  }, [topSongs, isLoaded, user?.id]);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    AsyncStorage.setItem(STORAGE_KEYS.WANT_TO_LISTEN, JSON.stringify(wantToListen)).catch(() => {});
-  }, [wantToListen, isLoaded]);
+    if (!isLoaded || !user?.id) return;
+    AsyncStorage.setItem(sk(KEY.TOP_ARTISTS, user.id), JSON.stringify(topArtists)).catch(() => {});
+  }, [topArtists, isLoaded, user?.id]);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    AsyncStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists)).catch(() => {});
-  }, [playlists, isLoaded]);
+    if (!isLoaded || !user?.id) return;
+    AsyncStorage.setItem(sk(KEY.WANT, user.id), JSON.stringify(wantToListen)).catch(() => {});
+  }, [wantToListen, isLoaded, user?.id]);
+
+  useEffect(() => {
+    if (!isLoaded || !user?.id) return;
+    AsyncStorage.setItem(sk(KEY.PLAYLISTS, user.id), JSON.stringify(playlists)).catch(() => {});
+  }, [playlists, isLoaded, user?.id]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -285,7 +362,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     setLoggedAlbums((prev) => [newAlbum, ...prev]);
     setPendingAlbum(null);
 
-    // Write to Supabase
     if (user) {
       supabase
         .from('user_albums')
@@ -313,7 +389,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       )
     );
 
-    // Update in Supabase
     if (user) {
       supabase
         .from('user_albums')
@@ -359,14 +434,43 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   }
 
   function addToWantToListen(album: WantToListenAlbum) {
+    const dateAdded = new Date().toISOString();
     setWantToListen((prev) => {
       if (prev.find((a) => a.id === album.id)) return prev;
-      return [{ ...album, dateAdded: new Date().toISOString() }, ...prev];
+      return [{ ...album, dateAdded }, ...prev];
     });
+
+    // Write to Supabase so it's visible when viewing this user's profile
+    if (user) {
+      supabase
+        .from('want_to_listen')
+        .upsert({
+          id:          album.id,
+          user_id:     user.id,
+          title:       album.title,
+          artist:      album.artist,
+          year:        album.year,
+          artwork_url: album.artworkUrl || null,
+          created_at:  dateAdded,
+        }, { onConflict: 'id,user_id' })
+        .then(({ error }) => {
+          if (error) console.error('[AlbumsContext] addToWantToListen upsert error:', error.message);
+        });
+    }
   }
 
   function removeFromWantToListen(id: string) {
     setWantToListen((prev) => prev.filter((a) => a.id !== id));
+
+    if (user) {
+      supabase
+        .from('want_to_listen')
+        .delete()
+        .match({ id, user_id: user.id })
+        .then(({ error }) => {
+          if (error) console.error('[AlbumsContext] removeFromWantToListen error:', error.message);
+        });
+    }
   }
 
   function createPlaylist(name: string, description?: string): string {
@@ -412,7 +516,10 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         if (user) {
           supabase
             .from('playlist_albums')
-            .upsert({ playlist_id: playlistId, spotify_id: albumId, position: updated.albumIds.length - 1 }, { onConflict: 'playlist_id,spotify_id' })
+            .upsert(
+              { playlist_id: playlistId, spotify_id: albumId, position: updated.albumIds.length - 1 },
+              { onConflict: 'playlist_id,spotify_id' }
+            )
             .then(({ error }) => { if (error) console.error('[AlbumsContext] addAlbumToPlaylist error:', error.message); });
         }
 

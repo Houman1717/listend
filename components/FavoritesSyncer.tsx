@@ -25,16 +25,15 @@ export function FavoritesSyncer() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(() => {
+      const payload = { top_albums: topAlbums, top_songs: topSongs, top_artists: topArtists };
+      console.log('[Top5] saving for user:', user.id, payload);
       supabase
         .from('profiles')
-        .update({
-          top_albums:  topAlbums,
-          top_songs:   topSongs,
-          top_artists: topArtists,
-        })
+        .update(payload)
         .eq('id', user.id)
         .then(({ error }) => {
           if (error) console.error('[FavoritesSyncer] sync error:', error.message);
+          else console.log('[Top5] saved successfully for user:', user.id);
         });
     }, 800);
 
