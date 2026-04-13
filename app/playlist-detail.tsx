@@ -100,7 +100,7 @@ export default function PlaylistDetailScreen() {
   const { playlists, loggedAlbums, removeAlbumFromPlaylist, deletePlaylist } = useAlbums();
   const { user } = useAuth();
 
-  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const viewingOther = paramUserId || null;
 
   // ── Other-user state ──────────────────────────────────────────────────────
   const [otherPlaylistName, setOtherPlaylistName] = useState('');

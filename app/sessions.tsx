@@ -69,7 +69,7 @@ export default function SessionsScreen() {
   const { user } = useAuth();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
-  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const viewingOther = paramUserId || null;
   const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
 
   useEffect(() => {

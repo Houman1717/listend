@@ -259,7 +259,7 @@ export default function RecentActivityScreen() {
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   // If a userId param is present and it isn't ours, we're viewing someone else.
-  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const viewingOther = paramUserId || null;
 
   // ── Own-feed follow items (fetched from Supabase for current user) ───────────
   const [ownFollowItems,   setOwnFollowItems]   = useState<FollowItem[]>([]);

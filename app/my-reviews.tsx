@@ -92,7 +92,7 @@ export default function MyReviewsScreen() {
   const { user } = useAuth();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
-  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const viewingOther = paramUserId || null;
   const [otherReviews, setOtherReviews] = useState<LoggedAlbum[]>([]);
 
   useEffect(() => {

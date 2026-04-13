@@ -68,7 +68,7 @@ export default function WantToListenScreen() {
   const { user } = useAuth();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
-  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const viewingOther = paramUserId || null;
   const [otherList, setOtherList] = useState<WantToListenAlbum[]>([]);
 
   useEffect(() => {

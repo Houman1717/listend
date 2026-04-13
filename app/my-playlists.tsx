@@ -190,7 +190,7 @@ export default function MyPlaylistsScreen() {
   const { user } = useAuth();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
-  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+  const viewingOther = paramUserId || null;
 
   // ── Other user's playlists fetched from Supabase ──────────────────────────
   const [otherPlaylists, setOtherPlaylists] = useState<Playlist[]>([]);
