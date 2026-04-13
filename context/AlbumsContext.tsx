@@ -258,7 +258,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       // 3c. Want to Listen
       const { data: wantData, error: wantErr } = await supabase
         .from('want_to_listen')
-        .select('id, title, artist, year, artwork_url, created_at')
+        .select('spotify_id, title, artist, year, artwork_url, created_at')
         .eq('user_id', uid)
         .order('created_at', { ascending: false });
 
@@ -267,7 +267,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           console.error('[AlbumsContext] want_to_listen sync error:', wantErr.message);
         } else {
           const want: WantToListenAlbum[] = (wantData ?? []).map((w: any) => ({
-            id:         w.id,
+            id:         w.spotify_id,
             title:      w.title       ?? '',
             artist:     w.artist      ?? '',
             year:       w.year        ?? 0,
@@ -447,7 +447,8 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     }
 
     const payload = {
-      id:          album.id,
+      // id is omitted — Supabase generates it via gen_random_uuid()
+      spotify_id:  album.id,
       user_id:     user.id,
       title:       album.title,
       artist:      album.artist,
@@ -479,7 +480,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       supabase
         .from('want_to_listen')
         .delete()
-        .match({ id, user_id: user.id })
+        .match({ spotify_id: id, user_id: user.id })
         .then(({ error }) => {
           if (error) console.error('[AlbumsContext] removeFromWantToListen error:', error.message);
         });

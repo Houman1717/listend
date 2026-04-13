@@ -154,16 +154,16 @@ async function fetchActivityForUser(uid: string): Promise<ActivityItem[]> {
   // Want-to-listen
   const { data: want } = await supabase
     .from('want_to_listen')
-    .select('id, title, artist, year, artwork_url, created_at')
+    .select('spotify_id, title, artist, year, artwork_url, created_at')
     .eq('user_id', uid)
     .order('created_at', { ascending: false });
 
   if (want) {
     for (const w of want) {
       items.push({
-        key:        `want-${w.id}`,
+        key:        `want-${w.spotify_id}`,
         type:       'wantToListen',
-        id:         w.id,
+        id:         w.spotify_id,
         title:      w.title      ?? '',
         artist:     w.artist     ?? '',
         year:       w.year       ?? 0,

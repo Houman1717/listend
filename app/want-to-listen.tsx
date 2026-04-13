@@ -76,7 +76,7 @@ export default function WantToListenScreen() {
     console.log('[WantToListen] fetching for user:', viewingOther);
     supabase
       .from('want_to_listen')
-      .select('id, title, artist, year, artwork_url, created_at')
+      .select('spotify_id, title, artist, year, artwork_url, created_at')
       .eq('user_id', viewingOther)
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
@@ -86,7 +86,7 @@ export default function WantToListenScreen() {
         }
         console.log('[WantToListen] fetched', data?.length ?? 0, 'items for user:', viewingOther);
         setOtherList((data ?? []).map((w: any) => ({
-          id:         w.id,
+          id:         w.spotify_id,
           title:      w.title       ?? '',
           artist:     w.artist      ?? '',
           year:       w.year        ?? 0,
