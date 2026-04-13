@@ -10,41 +10,45 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum, Playlist } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 // ─── Playlist artwork mosaic (2×2 grid of first 4 covers) ────────────────────
 
 function PlaylistMosaic({
   albumIds,
-  loggedAlbums,
+  albumMap,
   size,
 }: {
   albumIds: string[];
-  loggedAlbums: LoggedAlbum[];
+  albumMap: Map<string, string | undefined>; // spotify_id → artwork_url
   size: number;
 }) {
   const half = size / 2;
-  const slots = Array.from({ length: 4 }, (_, i) => {
-    return loggedAlbums.find((a) => a.id === albumIds[i]) ?? null;
-  });
+  const slots = Array.from({ length: 4 }, (_, i) => albumIds[i] ?? null);
 
   return (
     <View style={{ width: size, height: size, borderRadius: 8, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
-      {slots.map((album, i) => (
-        <View key={i} style={{ width: half, height: half }}>
-          {album?.artworkUrl ? (
-            <Image source={{ uri: album.artworkUrl }} style={{ width: half, height: half }} resizeMode="cover" />
-          ) : (
-            <View style={{ width: half, height: half, backgroundColor: album?.coverColor ?? '#1e1e1e' }} />
-          )}
-        </View>
-      ))}
+      {slots.map((id, i) => {
+        const url = id ? albumMap.get(id) : undefined;
+        return (
+          <View key={i} style={{ width: half, height: half }}>
+            {url ? (
+              <Image source={{ uri: url }} style={{ width: half, height: half }} resizeMode="cover" />
+            ) : (
+              <View style={{ width: half, height: half, backgroundColor: '#1e1e1e' }} />
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -53,13 +57,13 @@ function PlaylistMosaic({
 
 function PlaylistCard({
   playlist,
-  loggedAlbums,
+  albumMap,
   onPress,
   isDark,
   colors,
 }: {
   playlist: Playlist;
-  loggedAlbums: LoggedAlbum[];
+  albumMap: Map<string, string | undefined>;
   onPress: () => void;
   isDark: boolean;
   colors: any;
@@ -76,7 +80,7 @@ function PlaylistCard({
           opacity: pressed ? 0.7 : 1,
         },
       ]}>
-      <PlaylistMosaic albumIds={playlist.albumIds} loggedAlbums={loggedAlbums} size={64} />
+      <PlaylistMosaic albumIds={playlist.albumIds} albumMap={albumMap} size={64} />
       <View style={s.playlistInfo}>
         <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>
           {playlist.name}
@@ -183,6 +187,78 @@ export default function MyPlaylistsScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { loggedAlbums, playlists, createPlaylist, deletePlaylist } = useAlbums();
+  const { user } = useAuth();
+  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
+
+  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
+
+  // ── Other user's playlists fetched from Supabase ──────────────────────────
+  const [otherPlaylists, setOtherPlaylists] = useState<Playlist[]>([]);
+  const [otherAlbumMap,  setOtherAlbumMap]  = useState<Map<string, string | undefined>>(new Map());
+  const [loadingOther,   setLoadingOther]   = useState(false);
+
+  useEffect(() => {
+    if (!viewingOther) return;
+    setLoadingOther(true);
+
+    (async () => {
+      // Fetch playlists
+      const { data: pls } = await supabase
+        .from('playlists')
+        .select('id, name, description, created_at')
+        .eq('user_id', viewingOther)
+        .order('created_at', { ascending: false });
+
+      if (!pls || pls.length === 0) {
+        setOtherPlaylists([]);
+        setLoadingOther(false);
+        return;
+      }
+
+      const playlistIds = pls.map((p: any) => p.id);
+
+      // Fetch playlist→album membership
+      const { data: pas } = await supabase
+        .from('playlist_albums')
+        .select('playlist_id, spotify_id, position')
+        .in('playlist_id', playlistIds)
+        .order('position', { ascending: true });
+
+      // Fetch viewed user's album artwork
+      const { data: uas } = await supabase
+        .from('user_albums')
+        .select('spotify_id, artwork_url')
+        .eq('user_id', viewingOther);
+
+      const artMap = new Map<string, string | undefined>();
+      for (const a of (uas ?? []) as any[]) {
+        artMap.set(a.spotify_id, a.artwork_url ?? undefined);
+      }
+
+      const built: Playlist[] = pls.map((p: any) => ({
+        id:          p.id,
+        name:        p.name,
+        description: p.description ?? undefined,
+        albumIds:    (pas ?? [])
+          .filter((a: any) => a.playlist_id === p.id)
+          .map((a: any) => a.spotify_id),
+        createdAt:   p.created_at,
+      }));
+
+      setOtherPlaylists(built);
+      setOtherAlbumMap(artMap);
+      setLoadingOther(false);
+    })();
+  }, [viewingOther]);
+
+  // ── Own user album artwork map (spotify_id → artwork_url) ─────────────────
+  const ownAlbumMap = new Map<string, string | undefined>(
+    loggedAlbums.map((a) => [a.id, a.artworkUrl])
+  );
+
+  // ── Display data ──────────────────────────────────────────────────────────
+  const displayPlaylists = viewingOther ? otherPlaylists : playlists;
+  const displayAlbumMap  = viewingOther ? otherAlbumMap  : ownAlbumMap;
 
   const [showNewPlaylist, setShowNewPlaylist] = useState(false);
 
@@ -202,32 +278,49 @@ export default function MyPlaylistsScreen() {
     );
   }
 
+  if (loadingOther) {
+    return (
+      <View style={[s.root, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color="#FF3CAC" size="large" />
+      </View>
+    );
+  }
+
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      {/* New Playlist button */}
-      <Pressable
-        onPress={() => setShowNewPlaylist(true)}
-        style={({ pressed }) => [s.newBtn, { opacity: pressed ? 0.7 : 1 }]}>
-        <FontAwesome name="plus" size={13} color="#FF3CAC" />
-        <Text style={s.newBtnText}>New Playlist</Text>
-      </Pressable>
+      {/* New Playlist button — own user only */}
+      {!viewingOther && (
+        <Pressable
+          onPress={() => setShowNewPlaylist(true)}
+          style={({ pressed }) => [s.newBtn, { opacity: pressed ? 0.7 : 1 }]}>
+          <FontAwesome name="plus" size={13} color="#FF3CAC" />
+          <Text style={s.newBtnText}>New Playlist</Text>
+        </Pressable>
+      )}
 
       <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
-        {playlists.length === 0 ? (
+        {displayPlaylists.length === 0 ? (
           <View style={s.emptyWrap}>
             <FontAwesome name="list" size={36} color={isDark ? '#333' : '#ddd'} />
             <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
             <Text style={[s.emptySub, { color: colors.subtext }]}>
-              Create one to start organising your albums.
+              {viewingOther
+                ? 'This user has no playlists.'
+                : 'Create one to start organising your albums.'}
             </Text>
           </View>
         ) : (
-          playlists.map((playlist) => (
+          displayPlaylists.map((playlist) => (
             <PlaylistCard
               key={playlist.id}
               playlist={playlist}
-              loggedAlbums={loggedAlbums}
-              onPress={() => router.push({ pathname: '/playlist-detail', params: { id: playlist.id } })}
+              albumMap={displayAlbumMap}
+              onPress={() =>
+                router.push({
+                  pathname: '/playlist-detail',
+                  params: { id: playlist.id, ...(viewingOther ? { userId: viewingOther } : {}) },
+                })
+              }
               isDark={isDark}
               colors={colors}
             />
@@ -235,13 +328,16 @@ export default function MyPlaylistsScreen() {
         )}
       </ScrollView>
 
-      <NewPlaylistModal
-        visible={showNewPlaylist}
-        onClose={() => setShowNewPlaylist(false)}
-        onCreate={handleCreate}
-        isDark={isDark}
-        colors={colors}
-      />
+      {/* Modal — own user only */}
+      {!viewingOther && (
+        <NewPlaylistModal
+          visible={showNewPlaylist}
+          onClose={() => setShowNewPlaylist(false)}
+          onCreate={handleCreate}
+          isDark={isDark}
+          colors={colors}
+        />
+      )}
     </View>
   );
 }

@@ -6,13 +6,17 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useState, useEffect } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -37,14 +41,18 @@ function VolumeBadge({ rating }: { rating: number }) {
   );
 }
 
+// ─── Album card — edit controls hidden when readOnly ─────────────────────────
+
 function AlbumCard({
   album,
   cardWidth,
+  readOnly,
   onPress,
   onRemove,
 }: {
   album: LoggedAlbum;
   cardWidth: number;
+  readOnly: boolean;
   onPress: () => void;
   onRemove: () => void;
 }) {
@@ -52,7 +60,7 @@ function AlbumCard({
     <View style={{ width: cardWidth }}>
       <Pressable
         onPress={onPress}
-        onLongPress={onRemove}
+        onLongPress={readOnly ? undefined : onRemove}
         style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}>
         {album.artworkUrl ? (
           <Image
@@ -69,13 +77,17 @@ function AlbumCard({
           <VolumeBadge rating={album.rating} />
         </View>
       </Pressable>
-      {/* Remove button */}
-      <Pressable onPress={onRemove} style={s.removeBtn} hitSlop={4}>
-        <FontAwesome name="times-circle" size={16} color="#FF3CAC" />
-      </Pressable>
+      {/* Remove button — own user only */}
+      {!readOnly && (
+        <Pressable onPress={onRemove} style={s.removeBtn} hitSlop={4}>
+          <FontAwesome name="times-circle" size={16} color="#FF3CAC" />
+        </Pressable>
+      )}
     </View>
   );
 }
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function PlaylistDetailScreen() {
   const { width } = useWindowDimensions();
@@ -84,19 +96,96 @@ export default function PlaylistDetailScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, userId: paramUserId } = useLocalSearchParams<{ id: string; userId?: string }>();
   const { playlists, loggedAlbums, removeAlbumFromPlaylist, deletePlaylist } = useAlbums();
+  const { user } = useAuth();
 
-  const playlist = playlists.find((p) => p.id === id);
+  const viewingOther = paramUserId && paramUserId !== user?.id ? paramUserId : null;
 
-  if (!playlist) {
+  // ── Other-user state ──────────────────────────────────────────────────────
+  const [otherPlaylistName, setOtherPlaylistName] = useState('');
+  const [otherPlaylistDesc, setOtherPlaylistDesc] = useState<string | null>(null);
+  const [otherAlbums,       setOtherAlbums]       = useState<LoggedAlbum[]>([]);
+  const [loading,           setLoading]           = useState(!!viewingOther);
+
+  useEffect(() => {
+    if (!viewingOther || !id) return;
+
+    (async () => {
+      setLoading(true);
+
+      // Fetch playlist metadata
+      const { data: pl } = await supabase
+        .from('playlists')
+        .select('name, description')
+        .eq('id', id)
+        .single();
+
+      if (pl) {
+        setOtherPlaylistName(pl.name ?? '');
+        setOtherPlaylistDesc(pl.description ?? null);
+      }
+
+      // Fetch album order from playlist_albums
+      const { data: pas } = await supabase
+        .from('playlist_albums')
+        .select('spotify_id, position')
+        .eq('playlist_id', id)
+        .order('position', { ascending: true });
+
+      if (!pas || pas.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      const spotifyIds = pas.map((a: any) => a.spotify_id);
+
+      // Fetch album details from user_albums for this user
+      const { data: uas } = await supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, year, rating')
+        .eq('user_id', viewingOther)
+        .in('spotify_id', spotifyIds);
+
+      const uaMap = new Map<string, any>();
+      for (const a of (uas ?? []) as any[]) uaMap.set(a.spotify_id, a);
+
+      const albums: LoggedAlbum[] = pas.map((pa: any, i: number) => {
+        const ua = uaMap.get(pa.spotify_id);
+        return {
+          id:         pa.spotify_id,
+          title:      ua?.title      ?? pa.spotify_id,
+          artist:     ua?.artist     ?? '',
+          year:       ua?.year       ?? 0,
+          rating:     ua?.rating     ?? 0,
+          dateLogged: '',
+          artworkUrl: ua?.artwork_url ?? undefined,
+          coverColor: ['#2d5a27','#7a4a2e','#1e3a5f','#d4a017','#5c2d82','#8b1a1a'][i % 6],
+        };
+      });
+
+      setOtherAlbums(albums);
+      setLoading(false);
+    })();
+  }, [viewingOther, id]);
+
+  // ── Own-user data from context ────────────────────────────────────────────
+  const ownPlaylist = !viewingOther ? playlists.find((p) => p.id === id) : null;
+
+  if (!viewingOther && !ownPlaylist) {
     router.back();
     return null;
   }
 
-  const albums = playlist.albumIds
-    .map((aid) => loggedAlbums.find((a) => a.id === aid))
-    .filter((a): a is LoggedAlbum => a !== undefined);
+  const ownAlbums = ownPlaylist
+    ? ownPlaylist.albumIds
+        .map((aid) => loggedAlbums.find((a) => a.id === aid))
+        .filter((a): a is LoggedAlbum => a !== undefined)
+    : [];
+
+  const playlistName = viewingOther ? otherPlaylistName : (ownPlaylist?.name ?? '');
+  const playlistDesc = viewingOther ? otherPlaylistDesc : (ownPlaylist?.description ?? null);
+  const albums       = viewingOther ? otherAlbums       : ownAlbums;
 
   function confirmRemoveAlbum(album: LoggedAlbum) {
     Alert.alert(
@@ -104,7 +193,7 @@ export default function PlaylistDetailScreen() {
       `Remove "${album.title}" from this playlist?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => removeAlbumFromPlaylist(playlist!.id, album.id) },
+        { text: 'Remove', style: 'destructive', onPress: () => removeAlbumFromPlaylist(ownPlaylist!.id, album.id) },
       ]
     );
   }
@@ -112,14 +201,14 @@ export default function PlaylistDetailScreen() {
   function confirmDeletePlaylist() {
     Alert.alert(
       'Delete Playlist',
-      `Delete "${playlist!.name}"? This cannot be undone.`,
+      `Delete "${playlistName}"? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            deletePlaylist(playlist!.id);
+            deletePlaylist(ownPlaylist!.id);
             router.back();
           },
         },
@@ -127,67 +216,83 @@ export default function PlaylistDetailScreen() {
     );
   }
 
+  if (loading) {
+    return (
+      <View style={[s.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color="#FF3CAC" size="large" />
+      </View>
+    );
+  }
+
   return (
     <>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <Pressable
-              onPress={() => router.push({ pathname: '/playlist-add-albums', params: { playlistId: playlist!.id } })}
-              hitSlop={12}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: '100%', paddingHorizontal: 4 }}>
-              <FontAwesome name="plus" size={20} color="#FF3CAC" />
-            </Pressable>
-          ),
+          headerRight: !viewingOther
+            ? () => (
+                <Pressable
+                  onPress={() =>
+                    router.push({ pathname: '/playlist-add-albums', params: { playlistId: ownPlaylist!.id } })
+                  }
+                  hitSlop={12}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: '100%', paddingHorizontal: 4 }}>
+                  <FontAwesome name="plus" size={20} color="#FF3CAC" />
+                </Pressable>
+              )
+            : undefined,
         }}
       />
-    <ScrollView
-      style={[s.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={[s.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}>
 
-      {/* Header */}
-      <View style={s.header}>
-        <View style={s.headerText}>
-          <Text style={[s.playlistName, { color: colors.text }]}>{playlist.name}</Text>
-          <Text style={[s.albumCount, { color: colors.subtext }]}>
-            {albums.length === 1 ? '1 album' : `${albums.length} albums`}
-          </Text>
-          {playlist.description ? (
-            <Text style={[s.description, { color: colors.subtext }]}>{playlist.description}</Text>
-          ) : null}
+        {/* Header */}
+        <View style={s.header}>
+          <View style={s.headerText}>
+            <Text style={[s.playlistName, { color: colors.text }]}>{playlistName}</Text>
+            <Text style={[s.albumCount, { color: colors.subtext }]}>
+              {albums.length === 1 ? '1 album' : `${albums.length} albums`}
+            </Text>
+            {playlistDesc ? (
+              <Text style={[s.description, { color: colors.subtext }]}>{playlistDesc}</Text>
+            ) : null}
+          </View>
+
+          {/* Delete button — own user only */}
+          {!viewingOther && (
+            <Pressable onPress={confirmDeletePlaylist} hitSlop={8} style={s.deleteBtn}>
+              <FontAwesome name="trash-o" size={18} color="#FF3CAC" />
+            </Pressable>
+          )}
         </View>
 
-        <Pressable onPress={confirmDeletePlaylist} hitSlop={8} style={s.deleteBtn}>
-          <FontAwesome name="trash-o" size={18} color="#FF3CAC" />
-        </Pressable>
-      </View>
+        <View style={[s.divider, { backgroundColor: isDark ? '#222' : '#e8e8e8' }]} />
 
-      <View style={[s.divider, { backgroundColor: isDark ? '#222' : '#e8e8e8' }]} />
-
-      {/* Album grid */}
-      {albums.length === 0 ? (
-        <View style={s.emptyWrap}>
-          <FontAwesome name="music" size={36} color={isDark ? '#333' : '#ddd'} />
-          <Text style={[s.emptyTitle, { color: colors.text }]}>No albums yet</Text>
-          <Text style={[s.emptySub, { color: colors.subtext }]}>
-            Tap the + button above to search and add albums.
-          </Text>
-        </View>
-      ) : (
-        <View style={s.grid}>
-          {albums.map((album) => (
-            <AlbumCard
-              key={album.id}
-              album={album}
-              cardWidth={cardWidth}
-              onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
-              onRemove={() => confirmRemoveAlbum(album)}
-            />
-          ))}
-        </View>
-      )}
-    </ScrollView>
+        {/* Album grid */}
+        {albums.length === 0 ? (
+          <View style={s.emptyWrap}>
+            <FontAwesome name="music" size={36} color={isDark ? '#333' : '#ddd'} />
+            <Text style={[s.emptyTitle, { color: colors.text }]}>No albums yet</Text>
+            <Text style={[s.emptySub, { color: colors.subtext }]}>
+              {viewingOther ? 'This playlist is empty.' : 'Tap the + button above to search and add albums.'}
+            </Text>
+          </View>
+        ) : (
+          <View style={s.grid}>
+            {albums.map((album) => (
+              <AlbumCard
+                key={album.id}
+                album={album}
+                cardWidth={cardWidth}
+                readOnly={!!viewingOther}
+                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
+                onRemove={() => confirmRemoveAlbum(album)}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </>
   );
 }

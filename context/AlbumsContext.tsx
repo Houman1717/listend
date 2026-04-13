@@ -162,11 +162,12 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  // ── Sync logged albums FROM Supabase when user signs in ───────────────────
+  // ── Sync FROM Supabase when user signs in (albums + playlists) ────────────
   // Supabase is the source of truth. AsyncStorage is a local cache.
   useEffect(() => {
     if (!user) return;
 
+    // --- Logged albums ---
     supabase
       .from('user_albums')
       .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
@@ -177,7 +178,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           console.error('[AlbumsContext] user_albums sync error:', error.message);
           return;
         }
-        if (!data || data.length === 0) return; // Keep local cache if Supabase is empty
+        if (!data || data.length === 0) return;
 
         const albums: LoggedAlbum[] = data.map((row, i) => ({
           id:         row.spotify_id,
@@ -193,6 +194,40 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
         setLoggedAlbums(albums);
         AsyncStorage.setItem(STORAGE_KEYS.LOGGED, JSON.stringify(albums)).catch(() => {});
+      });
+
+    // --- Playlists ---
+    supabase
+      .from('playlists')
+      .select('id, name, description, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(async ({ data: remotePlaylists, error: plErr }) => {
+        if (plErr) {
+          console.error('[AlbumsContext] playlists sync error:', plErr.message);
+          return;
+        }
+        if (!remotePlaylists || remotePlaylists.length === 0) return;
+
+        const playlistIds = remotePlaylists.map((p: any) => p.id);
+        const { data: remoteAlbums } = await supabase
+          .from('playlist_albums')
+          .select('playlist_id, spotify_id, position')
+          .in('playlist_id', playlistIds)
+          .order('position', { ascending: true });
+
+        const synced: Playlist[] = remotePlaylists.map((p: any) => ({
+          id:          p.id,
+          name:        p.name,
+          description: p.description ?? undefined,
+          albumIds:    (remoteAlbums ?? [])
+            .filter((a: any) => a.playlist_id === p.id)
+            .map((a: any) => a.spotify_id),
+          createdAt:   p.created_at,
+        }));
+
+        setPlaylists(synced);
+        AsyncStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(synced)).catch(() => {});
       });
   }, [user?.id]);
 
@@ -336,28 +371,53 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   function createPlaylist(name: string, description?: string): string {
     const id = `pl_${Date.now()}`;
+    const createdAt = new Date().toISOString();
     const newPlaylist: Playlist = {
       id,
       name: name.trim(),
       description: description?.trim() || undefined,
       albumIds: [],
-      createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      createdAt,
     };
     setPlaylists((prev) => [newPlaylist, ...prev]);
+
+    if (user) {
+      supabase
+        .from('playlists')
+        .insert({ id, user_id: user.id, name: newPlaylist.name, description: newPlaylist.description ?? null, created_at: createdAt })
+        .then(({ error }) => { if (error) console.error('[AlbumsContext] createPlaylist error:', error.message); });
+    }
+
     return id;
   }
 
   function deletePlaylist(id: string) {
     setPlaylists((prev) => prev.filter((p) => p.id !== id));
+
+    if (user) {
+      supabase
+        .from('playlists')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => { if (error) console.error('[AlbumsContext] deletePlaylist error:', error.message); });
+    }
   }
 
   function addAlbumToPlaylist(playlistId: string, albumId: string) {
     setPlaylists((prev) =>
-      prev.map((p) =>
-        p.id === playlistId && !p.albumIds.includes(albumId)
-          ? { ...p, albumIds: [...p.albumIds, albumId] }
-          : p
-      )
+      prev.map((p) => {
+        if (p.id !== playlistId || p.albumIds.includes(albumId)) return p;
+        const updated = { ...p, albumIds: [...p.albumIds, albumId] };
+
+        if (user) {
+          supabase
+            .from('playlist_albums')
+            .upsert({ playlist_id: playlistId, spotify_id: albumId, position: updated.albumIds.length - 1 }, { onConflict: 'playlist_id,spotify_id' })
+            .then(({ error }) => { if (error) console.error('[AlbumsContext] addAlbumToPlaylist error:', error.message); });
+        }
+
+        return updated;
+      })
     );
   }
 
@@ -369,6 +429,14 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           : p
       )
     );
+
+    if (user) {
+      supabase
+        .from('playlist_albums')
+        .delete()
+        .match({ playlist_id: playlistId, spotify_id: albumId })
+        .then(({ error }) => { if (error) console.error('[AlbumsContext] removeAlbumFromPlaylist error:', error.message); });
+    }
   }
 
   return (
