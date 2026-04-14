@@ -177,43 +177,13 @@ export default function ProfileScreen() {
 
   // Stats derived directly from loggedAlbums (synced from user_albums on load)
   const albumCount = loggedAlbums.length;
-  const [thisYear, setThisYear] = useState(0);
+  const thisYear = loggedAlbums.filter(a => {
+    const d = new Date(a.dateLogged);
+    return !isNaN(d.getTime()) && d.getFullYear() === new Date().getFullYear();
+  }).length;
   const avgRating  = albumCount
     ? (loggedAlbums.reduce((s, a) => s + a.rating, 0) / albumCount).toFixed(1)
     : '—';
-
-  // Fetch "This Year" count directly from user_albums.listened_at
-  useEffect(() => {
-    if (!user) return;
-    const currentYear = new Date().getFullYear();
-    console.log('[Profile][thisYear] currentYear =', currentYear, '| user.id =', user.id);
-    supabase
-      .from('user_albums')
-      .select('listened_at')
-      .eq('user_id', user.id)
-      .then(({ data, error }) => {
-        console.log('[Profile][thisYear] raw rows =', data?.length ?? 0, '| error =', error?.message ?? null);
-        if (data && data.length > 0) {
-          console.log('[Profile][thisYear] first 5 listened_at values:', data.slice(0, 5).map((a: any) => a.listened_at));
-          data.forEach((a: any) => {
-            const d = a.listened_at ? new Date(a.listened_at) : null;
-            const yr = d ? d.getFullYear() : 'null';
-            const passes = d && !isNaN(d.getTime()) && d.getFullYear() === currentYear;
-            if (!passes) {
-              console.log('[Profile][thisYear] EXCLUDED — listened_at:', a.listened_at, '→ parsed year:', yr);
-            }
-          });
-        }
-        if (!data) return;
-        const count = data.filter((a: any) => {
-          if (!a.listened_at) return false;
-          const d = new Date(a.listened_at);
-          return !isNaN(d.getTime()) && d.getFullYear() === currentYear;
-        }).length;
-        console.log('[Profile][thisYear] final count =', count);
-        setThisYear(count);
-      });
-  }, [user]);
 
   // Fetch profile row (display_name, username, avatar_url)
   useEffect(() => {

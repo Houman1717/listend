@@ -200,7 +200,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         if (albumErr) {
           console.error('[AlbumsContext] user_albums sync error:', albumErr.message);
         } else {
-          // Always set — even if empty — so a new account doesn't keep old data
           const albums: LoggedAlbum[] = (albumData ?? []).map((row, i) => ({
             id:         row.spotify_id,
             title:      row.title       ?? '',
@@ -212,9 +211,28 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
             artworkUrl: row.artwork_url ?? undefined,
             coverColor: COVER_COLORS[i % COVER_COLORS.length],
           }));
-          console.log('[AlbumsContext] user_albums loaded:', albums.length, 'for user:', uid);
-          setLoggedAlbums(albums);
-          AsyncStorage.setItem(sk(KEY.LOGGED, uid), JSON.stringify(albums)).catch(() => {});
+          // Merge: preserve local state that is newer than what the DB returned.
+          // Two cases this guards against:
+          //   1. Brand-new album logged while fetch was in-flight — not in DB yet,
+          //      so it won't appear in `albums` at all (kept via localOnly).
+          //   2. Re-logged album whose DB row still has an old listened_at — the
+          //      fetch returns the stale date, which would drop it from thisYear.
+          //      We keep the local dateLogged when it is more recent.
+          const fetchedIds = new Set(albums.map(a => a.id));
+          setLoggedAlbums(prev => {
+            const prevMap = new Map(prev.map(a => [a.id, a]));
+            const localOnly = prev.filter(a => !fetchedIds.has(a.id));
+            const merged = albums.map(a => {
+              const local = prevMap.get(a.id);
+              if (local && local.dateLogged > a.dateLogged) {
+                return { ...a, dateLogged: local.dateLogged };
+              }
+              return a;
+            });
+            const result = [...localOnly, ...merged];
+            AsyncStorage.setItem(sk(KEY.LOGGED, uid), JSON.stringify(result)).catch(() => {});
+            return result;
+          });
         }
       }
 

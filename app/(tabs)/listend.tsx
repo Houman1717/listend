@@ -596,22 +596,12 @@ export default function ListendScreen() {
   const [profileAvatarUrl,   setProfileAvatarUrl]   = useState<string | null>(null);
   const [profileBio,         setProfileBio]         = useState('');
   const [profileCoverUrl,    setProfileCoverUrl]    = useState<string | null>(null);
-  const [thisYearCount,      setThisYearCount]      = useState(0);
 
-  // Fetch "This Year" count directly from user_albums.listened_at —
-  // identical to the query used by the other-user profile path.
-  useEffect(() => {
-    if (!user) return;
-    const yearStart = `${new Date().getFullYear()}-01-01`;
-    supabase
-      .from('user_albums')
-      .select('listened_at', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('listened_at', yearStart)
-      .then(({ count, error }) => {
-        if (!error && count !== null) setThisYearCount(count);
-      });
-  }, [user]);
+  // "This Year" count — derived from loggedAlbums so it updates live when new albums are logged
+  const thisYearCount = loggedAlbums.filter(a => {
+    const d = new Date(a.dateLogged);
+    return !isNaN(d.getTime()) && d.getFullYear() === new Date().getFullYear();
+  }).length;
 
   useFocusEffect(
     useCallback(() => {

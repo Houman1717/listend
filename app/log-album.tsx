@@ -138,8 +138,7 @@ export default function LogAlbumScreen() {
 
   function handleLog() {
     logAlbum(rating, review);
-    router.back();
-    router.replace('/(tabs)');
+    router.dismissAll();
   }
 
   const isDark = colorScheme === 'dark';
