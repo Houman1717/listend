@@ -123,6 +123,7 @@ function RootLayoutNav() {
           <Stack.Screen name="sessions" options={{ title: 'Sessions', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="recent-activity" options={{ title: 'Recent Activity', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="notifications" options={{ title: 'Notifications', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="popular-reviews" options={{ title: 'Popular Reviews This Week', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
         </Stack>
       </ThemeProvider>
     </FlipProvider>

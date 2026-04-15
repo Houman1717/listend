@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -128,17 +128,11 @@ export default function LogAlbumScreen() {
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
 
-  useEffect(() => {
-    if (!pendingAlbum) {
-      router.back();
-    }
-  }, [pendingAlbum]);
-
   if (!pendingAlbum) return null;
 
   function handleLog() {
     logAlbum(rating, review);
-    router.dismissAll();
+    router.dismiss();
   }
 
   const isDark = colorScheme === 'dark';
@@ -200,7 +194,7 @@ export default function LogAlbumScreen() {
           </Text>
         </Pressable>
 
-        <Pressable style={styles.cancelButton} onPress={() => router.back()}>
+        <Pressable style={styles.cancelButton} onPress={() => router.dismiss()}>
           <Text style={[styles.cancelText, { color: colors.subtext }]}>Cancel</Text>
         </Pressable>
       </ScrollView>

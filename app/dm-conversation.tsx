@@ -444,8 +444,6 @@ function TextBubble({ text, isMe, time }: { text: string; isMe: boolean; time: s
   );
 }
 
-const RATING_DOT_COUNT = 10;
-
 function AlbumCard({
   album,
   isMe,
@@ -459,38 +457,69 @@ function AlbumCard({
   senderReview?: string;
   onPress: () => void;
 }) {
+  // Fake recipient rating/review for UI display
+  const recipientRating = 8;
+  const recipientReview = 'Really solid project, a few tracks felt like filler but the highs carry it.';
+
+  const senderLabel    = isMe ? 'You' : 'Them';
+  const recipientLabel = isMe ? 'Them' : 'You';
+
   return (
     <View style={[b.row, isMe ? b.rowMe : b.rowThem]}>
       <Pressable
-        style={({ pressed }) => [b.albumCard, isMe ? b.albumCardMe : b.albumCardThem, { opacity: pressed ? 0.85 : 1 }]}
+        style={({ pressed }) => [b.albumCard, { opacity: pressed ? 0.85 : 1 }]}
         onPress={onPress}>
-        {album.artworkUrl ? (
-          <Image source={{ uri: album.artworkUrl }} style={b.albumArt} resizeMode="cover" />
-        ) : (
-          <View style={[b.albumArt, b.albumArtFallback]}>
-            <FontAwesome name="music" size={24} color={SUBTEXT} />
-          </View>
-        )}
-        <View style={b.albumInfo}>
-          <Text style={b.albumTitle} numberOfLines={2}>{album.title}</Text>
-          <Text style={b.albumArtist} numberOfLines={1}>{album.artist}</Text>
-          {album.year ? <Text style={b.albumYear}>{album.year}</Text> : null}
-          {senderRating ? (
-            <View style={b.ratingRow}>
-              {Array.from({ length: RATING_DOT_COUNT }).map((_, i) => (
-                <View
-                  key={i}
-                  style={[b.ratingDot, { backgroundColor: i < senderRating ? '#FF3CAC' : 'rgba(255,255,255,0.2)' }]}
-                />
-              ))}
-              <Text style={b.ratingNum}>{senderRating}/10</Text>
+
+        {/* Top: artwork + album meta */}
+        <View style={b.albumTop}>
+          {album.artworkUrl ? (
+            <Image source={{ uri: album.artworkUrl }} style={b.albumArt} resizeMode="cover" />
+          ) : (
+            <View style={[b.albumArt, b.albumArtFallback]}>
+              <FontAwesome name="music" size={20} color={SUBTEXT} />
             </View>
-          ) : null}
+          )}
+          <View style={b.albumMeta}>
+            <Text style={b.albumTitle} numberOfLines={2}>{album.title}</Text>
+            <Text style={b.albumArtist} numberOfLines={1}>{album.artist}</Text>
+            {album.year ? <Text style={b.albumYear}>{album.year}</Text> : null}
+          </View>
+          <FontAwesome name="chevron-right" size={11} color={SUBTEXT} style={{ alignSelf: 'center', marginLeft: 4 }} />
+        </View>
+
+        {/* Divider */}
+        <View style={b.reviewDivider} />
+
+        {/* Sender review */}
+        <View style={b.reviewSection}>
+          <View style={b.reviewSectionHeader}>
+            <Text style={b.reviewSectionLabel}>{senderLabel}</Text>
+            {senderRating ? (
+              <View style={b.ratingBadge}>
+                <FontAwesome name="volume-up" size={8} color="#fff" />
+                <Text style={b.ratingBadgeText}>{senderRating}</Text>
+              </View>
+            ) : null}
+          </View>
           {senderReview ? (
             <Text style={b.reviewText} numberOfLines={2}>"{senderReview}"</Text>
-          ) : null}
+          ) : (
+            <Text style={b.reviewPlaceholder}>No review yet</Text>
+          )}
         </View>
-        <FontAwesome name="chevron-right" size={12} color={SUBTEXT} style={{ alignSelf: 'center' }} />
+
+        {/* Recipient review */}
+        <View style={b.reviewSection}>
+          <View style={b.reviewSectionHeader}>
+            <Text style={b.reviewSectionLabel}>{recipientLabel}</Text>
+            <View style={b.ratingBadge}>
+              <FontAwesome name="volume-up" size={8} color="#fff" />
+              <Text style={b.ratingBadgeText}>{recipientRating}</Text>
+            </View>
+          </View>
+          <Text style={b.reviewText} numberOfLines={2}>"{recipientReview}"</Text>
+        </View>
+
       </Pressable>
     </View>
   );
@@ -578,19 +607,23 @@ const b = StyleSheet.create({
 
   // Album card
   albumCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     maxWidth: 280,
     borderRadius: 14,
     overflow: 'hidden',
+    padding: 12,
     gap: 10,
-    padding: 10,
+    backgroundColor: '#1e1e1e',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#333',
   },
-  albumCardMe:   { backgroundColor: '#c42d8a' },
-  albumCardThem: { backgroundColor: '#222' },
 
+  albumTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   albumArt: {
-    width: 56, height: 56,
+    width: 52, height: 52,
     borderRadius: 6,
     flexShrink: 0,
   },
@@ -598,16 +631,37 @@ const b = StyleSheet.create({
     backgroundColor: '#333',
     alignItems: 'center', justifyContent: 'center',
   },
-  albumInfo: { flex: 1, gap: 2 },
-  albumTitle:  { color: TEXT,    fontSize: 14, fontWeight: '700', lineHeight: 18 },
+  albumMeta: { flex: 1, gap: 2, paddingTop: 1 },
+  albumTitle:  { color: TEXT,    fontSize: 13, fontWeight: '700', lineHeight: 17 },
   albumArtist: { color: SUBTEXT, fontSize: 12 },
   albumYear:   { color: SUBTEXT, fontSize: 11 },
 
-  // Sender rating/review
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 5 },
-  ratingDot: { width: 5, height: 5, borderRadius: 2.5 },
-  ratingNum: { color: 'rgba(255,255,255,0.7)', fontSize: 10, marginLeft: 4 },
-  reviewText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontStyle: 'italic', lineHeight: 15, marginTop: 3 },
+  reviewDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#2e2e2e',
+  },
+
+  reviewSection: { gap: 4 },
+  reviewSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reviewSectionLabel: { color: SUBTEXT, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FF3CAC',
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  ratingBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+
+  reviewText:        { color: 'rgba(240,240,240,0.65)', fontSize: 12, fontStyle: 'italic', lineHeight: 16 },
+  reviewPlaceholder: { color: '#444', fontSize: 12, fontStyle: 'italic' },
 });
 
 // Album search sheet styles

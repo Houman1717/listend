@@ -6,6 +6,7 @@ import {
   Pressable,
   TextInput,
   ScrollView,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -102,6 +103,31 @@ type CommunityReview = {
   dateStr?: string;
 };
 
+// ─── Fake review data ─────────────────────────────────────────────────────────
+
+type FakeReview = {
+  id: string;
+  username: string;
+  rating: number;
+  text: string;
+  dateStr: string;
+  likeCount: number;
+};
+
+const FAKE_ALBUM_REVIEWS: FakeReview[] = [
+  { id: 'f1', username: 'vinylhead_92',  rating: 9,  text: 'This album completely changed how I listen to music. Every track flows perfectly into the next — no skips whatsoever.',       dateStr: '3 days ago', likeCount: 41 },
+  { id: 'f2', username: 'moodboard_mel', rating: 8,  text: 'Production is immaculate. A few tracks feel like filler but the highs are so high it barely matters. Standout project.',    dateStr: '5 days ago', likeCount: 27 },
+  { id: 'f3', username: 'crate_digger',  rating: 10, text: 'Genuinely one of the best listening experiences I\'ve had all year. The emotion and craft on display here is unmatched.',   dateStr: '1 week ago', likeCount: 88 },
+  { id: 'f4', username: 'lofi_lyric',    rating: 7,  text: 'Really solid album, grew on me more and more with each listen. The second half especially hits different late at night.',   dateStr: '1 week ago', likeCount: 19 },
+];
+
+function avatarColor(username: string): string {
+  const palette = ['#FF3CAC', '#7B61FF', '#00BCD4', '#FF6B35', '#4CAF50', '#FFC107'];
+  let hash = 0;
+  for (const c of username) hash = (hash * 31 + c.charCodeAt(0)) % palette.length;
+  return palette[Math.abs(hash)];
+}
+
 // ─── Rating picker ────────────────────────────────────────────────────────────
 
 const RATING_LABELS: Record<number, string> = {
@@ -156,7 +182,7 @@ function MiniRatingBar({ rating, isDark }: { rating: number; isDark: boolean }) 
           />
         ))}
       </View>
-      <Text style={[s.miniBarNum, { color: activeColor }]}>{rating}</Text>
+      <Text style={[s.miniBarNum, { color: rating > 0 ? activeColor : inactiveColor }]}>{rating > 0 ? rating : '–'}</Text>
     </View>
   );
 }
@@ -270,9 +296,11 @@ function ReviewCard({
         <Text style={[s.reviewCardUsername, { color: isOwn ? '#FF3CAC' : colors.text }]}>
           {username}
         </Text>
-        <View style={s.ratingBadge}>
-          <Text style={s.ratingBadgeText}>{rating}</Text>
-        </View>
+        {rating >= 1 && (
+          <View style={s.ratingBadge}>
+            <Text style={s.ratingBadgeText}>{rating}</Text>
+          </View>
+        )}
       </View>
       {text ? (
         <Text style={[s.reviewCardText, { color: colors.text }]} numberOfLines={4}>
@@ -307,6 +335,78 @@ function ReviewCard({
           ) : null}
         </View>
       )}
+    </View>
+  );
+}
+
+// ─── Album review card (home-screen style) ────────────────────────────────────
+
+function AlbumReviewCard({
+  review,
+  liked,
+  onLike,
+  isDark,
+  colors,
+  borderColor,
+  isOwn = false,
+  fullWidth = false,
+}: {
+  review: FakeReview;
+  liked: boolean;
+  onLike: () => void;
+  isDark: boolean;
+  colors: { text: string; subtext: string; background: string };
+  borderColor: string;
+  isOwn?: boolean;
+  fullWidth?: boolean;
+}) {
+  const displayCount = review.likeCount + (liked ? 1 : 0);
+  return (
+    <View style={[
+      s.reviewCard,
+      { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor },
+      isOwn && s.reviewCardOwn,
+      fullWidth && { width: '100%' },
+    ]}>
+      {/* Header: avatar + username | rating badge */}
+      <View style={s.reviewCardHeader}>
+        <View style={arc.userRow}>
+          <View style={[arc.avatar, { backgroundColor: isOwn ? '#FF3CAC' : avatarColor(review.username) }]}>
+            <Text style={arc.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+          </View>
+          <Text style={[arc.username, { color: '#FF3CAC' }]} numberOfLines={1}>
+            @{review.username}
+          </Text>
+        </View>
+        {review.rating >= 1 && (
+          <View style={[s.ratingBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+            <FontAwesome name="volume-up" size={9} color="#fff" />
+            <Text style={s.ratingBadgeText}>{review.rating}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Review text */}
+      <Text style={[arc.reviewText, { color: isDark ? '#bbb' : '#444' }]} numberOfLines={fullWidth ? 0 : 3}>
+        "{review.text}"
+      </Text>
+
+      {/* Footer: date + like (own reviews have no like button) */}
+      <View style={arc.footer}>
+        <Text style={[s.reviewCardDate, { color: colors.subtext }]}>{review.dateStr}</Text>
+        {!isOwn && (
+          <Pressable onPress={onLike} hitSlop={8} style={s.reviewCardLikeBtn}>
+            <FontAwesome
+              name={liked ? 'heart' : 'heart-o'}
+              size={12}
+              color={liked ? '#FF3CAC' : (isDark ? '#555' : '#bbb')}
+            />
+            <Text style={[s.reviewCardLikeCount, { color: liked ? '#FF3CAC' : (isDark ? '#555' : '#bbb') }]}>
+              {displayCount}
+            </Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -346,6 +446,32 @@ export default function AlbumDetailScreen() {
   const [editMode, setEditMode]         = useState(false);
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [likedAlbumReviews, setLikedAlbumReviews] = useState<Set<string>>(new Set());
+
+  function handleLikeAlbumReview(id: string) {
+    setLikedAlbumReviews(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  // Build review list — user's own review pinned first when available
+  const userOwnReview: FakeReview | null =
+    isLogged && loggedAlbum!.review
+      ? {
+          id: 'own',
+          username: 'you',
+          rating: loggedAlbum!.rating,
+          text: loggedAlbum!.review!,
+          dateStr: formatLoggedDate(loggedAlbum!.dateLogged),
+          likeCount: 0,
+        }
+      : null;
+
+  const displayReviews: FakeReview[] = userOwnReview
+    ? [userOwnReview, ...FAKE_ALBUM_REVIEWS]
+    : FAKE_ALBUM_REVIEWS;
 
   // Remote data
   const [tracks, setTracks]               = useState<Track[] | null>(null);
@@ -667,12 +793,18 @@ export default function AlbumDetailScreen() {
             </View>
           ) : (
             <View style={s.editLogRow}>
-              <Text style={[s.editLogDate, { color: colors.subtext }]}>
-                Logged {formatLoggedDate(loggedAlbum!.dateLogged)}
-              </Text>
+              <View style={s.listendLeft}>
+                <View style={s.listendBadge}>
+                  <FontAwesome name="headphones" size={12} color="#fff" />
+                  <Text style={s.listendBadgeText}>Listend</Text>
+                </View>
+                <Text style={[s.editLogDate, { color: colors.subtext }]}>
+                  {formatLoggedDate(loggedAlbum!.dateLogged)}
+                </Text>
+              </View>
               <View style={s.editLogRight}>
-                <FontAwesome name="volume-up" size={14} color="#FF3CAC" />
-                <MiniRatingBar rating={loggedAlbum!.rating} isDark={isDark} />
+                <FontAwesome name="volume-up" size={14} color={loggedAlbum!.rating > 0 ? '#FF3CAC' : (isDark ? '#333' : '#ddd')} />
+                {loggedAlbum!.rating >= 1 && <MiniRatingBar rating={loggedAlbum!.rating} isDark={isDark} />}
                 <Pressable onPress={() => setEditMode(true)} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
                   <FontAwesome name="pencil" size={13} color={colors.subtext} />
                 </Pressable>
@@ -681,9 +813,11 @@ export default function AlbumDetailScreen() {
           )
         ) : (
           <View style={s.ctaRow}>
-            <Pressable style={[s.primaryBtn, s.ctaFlex, { backgroundColor: '#FF3CAC' }]} onPress={handleLog}>
-              <FontAwesome name="plus" size={14} color="#fff" />
-              <Text style={[s.primaryBtnText, { color: '#fff' }]}>Log Album</Text>
+            <Pressable
+              style={({ pressed }) => [s.listenBtn, s.ctaFlex, { borderColor: isDark ? '#444' : '#ccc', opacity: pressed ? 0.7 : 1 }]}
+              onPress={handleLog}>
+              <FontAwesome name="headphones" size={16} color={colors.text} />
+              <Text style={[s.listenBtnText, { color: colors.text }]}>Listen</Text>
             </Pressable>
             <Pressable
               style={[s.secondaryBtn, s.ctaFlex, { borderColor: isDark ? '#333' : '#ddd' }]}
@@ -707,55 +841,37 @@ export default function AlbumDetailScreen() {
         {/* ── 5. Reviews ────────────────────────────────────────────────────── */}
         <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
           <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 12 }]}>Reviews</Text>
-          <ScrollView
+          <FlatList
             horizontal
+            data={displayReviews}
+            keyExtractor={item => item.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.reviewsScroll}
-            style={s.reviewsScrollView}>
-            {isLogged && !!loggedAlbum!.review && (
-              <ReviewCard
-                username="You"
-                rating={loggedAlbum!.rating}
-                text={loggedAlbum!.review}
-                dateStr={formatLoggedDate(loggedAlbum!.dateLogged)}
-                isOwn
+            style={s.reviewsScrollView}
+            renderItem={({ item }) => (
+              <AlbumReviewCard
+                review={item}
+                liked={likedAlbumReviews.has(item.id)}
+                onLike={() => handleLikeAlbumReview(item.id)}
                 isDark={isDark}
                 colors={colors}
-                sectionBg={isDark ? '#1a1a1a' : '#fff'}
                 borderColor={borderColor}
+                isOwn={item.id === 'own'}
               />
             )}
-            {communityReviews.slice(0, 3).map(r => {
-              const likeState = reviewLikesMap.get(r.id) ?? { liked: false, count: 0 };
-              return (
-                <ReviewCard
-                  key={r.id}
-                  username={r.username}
-                  rating={r.rating}
-                  text={r.text}
-                  dateStr={r.dateStr}
-                  isDark={isDark}
-                  colors={colors}
-                  sectionBg={isDark ? '#1a1a1a' : '#fff'}
-                  borderColor={borderColor}
-                  likeCount={likeState.count}
-                  isLiked={likeState.liked}
-                  onLike={() => handleToggleLike(r)}
-                />
-              );
-            })}
-            {/* Show More card */}
-            <Pressable
-              style={({ pressed }) => [
-                s.reviewCard,
-                s.showMoreCard,
-                { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor, opacity: pressed ? 0.7 : 1 },
-              ]}
-              onPress={() => setShowAllReviews(true)}>
-              <FontAwesome name="comments" size={22} color={isDark ? '#555' : '#bbb'} />
-              <Text style={[s.showMoreText, { color: colors.subtext }]}>Show{'\n'}More</Text>
-            </Pressable>
-          </ScrollView>
+            ListFooterComponent={
+              <Pressable
+                style={({ pressed }) => [
+                  s.reviewCard,
+                  s.showMoreCard,
+                  { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor, opacity: pressed ? 0.7 : 1 },
+                ]}
+                onPress={() => setShowAllReviews(true)}>
+                <FontAwesome name="comments" size={22} color={isDark ? '#555' : '#bbb'} />
+                <Text style={[s.showMoreText, { color: colors.subtext }]}>Show{'\n'}More</Text>
+              </Pressable>
+            }
+          />
         </View>
 
         {/* ── 6. Tracklist ──────────────────────────────────────────────────── */}
@@ -872,56 +988,22 @@ export default function AlbumDetailScreen() {
               <FontAwesome name="times" size={20} color={colors.subtext} />
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={s.allReviewsList} showsVerticalScrollIndicator={false}>
-            {isLogged && !!loggedAlbum!.review && (
-              <View style={[s.allReviewRow, { borderBottomColor: isDark ? '#1f1f1f' : '#f0f0f0' }]}>
-                <View style={s.allReviewTop}>
-                  <Text style={[s.allReviewUsername, { color: '#FF3CAC' }]}>You</Text>
-                  <View style={s.ratingBadge}>
-                    <Text style={s.ratingBadgeText}>{loggedAlbum!.rating}</Text>
-                  </View>
-                </View>
-                {loggedAlbum!.review ? (
-                  <Text style={[s.allReviewText, { color: colors.text }]}>{loggedAlbum!.review}</Text>
-                ) : (
-                  <Text style={[s.allReviewNoText, { color: colors.subtext }]}>No review written.</Text>
-                )}
-                <Text style={[s.allReviewDate, { color: colors.subtext }]}>{formatLoggedDate(loggedAlbum!.dateLogged)}</Text>
-              </View>
-            )}
-            {communityReviews.map(r => {
-              const likeState = reviewLikesMap.get(r.id) ?? { liked: false, count: 0 };
-              return (
-                <View key={r.id} style={[s.allReviewRow, { borderBottomColor: isDark ? '#1f1f1f' : '#f0f0f0' }]}>
-                  <View style={s.allReviewTop}>
-                    <Text style={[s.allReviewUsername, { color: colors.text }]}>{r.username}</Text>
-                    <View style={s.ratingBadge}>
-                      <Text style={s.ratingBadgeText}>{r.rating}</Text>
-                    </View>
-                  </View>
-                  {r.text ? (
-                    <Text style={[s.allReviewText, { color: colors.text }]}>{r.text}</Text>
-                  ) : (
-                    <Text style={[s.allReviewNoText, { color: colors.subtext }]}>No review written.</Text>
-                  )}
-                  {r.dateStr && (
-                    <Text style={[s.allReviewDate, { color: colors.subtext }]}>{r.dateStr}</Text>
-                  )}
-                  <Pressable onPress={() => handleToggleLike(r)} hitSlop={8} style={s.allReviewLikeBtn}>
-                    <FontAwesome
-                      name={likeState.liked ? 'heart' : 'heart-o'}
-                      size={13}
-                      color={likeState.liked ? '#FF3CAC' : '#666'}
-                    />
-                    {likeState.count > 0 && (
-                      <Text style={[s.allReviewLikeCount, { color: likeState.liked ? '#FF3CAC' : '#666' }]}>
-                        {likeState.count}
-                      </Text>
-                    )}
-                  </Pressable>
-                </View>
-              );
-            })}
+          <ScrollView
+            contentContainerStyle={[s.allReviewsList, { gap: 12, paddingHorizontal: 16 }]}
+            showsVerticalScrollIndicator={false}>
+            {displayReviews.map(r => (
+              <AlbumReviewCard
+                key={r.id}
+                review={{ ...r }}
+                liked={likedAlbumReviews.has(r.id)}
+                onLike={() => handleLikeAlbumReview(r.id)}
+                isDark={isDark}
+                colors={colors}
+                borderColor={borderColor}
+                isOwn={r.id === 'own'}
+                fullWidth
+              />
+            ))}
           </ScrollView>
         </View>
       </Modal>
@@ -998,9 +1080,26 @@ const s = StyleSheet.create({
   secondaryBtn: { height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderWidth: 1 },
   secondaryBtnText: { fontSize: 15, fontWeight: '500' },
 
+  // Listen CTA (unlogged)
+  listenBtn: { height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderWidth: 1 },
+  listenBtnText: { fontSize: 16, fontWeight: '600' },
+
+  // Listend badge (logged)
+  listendLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  listendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FF3CAC',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  listendBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
   // Logged / edit
-  editLogRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', width: '100%', marginTop: 16 },
-  editLogDate: { fontSize: 13 },
+  editLogRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 16 },
+  editLogDate: { fontSize: 12 },
   editLogRight: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
 
   editBlock: { width: '100%', marginTop: 16 },
@@ -1113,4 +1212,32 @@ const s = StyleSheet.create({
   playlistRowCount: { fontSize: 12 },
   checkBox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#555', alignItems: 'center', justifyContent: 'center' },
   checkBoxActive: { backgroundColor: '#FF3CAC', borderColor: '#FF3CAC' },
+});
+
+// ─── Album review card styles ─────────────────────────────────────────────────
+
+const arc = StyleSheet.create({
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flex: 1,
+    marginRight: 8,
+  },
+  avatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarLetter: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  username:     { fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  reviewText:   { fontSize: 12, lineHeight: 18, fontStyle: 'italic' },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
 });
