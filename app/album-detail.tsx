@@ -20,6 +20,7 @@ import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { ReviewComment, CommentBubble, CommentsSection, avatarColor } from '@/components/ReviewComments';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -121,12 +122,22 @@ const FAKE_ALBUM_REVIEWS: FakeReview[] = [
   { id: 'f4', username: 'lofi_lyric',    rating: 7,  text: 'Really solid album, grew on me more and more with each listen. The second half especially hits different late at night.',   dateStr: '1 week ago', likeCount: 19 },
 ];
 
-function avatarColor(username: string): string {
-  const palette = ['#FF3CAC', '#7B61FF', '#00BCD4', '#FF6B35', '#4CAF50', '#FFC107'];
-  let hash = 0;
-  for (const c of username) hash = (hash * 31 + c.charCodeAt(0)) % palette.length;
-  return palette[Math.abs(hash)];
-}
+// ─── Review mock data ─────────────────────────────────────────────────────────
+
+const MOCK_COMMENTS: ReviewComment[] = [
+  // f1 – vinylhead_92 (2 comments + 1 reply)
+  { id: 'c1', reviewId: 'f1', userId: 'u1', username: 'tape_collector', body: 'Completely agree — the transitions are insane on this one.',          createdAt: '2 days ago' },
+  { id: 'c2', reviewId: 'f1', userId: 'u2', username: 'nightfreq',      body: 'Which track hit you hardest on first listen?',                        createdAt: '2 days ago' },
+  { id: 'c3', reviewId: 'f1', parentCommentId: 'c2', userId: 'u3', username: 'vinylhead_92', body: 'Track 5, no question. The way it builds out of nowhere…', createdAt: '1 day ago' },
+  // f2 – moodboard_mel (2 comments)
+  { id: 'c4', reviewId: 'f2', userId: 'u4', username: 'lo_hz',        body: 'Curious which tracks you thought were filler?',                       createdAt: '4 days ago' },
+  { id: 'c5', reviewId: 'f2', userId: 'u5', username: 'wavelength_w', body: 'The highs are genuinely unreal. Standout for sure.',                   createdAt: '3 days ago' },
+  // f3 – crate_digger (3 comments + 1 reply)
+  { id: 'c6', reviewId: 'f3', userId: 'u6', username: 'deep_cuts99',  body: 'GOTY contender. Shared this with three people already.',               createdAt: '6 days ago' },
+  { id: 'c7', reviewId: 'f3', userId: 'u7', username: 'auralfix',     body: 'The craft is what separates it — nothing sounds accidental.',           createdAt: '5 days ago' },
+  { id: 'c8', reviewId: 'f3', parentCommentId: 'c7', userId: 'u8', username: 'crate_digger', body: 'Exactly. Every detail feels intentional.',       createdAt: '5 days ago' },
+  { id: 'c9', reviewId: 'f3', userId: 'u9', username: 'sideB_fan',    body: 'Emotion and craft — that\'s the perfect way to put it.',               createdAt: '4 days ago' },
+];
 
 // ─── Rating picker ────────────────────────────────────────────────────────────
 
@@ -345,29 +356,49 @@ function AlbumReviewCard({
   review,
   liked,
   onLike,
+  onPress,
   isDark,
   colors,
   borderColor,
   isOwn = false,
   fullWidth = false,
+  highlighted = false,
+  onLayout,
+  commentCount = 0,
+  onCommentCountPress,
+  comments,
+  commentsExpanded = false,
+  onAddComment,
 }: {
   review: FakeReview;
   liked: boolean;
   onLike: () => void;
+  onPress?: () => void;
   isDark: boolean;
   colors: { text: string; subtext: string; background: string };
   borderColor: string;
   isOwn?: boolean;
   fullWidth?: boolean;
+  highlighted?: boolean;
+  onLayout?: (y: number) => void;
+  commentCount?: number;
+  onCommentCountPress?: () => void;
+  comments?: ReviewComment[];
+  commentsExpanded?: boolean;
+  onAddComment?: (body: string, parentId?: string | null) => void;
 }) {
   const displayCount = review.likeCount + (liked ? 1 : 0);
-  return (
-    <View style={[
-      s.reviewCard,
-      { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor },
-      isOwn && s.reviewCardOwn,
-      fullWidth && { width: '100%' },
-    ]}>
+  const cardStyle = [
+    s.reviewCard,
+    { backgroundColor: isDark ? '#1a1a1a' : '#fff', borderColor },
+    isOwn && s.reviewCardOwn,
+    fullWidth && { width: '100%' },
+    highlighted && { borderColor: '#FF3CAC', borderWidth: 1.5 },
+  ];
+  const layoutHandler = onLayout ? (e: any) => onLayout(e.nativeEvent.layout.y) : undefined;
+
+  const cardContent = (
+    <>
       {/* Header: avatar + username | rating badge */}
       <View style={s.reviewCardHeader}>
         <View style={arc.userRow}>
@@ -391,22 +422,61 @@ function AlbumReviewCard({
         "{review.text}"
       </Text>
 
-      {/* Footer: date + like (own reviews have no like button) */}
+      {/* Footer: date | comments | like */}
       <View style={arc.footer}>
         <Text style={[s.reviewCardDate, { color: colors.subtext }]}>{review.dateStr}</Text>
-        {!isOwn && (
-          <Pressable onPress={onLike} hitSlop={8} style={s.reviewCardLikeBtn}>
-            <FontAwesome
-              name={liked ? 'heart' : 'heart-o'}
-              size={12}
-              color={liked ? '#FF3CAC' : (isDark ? '#555' : '#bbb')}
-            />
-            <Text style={[s.reviewCardLikeCount, { color: liked ? '#FF3CAC' : (isDark ? '#555' : '#bbb') }]}>
-              {displayCount}
-            </Text>
-          </Pressable>
-        )}
+        <View style={arc.footerRight}>
+          {commentCount > 0 || fullWidth ? (
+            <Pressable
+              onPress={onCommentCountPress}
+              hitSlop={8}
+              style={arc.commentCountBtn}>
+              <FontAwesome name="comment-o" size={11} color={commentsExpanded ? '#FF3CAC' : (isDark ? '#555' : '#bbb')} />
+              <Text style={[arc.commentCountText, { color: commentsExpanded ? '#FF3CAC' : (isDark ? '#555' : '#bbb') }]}>
+                {commentCount > 0 ? `${commentCount}` : '0'}
+              </Text>
+            </Pressable>
+          ) : null}
+          {!isOwn && (
+            <Pressable onPress={onLike} hitSlop={8} style={s.reviewCardLikeBtn}>
+              <FontAwesome
+                name={liked ? 'heart' : 'heart-o'}
+                size={12}
+                color={liked ? '#FF3CAC' : (isDark ? '#555' : '#bbb')}
+              />
+              <Text style={[s.reviewCardLikeCount, { color: liked ? '#FF3CAC' : (isDark ? '#555' : '#bbb') }]}>
+                {displayCount}
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </View>
+
+      {/* Comments section — only in full-width (modal) expanded mode */}
+      {commentsExpanded && fullWidth && (
+        <CommentsSection
+          comments={comments ?? []}
+          isDark={isDark}
+          colors={colors}
+          onAddComment={onAddComment}
+        />
+      )}
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        onLayout={layoutHandler}
+        style={({ pressed }) => [...cardStyle, pressed && { opacity: 0.75 }]}>
+        {cardContent}
+      </Pressable>
+    );
+  }
+  return (
+    <View style={cardStyle} onLayout={layoutHandler}>
+      {cardContent}
     </View>
   );
 }
@@ -446,7 +516,63 @@ export default function AlbumDetailScreen() {
   const [editMode, setEditMode]         = useState(false);
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
+  const modalScrollRef = useRef<ScrollView>(null);
+  const reviewYPositions = useRef<Map<string, number>>(new Map());
   const [likedAlbumReviews, setLikedAlbumReviews] = useState<Set<string>>(new Set());
+  const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
+  const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(() => {
+    const m = new Map<string, ReviewComment[]>();
+    for (const c of MOCK_COMMENTS) {
+      m.set(c.reviewId, [...(m.get(c.reviewId) ?? []), c]);
+    }
+    return m;
+  });
+
+  function handleToggleComments(reviewId: string) {
+    setExpandedCommentsId(prev => prev === reviewId ? null : reviewId);
+  }
+
+  function handleAddComment(reviewId: string, body: string, parentId?: string | null) {
+    const newComment: ReviewComment = {
+      id:              `local_${Date.now()}`,
+      reviewId,
+      parentCommentId: parentId ?? null,
+      userId:          user?.id ?? 'local',
+      username:        'you',
+      body,
+      createdAt:       'just now',
+    };
+    setCommentsMap(prev => {
+      const m = new Map(prev);
+      m.set(reviewId, [...(m.get(reviewId) ?? []), newComment]);
+      return m;
+    });
+  }
+
+  function handleReviewCardPress(id: string) {
+    setHighlightedReviewId(id);
+    setExpandedCommentsId(null);
+    setShowAllReviews(true);
+  }
+
+  function handleReviewCommentCountPress(id: string) {
+    setHighlightedReviewId(id);
+    setExpandedCommentsId(id);
+    setShowAllReviews(true);
+  }
+
+  useEffect(() => {
+    if (!showAllReviews || !highlightedReviewId) return;
+    const scrollToReview = () => {
+      const y = reviewYPositions.current.get(highlightedReviewId);
+      if (y != null) {
+        modalScrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
+      }
+    };
+    const t = setTimeout(scrollToReview, 150);
+    return () => clearTimeout(t);
+  }, [showAllReviews, highlightedReviewId]);
 
   function handleLikeAlbumReview(id: string) {
     setLikedAlbumReviews(prev => {
@@ -853,6 +979,9 @@ export default function AlbumDetailScreen() {
                 review={item}
                 liked={likedAlbumReviews.has(item.id)}
                 onLike={() => handleLikeAlbumReview(item.id)}
+                onPress={() => handleReviewCardPress(item.id)}
+                onCommentCountPress={() => handleReviewCommentCountPress(item.id)}
+                commentCount={commentsMap.get(item.id)?.length ?? 0}
                 isDark={isDark}
                 colors={colors}
                 borderColor={borderColor}
@@ -980,28 +1109,43 @@ export default function AlbumDetailScreen() {
       </ScrollView>
 
       {/* ── All Reviews modal ────────────────────────────────────────────────── */}
-      <Modal visible={showAllReviews} animationType="slide" onRequestClose={() => setShowAllReviews(false)}>
+      <Modal
+        visible={showAllReviews}
+        animationType="slide"
+        onRequestClose={() => { setShowAllReviews(false); setHighlightedReviewId(null); setExpandedCommentsId(null); }}>
         <View style={[s.allReviewsModal, { backgroundColor: colors.background }]}>
           <View style={[s.allReviewsHeader, { borderBottomColor: isDark ? '#222' : '#eee' }]}>
             <Text style={[s.allReviewsTitle, { color: colors.text }]}>Reviews</Text>
-            <Pressable onPress={() => setShowAllReviews(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
+            <Pressable
+              onPress={() => { setShowAllReviews(false); setHighlightedReviewId(null); setExpandedCommentsId(null); }}
+              hitSlop={12}
+              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
               <FontAwesome name="times" size={20} color={colors.subtext} />
             </Pressable>
           </View>
           <ScrollView
+            ref={modalScrollRef}
             contentContainerStyle={[s.allReviewsList, { gap: 12, paddingHorizontal: 16 }]}
-            showsVerticalScrollIndicator={false}>
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled">
             {displayReviews.map(r => (
               <AlbumReviewCard
                 key={r.id}
                 review={{ ...r }}
                 liked={likedAlbumReviews.has(r.id)}
                 onLike={() => handleLikeAlbumReview(r.id)}
+                onCommentCountPress={() => handleToggleComments(r.id)}
+                commentCount={commentsMap.get(r.id)?.length ?? 0}
+                comments={commentsMap.get(r.id) ?? []}
+                commentsExpanded={expandedCommentsId === r.id}
+                onAddComment={(body, parentId) => handleAddComment(r.id, body, parentId)}
                 isDark={isDark}
                 colors={colors}
                 borderColor={borderColor}
                 isOwn={r.id === 'own'}
                 fullWidth
+                highlighted={r.id === highlightedReviewId}
+                onLayout={(y) => { reviewYPositions.current.set(r.id, y); }}
               />
             ))}
           </ScrollView>
@@ -1240,4 +1384,21 @@ const arc = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 2,
   },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  commentCountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  commentCountText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
 });
+
+// ─── Comment section styles ───────────────────────────────────────────────────
+

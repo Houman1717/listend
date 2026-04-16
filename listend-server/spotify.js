@@ -104,6 +104,7 @@ function trackFromItem(item) {
     title:       item.name,
     artist:      item.artists?.[0]?.name ?? '',
     artwork_url: item.album?.images?.[0]?.url ?? '',
+    year:        parseInt(item.album?.release_date?.slice(0, 4) ?? '0', 10),
   };
 }
 

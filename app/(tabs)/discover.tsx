@@ -16,6 +16,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -84,9 +85,9 @@ function AlbumCard({ item, isDark }: { item: SpotifyAlbum; isDark: boolean }) {
   );
 }
 
-function SongCard({ item, index, isDark }: { item: SpotifyTrack; index: number; isDark: boolean }) {
+function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index: number; isDark: boolean; onPress: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [s.card, { width: CARD_SIZE, opacity: pressed ? 0.7 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: CARD_SIZE, opacity: pressed ? 0.7 : 1 }]}>
       <View>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={{ width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 }} />
@@ -272,6 +273,7 @@ export default function DiscoverScreen() {
   const [songs,   setSongs]   = useState<SpotifyTrack[]>(homeCache.songs   ?? []);
   const [artists, setArtists] = useState<SpotifyArtist[]>(homeCache.artists ?? []);
   const [loading, setLoading] = useState(!homeCache.songs);
+  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   useEffect(() => {
     if (homeCache.songs) return;
@@ -287,6 +289,12 @@ export default function DiscoverScreen() {
   }, []);
 
   return (
+    <>
+    <SongInfoModal
+        song={activeSong}
+        onClose={() => setActiveSong(null)}
+        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+      />
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.content}
@@ -370,7 +378,7 @@ export default function DiscoverScreen() {
             contentContainerStyle={s.row}
             renderItem={({ item, index }) =>
               item ? (
-                <SongCard item={item} index={index} isDark={isDark} />
+                <SongCard item={item} index={index} isDark={isDark} onPress={() => setActiveSong({ title: item.title, artist: item.artist, artworkUrl: item.artworkUrl })} />
               ) : (
                 <View style={[s.placeholderCard, { backgroundColor: isDark ? '#1e1e2e' : '#e5e5e5' }]} />
               )
@@ -410,6 +418,7 @@ export default function DiscoverScreen() {
       </Section>
 
     </ScrollView>
+    </>
   );
 }
 

@@ -10,7 +10,8 @@ import {
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { POPULAR_REVIEWS_DATA, PopularReview, avatarColor } from './(tabs)/index';
+import { POPULAR_REVIEWS_DATA, PopularReview } from './(tabs)/index';
+import { avatarColor } from '@/components/ReviewComments';
 
 // ─── Full review row ──────────────────────────────────────────────────────────
 

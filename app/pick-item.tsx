@@ -26,8 +26,8 @@ export default function PickItemScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { type } = useLocalSearchParams<{ type: 'album' | 'song' | 'artist' }>();
-  const { addTopAlbum, addTopSong, addTopArtist } = useAlbums();
+  const { type, replaceId } = useLocalSearchParams<{ type: 'album' | 'song' | 'artist'; replaceId?: string }>();
+  const { addTopAlbum, addTopSong, addTopArtist, removeTopAlbum, removeTopSong, removeTopArtist } = useAlbums();
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ResultItem[]>([]);
@@ -65,14 +65,17 @@ export default function PickItemScreen() {
     if (isAlbum) {
       const a = item as SpotifyAlbum;
       const album: TopAlbum = { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl };
+      if (replaceId) removeTopAlbum(replaceId);
       addTopAlbum(album);
     } else if (isArtist) {
       const a = item as SpotifyArtist;
       const artist: TopArtist = { id: a.id, name: a.name, artworkUrl: a.artworkUrl };
+      if (replaceId) removeTopArtist(replaceId);
       addTopArtist(artist);
     } else {
       const t = item as SpotifyTrack;
-      const song: TopSong = { id: t.id, title: t.title, artist: t.artist, artworkUrl: t.artworkUrl };
+      const song: TopSong = { id: t.id, title: t.title, artist: t.artist, artworkUrl: t.artworkUrl, releaseDate: t.releaseDate };
+      if (replaceId) removeTopSong(replaceId);
       addTopSong(song);
     }
     router.back();

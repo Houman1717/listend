@@ -104,6 +104,7 @@ app.get('/home', async (req, res) => {
         title: r.title,
         artist: r.artist,
         artworkUrl: r.artwork_url,
+        releaseDate: r.year ? String(r.year) : undefined,
       })),
       artists: (artistsRes.data ?? []).map(r => ({
         id: r.spotify_id,
@@ -238,6 +239,7 @@ app.get('/search', async (req, res) => {
         title: item.name,
         artist: item.artists?.[0]?.name ?? '',
         artworkUrl: item.album?.images?.[0]?.url ?? '',
+        releaseDate: item.album?.release_date?.slice(0, 4) ?? '',
       }));
     } else {
       results = (data.artists?.items ?? []).filter(Boolean).map(item => ({

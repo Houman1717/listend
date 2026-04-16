@@ -15,6 +15,7 @@ export type SpotifyTrack = {
   title: string;
   artist: string;
   artworkUrl: string;
+  releaseDate?: string;
 };
 
 export type SpotifyArtist = {

@@ -44,6 +44,7 @@ export type TopSong = {
   title: string;
   artist: string;
   artworkUrl: string;
+  releaseDate?: string;
 };
 
 export type TopArtist = {
@@ -80,10 +81,13 @@ type AlbumsContextType = {
   topArtists: TopArtist[];
   addTopAlbum: (album: TopAlbum) => void;
   removeTopAlbum: (id: string) => void;
+  reorderTopAlbums: (albums: TopAlbum[]) => void;
   addTopSong: (song: TopSong) => void;
   removeTopSong: (id: string) => void;
+  reorderTopSongs: (songs: TopSong[]) => void;
   addTopArtist: (artist: TopArtist) => void;
   removeTopArtist: (id: string) => void;
+  reorderTopArtists: (artists: TopArtist[]) => void;
   wantToListen: WantToListenAlbum[];
   addToWantToListen: (album: WantToListenAlbum) => void;
   removeFromWantToListen: (id: string) => void;
@@ -378,6 +382,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     };
 
     setLoggedAlbums((prev) => [newAlbum, ...prev]);
+    setWantToListen((prev) => prev.filter((a) => a.id !== newAlbum.id));
     setPendingAlbum(null);
 
     if (user) {
@@ -396,6 +401,14 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         }, { onConflict: 'user_id,spotify_id' })
         .then(({ error }) => {
           if (error) console.error('[AlbumsContext] logAlbum upsert error:', error.message);
+        });
+
+      supabase
+        .from('want_to_listen')
+        .delete()
+        .match({ user_id: user.id, spotify_id: newAlbum.id })
+        .then(({ error }) => {
+          if (error) console.error('[AlbumsContext] logAlbum want_to_listen removal error:', error.message);
         });
     }
   }
@@ -449,6 +462,39 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   function removeTopArtist(id: string) {
     setTopArtists((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  function reorderTopAlbums(albums: TopAlbum[]) {
+    const ordered = albums.filter(Boolean).slice(0, 5) as TopAlbum[];
+    setTopAlbums(ordered);
+    if (user) {
+      supabase
+        .from('profiles')
+        .upsert({ id: user.id, top_albums: ordered }, { onConflict: 'id' })
+        .then(({ error }) => { if (error) console.error('[AlbumsContext] reorderTopAlbums error:', error.message); });
+    }
+  }
+
+  function reorderTopSongs(songs: TopSong[]) {
+    const ordered = songs.filter(Boolean).slice(0, 5) as TopSong[];
+    setTopSongs(ordered);
+    if (user) {
+      supabase
+        .from('profiles')
+        .upsert({ id: user.id, top_songs: ordered }, { onConflict: 'id' })
+        .then(({ error }) => { if (error) console.error('[AlbumsContext] reorderTopSongs error:', error.message); });
+    }
+  }
+
+  function reorderTopArtists(artists: TopArtist[]) {
+    const ordered = artists.filter(Boolean).slice(0, 5) as TopArtist[];
+    setTopArtists(ordered);
+    if (user) {
+      supabase
+        .from('profiles')
+        .upsert({ id: user.id, top_artists: ordered }, { onConflict: 'id' })
+        .then(({ error }) => { if (error) console.error('[AlbumsContext] reorderTopArtists error:', error.message); });
+    }
   }
 
   function addToWantToListen(album: WantToListenAlbum) {
@@ -581,7 +627,10 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   return (
     <AlbumsContext.Provider value={{
       loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, updateReview,
-      topAlbums, topSongs, topArtists, addTopAlbum, removeTopAlbum, addTopSong, removeTopSong, addTopArtist, removeTopArtist,
+      topAlbums, topSongs, topArtists,
+      addTopAlbum, removeTopAlbum, reorderTopAlbums,
+      addTopSong, removeTopSong, reorderTopSongs,
+      addTopArtist, removeTopArtist, reorderTopArtists,
       wantToListen, addToWantToListen, removeFromWantToListen,
       playlists, createPlaylist, deletePlaylist, addAlbumToPlaylist, removeAlbumFromPlaylist,
       isLoaded,

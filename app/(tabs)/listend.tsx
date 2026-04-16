@@ -9,8 +9,10 @@ import {
   Dimensions,
   Modal,
   SafeAreaView,
+  PanResponder,
+  Animated,
 } from 'react-native';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +20,7 @@ import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
+import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
 const DARK_BG   = '#0d0d0d';
 const CARD_BG   = '#1a1a1a';
@@ -401,24 +404,29 @@ const FAV_SLOTS = 5;
 const FAV_SLOT_SIZE = Math.floor(
   (Dimensions.get('window').width - 40 - FAV_GAP * (FAV_SLOTS - 1)) / FAV_SLOTS
 );
+const SLOT_STEP = FAV_SLOT_SIZE + FAV_GAP;
 
 // ─── Horizontal favourite slot ────────────────────────────────────────────────
 
 function FavSlot({
   item,
-  onAdd,
-  onRemove,
+  editMode = false,
+  onPress,
   circular = false,
 }: {
   item?: { artworkUrl?: string; title: string };
-  onAdd: () => void;
-  onRemove: () => void;
+  editMode?: boolean;
+  onPress?: () => void;
   circular?: boolean;
 }) {
   const radius = circular ? FAV_SLOT_SIZE / 2 : 3;
+
   if (item) {
     return (
-      <Pressable onPress={onRemove} style={[s.favSlot, { borderRadius: radius }]}>
+      <Pressable
+        onPress={onPress}
+        disabled={!onPress}
+        style={({ pressed }) => [s.favSlot, { borderRadius: radius, opacity: pressed ? 0.7 : 1 }]}>
         {item.artworkUrl ? (
           <Image
             source={{ uri: item.artworkUrl }}
@@ -430,14 +438,24 @@ function FavSlot({
             <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
           </View>
         )}
+        {editMode && (
+          <View style={[s.favEditOverlay, { borderRadius: radius }]}>
+            <FontAwesome name="pencil" size={10} color="#fff" />
+          </View>
+        )}
       </Pressable>
     );
   }
-  return (
-    <Pressable onPress={onAdd} style={[s.favSlot, s.favEmpty, { borderRadius: radius }]}>
-      <Text style={s.favPlus}>+</Text>
-    </Pressable>
-  );
+
+  if (editMode) {
+    return (
+      <Pressable onPress={onPress} style={[s.favSlot, s.favEmptyEdit, { borderRadius: radius }]}>
+        <FontAwesome name="plus" size={14} color="#555" />
+      </Pressable>
+    );
+  }
+
+  return <View style={[s.favSlot, s.favEmpty, { borderRadius: radius }]} />;
 }
 
 // ─── Navigation row ───────────────────────────────────────────────────────────
@@ -578,6 +596,204 @@ const ss = StyleSheet.create({
   signOutLabel: { color: '#FF4444' },
 });
 
+// ─── Draggable Top-5 row (edit mode only) ────────────────────────────────────
+
+function DraggableFavRow({
+  slots,
+  circular = false,
+  onSlotPress,
+  onReorder,
+}: {
+  slots: (any | undefined)[];
+  circular?: boolean;
+  onSlotPress: (index: number, item: any) => void;
+  onReorder: (newOrder: (any | undefined)[]) => void;
+}) {
+  const slotsRef = useRef(slots);
+  slotsRef.current = slots;
+  const onSlotPressRef = useRef(onSlotPress);
+  onSlotPressRef.current = onSlotPress;
+  const onReorderRef = useRef(onReorder);
+  onReorderRef.current = onReorder;
+
+  const isDraggingRef  = useRef(false);
+  const dragIdxRef     = useRef(-1);
+  const hoverIdxRef    = useRef(-1);
+  const timerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPageXRef  = useRef(0);   // pageX at touch start — used as dx anchor
+  const floatX         = useRef(new Animated.Value(0)).current;
+
+  // Row's absolute x on screen — converts pageX → local slot index
+  const rowRef      = useRef<View>(null);
+  const rowPageXRef = useRef(0);
+
+  const [dragState, setDragState] = useState<{
+    dragIdx: number;
+    hoverIdx: number;
+    draggingItem: any;
+  } | null>(null);
+
+  function clearTimer() {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+  }
+
+  function slotIdxAt(px: number) {
+    return Math.min(4, Math.max(0, Math.floor((px - rowPageXRef.current) / SLOT_STEP)));
+  }
+
+  const panResponder = useRef(
+    PanResponder.create({
+      // Capture phase: claim touch before any child Pressable
+      onStartShouldSetPanResponderCapture: () => true,
+      // Reclaim responder if we're mid-drag and somehow lost it
+      onMoveShouldSetPanResponder: () => isDraggingRef.current,
+      // Never yield to the ScrollView parent — this is the key fix for the
+      // "only one hop" bug where the ScrollView stole the responder each move
+      onPanResponderTerminateRequest: () => false,
+
+      onPanResponderGrant: (evt) => {
+        const idx = slotIdxAt(evt.nativeEvent.pageX);
+        dragIdxRef.current   = idx;
+        hoverIdxRef.current  = idx;
+        startPageXRef.current = evt.nativeEvent.pageX;
+        floatX.setValue(idx * SLOT_STEP);
+
+        timerRef.current = setTimeout(() => {
+          const item = slotsRef.current[idx];
+          if (!item) return;
+          isDraggingRef.current = true;
+          setDragState({ dragIdx: idx, hoverIdx: idx, draggingItem: item });
+        }, 300);
+      },
+
+      onPanResponderMove: (evt, gs) => {
+        if (!isDraggingRef.current) {
+          if (Math.abs(gs.dx) > 8 || Math.abs(gs.dy) > 10) clearTimer();
+          return;
+        }
+        // Use live pageX instead of gestureState.dx to avoid drift across re-renders
+        const dx = evt.nativeEvent.pageX - startPageXRef.current;
+        const clamped = Math.max(0, Math.min(4 * SLOT_STEP, dragIdxRef.current * SLOT_STEP + dx));
+        floatX.setValue(clamped);
+        const newHover = Math.min(4, Math.max(0, Math.round((clamped + FAV_SLOT_SIZE / 2) / SLOT_STEP)));
+        if (newHover !== hoverIdxRef.current) {
+          hoverIdxRef.current = newHover;
+          setDragState(prev => prev ? { ...prev, hoverIdx: newHover } : null);
+        }
+      },
+
+      onPanResponderRelease: (evt) => {
+        clearTimer();
+        if (!isDraggingRef.current) {
+          const tapped = slotIdxAt(evt.nativeEvent.pageX);
+          onSlotPressRef.current(tapped, slotsRef.current[tapped]);
+          return;
+        }
+        const from = dragIdxRef.current;
+        const to   = hoverIdxRef.current;
+        isDraggingRef.current = false;
+        dragIdxRef.current    = -1;
+        hoverIdxRef.current   = -1;
+        setDragState(null);
+        if (from !== to) {
+          const next = [...slotsRef.current];
+          const [moved] = next.splice(from, 1);
+          next.splice(to, 0, moved);
+          onReorderRef.current(next);
+        }
+      },
+
+      onPanResponderTerminate: () => {
+        clearTimer();
+        isDraggingRef.current = false;
+        dragIdxRef.current    = -1;
+        hoverIdxRef.current   = -1;
+        setDragState(null);
+      },
+    })
+  ).current;
+
+  // Build display order during drag
+  let displaySlots: (any | undefined)[];
+  let placeholderIdx = -1;
+  if (dragState) {
+    const { dragIdx, hoverIdx } = dragState;
+    if (dragIdx === hoverIdx) {
+      displaySlots   = slots.map((item, i) => (i === dragIdx ? undefined : item));
+      placeholderIdx = dragIdx;
+    } else {
+      const rest = slots.filter((_, i) => i !== dragIdx);
+      rest.splice(hoverIdx, 0, undefined);
+      displaySlots   = rest;
+      placeholderIdx = hoverIdx;
+    }
+  } else {
+    displaySlots = [...slots];
+  }
+
+  const radius       = circular ? FAV_SLOT_SIZE / 2 : 3;
+  const draggingItem = dragState?.draggingItem;
+
+  return (
+    <View
+      ref={rowRef}
+      style={[s.favRow, { position: 'relative' }]}
+      onLayout={() => rowRef.current?.measure((_x, _y, _w, _h, px) => { rowPageXRef.current = px; })}
+      {...panResponder.panHandlers}
+    >
+      {displaySlots.map((item, i) => {
+        const isPlaceholder = i === placeholderIdx && !!dragState;
+        const displayItem   = isPlaceholder || !item
+          ? undefined
+          : { artworkUrl: item.artworkUrl, title: item.title || item.name || '' };
+        // pointerEvents="none" prevents child Pressables from consuming touches
+        return (
+          <View key={i} pointerEvents="none">
+            <FavSlot item={displayItem} editMode circular={circular} />
+          </View>
+        );
+      })}
+
+      {draggingItem && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            width: FAV_SLOT_SIZE,
+            height: FAV_SLOT_SIZE,
+            borderRadius: radius,
+            overflow: 'hidden',
+            backgroundColor: CARD_BG,
+            position: 'absolute',
+            left: floatX,
+            top: -4,
+            zIndex: 20,
+            elevation: 20,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.5,
+            shadowRadius: 10,
+            transform: [{ scale: 1.08 }],
+          }}
+        >
+          {draggingItem.artworkUrl ? (
+            <Image
+              source={{ uri: draggingItem.artworkUrl }}
+              style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE }}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[s.favInitialBg]}>
+              <Text style={s.favInitial}>
+                {(draggingItem.title || draggingItem.name || '?').charAt(0)}
+              </Text>
+            </View>
+          )}
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ListendScreen() {
@@ -585,9 +801,11 @@ export default function ListendScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
-  const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, loggedAlbums, wantToListen } = useAlbums();
+  const { topAlbums, topSongs, topArtists, reorderTopAlbums, reorderTopSongs, reorderTopArtists, loggedAlbums, wantToListen } = useAlbums();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [top5EditMode, setTop5EditMode] = useState(false);
+  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   // Profile data — re-fetched each time the tab comes into focus
   // so updates from edit-profile are reflected immediately
@@ -665,28 +883,13 @@ export default function ListendScreen() {
     count: loggedAlbums.filter(a => a.rating === i + 1).length,
   }));
 
-  function confirmRemoveAlbum(id: string, title: string) {
-    Alert.alert('Remove', `Remove "${title}" from Top 5?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeTopAlbum(id) },
-    ]);
-  }
-
-  function confirmRemoveSong(id: string, title: string) {
-    Alert.alert('Remove', `Remove "${title}" from Top 5?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeTopSong(id) },
-    ]);
-  }
-
-  function confirmRemoveArtist(id: string, name: string) {
-    Alert.alert('Remove', `Remove "${name}" from Top 5?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeTopArtist(id) },
-    ]);
-  }
-
   return (
+    <>
+    <SongInfoModal
+      song={activeSong}
+      onClose={() => setActiveSong(null)}
+      onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+    />
     <ScrollView
       style={s.container}
       contentContainerStyle={s.content}
@@ -726,23 +929,37 @@ export default function ListendScreen() {
       <View style={s.section}>
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>MY TOP 5 ALBUMS</Text>
-          <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'album' } })}>
-            <Text style={s.editLabel}>Edit</Text>
+          <Pressable
+            onPress={() => setTop5EditMode(v => !v)}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+            <Text style={s.editLabel}>{top5EditMode ? 'Done' : 'Edit'}</Text>
           </Pressable>
         </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
-            const a: TopAlbum | undefined = topAlbums[i];
-            return (
-              <FavSlot
-                key={i}
-                item={a}
-                onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'album' } })}
-                onRemove={() => a && confirmRemoveAlbum(a.id, a.title)}
-              />
-            );
-          })}
-        </View>
+        {top5EditMode ? (
+          <DraggableFavRow
+            slots={Array.from({ length: 5 }, (_, i) => topAlbums[i])}
+            circular={false}
+            onSlotPress={(_, item) => {
+              const a = item as TopAlbum | undefined;
+              router.push({ pathname: '/pick-item', params: { type: 'album', ...(a ? { replaceId: a.id } : {}) } });
+            }}
+            onReorder={(next) => reorderTopAlbums(next.filter(Boolean) as TopAlbum[])}
+          />
+        ) : (
+          <View style={s.favRow}>
+            {Array.from({ length: 5 }).map((_, i) => {
+              const a: TopAlbum | undefined = topAlbums[i];
+              return (
+                <FavSlot
+                  key={i}
+                  item={a}
+                  editMode={false}
+                  onPress={a ? () => router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl } }) : undefined}
+                />
+              );
+            })}
+          </View>
+        )}
       </View>
 
       <View style={s.rule} />
@@ -751,23 +968,32 @@ export default function ListendScreen() {
       <View style={s.section}>
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>MY TOP 5 SONGS</Text>
-          <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}>
-            <Text style={s.editLabel}>Edit</Text>
-          </Pressable>
         </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
-            const song: TopSong | undefined = topSongs[i];
-            return (
-              <FavSlot
-                key={i}
-                item={song}
-                onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}
-                onRemove={() => song && confirmRemoveSong(song.id, song.title)}
-              />
-            );
-          })}
-        </View>
+        {top5EditMode ? (
+          <DraggableFavRow
+            slots={Array.from({ length: 5 }, (_, i) => topSongs[i])}
+            circular={false}
+            onSlotPress={(_, item) => {
+              const song = item as TopSong | undefined;
+              router.push({ pathname: '/pick-item', params: { type: 'song', ...(song ? { replaceId: song.id } : {}) } });
+            }}
+            onReorder={(next) => reorderTopSongs(next.filter(Boolean) as TopSong[])}
+          />
+        ) : (
+          <View style={s.favRow}>
+            {Array.from({ length: 5 }).map((_, i) => {
+              const song: TopSong | undefined = topSongs[i];
+              return (
+                <FavSlot
+                  key={i}
+                  item={song}
+                  editMode={false}
+                  onPress={song ? () => setActiveSong({ title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate }) : undefined}
+                />
+              );
+            })}
+          </View>
+        )}
       </View>
 
       <View style={s.rule} />
@@ -776,24 +1002,33 @@ export default function ListendScreen() {
       <View style={s.section}>
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>MY TOP 5 ARTISTS</Text>
-          <Pressable onPress={() => router.push({ pathname: '/pick-item', params: { type: 'artist' } })}>
-            <Text style={s.editLabel}>Edit</Text>
-          </Pressable>
         </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
-            const artist: TopArtist | undefined = topArtists[i];
-            return (
-              <FavSlot
-                key={i}
-                circular
-                item={artist ? { artworkUrl: artist.artworkUrl, title: artist.name } : undefined}
-                onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'artist' } })}
-                onRemove={() => artist && confirmRemoveArtist(artist.id, artist.name)}
-              />
-            );
-          })}
-        </View>
+        {top5EditMode ? (
+          <DraggableFavRow
+            slots={Array.from({ length: 5 }, (_, i) => topArtists[i])}
+            circular={true}
+            onSlotPress={(_, item) => {
+              const artist = item as TopArtist | undefined;
+              router.push({ pathname: '/pick-item', params: { type: 'artist', ...(artist ? { replaceId: artist.id } : {}) } });
+            }}
+            onReorder={(next) => reorderTopArtists(next.filter(Boolean) as TopArtist[])}
+          />
+        ) : (
+          <View style={s.favRow}>
+            {Array.from({ length: 5 }).map((_, i) => {
+              const artist: TopArtist | undefined = topArtists[i];
+              return (
+                <FavSlot
+                  key={i}
+                  circular
+                  item={artist ? { artworkUrl: artist.artworkUrl, title: artist.name } : undefined}
+                  editMode={false}
+                  onPress={artist ? () => router.push({ pathname: '/artist-detail', params: { id: artist.id, name: artist.name, artworkUrl: artist.artworkUrl } }) : undefined}
+                />
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* ── Activity rows (above stats) ─────────────────────────────────────── */}
@@ -858,6 +1093,7 @@ export default function ListendScreen() {
       </View>
 
     </ScrollView>
+    </>
   );
 }
 
@@ -903,6 +1139,23 @@ const s = StyleSheet.create({
   },
   favInitial: { color: '#555', fontSize: 16, fontWeight: '700' },
   favPlus: { color: '#505050', fontSize: 20, fontWeight: '300' },
+  favEmptyEdit: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#3a3a3a',
+    borderStyle: 'dashed',
+  },
+  favEditOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 20 },
 

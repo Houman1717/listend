@@ -9,6 +9,10 @@ import {
   Dimensions,
   Modal,
   SafeAreaView,
+  TextInput,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -16,9 +20,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const API_URL    = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const DARK_BG    = '#0d0d0d';
 const CARD_BG    = '#1a1a1a';
 const BORDER     = '#2a2a2a';
@@ -35,8 +41,8 @@ const FAV_SLOT_SIZE = Math.floor(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FavAlbum  = { id: string; title: string; artist: string; artworkUrl: string };
-type FavSong   = { id: string; title: string; artist: string; artworkUrl: string };
+type FavAlbum  = { id: string; title: string; artist: string; artworkUrl: string; year?: number };
+type FavSong   = { id: string; title: string; artist: string; artworkUrl: string; releaseDate?: string };
 type FavArtist = { id: string; name: string; artworkUrl: string };
 
 type Profile = {
@@ -189,6 +195,176 @@ function FavSlotReadOnly({
   return <>{inner}</>;
 }
 
+// ─── Edit fav slot ────────────────────────────────────────────────────────────
+
+function FavSlotEdit({
+  item,
+  circular = false,
+  onPress,
+}: {
+  item?: { artworkUrl?: string; title: string };
+  circular?: boolean;
+  onPress: () => void;
+}) {
+  const radius = circular ? FAV_SLOT_SIZE / 2 : 3;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
+      {item?.artworkUrl ? (
+        <View style={[s.favSlot, { borderRadius: radius }]}>
+          <Image
+            source={{ uri: item.artworkUrl }}
+            style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE, borderRadius: radius }}
+            resizeMode="cover"
+          />
+          <View style={[s.favEditOverlay, { borderRadius: radius }]}>
+            <FontAwesome name="pencil" size={10} color="#fff" />
+          </View>
+        </View>
+      ) : item ? (
+        <View style={[s.favSlot, { borderRadius: radius }]}>
+          <View style={[s.favInitialBg, { borderRadius: radius }]}>
+            <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
+          </View>
+          <View style={[s.favEditOverlay, { borderRadius: radius }]}>
+            <FontAwesome name="pencil" size={10} color="#fff" />
+          </View>
+        </View>
+      ) : (
+        <View style={[s.favSlot, s.favEmptyEdit, { borderRadius: radius }]}>
+          <FontAwesome name="plus" size={14} color="#555" />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+// ─── Slot picker modal ────────────────────────────────────────────────────────
+
+function SlotPickerModal({
+  visible,
+  type,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  type: 'album' | 'song' | 'artist';
+  onSelect: (item: FavAlbum | FavSong | FavArtist) => void;
+  onClose: () => void;
+}) {
+  const [query,     setQuery]     = useState('');
+  const [results,   setResults]   = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    if (!visible) { setQuery(''); setResults([]); }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return; }
+    const apiType = type === 'song' ? 'track' : type;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query.trim())}&type=${apiType}`);
+        if (res.ok) setResults(await res.json());
+      } catch { } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [query, type]);
+
+  function handleSelect(raw: any) {
+    let item: FavAlbum | FavSong | FavArtist;
+    if (type === 'artist') {
+      item = { id: raw.id, name: raw.name ?? raw.title ?? '', artworkUrl: raw.artworkUrl ?? '' };
+    } else {
+      item = { id: raw.id, title: raw.title ?? '', artist: raw.artist ?? '', artworkUrl: raw.artworkUrl ?? '' };
+    }
+    onSelect(item);
+    onClose();
+  }
+
+  const placeholder = type === 'artist' ? 'Search artists…' : type === 'song' ? 'Search songs…' : 'Search albums…';
+  const modalTitle  = type === 'artist' ? 'Choose Artist'  : type === 'song' ? 'Choose Song'    : 'Choose Album';
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: DARK_BG }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <SafeAreaView style={{ flex: 1 }}>
+
+          {/* Header */}
+          <View style={sp.header}>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="times" size={18} color={SUBTEXT} />
+            </Pressable>
+            <Text style={sp.title}>{modalTitle}</Text>
+            <View style={{ width: 18 }} />
+          </View>
+
+          {/* Search bar */}
+          <View style={sp.searchBar}>
+            <FontAwesome name="search" size={13} color={SUBTEXT} />
+            <TextInput
+              style={sp.searchInput}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={placeholder}
+              placeholderTextColor={SUBTEXT}
+              autoFocus
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+            />
+          </View>
+
+          {/* Results */}
+          {searching ? (
+            <ActivityIndicator color={ACCENT} style={{ marginTop: 32 }} />
+          ) : (
+            <FlatList
+              data={results}
+              keyExtractor={(_, i) => String(i)}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => {
+                const title    = type === 'artist' ? (item.name ?? '') : (item.title ?? '');
+                const sub      = type === 'artist' ? (item.genre ?? '') : (item.artist ?? '');
+                const artwork  = item.artworkUrl ?? '';
+                const circular = type === 'artist';
+                return (
+                  <Pressable
+                    style={({ pressed }) => [sp.resultRow, { opacity: pressed ? 0.6 : 1 }]}
+                    onPress={() => handleSelect(item)}>
+                    {artwork ? (
+                      <Image
+                        source={{ uri: artwork }}
+                        style={[sp.resultArt, circular && { borderRadius: 22 }]}
+                      />
+                    ) : (
+                      <View style={[sp.resultArt, { backgroundColor: CARD_BG, justifyContent: 'center', alignItems: 'center' }, circular && { borderRadius: 22 }]}>
+                        <Text style={{ color: SUBTEXT, fontSize: 14 }}>{title.charAt(0)}</Text>
+                      </View>
+                    )}
+                    <View style={sp.resultText}>
+                      <Text style={sp.resultTitle} numberOfLines={1}>{title}</Text>
+                      {sub ? <Text style={sp.resultSub} numberOfLines={1}>{sub}</Text> : null}
+                    </View>
+                  </Pressable>
+                );
+              }}
+            />
+          )}
+
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ─── Nav row ──────────────────────────────────────────────────────────────────
 
 function NavRow({
@@ -227,8 +403,19 @@ export default function UserProfileScreen() {
   const navigation     = useNavigation();
   const router         = useRouter();
 
+  const isOwnProfile = !!user?.id && user.id === viewedUserId;
+
   const [profile,        setProfile]        = useState<Profile | null>(null);
   const [loading,        setLoading]        = useState(true);
+
+  // Top 5 edit mode
+  const [top5EditMode,    setTop5EditMode]    = useState(false);
+  const [isSaving,        setIsSaving]        = useState(false);
+  const [draftTopAlbums,  setDraftTopAlbums]  = useState<FavAlbum[]>([]);
+  const [draftTopSongs,   setDraftTopSongs]   = useState<FavSong[]>([]);
+  const [draftTopArtists, setDraftTopArtists] = useState<FavArtist[]>([]);
+  const [slotPicker, setSlotPicker] = useState<{ type: 'album' | 'song' | 'artist'; index: number } | null>(null);
+  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   // Follow state — read from Supabase on load so it persists across sessions
   const [isFollowing,    setIsFollowing]    = useState(false);
@@ -444,6 +631,47 @@ export default function UserProfileScreen() {
     setFollowLoading(false);
   }
 
+  // ── Top 5 edit ───────────────────────────────────────────────────────────────
+  function handleEnterEditMode() {
+    if (!profile) return;
+    setDraftTopAlbums([...profile.top_albums]);
+    setDraftTopSongs([...profile.top_songs]);
+    setDraftTopArtists([...profile.top_artists]);
+    setTop5EditMode(true);
+  }
+
+  async function handleSaveTop5() {
+    if (!user?.id || !profile) return;
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        top_albums:  draftTopAlbums,
+        top_songs:   draftTopSongs,
+        top_artists: draftTopArtists,
+      })
+      .eq('id', user.id);
+    if (!error) {
+      setProfile({ ...profile, top_albums: draftTopAlbums, top_songs: draftTopSongs, top_artists: draftTopArtists });
+    } else {
+      console.error('[UserProfile] top5 save error:', error.message);
+    }
+    setIsSaving(false);
+    setTop5EditMode(false);
+  }
+
+  function handleSlotSelect(item: FavAlbum | FavSong | FavArtist) {
+    if (!slotPicker) return;
+    const { type, index } = slotPicker;
+    if (type === 'album') {
+      setDraftTopAlbums(prev => { const n = [...prev]; n[index] = item as FavAlbum; return n; });
+    } else if (type === 'song') {
+      setDraftTopSongs(prev => { const n = [...prev]; n[index] = item as FavSong; return n; });
+    } else {
+      setDraftTopArtists(prev => { const n = [...prev]; n[index] = item as FavArtist; return n; });
+    }
+  }
+
   // ── Loading / not found ──────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -465,6 +693,12 @@ export default function UserProfileScreen() {
   const initial = name.charAt(0).toUpperCase() || '?';
 
   return (
+    <>
+    <SongInfoModal
+      song={activeSong}
+      onClose={() => setActiveSong(null)}
+      onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+    />
     <ScrollView
       style={s.container}
       contentContainerStyle={s.content}
@@ -578,15 +812,40 @@ export default function UserProfileScreen() {
       <View style={s.section}>
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>TOP 5 ALBUMS</Text>
+          {isOwnProfile && (
+            top5EditMode ? (
+              <Pressable
+                onPress={handleSaveTop5}
+                disabled={isSaving}
+                style={({ pressed }) => ({ opacity: pressed || isSaving ? 0.6 : 1 })}>
+                {isSaving
+                  ? <ActivityIndicator size="small" color={ACCENT} />
+                  : <Text style={s.editBtn}>Done</Text>}
+              </Pressable>
+            ) : (
+              <Pressable onPress={handleEnterEditMode} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                <Text style={s.editBtn}>Edit</Text>
+              </Pressable>
+            )
+          )}
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const a = profile.top_albums[i];
+            const a = top5EditMode ? draftTopAlbums[i] : profile.top_albums[i];
+            if (top5EditMode) {
+              return (
+                <FavSlotEdit
+                  key={i}
+                  item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
+                  onPress={() => setSlotPicker({ type: 'album', index: i })}
+                />
+              );
+            }
             return (
               <FavSlotReadOnly
                 key={i}
                 item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
-                onPress={a ? () => router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, artworkUrl: a.artworkUrl } }) : undefined}
+                onPress={a ? () => router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl } }) : undefined}
               />
             );
           })}
@@ -602,12 +861,21 @@ export default function UserProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const sg = profile.top_songs[i];
+            const sg = top5EditMode ? draftTopSongs[i] : profile.top_songs[i];
+            if (top5EditMode) {
+              return (
+                <FavSlotEdit
+                  key={i}
+                  item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
+                  onPress={() => setSlotPicker({ type: 'song', index: i })}
+                />
+              );
+            }
             return (
               <FavSlotReadOnly
                 key={i}
                 item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
-                onPress={sg ? () => router.push({ pathname: '/artist-detail', params: { name: sg.artist } }) : undefined}
+                onPress={sg ? () => setActiveSong({ title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
               />
             );
           })}
@@ -623,7 +891,17 @@ export default function UserProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const ar = profile.top_artists[i];
+            const ar = top5EditMode ? draftTopArtists[i] : profile.top_artists[i];
+            if (top5EditMode) {
+              return (
+                <FavSlotEdit
+                  key={i}
+                  item={ar ? { artworkUrl: ar.artworkUrl, title: ar.name } : undefined}
+                  circular
+                  onPress={() => setSlotPicker({ type: 'artist', index: i })}
+                />
+              );
+            }
             return (
               <FavSlotReadOnly
                 key={i}
@@ -690,7 +968,15 @@ export default function UserProfileScreen() {
         />
       </View>
 
+      <SlotPickerModal
+        visible={slotPicker !== null}
+        type={slotPicker?.type ?? 'album'}
+        onSelect={handleSlotSelect}
+        onClose={() => setSlotPicker(null)}
+      />
+
     </ScrollView>
+    </>
   );
 }
 
@@ -835,6 +1121,29 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2e2e2e',
   },
+  favEmptyEdit: {
+    borderWidth: 1.5,
+    borderColor: '#3a3a3a',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  favEditOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderTopLeftRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editBtn: {
+    color: ACCENT,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   favInitialBg: {
     width: FAV_SLOT_SIZE,
     height: FAV_SLOT_SIZE,
@@ -926,4 +1235,54 @@ const rm = StyleSheet.create({
     color: TEXT, fontSize: 13, fontWeight: '600',
     width: 28, textAlign: 'right',
   },
+});
+
+// ─── Slot picker modal styles ─────────────────────────────────────────────────
+
+const sp = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
+  title: {
+    color: TEXT,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    margin: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: CARD_BG,
+    borderRadius: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 15,
+  },
+  resultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  resultArt: {
+    width: 44,
+    height: 44,
+    borderRadius: 4,
+    backgroundColor: CARD_BG,
+  },
+  resultText: { flex: 1, gap: 3 },
+  resultTitle: { color: TEXT,    fontSize: 15, fontWeight: '600' },
+  resultSub:   { color: SUBTEXT, fontSize: 13 },
 });

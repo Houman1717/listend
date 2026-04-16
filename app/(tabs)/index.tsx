@@ -8,12 +8,18 @@ import {
   Pressable,
   Image,
   ActivityIndicator,
+  Modal,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -131,12 +137,30 @@ export const POPULAR_REVIEWS_DATA: PopularReview[] = [
   },
 ];
 
-export function avatarColor(username: string): string {
-  const palette = ['#FF3CAC', '#7B61FF', '#00BCD4', '#FF6B35', '#4CAF50', '#FFC107'];
-  let hash = 0;
-  for (const c of username) hash = (hash * 31 + c.charCodeAt(0)) % palette.length;
-  return palette[Math.abs(hash)];
-}
+// avatarColor is re-exported so popular-reviews.tsx can import it from here
+export { avatarColor };
+
+// ─── Popular review mock comments ────────────────────────────────────────────
+
+const POPULAR_REVIEW_COMMENTS: ReviewComment[] = [
+  // Review 1 — After Hours
+  { id: 'pr_c1', reviewId: '1', userId: 'u1', username: 'nightfreq',     body: 'Blinding Lights is one of those songs that transcends the whole album.',  createdAt: '1 day ago'  },
+  { id: 'pr_c2', reviewId: '1', userId: 'u2', username: 'wavesurfer',    body: 'The whole aesthetic is so coherent from start to finish.',                 createdAt: '2 days ago' },
+  // Review 2 — folklore
+  { id: 'pr_c3', reviewId: '2', userId: 'u3', username: 'indie_ears',    body: 'Cardigan is legitimately one of her best tracks ever written.',            createdAt: '3 days ago' },
+  { id: 'pr_c4', reviewId: '2', parentCommentId: 'pr_c3', userId: 'u4', username: 'moodboard_mel', body: 'Totally agree — the production on that one is so delicate.', createdAt: '2 days ago' },
+  // Review 3 — DAMN.
+  { id: 'pr_c5', reviewId: '3', userId: 'u5', username: 'deep_cuts99',   body: 'DUCKWORTH as the closer is a masterclass in sequencing.',                 createdAt: '5 days ago' },
+  { id: 'pr_c6', reviewId: '3', userId: 'u6', username: 'tape_collector',body: '"Built different" is an understatement.',                                  createdAt: '4 days ago' },
+  { id: 'pr_c7', reviewId: '3', userId: 'u7', username: 'lofi_lyric',    body: 'Still holds up perfectly years later.',                                    createdAt: '1 week ago' },
+  // Review 4 — SOS
+  { id: 'pr_c8', reviewId: '4', userId: 'u8', username: 'auralfix',      body: "Kill Bill is perfect. SZA's voice is on another level here.",             createdAt: '2 days ago' },
+  // Review 5 — Random Access Memories
+  { id: 'pr_c9',  reviewId: '5', userId: 'u9',  username: 'bass_notes_ben',  body: 'Touch is so underrated. Giorgio by Moroder too.',              createdAt: '6 days ago' },
+  { id: 'pr_c10', reviewId: '5', parentCommentId: 'pr_c9', userId: 'u10', username: 'nightowl_nina', body: 'Giorgio by Moroder is an absolute journey.', createdAt: '5 days ago' },
+  // Review 6 — Currents
+  { id: 'pr_c11', reviewId: '6', userId: 'u11', username: 'sideB_fan',   body: 'The Less I Know is just perfect indie-pop. Full stop.',                   createdAt: '1 week ago' },
+];
 
 // ─── Card sizes ───────────────────────────────────────────────────────────────
 
@@ -232,6 +256,8 @@ function PopularReviewCard({
   liked,
   onLike,
   onPress,
+  onCommentCountPress,
+  commentCount = 0,
   isDark,
   colors,
 }: {
@@ -239,10 +265,13 @@ function PopularReviewCard({
   liked: boolean;
   onLike: () => void;
   onPress: () => void;
+  onCommentCountPress: () => void;
+  commentCount?: number;
   isDark: boolean;
   colors: any;
 }) {
   const displayCount = item.likeCount + (liked ? 1 : 0);
+  const subtext = isDark ? '#555' : '#bbb';
   return (
     <Pressable
       onPress={onPress}
@@ -282,7 +311,7 @@ function PopularReviewCard({
         "{item.review}"
       </Text>
 
-      {/* Footer: avatar + username + like */}
+      {/* Footer: avatar + username | comments + like */}
       <View style={pr.footer}>
         <View style={pr.userRow}>
           <View style={[pr.avatar, { backgroundColor: avatarColor(item.username) }]}>
@@ -292,18 +321,144 @@ function PopularReviewCard({
             @{item.username}
           </Text>
         </View>
-        <Pressable onPress={onLike} hitSlop={8} style={pr.likeBtn}>
-          <FontAwesome
-            name={liked ? 'heart' : 'heart-o'}
-            size={13}
-            color={liked ? '#FF3CAC' : (isDark ? '#555' : '#bbb')}
-          />
-          <Text style={[pr.likeCount, { color: isDark ? '#555' : '#bbb' }]}>
-            {displayCount}
-          </Text>
-        </Pressable>
+        <View style={pr.footerActions}>
+          <Pressable
+            onPress={(e) => { e.stopPropagation?.(); onCommentCountPress(); }}
+            hitSlop={8}
+            style={pr.actionBtn}>
+            <FontAwesome name="comment-o" size={12} color={subtext} />
+            <Text style={[pr.actionCount, { color: subtext }]}>{commentCount}</Text>
+          </Pressable>
+          <Pressable
+            onPress={(e) => { e.stopPropagation?.(); onLike(); }}
+            hitSlop={8}
+            style={pr.actionBtn}>
+            <FontAwesome
+              name={liked ? 'heart' : 'heart-o'}
+              size={12}
+              color={liked ? '#FF3CAC' : subtext}
+            />
+            <Text style={[pr.actionCount, { color: liked ? '#FF3CAC' : subtext }]}>
+              {displayCount}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </Pressable>
+  );
+}
+
+// ─── Expanded popular review modal ────────────────────────────────────────────
+
+function PopularReviewModal({
+  review,
+  comments,
+  commentsExpanded,
+  onToggleComments,
+  onAddComment,
+  onClose,
+  isDark,
+  colors,
+}: {
+  review: PopularReview;
+  comments: ReviewComment[];
+  commentsExpanded: boolean;
+  onToggleComments: () => void;
+  onAddComment: (body: string, parentId?: string | null) => void;
+  onClose: () => void;
+  isDark: boolean;
+  colors: any;
+}) {
+  const commentCount = comments.length;
+  const bg = isDark ? '#0d0d0d' : colors.background;
+  const border = isDark ? '#2a2a2a' : '#e5e5e5';
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: bg }}>
+        <SafeAreaView style={{ flex: 1 }}>
+
+          {/* Header */}
+          <View style={[rm.header, { borderBottomColor: border }]}>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="chevron-down" size={16} color={isDark ? '#888' : '#666'} />
+            </Pressable>
+            <Text style={[rm.headerTitle, { color: isDark ? '#f0f0f0' : '#111' }]}>Review</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={[rm.body, { paddingBottom: 40 }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+
+            {/* Album row */}
+            <View style={rm.albumRow}>
+              <Image source={{ uri: review.artworkUrl }} style={rm.art} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={[rm.albumTitle, { color: isDark ? '#f0f0f0' : '#111' }]}>{review.albumTitle}</Text>
+                <Text style={[rm.albumArtist, { color: isDark ? '#888' : '#666' }]}>
+                  {review.albumArtist} · {review.albumYear}
+                </Text>
+                <View style={rm.ratingRow}>
+                  <FontAwesome name="volume-up" size={10} color="#FF3CAC" />
+                  <View style={rm.ratingBadge}>
+                    <Text style={rm.ratingNum}>{review.rating}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* Author */}
+            <View style={rm.authorRow}>
+              <View style={[rm.avatar, { backgroundColor: avatarColor(review.username) }]}>
+                <Text style={rm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+              </View>
+              <Text style={rm.username}>@{review.username}</Text>
+            </View>
+
+            {/* Full review */}
+            <Text style={[rm.reviewText, { color: isDark ? '#ccc' : '#333' }]}>
+              "{review.review}"
+            </Text>
+
+            {/* Comment toggle */}
+            <Pressable
+              onPress={onToggleComments}
+              hitSlop={8}
+              style={[rm.commentsToggle, { borderColor: border }]}>
+              <FontAwesome
+                name="comment-o"
+                size={13}
+                color={commentsExpanded ? '#FF3CAC' : (isDark ? '#555' : '#aaa')}
+              />
+              <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#FF3CAC' : (isDark ? '#555' : '#aaa') }]}>
+                {commentCount === 0
+                  ? 'No comments yet'
+                  : `${commentCount} comment${commentCount !== 1 ? 's' : ''}`}
+              </Text>
+              <FontAwesome
+                name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
+                size={10}
+                color={isDark ? '#555' : '#aaa'}
+                style={{ marginLeft: 'auto' }}
+              />
+            </Pressable>
+
+            {commentsExpanded && (
+              <CommentsSection
+                comments={comments}
+                isDark={isDark}
+                colors={colors}
+                onAddComment={onAddComment}
+              />
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -362,11 +517,51 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(!cache.albums);
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
 
+  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
+
+  // Comments state for popular reviews
+  const [expandedReview,     setExpandedReview]     = useState<PopularReview | null>(null);
+  const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
+  const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(() => {
+    const m = new Map<string, ReviewComment[]>();
+    for (const c of POPULAR_REVIEW_COMMENTS) {
+      m.set(c.reviewId, [...(m.get(c.reviewId) ?? []), c]);
+    }
+    return m;
+  });
+
   function handleLikeReview(id: string) {
     setLikedReviews(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
+    });
+  }
+
+  function handleReviewCardPress(item: PopularReview) {
+    setExpandedReview(item);
+    setExpandedCommentsId(null);
+  }
+
+  function handleReviewCommentCountPress(item: PopularReview) {
+    setExpandedReview(item);
+    setExpandedCommentsId(item.id);
+  }
+
+  function handleAddComment(reviewId: string, body: string, parentId?: string | null) {
+    const newComment: ReviewComment = {
+      id:              `local_${Date.now()}`,
+      reviewId,
+      parentCommentId: parentId ?? null,
+      userId:          'local',
+      username:        'you',
+      body,
+      createdAt:       'just now',
+    };
+    setCommentsMap(prev => {
+      const m = new Map(prev);
+      m.set(reviewId, [...(m.get(reviewId) ?? []), newComment]);
+      return m;
     });
   }
 
@@ -390,7 +585,7 @@ export default function HomeScreen() {
   function handleAlbumPress(item: SpotifyAlbum) {
     router.push({
       pathname: '/album-detail',
-      params: { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl },
+      params: { id: item.id, title: item.title, artist: item.artist, year: String(item.year), artworkUrl: item.artworkUrl },
     });
   }
 
@@ -402,11 +597,7 @@ export default function HomeScreen() {
   }
 
   function handleSongPress(item: SpotifyTrack) {
-    // Navigate to the artist page since we have the artist name but not the album ID
-    router.push({
-      pathname: '/artist-detail',
-      params: { name: item.artist },
-    });
+    setActiveSong({ title: item.title, artist: item.artist, artworkUrl: item.artworkUrl });
   }
 
   return (
@@ -465,7 +656,9 @@ export default function HomeScreen() {
               item={item}
               liked={likedReviews.has(item.id)}
               onLike={() => handleLikeReview(item.id)}
-              onPress={() => router.push('/popular-reviews')}
+              onPress={() => handleReviewCardPress(item)}
+              onCommentCountPress={() => handleReviewCommentCountPress(item)}
+              commentCount={commentsMap.get(item.id)?.length ?? 0}
               isDark={isDark}
               colors={colors}
             />
@@ -489,6 +682,29 @@ export default function HomeScreen() {
           }
         />
       </Section>
+
+      {/* Song info modal */}
+      <SongInfoModal
+        song={activeSong}
+        onClose={() => setActiveSong(null)}
+        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+      />
+
+      {/* Expanded review modal */}
+      {expandedReview && (
+        <PopularReviewModal
+          review={expandedReview}
+          comments={commentsMap.get(expandedReview.id) ?? []}
+          commentsExpanded={expandedCommentsId === expandedReview.id}
+          onToggleComments={() =>
+            setExpandedCommentsId(prev => prev === expandedReview.id ? null : expandedReview.id)
+          }
+          onAddComment={(body, parentId) => handleAddComment(expandedReview.id, body, parentId)}
+          onClose={() => { setExpandedReview(null); setExpandedCommentsId(null); }}
+          isDark={isDark}
+          colors={colors}
+        />
+      )}
 
       {/* 4 — Top Listend Songs This Week */}
       <Section title="Top Listend Songs This Week" loading={loading}>
@@ -636,6 +852,17 @@ const pr = StyleSheet.create({
     gap: 4,
   },
   likeCount: { fontSize: 11 },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  actionCount: { fontSize: 11, fontWeight: '600' },
   seeMoreCard: {
     width: 72,
     borderRadius: 12,
@@ -646,4 +873,56 @@ const pr = StyleSheet.create({
     alignSelf: 'stretch',
   },
   seeMoreText: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
+});
+
+// ─── Review modal styles ──────────────────────────────────────────────────────
+
+const rm = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  body: { padding: 16, gap: 14 },
+
+  albumRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  art: { width: 80, height: 80, borderRadius: 8 },
+  albumTitle:  { fontSize: 15, fontWeight: '700', lineHeight: 20 },
+  albumArtist: { fontSize: 13 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  ratingBadge: {
+    backgroundColor: '#FF3CAC',
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  ratingNum: { color: '#fff', fontSize: 11, fontWeight: '700' },
+
+  authorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  avatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarLetter: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  username: { color: '#FF3CAC', fontSize: 13, fontWeight: '600' },
+
+  reviewText: { fontSize: 14, lineHeight: 22, fontStyle: 'italic' },
+
+  commentsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  commentsToggleText: { fontSize: 13, fontWeight: '600', flex: 1 },
 });
