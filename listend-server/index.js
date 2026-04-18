@@ -635,6 +635,41 @@ app.get('/genius/credits', async (req, res) => {
 // ── GET /spotify/album/:id/tracks ────────────────────────────────────────────
 // Returns the full tracklist for an album.
 
+// ── GET /spotify/track/:id ────────────────────────────────────────────────────
+// Returns a single track's release date and basic info.
+
+app.get('/spotify/track/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!id || id === 'undefined') {
+    return res.status(400).json({ error: 'track id is required' });
+  }
+  const CACHE_KEY = `spotify_track_${id}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const t = await spotifyGet(`/tracks/${id}?market=US`);
+    const payload = {
+      id:          t.id,
+      title:       t.name,
+      artist:      t.artists?.[0]?.name ?? '',
+      artworkUrl:  t.album?.images?.[0]?.url ?? '',
+      albumId:     t.album?.id ?? '',
+      releaseDate: t.album?.release_date ?? '',
+    };
+    cacheSet(CACHE_KEY, payload, TTL_6H);
+    await setCache(CACHE_KEY, payload);
+    res.json(payload);
+  } catch (err) {
+    console.error('[/spotify/track]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/spotify/album/:id/tracks', async (req, res) => {
   const { id } = req.params;
   const CACHE_KEY = `spotify_album_tracks_${id}`;
