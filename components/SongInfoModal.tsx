@@ -7,18 +7,36 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
+import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type SongInfo = {
+  id?:          string;
   title:        string;
   artist:       string;
   artworkUrl?:  string;
+  albumId?:     string;
   releaseDate?: string;
 };
+
+function formatReleaseDate(raw: string): string {
+  if (!raw) return '';
+  // Accept "YYYY", "YYYY-MM", "YYYY-MM-DD"
+  const parts = raw.split('-');
+  if (parts.length === 1) return parts[0];
+  const year = parts[0];
+  const month = parseInt(parts[1], 10);
+  const day = parts[2] ? parseInt(parts[2], 10) : null;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (isNaN(month) || month < 1 || month > 12) return year;
+  return day ? `${months[month - 1]} ${day}, ${year}` : `${months[month - 1]} ${year}`;
+}
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
@@ -26,13 +44,37 @@ export function SongInfoModal({
   song,
   onClose,
   onArtistPress,
+  onAlbumPress,
 }: {
   song:           SongInfo | null;
   onClose:        () => void;
   onArtistPress?: (name: string) => void;
+  onAlbumPress?:  (albumId: string) => void;
 }) {
   const colorScheme = useColorScheme();
   const isDark      = colorScheme === 'dark';
+  const [fetchedDate,    setFetchedDate]    = useState<string>('');
+  const [fetchedAlbumId, setFetchedAlbumId] = useState<string>('');
+
+  useEffect(() => {
+    setFetchedDate('');
+    setFetchedAlbumId('');
+    if (!song) return;
+    if ((song.releaseDate && song.albumId) || !song.id) return;
+    let cancelled = false;
+    fetch(`${API_URL}/spotify/track/${song.id}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled) return;
+        if (data?.releaseDate) setFetchedDate(data.releaseDate);
+        if (data?.albumId)     setFetchedAlbumId(data.albumId);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [song?.id, song?.releaseDate, song?.albumId]);
+
+  const displayDate    = formatReleaseDate(song?.releaseDate || fetchedDate || '');
+  const displayAlbumId = song?.albumId || fetchedAlbumId;
 
   return (
     <Modal
@@ -68,12 +110,22 @@ export function SongInfoModal({
           )}
 
           <View style={s.info}>
-            <Text
-              style={[s.title, { color: isDark ? '#f0f0f0' : '#111' }]}
-              numberOfLines={2}
+            <Pressable
+              hitSlop={6}
+              disabled={!displayAlbumId}
+              onPress={() => {
+                if (!displayAlbumId) return;
+                onClose();
+                onAlbumPress?.(displayAlbumId);
+              }}
             >
-              {song?.title}
-            </Text>
+              <Text
+                style={[s.title, { color: isDark ? '#f0f0f0' : '#111' }, displayAlbumId ? s.titleTappable : null]}
+                numberOfLines={2}
+              >
+                {song?.title}
+              </Text>
+            </Pressable>
 
             {/* Artist — tappable, navigation handled by parent */}
             <Pressable
@@ -92,11 +144,11 @@ export function SongInfoModal({
             </Pressable>
 
             {/* Release date */}
-            {song?.releaseDate ? (
+            {displayDate ? (
               <View style={s.dateRow}>
                 <FontAwesome name="calendar-o" size={11} color={isDark ? '#666' : '#aaa'} />
                 <Text style={[s.date, { color: isDark ? '#666' : '#aaa' }]}>
-                  {song.releaseDate}
+                  {displayDate}
                 </Text>
               </View>
             ) : null}
@@ -166,6 +218,9 @@ const s = StyleSheet.create({
     fontSize:   17,
     fontWeight: '700',
     lineHeight: 22,
+  },
+  titleTappable: {
+    textDecorationLine: 'underline',
   },
   artistRow: {
     flexDirection: 'row',

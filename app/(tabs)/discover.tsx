@@ -294,6 +294,7 @@ export default function DiscoverScreen() {
         song={activeSong}
         onClose={() => setActiveSong(null)}
         onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+        onAlbumPress={(id) => router.push({ pathname: '/album-detail', params: { id } })}
       />
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -378,7 +379,7 @@ export default function DiscoverScreen() {
             contentContainerStyle={s.row}
             renderItem={({ item, index }) =>
               item ? (
-                <SongCard item={item} index={index} isDark={isDark} onPress={() => setActiveSong({ title: item.title, artist: item.artist, artworkUrl: item.artworkUrl })} />
+                <SongCard item={item} index={index} isDark={isDark} onPress={() => setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate })} />
               ) : (
                 <View style={[s.placeholderCard, { backgroundColor: isDark ? '#1e1e2e' : '#e5e5e5' }]} />
               )

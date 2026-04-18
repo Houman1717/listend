@@ -597,7 +597,7 @@ export default function HomeScreen() {
   }
 
   function handleSongPress(item: SpotifyTrack) {
-    setActiveSong({ title: item.title, artist: item.artist, artworkUrl: item.artworkUrl });
+    setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate });
   }
 
   return (
@@ -688,6 +688,7 @@ export default function HomeScreen() {
         song={activeSong}
         onClose={() => setActiveSong(null)}
         onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+        onAlbumPress={(id) => router.push({ pathname: '/album-detail', params: { id } })}
       />
 
       {/* Expanded review modal */}

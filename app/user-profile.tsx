@@ -698,6 +698,7 @@ export default function UserProfileScreen() {
       song={activeSong}
       onClose={() => setActiveSong(null)}
       onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+      onAlbumPress={(id) => router.push({ pathname: '/album-detail', params: { id } })}
     />
     <ScrollView
       style={s.container}
@@ -781,15 +782,19 @@ export default function UserProfileScreen() {
 
         {/* Stats */}
         <View style={s.statsRow}>
-          <View style={s.statBox}>
+          <Pressable
+            style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
+            onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId } })}>
             <Text style={s.statValue}>{albumCount}</Text>
             <Text style={s.statLabel}>Albums</Text>
-          </View>
+          </Pressable>
           <View style={s.statDivider} />
-          <View style={s.statBox}>
+          <Pressable
+            style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
+            onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}>
             <Text style={s.statValue}>{thisYearCount}</Text>
             <Text style={s.statLabel}>This Year</Text>
-          </View>
+          </Pressable>
           <View style={s.statDivider} />
           <Pressable
             style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
@@ -875,7 +880,7 @@ export default function UserProfileScreen() {
               <FavSlotReadOnly
                 key={i}
                 item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
-                onPress={sg ? () => setActiveSong({ title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
+                onPress={sg ? () => setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
               />
             );
           })}
@@ -914,24 +919,8 @@ export default function UserProfileScreen() {
         </View>
       </View>
 
-      {/* ── Activity rows ──────────────────────────────────────────────────── */}
+      {/* ── Nav rows ──────────────────────────────────────────────────────── */}
       <View style={s.navGroup}>
-        <NavRow
-          icon="calendar"
-          label="Sessions"
-          sub="Listening diary"
-          onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="clock-o"
-          label="Recent Activity"
-          sub={`${albumCount} logged albums`}
-          onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })}
-        />
-      </View>
-
-      <View style={[s.navGroup, { marginTop: 2 }]}>
         <NavRow
           icon="music"
           label="Listend"
@@ -940,10 +929,24 @@ export default function UserProfileScreen() {
         />
         <View style={s.navSeparator} />
         <NavRow
+          icon="calendar"
+          label="Sessions"
+          sub="Listening diary"
+          onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
           icon="bookmark-o"
           label="Want to Listen"
           sub={`${wantCount} saved`}
           onPress={() => router.push({ pathname: '/want-to-listen', params: { userId: viewedUserId } })}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="clock-o"
+          label="Recent Activity"
+          sub={`${albumCount} logged albums`}
+          onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })}
         />
         <View style={s.navSeparator} />
         <NavRow
@@ -958,6 +961,13 @@ export default function UserProfileScreen() {
           label="Playlists"
           sub="Album lists"
           onPress={() => router.push({ pathname: '/my-playlists', params: { userId: viewedUserId } })}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="heart"
+          label="Liked Artists"
+          sub="Their favourites"
+          onPress={() => router.push({ pathname: '/liked-artists', params: { readOnly: '1' } })}
         />
         <View style={s.navSeparator} />
         <NavRow

@@ -889,6 +889,7 @@ export default function ListendScreen() {
       song={activeSong}
       onClose={() => setActiveSong(null)}
       onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+      onAlbumPress={(id) => router.push({ pathname: '/album-detail', params: { id } })}
     />
     <ScrollView
       style={s.container}
@@ -988,7 +989,7 @@ export default function ListendScreen() {
                   key={i}
                   item={song}
                   editMode={false}
-                  onPress={song ? () => setActiveSong({ title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate }) : undefined}
+                  onPress={song ? () => setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate }) : undefined}
                 />
               );
             })}
@@ -1031,13 +1032,13 @@ export default function ListendScreen() {
         )}
       </View>
 
-      {/* ── Activity rows (above stats) ─────────────────────────────────────── */}
+      {/* ── Nav rows ─────────────────────────────────────────────────────────── */}
       <View style={s.navGroup}>
         <NavRow
-          icon="comments"
-          label="DMs"
-          sub="Messages"
-          onPress={() => router.push('/dms')}
+          icon="music"
+          label="My Listend"
+          sub={`${loggedAlbums.length} albums`}
+          onPress={() => router.push('/my-listend')}
         />
         <View style={s.navSeparator} />
         <NavRow
@@ -1048,26 +1049,17 @@ export default function ListendScreen() {
         />
         <View style={s.navSeparator} />
         <NavRow
-          icon="clock-o"
-          label="Recent Activity"
-          sub={`${loggedAlbums.length} logged albums`}
-          onPress={() => router.push('/recent-activity')}
-        />
-      </View>
-
-      <View style={[s.navGroup, { marginTop: 2 }]}>
-        <NavRow
-          icon="music"
-          label="My Listend"
-          sub={`${loggedAlbums.length} albums`}
-          onPress={() => router.push('/my-listend')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
           icon="bookmark-o"
           label="Want to Listen"
           sub={`${wantToListen.length} saved`}
           onPress={() => router.push('/want-to-listen')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="clock-o"
+          label="Recent Activity"
+          sub={`${loggedAlbums.length} logged albums`}
+          onPress={() => router.push('/recent-activity')}
         />
         <View style={s.navSeparator} />
         <NavRow
@@ -1082,6 +1074,20 @@ export default function ListendScreen() {
           label="My Playlists"
           sub="Your album lists"
           onPress={() => router.push('/my-playlists')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="heart"
+          label="Liked Artists"
+          sub="Your favourites"
+          onPress={() => router.push('/liked-artists')}
+        />
+        <View style={s.navSeparator} />
+        <NavRow
+          icon="comments"
+          label="DMs"
+          sub="Messages"
+          onPress={() => router.push('/dms')}
         />
         <View style={s.navSeparator} />
         <NavRow
