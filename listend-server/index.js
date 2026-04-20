@@ -7,6 +7,7 @@ const supabase = require('./db');
 const { runRefresh } = require('./refresh');
 const { spotifyGet, getToken } = require('./spotify');
 const { getCached, setCache, TTL_24H, TTL_7D } = require('./cache');
+const generateAppleToken = require('./utils/appleToken');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -1038,6 +1039,12 @@ app.post('/api/delete-cover', async (req, res) => {
 
   console.log(`[delete-cover] success → ${path} removed`);
   return res.json({ success: true });
+});
+
+// ── GET /apple-token ──────────────────────────────────────────────────────────
+
+app.get('/apple-token', (req, res) => {
+  res.json({ token: generateAppleToken() });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
