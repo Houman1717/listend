@@ -222,32 +222,39 @@ app.get('/search', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_10M); return res.json(db); }
 
   try {
-    const encoded = encodeURIComponent(q);
-    const data = await spotifyGet(`/search?q=${encoded}&type=${type}&limit=10&market=US`);
+    const amType = type === 'album' ? 'albums' : type === 'track' ? 'songs' : 'artists';
+    const url = `https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(q)}&types=${amType}&limit=10`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${generateAppleToken()}` },
+    });
+    if (!resp.ok) throw new Error(`Apple Music search → ${resp.status}`);
+    const data = await resp.json();
+
+    const artworkUrl = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
 
     let results;
     if (type === 'album') {
-      results = (data.albums?.items ?? []).filter(Boolean).map(item => ({
+      results = (data.results?.albums?.data ?? []).map(item => ({
         id: item.id,
-        title: item.name,
-        artist: item.artists?.[0]?.name ?? '',
-        year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-        artworkUrl: item.images?.[0]?.url ?? '',
+        title: item.attributes?.name ?? '',
+        artist: item.attributes?.artistName ?? '',
+        year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+        artworkUrl: artworkUrl(item.attributes?.artwork),
       }));
     } else if (type === 'track') {
-      results = (data.tracks?.items ?? []).filter(Boolean).map(item => ({
+      results = (data.results?.songs?.data ?? []).map(item => ({
         id: item.id,
-        title: item.name,
-        artist: item.artists?.[0]?.name ?? '',
-        artworkUrl: item.album?.images?.[0]?.url ?? '',
-        releaseDate: item.album?.release_date?.slice(0, 4) ?? '',
+        title: item.attributes?.name ?? '',
+        artist: item.attributes?.artistName ?? '',
+        artworkUrl: artworkUrl(item.attributes?.artwork),
+        releaseDate: item.attributes?.releaseDate?.slice(0, 4) ?? '',
       }));
     } else {
-      results = (data.artists?.items ?? []).filter(Boolean).map(item => ({
+      results = (data.results?.artists?.data ?? []).map(item => ({
         id: item.id,
-        name: item.name,
-        genre: item.genres?.[0] ?? '',
-        artworkUrl: item.images?.[0]?.url ?? '',
+        name: item.attributes?.name ?? '',
+        genre: item.attributes?.genreNames?.[0] ?? '',
+        artworkUrl: artworkUrl(item.attributes?.artwork),
       }));
     }
 
