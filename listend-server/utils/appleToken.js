@@ -8,7 +8,12 @@ const keyId = process.env.APPLE_KEY_ID;
 let cachedToken = null;
 let tokenExpiry = null;
 
+// force cache reset
+cachedToken = null;
+tokenExpiry = null;
+
 function generateAppleToken() {
+  console.log('[appleToken] privateKey first 20 chars:', privateKey.slice(0, 20));
   if (cachedToken && tokenExpiry > Date.now()) return cachedToken;
   cachedToken = jwt.sign({}, privateKey, {
     algorithm: 'ES256',
