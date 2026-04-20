@@ -13,7 +13,9 @@ cachedToken = null;
 tokenExpiry = null;
 
 function generateAppleToken() {
+  console.log('[appleToken] privateKey length:', privateKey.length);
   console.log('[appleToken] privateKey first 20 chars:', privateKey.slice(0, 20));
+  console.log('[appleToken] privateKey last 20 chars:', privateKey.slice(-20));
   if (cachedToken && tokenExpiry > Date.now()) return cachedToken;
   cachedToken = jwt.sign({}, privateKey, {
     algorithm: 'ES256',
