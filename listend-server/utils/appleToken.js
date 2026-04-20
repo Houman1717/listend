@@ -23,6 +23,9 @@ function generateAppleToken() {
     header: { alg: 'ES256', kid: keyId }
   });
   tokenExpiry = Date.now() + (179 * 24 * 60 * 60 * 1000);
+  const [h, p] = cachedToken.split('.').slice(0, 2).map(s => JSON.parse(Buffer.from(s, 'base64url').toString('utf8')));
+  console.log('[appleToken] JWT header:', JSON.stringify(h));
+  console.log('[appleToken] JWT payload:', JSON.stringify(p));
   return cachedToken;
 }
 
