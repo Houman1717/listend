@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 
-const privateKey = (process.env.APPLE_MUSIC_PRIVATE_KEY || '').replace(/\\\\n/g, '\n');
+const rawKey = process.env.APPLE_MUSIC_PRIVATE_KEY || '';
+const privateKey = rawKey.includes('\\n') ? rawKey.replace(/\\n/g, '\n') : rawKey;
 const teamId = process.env.APPLE_TEAM_ID;
 const keyId = process.env.APPLE_KEY_ID;
 
