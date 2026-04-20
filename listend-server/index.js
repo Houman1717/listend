@@ -350,13 +350,13 @@ app.get('/discover/coming-soon', async (req, res) => {
 
   try {
     const year = new Date().getFullYear();
-    const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=10`);
-    const results = (data.albums?.items ?? []).filter(Boolean).map(item => ({
+    const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(`coming soon ${year}`)}&types=albums&limit=10`);
+    const results = (data.results?.albums?.data ?? []).map(item => ({
       id: item.id,
-      title: item.name,
-      artist: item.artists?.[0]?.name ?? '',
-      year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-      artworkUrl: item.images?.[0]?.url ?? '',
+      title: item.attributes?.name ?? '',
+      artist: item.attributes?.artistName ?? '',
+      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+      artworkUrl: amArtwork(item.attributes?.artwork),
     }));
     cacheSet(CACHE_KEY, results, TTL_6H);
     await setCache(CACHE_KEY, results);
@@ -672,14 +672,15 @@ app.get('/spotify/track/:id', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const t = await spotifyGet(`/tracks/${id}?market=US`);
+    const data = await amFetch(`/catalog/us/songs/${id}`);
+    const t = data.data?.[0];
     const payload = {
-      id:          t.id,
-      title:       t.name,
-      artist:      t.artists?.[0]?.name ?? '',
-      artworkUrl:  t.album?.images?.[0]?.url ?? '',
-      albumId:     t.album?.id ?? '',
-      releaseDate: t.album?.release_date ?? '',
+      id:          t?.id ?? id,
+      title:       t?.attributes?.name ?? '',
+      artist:      t?.attributes?.artistName ?? '',
+      artworkUrl:  amArtwork(t?.attributes?.artwork),
+      albumId:     t?.relationships?.albums?.data?.[0]?.id ?? '',
+      releaseDate: t?.attributes?.releaseDate ?? '',
     };
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
@@ -893,9 +894,8 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
 });
 
 // ── GET /spotify/recommendations — ?trackIds=id1&trackIds=id2&excludeAlbumId=id ─
-// Seeds Spotify recommendations with up to 2 track IDs. Extracts unique albums
-// from the returned tracks, excluding the source album. Returns [] silently if
-// the endpoint is unavailable (deprecated in some markets / app tiers).
+// Uses Apple Music search on each seed track ID to find related albums.
+// Returns [] silently on failure so the frontend simply hides the section.
 
 app.get('/spotify/recommendations', async (req, res) => {
   const rawIds = req.query.trackIds ?? [];
@@ -913,23 +913,31 @@ app.get('/spotify/recommendations', async (req, res) => {
   if (db) { console.log('[/spotify/recommendations] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const seeds = trackIds.join(',');
-    console.log(`[/spotify/recommendations] seed_tracks=${seeds} excludeAlbum=${excludeAlbumId}`);
-    const data = await spotifyGet(`/recommendations?seed_tracks=${seeds}&limit=12&market=US`);
-
+    // Resolve each seed track ID to a title via Apple Music, then search for related albums
     const seen = new Set([excludeAlbumId].filter(Boolean));
     const albums = [];
-    for (const track of (data.tracks ?? [])) {
-      const alb = track.album;
-      if (!alb || seen.has(alb.id)) continue;
-      seen.add(alb.id);
-      albums.push({
-        id:         alb.id,
-        title:      alb.name,
-        artist:     alb.artists?.[0]?.name ?? '',
-        artworkUrl: alb.images?.[0]?.url ?? '',
-        year:       parseInt(alb.release_date?.slice(0, 4) ?? '0', 10),
-      });
+
+    for (const trackId of trackIds) {
+      try {
+        const songData = await amFetch(`/catalog/us/songs/${trackId}`);
+        const song = songData.data?.[0];
+        if (!song) continue;
+        const term = encodeURIComponent(`${song.attributes?.name ?? ''} ${song.attributes?.artistName ?? ''}`);
+        const searchData = await amFetch(`/catalog/us/search?term=${term}&types=albums&limit=6`);
+        for (const item of (searchData.results?.albums?.data ?? [])) {
+          if (seen.has(item.id)) continue;
+          seen.add(item.id);
+          albums.push({
+            id:         item.id,
+            title:      item.attributes?.name ?? '',
+            artist:     item.attributes?.artistName ?? '',
+            artworkUrl: amArtwork(item.attributes?.artwork),
+            year:       parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+          });
+        }
+      } catch (e) {
+        console.warn(`[/spotify/recommendations] lookup failed for trackId=${trackId}:`, e.message);
+      }
     }
 
     const result = albums.slice(0, 8);
@@ -938,8 +946,6 @@ app.get('/spotify/recommendations', async (req, res) => {
     await setCache(CACHE_KEY, result);
     res.json(result);
   } catch (err) {
-    // Recommendations may return 403 on some Spotify tiers — return empty so
-    // the frontend simply hides the section rather than showing an error.
     console.warn('[/spotify/recommendations] failed:', err.message ?? err);
     res.json([]);
   }
