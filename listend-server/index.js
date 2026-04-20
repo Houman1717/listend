@@ -68,17 +68,6 @@ app.use(express.json({ limit: '10mb' }));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-// ── GET /debug/spotify — raw Spotify proxy for diagnosis ──────────────────────
-
-app.get('/debug/spotify', async (req, res) => {
-  try {
-    const path = req.query.path;
-    const data = await spotifyGet(path);
-    res.json({ spotifyStatus: 200, body: data });
-  } catch (err) {
-    res.json({ spotifyStatus: err.status || 500, body: err.message, detail: err.responseBody });
-  }
-});
 
 // ── GET /home ─────────────────────────────────────────────────────────────────
 
