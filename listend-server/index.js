@@ -9,6 +9,16 @@ const { spotifyGet, getToken } = require('./spotify');
 const { getCached, setCache, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
 
+async function amFetch(path) {
+  const resp = await fetch(`https://api.music.apple.com/v1${path}`, {
+    headers: { Authorization: `Bearer ${generateAppleToken()}` },
+  });
+  if (!resp.ok) throw new Error(`Apple Music ${path} → ${resp.status}`);
+  return resp.json();
+}
+
+const amArtwork = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -279,13 +289,14 @@ app.get('/discover/new-releases', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await spotifyGet('/search?q=tag:new&type=album&limit=10&market=US');
-    const results = (data.albums?.items ?? []).filter(Boolean).map(item => ({
+    const year = new Date().getFullYear();
+    const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(`new releases ${year}`)}&types=albums&limit=10`);
+    const results = (data.results?.albums?.data ?? []).map(item => ({
       id: item.id,
-      title: item.name,
-      artist: item.artists?.[0]?.name ?? '',
-      year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-      artworkUrl: item.images?.[0]?.url ?? '',
+      title: item.attributes?.name ?? '',
+      artist: item.attributes?.artistName ?? '',
+      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+      artworkUrl: amArtwork(item.attributes?.artwork),
     }));
     cacheSet(CACHE_KEY, results, TTL_6H);
     await setCache(CACHE_KEY, results);
@@ -309,13 +320,13 @@ app.get('/discover/popular', async (req, res) => {
 
   try {
     const year = new Date().getFullYear();
-    const data = await spotifyGet(`/search?q=year:${year}&type=album&limit=10&market=US`);
-    const results = (data.albums?.items ?? []).filter(Boolean).map(item => ({
+    const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(`best albums ${year}`)}&types=albums&limit=10`);
+    const results = (data.results?.albums?.data ?? []).map(item => ({
       id: item.id,
-      title: item.name,
-      artist: item.artists?.[0]?.name ?? '',
-      year: parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-      artworkUrl: item.images?.[0]?.url ?? '',
+      title: item.attributes?.name ?? '',
+      artist: item.attributes?.artistName ?? '',
+      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+      artworkUrl: amArtwork(item.attributes?.artwork),
     }));
     cacheSet(CACHE_KEY, results, TTL_6H);
     await setCache(CACHE_KEY, results);
@@ -394,23 +405,24 @@ app.get('/lastfm/artist', async (req, res) => {
 
     const a = json.artist;
 
-    // Fetch Spotify images for each similar artist — allSettled so one failure doesn't break the list
+    // Fetch Apple Music images for each similar artist — allSettled so one failure doesn't break the list
     const similarRaw = a.similar?.artist ?? [];
     const imageResults = await Promise.allSettled(
       similarRaw.map(async (s, i) => {
         const q = encodeURIComponent(s.name);
-        const sr = await spotifyGet(`/search?q=${q}&type=artist&limit=1`);
+        const sr = await amFetch(`/catalog/us/search?term=${q}&types=artists&limit=1`);
+        const hit = sr.results?.artists?.data?.[0];
         if (i === 0) {
-          console.log(`[/lastfm/artist] first similar artist Spotify result (${s.name}):`, JSON.stringify(sr.artists?.items?.[0]));
+          console.log(`[/lastfm/artist] first similar artist Apple Music result (${s.name}):`, JSON.stringify(hit));
         }
-        const imageUrl = sr.artists?.items?.[0]?.images?.[0]?.url ?? null;
+        const imageUrl = amArtwork(hit?.attributes?.artwork) || null;
         console.log(`[/lastfm/artist] similar artist "${s.name}" imageUrl: ${imageUrl}`);
         return { name: s.name, url: s.url, imageUrl };
       })
     );
     const similarWithImages = imageResults.map((r, i) => {
       if (r.status === 'fulfilled') return r.value;
-      console.warn(`[/lastfm/artist] Spotify image lookup failed for "${similarRaw[i]?.name}":`, r.reason?.message);
+      console.warn(`[/lastfm/artist] Apple Music image lookup failed for "${similarRaw[i]?.name}":`, r.reason?.message);
       return { name: similarRaw[i].name, url: similarRaw[i].url, imageUrl: null };
     });
 
@@ -689,13 +701,13 @@ app.get('/spotify/album/:id/tracks', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await spotifyGet(`/albums/${id}/tracks?limit=50&market=US`);
-    const tracks = (data.items ?? []).map(t => ({
-      number: t.track_number,
+    const data = await amFetch(`/catalog/us/albums/${id}/tracks`);
+    const tracks = (data.data ?? []).map((t, i) => ({
+      number: t.attributes?.trackNumber ?? i + 1,
       id: t.id,
-      title: t.name,
-      durationMs: t.duration_ms,
-      featuredArtists: (t.artists ?? []).slice(1).map(a => a.name),
+      title: t.attributes?.name ?? '',
+      durationMs: t.attributes?.durationInMillis ?? null,
+      featuredArtists: [],
     }));
     cacheSet(CACHE_KEY, tracks, TTL_6H);
     await setCache(CACHE_KEY, tracks);
@@ -731,10 +743,10 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
       if (db) { console.log('[/spotify/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
     }
 
-    // Step 1: resolve artist name from Spotify
+    // Step 1: resolve artist name from Apple Music
     console.log(`[/spotify/artist/top-tracks] resolving artist name for id="${id}"`);
-    const artist = await spotifyGet(`/artists/${id}`);
-    const artistName = artist.name;
+    const artistData = await amFetch(`/catalog/us/artists/${id}`);
+    const artistName = artistData.data?.[0]?.attributes?.name ?? '';
     console.log(`[/spotify/artist/top-tracks] artist name="${artistName}"`);
 
     // Step 2: fetch top tracks from Last.fm
@@ -753,29 +765,29 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
     const lfmData = await lfmResp.json();
     const rawTracks = (lfmData.toptracks?.track ?? []).slice(0, 5);
 
-    // Step 3: fetch artwork for each track via Spotify search (two-pass fallback)
+    // Step 3: fetch artwork for each track via Apple Music search (two-pass fallback)
     const results = await Promise.allSettled(
       rawTracks.map(async (t, i) => {
         let artworkUrl = null;
         let albumTitle = null;
-        // Pass 1: fielded search — most precise
+        // Pass 1: precise — track + artist
         try {
-          const q1 = encodeURIComponent(`track:${t.name} artist:${artistName}`);
-          const sr1 = await spotifyGet(`/search?q=${q1}&type=track&limit=1`);
-          const hit1 = sr1.tracks?.items?.[0];
-          artworkUrl = hit1?.album?.images?.[0]?.url ?? null;
-          albumTitle = hit1?.album?.name ?? null;
+          const q1 = encodeURIComponent(`${t.name} ${artistName}`);
+          const sr1 = await amFetch(`/catalog/us/search?term=${q1}&types=songs&limit=1`);
+          const hit1 = sr1.results?.songs?.data?.[0];
+          artworkUrl = amArtwork(hit1?.attributes?.artwork) || null;
+          albumTitle = hit1?.attributes?.albumName ?? null;
         } catch (e) {
           console.warn(`[/spotify/artist/top-tracks] pass-1 artwork lookup failed for "${t.name}":`, e.message);
         }
-        // Pass 2: plain keyword fallback if pass 1 yielded nothing
+        // Pass 2: track name only fallback
         if (!artworkUrl) {
           try {
             const q2 = encodeURIComponent(t.name);
-            const sr2 = await spotifyGet(`/search?q=${q2}&type=track&limit=1`);
-            const hit2 = sr2.tracks?.items?.[0];
-            artworkUrl = hit2?.album?.images?.[0]?.url ?? null;
-            albumTitle = albumTitle ?? hit2?.album?.name ?? null;
+            const sr2 = await amFetch(`/catalog/us/search?term=${q2}&types=songs&limit=1`);
+            const hit2 = sr2.results?.songs?.data?.[0];
+            artworkUrl = amArtwork(hit2?.attributes?.artwork) || null;
+            albumTitle = albumTitle ?? hit2?.attributes?.albumName ?? null;
           } catch (e) {
             console.warn(`[/spotify/artist/top-tracks] pass-2 artwork lookup failed for "${t.name}":`, e.message);
           }
@@ -832,32 +844,27 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
     }
 
-    // Paginate through all releases — singles excluded at the Spotify level
-    const toItem = item => {
-      // Log first item on first page so we can see the real field names in Railway logs
-      return {
-        id:         item.id,
-        title:      item.name,
-        artworkUrl: item.images?.[0]?.url ?? '',
-        year:       parseInt(item.release_date?.slice(0, 4) ?? '0', 10),
-        // Normalise to lowercase and prefer album_group; fall back to album_type
-        type:       (item.album_group ?? item.album_type ?? '').toLowerCase(),
-      };
-    };
+    const toItem = item => ({
+      id:         item.id,
+      title:      item.attributes?.name ?? '',
+      artworkUrl: amArtwork(item.attributes?.artwork),
+      year:       parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+      type:       (item.attributes?.albumType ?? 'album').toLowerCase(),
+    });
 
     let allItems = [];
-    let nextPath = `/artists/${id}/albums?include_groups=album,compilation&limit=10`;
+    let nextPath = `/catalog/us/artists/${id}/albums?limit=25`;
     let page = 0;
     const PAGE_CAP = 5;
     while (nextPath && page < PAGE_CAP) {
       console.log(`[/spotify/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
       try {
-        const data = await spotifyGet(nextPath);
-        if (page === 0 && data.items?.[0]) {
-          console.log(`[/spotify/artist/albums] first item raw fields: ${JSON.stringify(data.items[0])}`);
+        const data = await amFetch(nextPath);
+        if (page === 0 && data.data?.[0]) {
+          console.log(`[/spotify/artist/albums] first item raw fields: ${JSON.stringify(data.data[0])}`);
         }
-        allItems = allItems.concat((data.items ?? []).map(toItem));
-        nextPath = data.next ? data.next.replace('https://api.spotify.com/v1', '') : null;
+        allItems = allItems.concat((data.data ?? []).map(toItem));
+        nextPath = data.next ? data.next.replace('/v1', '') : null;
       } catch (pageErr) {
         console.warn(`[/spotify/artist/albums] page ${page + 1} failed, stopping pagination:`, pageErr.message);
         nextPath = null;
