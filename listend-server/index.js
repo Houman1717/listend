@@ -5,7 +5,6 @@ const express = require('express');
 const cron = require('node-cron');
 const supabase = require('./db');
 const { runRefresh } = require('./refresh');
-const { spotifyGet, getToken } = require('./spotify');
 const { getCached, setCache, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
 
