@@ -51,4 +51,16 @@ async function deleteCache(key) {
   }
 }
 
-module.exports = { getCached, setCache, deleteCache, TTL_7D, TTL_24H };
+async function deleteCachePrefix(prefix) {
+  try {
+    const { error } = await supabase
+      .from('api_cache')
+      .delete()
+      .ilike('key', `${prefix}%`);
+    if (error) throw error;
+  } catch (err) {
+    console.warn('[cache] deleteCachePrefix error:', err.message ?? err);
+  }
+}
+
+module.exports = { getCached, setCache, deleteCache, deleteCachePrefix, TTL_7D, TTL_24H };

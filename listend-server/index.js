@@ -5,7 +5,7 @@ const express = require('express');
 const cron = require('node-cron');
 const supabase = require('./db');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
-const { getCached, setCache, deleteCache, TTL_24H, TTL_7D } = require('./cache');
+const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
 
 async function amFetch(path) {
@@ -966,6 +966,24 @@ app.get('/api/admin/refresh-home-artists', async (req, res) => {
   } catch (err) {
     console.error('[/api/admin/refresh-home-artists]', err.message ?? err);
     res.status(500).json({ success: false, error: err.message ?? 'Refresh failed' });
+  }
+});
+
+// ── GET /api/admin/purge-lastfm-cache ─────────────────────────────────────────
+
+app.get('/api/admin/purge-lastfm-cache', async (req, res) => {
+  try {
+    // Clear all lastfm_artist_* keys from in-memory cache
+    for (const key of memCache.keys()) {
+      if (key.startsWith('lastfm_artist_')) memCache.delete(key);
+    }
+    // Clear from Supabase api_cache
+    await deleteCachePrefix('lastfm_artist_');
+    console.log('[/api/admin/purge-lastfm-cache] done.');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[/api/admin/purge-lastfm-cache]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
   }
 });
 
