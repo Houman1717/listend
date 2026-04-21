@@ -854,7 +854,7 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     const baseTitle = title => title.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
 
     // Keywords anywhere in the title that mark a non-album release
-    const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance|highlights?|collection|greatest\s+hits?)\b|best\s+of\b|apple(?:\s+music)?\s+presents/i;
+    const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance|highlights?|collection|greatest\s+hits?|chopnotslop)\b|best\s+of\b|apple(?:\s+music)?\s+presents|chopped\s+not\s+slopped/i;
 
     const isAlbum = item => {
       if (item.isSingle === true) return false;
