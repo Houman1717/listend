@@ -833,13 +833,17 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
     }
 
-    const toItem = item => ({
-      id:         item.id,
-      title:      item.attributes?.name ?? '',
-      artworkUrl: amArtwork(item.attributes?.artwork),
-      year:       parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
-      type:       (item.attributes?.albumType ?? 'album').toLowerCase(),
-    });
+    const toItem = item => {
+      const rawType = item.attributes?.albumType ?? null;
+      return {
+        id:         item.id,
+        title:      item.attributes?.name ?? '',
+        artworkUrl: amArtwork(item.attributes?.artwork),
+        year:       parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+        type:       rawType ? rawType.toLowerCase() : 'unknown',
+        rawType,
+      };
+    };
 
     let allItems = [];
     let nextPath = `/catalog/us/artists/${id}/albums?limit=25`;
@@ -849,8 +853,9 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       console.log(`[/spotify/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
       try {
         const data = await amFetch(nextPath);
-        if (page === 0 && data.data?.[0]) {
+        if (page === 0 && data.data?.length) {
           console.log(`[/spotify/artist/albums] first item raw fields: ${JSON.stringify(data.data[0])}`);
+          console.log(`[/spotify/artist/albums] page 1 albumTypes: ${data.data.map(i => `"${i.attributes?.albumType ?? 'null'}"`).join(', ')}`);
         }
         allItems = allItems.concat((data.data ?? []).map(toItem));
         nextPath = data.next ? data.next.replace('/v1', '') : null;
@@ -860,16 +865,18 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       }
       page++;
     }
-    console.log(`[/spotify/artist/albums] fetched ${allItems.length} total releases across ${page} page(s)`);
+    console.log(`[/spotify/artist/albums] fetched ${allItems.length} total across ${page} page(s)`);
     console.log(`[/spotify/artist/albums] distinct type values: ${[...new Set(allItems.map(a => a.type))].join(', ')}`);
 
+    // Exclude known non-album types; anything unrecognised (including 'lp', 'album', 'unknown') is kept.
+    const NON_ALBUM_TYPES = new Set(['single', 'ep', 'compilation']);
     const grouped = {
-      albums:       allItems.filter(a => a.type === 'album'),
+      albums:       allItems.filter(a => !NON_ALBUM_TYPES.has(a.type)),
       singles:      [],
-      compilations: allItems.filter(a => a.type === 'compilation'),
+      compilations: [],
     };
 
-    console.log(`[/spotify/artist/albums] success — ${allItems.length} total (${grouped.albums.length} albums, ${grouped.compilations.length} compilations)`);
+    console.log(`[/spotify/artist/albums] success — ${allItems.length} total → ${grouped.albums.length} albums after filter`);
     cacheSet(CACHE_KEY, grouped, TTL_6H);
     await setCache(CACHE_KEY, grouped);
     res.json(grouped);
@@ -966,6 +973,22 @@ app.get('/api/admin/refresh-home-artists', async (req, res) => {
   } catch (err) {
     console.error('[/api/admin/refresh-home-artists]', err.message ?? err);
     res.status(500).json({ success: false, error: err.message ?? 'Refresh failed' });
+  }
+});
+
+// ── GET /api/admin/purge-artist-album-cache ───────────────────────────────────
+
+app.get('/api/admin/purge-artist-album-cache', async (req, res) => {
+  try {
+    for (const key of memCache.keys()) {
+      if (key.startsWith('spotify_artist_albums_')) memCache.delete(key);
+    }
+    await deleteCachePrefix('spotify_artist_albums_');
+    console.log('[/api/admin/purge-artist-album-cache] done.');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[/api/admin/purge-artist-album-cache]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
   }
 });
 

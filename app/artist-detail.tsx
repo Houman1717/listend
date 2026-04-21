@@ -271,12 +271,15 @@ export default function ArtistDetailScreen() {
           return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
         })
         .then(data => {
+          const NON_ALBUM = new Set(['single', 'ep', 'compilation']);
+          const rawAlbums: SpotifyAlbum[] = Array.isArray(data?.albums) ? data.albums : [];
+          console.log('[artist-detail] raw album types:', rawAlbums.map((a: SpotifyAlbum) => a.type).join(', '));
           const disc: SpotifyDiscography = {
-            albums:       Array.isArray(data?.albums)       ? data.albums       : [],
-            singles:      Array.isArray(data?.singles)      ? data.singles      : [],
-            compilations: Array.isArray(data?.compilations) ? data.compilations : [],
+            albums:       rawAlbums.filter((a: SpotifyAlbum) => !NON_ALBUM.has((a.type ?? '').toLowerCase())),
+            singles:      [],
+            compilations: [],
           };
-          console.log('[artist-detail] discography:', disc.albums.length, 'albums,', disc.singles.length, 'singles,', disc.compilations.length, 'compilations');
+          console.log('[artist-detail] discography after filter:', disc.albums.length, 'albums');
           if (!cancelled) setDiscography(disc);
         })
         .catch(err => {
