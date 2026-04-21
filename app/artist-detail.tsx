@@ -434,27 +434,8 @@ export default function ArtistDetailScreen() {
           <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
         ) : albumsError ? (
           <Text style={[sc.errorText, { color: '#f87171' }]}>{albumsError}</Text>
-        ) : discography && (discography.albums.length + discography.singles.length + discography.compilations.length) > 0 ? (
-          <>
-            {discography.albums.length > 0 && (
-              <>
-                <Text style={[sc.discGroupLabel, { color: colors.subtext }]}>Albums</Text>
-                {renderAlbumRow(discography.albums)}
-              </>
-            )}
-            {discography.singles.length > 0 && (
-              <>
-                <Text style={[sc.discGroupLabel, { color: colors.subtext, marginTop: discography.albums.length > 0 ? 16 : 0 }]}>Singles</Text>
-                {renderAlbumRow(discography.singles)}
-              </>
-            )}
-            {discography.compilations.length > 0 && (
-              <>
-                <Text style={[sc.discGroupLabel, { color: colors.subtext, marginTop: (discography.albums.length + discography.singles.length) > 0 ? 16 : 0 }]}>Compilations</Text>
-                {renderAlbumRow(discography.compilations)}
-              </>
-            )}
-          </>
+        ) : discography && discography.albums.length > 0 ? (
+          renderAlbumRow([...discography.albums].sort((a, b) => b.year - a.year))
         ) : (
           <Text style={[sc.empty, { color: mutedText }]}>No albums available</Text>
         )}
