@@ -5,7 +5,7 @@ const express = require('express');
 const cron = require('node-cron');
 const supabase = require('./db');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
-const { getCached, setCache, TTL_24H, TTL_7D } = require('./cache');
+const { getCached, setCache, deleteCache, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
 
 async function amFetch(path) {
@@ -960,7 +960,8 @@ app.get('/api/admin/refresh-home-artists', async (req, res) => {
   try {
     const artists = await refreshHomeArtists();
     cacheClear('home');
-    console.log('[/api/admin/refresh-home-artists] done, cache cleared.');
+    await deleteCache('home');
+    console.log('[/api/admin/refresh-home-artists] done, both caches cleared.');
     res.json({ success: true, count: artists.length, artists });
   } catch (err) {
     console.error('[/api/admin/refresh-home-artists]', err.message ?? err);

@@ -43,4 +43,12 @@ async function setCache(key, payload) {
   }
 }
 
-module.exports = { getCached, setCache, TTL_7D, TTL_24H };
+async function deleteCache(key) {
+  try {
+    await supabase.from('api_cache').delete().eq('key', key);
+  } catch (err) {
+    console.warn('[cache] deleteCache error:', err.message ?? err);
+  }
+}
+
+module.exports = { getCached, setCache, deleteCache, TTL_7D, TTL_24H };

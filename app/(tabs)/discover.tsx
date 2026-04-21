@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,7 +9,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -275,18 +275,19 @@ export default function DiscoverScreen() {
   const [loading, setLoading] = useState(!homeCache.songs);
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
-  useEffect(() => {
-    if (homeCache.songs) return;
-    fetchHome()
-      .then((data) => {
-        homeCache.songs   = data.songs;
-        homeCache.artists = data.artists;
-        setSongs(data.songs);
-        setArtists(data.artists);
-      })
-      .catch((err) => console.error('[Discover] fetchHome failed:', err?.message ?? err))
-      .finally(() => setLoading(false));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchHome()
+        .then((data) => {
+          homeCache.songs   = data.songs;
+          homeCache.artists = data.artists;
+          setSongs(data.songs);
+          setArtists(data.artists);
+        })
+        .catch((err) => console.error('[Discover] fetchHome failed:', err?.message ?? err))
+        .finally(() => setLoading(false));
+    }, [])
+  );
 
   return (
     <>

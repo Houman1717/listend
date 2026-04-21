@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -565,22 +565,22 @@ export default function HomeScreen() {
     });
   }
 
-  useEffect(() => {
-    if (cache.albums) return; // already warm
-
-    fetchHome()
-      .then((data) => {
-        cache.albums  = data.albums;
-        cache.songs   = data.songs;
-        cache.artists = data.artists;
-        setAlbums(data.albums);
-        setSongs(data.songs);
-        setArtists(data.artists);
-        data.albums.forEach(a => { if (a.artworkUrl) Image.prefetch(a.artworkUrl); });
-      })
-      .catch((err) => console.error('[Home] fetchHome failed:', err?.message ?? err))
-      .finally(() => setLoading(false));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchHome()
+        .then((data) => {
+          cache.albums  = data.albums;
+          cache.songs   = data.songs;
+          cache.artists = data.artists;
+          setAlbums(data.albums);
+          setSongs(data.songs);
+          setArtists(data.artists);
+          data.albums.forEach(a => { if (a.artworkUrl) Image.prefetch(a.artworkUrl); });
+        })
+        .catch((err) => console.error('[Home] fetchHome failed:', err?.message ?? err))
+        .finally(() => setLoading(false));
+    }, [])
+  );
 
   function handleAlbumPress(item: SpotifyAlbum) {
     router.push({
