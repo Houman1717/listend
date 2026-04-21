@@ -275,14 +275,15 @@ export default function ArtistDetailScreen() {
           return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
         })
         .then(data => {
-          const VARIANT_RE = /\s*[\(\[].*(live|version|remix|edit|remaster|remastered|deluxe|acapella|a cappella|single|acoustic|instrumental|expanded|anniversary|bonus|special|explicit|clean)\b.*[\)\]]\s*$/i;
-          const baseTitle = (title: string) => title.replace(VARIANT_RE, '').trim().toLowerCase();
+          const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
+          const baseTitle = (title: string) => title.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
+          const TITLE_EXCLUDE_RE = /\b(single|ep|live|session|acoustic|acapella|a cappella|remix|edit|remaster|remastered|version|instrumental|karaoke)\b/i;
           const isAlbum = (a: SpotifyAlbum) => {
             if (a.isSingle      === true) return false;
             if (a.isCompilation === true) return false;
-            if (a.trackCount != null && a.trackCount < 4) return false;
+            if (a.trackCount != null && a.trackCount < 6) return false;
             if (a.url && a.url.toLowerCase().includes('/single/')) return false;
-            if (VARIANT_RE.test(a.title)) return false;
+            if (TITLE_EXCLUDE_RE.test(a.title)) return false;
             return true;
           };
           const rawAlbums: SpotifyAlbum[] = Array.isArray(data?.albums) ? data.albums : [];

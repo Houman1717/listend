@@ -848,22 +848,22 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       };
     };
 
-    // Parenthetical/suffix patterns that mark a release as a non-canonical variant
-    const VARIANT_RE = /\s*[\(\[].*(live|version|remix|edit|remaster|remastered|deluxe|acapella|a cappella|single|acoustic|instrumental|expanded|anniversary|bonus|special|explicit|clean)\b.*[\)\]]\s*$/i;
+    // Strip parenthetical suffixes for deduplication key only
+    const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
 
-    // Strip trailing parenthetical suffixes to get the base title for deduplication
-    const baseTitle = title => title.replace(VARIANT_RE, '').trim().toLowerCase();
+    const baseTitle = title => title.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
+
+    // Keywords anywhere in the title that mark a non-album release
+    const TITLE_EXCLUDE_RE = /\b(single|ep|live|session|acoustic|acapella|a cappella|remix|edit|remaster|remastered|version|instrumental|karaoke)\b/i;
 
     const isAlbum = item => {
-      // Explicit Apple Music boolean flags
       if (item.isSingle      === true) return false;
       if (item.isCompilation === true) return false;
-      // Track count — real albums have 4+ tracks; singles/EPs rarely do
-      if (item.trackCount !== null && item.trackCount < 4) return false;
-      // URL path
+      // Real albums have at least 6 tracks; single bundles/EPs typically don't
+      if (item.trackCount !== null && item.trackCount < 6) return false;
       if (item.url && item.url.toLowerCase().includes('/single/')) return false;
-      // Title contains a variant-marking parenthetical
-      if (VARIANT_RE.test(item.title)) return false;
+      // Reject if the title itself contains any version-indicator keyword
+      if (TITLE_EXCLUDE_RE.test(item.title)) return false;
       return true;
     };
 
