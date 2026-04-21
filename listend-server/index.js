@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const cron = require('node-cron');
 const supabase = require('./db');
-const { runRefresh } = require('./refresh');
+const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
 
@@ -950,6 +950,20 @@ app.get('/refresh', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('[/refresh]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Refresh failed' });
+  }
+});
+
+// ── GET /api/admin/refresh-home-artists ───────────────────────────────────────
+
+app.get('/api/admin/refresh-home-artists', async (req, res) => {
+  try {
+    const artists = await refreshHomeArtists();
+    cacheClear('home');
+    console.log('[/api/admin/refresh-home-artists] done, cache cleared.');
+    res.json({ success: true, count: artists.length, artists });
+  } catch (err) {
+    console.error('[/api/admin/refresh-home-artists]', err.message ?? err);
     res.status(500).json({ success: false, error: err.message ?? 'Refresh failed' });
   }
 });
