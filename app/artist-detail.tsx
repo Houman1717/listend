@@ -275,21 +275,35 @@ export default function ArtistDetailScreen() {
           return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
         })
         .then(data => {
-          const rawAlbums: SpotifyAlbum[] = Array.isArray(data?.albums) ? data.albums : [];
-          console.log('[artist-detail] raw albums sample — isSingle:', rawAlbums.slice(0,5).map(a => a.isSingle).join(', '), '| trackCount:', rawAlbums.slice(0,5).map(a => a.trackCount).join(', '));
+          const VARIANT_RE = /\s*[\(\[].*(live|version|remix|edit|remaster|remastered|deluxe|acapella|a cappella|single|acoustic|instrumental|expanded|anniversary|bonus|special|explicit|clean)\b.*[\)\]]\s*$/i;
+          const baseTitle = (title: string) => title.replace(VARIANT_RE, '').trim().toLowerCase();
           const isAlbum = (a: SpotifyAlbum) => {
             if (a.isSingle      === true) return false;
             if (a.isCompilation === true) return false;
-            if (a.isSingle === null && a.trackCount != null && a.trackCount <= 1) return false;
+            if (a.trackCount != null && a.trackCount < 4) return false;
             if (a.url && a.url.toLowerCase().includes('/single/')) return false;
+            if (VARIANT_RE.test(a.title)) return false;
             return true;
           };
+          const rawAlbums: SpotifyAlbum[] = Array.isArray(data?.albums) ? data.albums : [];
+          const filtered = rawAlbums.filter(isAlbum);
+          const dedupMap = new Map<string, SpotifyAlbum>();
+          for (const item of filtered) {
+            const key = baseTitle(item.title);
+            const existing = dedupMap.get(key);
+            if (!existing) { dedupMap.set(key, item); continue; }
+            const itemHasSuffix     = /[\(\[]/.test(item.title);
+            const existingHasSuffix = /[\(\[]/.test(existing.title);
+            if (!itemHasSuffix && existingHasSuffix) { dedupMap.set(key, item); continue; }
+            if (itemHasSuffix && !existingHasSuffix) continue;
+            if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { dedupMap.set(key, item); continue; }
+            if (item.year < existing.year) dedupMap.set(key, item);
+          }
           const disc: SpotifyDiscography = {
-            albums:       rawAlbums.filter(isAlbum),
-            singles:      [],
-            compilations: [],
+            albums: [...dedupMap.values()],
+            singles: [], compilations: [],
           };
-          console.log('[artist-detail] discography after filter:', disc.albums.length, 'albums from', rawAlbums.length, 'raw');
+          console.log('[artist-detail] discography:', rawAlbums.length, 'raw →', filtered.length, 'filtered →', disc.albums.length, 'deduped');
           if (!cancelled) setDiscography(disc);
         })
         .catch(err => {

@@ -848,14 +848,22 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       };
     };
 
+    // Parenthetical/suffix patterns that mark a release as a non-canonical variant
+    const VARIANT_RE = /\s*[\(\[].*(live|version|remix|edit|remaster|remastered|deluxe|acapella|a cappella|single|acoustic|instrumental|expanded|anniversary|bonus|special|explicit|clean)\b.*[\)\]]\s*$/i;
+
+    // Strip trailing parenthetical suffixes to get the base title for deduplication
+    const baseTitle = title => title.replace(VARIANT_RE, '').trim().toLowerCase();
+
     const isAlbum = item => {
-      // Primary: trust Apple Music boolean flags when present
+      // Explicit Apple Music boolean flags
       if (item.isSingle      === true) return false;
       if (item.isCompilation === true) return false;
-      // Secondary: single-track releases are almost always singles
-      if (item.isSingle === null && item.trackCount !== null && item.trackCount <= 1) return false;
-      // Tertiary: URL path contains "/single/" in Apple Music catalog URLs
+      // Track count — real albums have 4+ tracks; singles/EPs rarely do
+      if (item.trackCount !== null && item.trackCount < 4) return false;
+      // URL path
       if (item.url && item.url.toLowerCase().includes('/single/')) return false;
+      // Title contains a variant-marking parenthetical
+      if (VARIANT_RE.test(item.title)) return false;
       return true;
     };
 
@@ -882,9 +890,27 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       page++;
     }
 
-    const albums = allItems.filter(isAlbum);
-    console.log(`[/spotify/artist/albums] fetched ${allItems.length} total → ${albums.length} albums after filter`);
-    console.log(`[/spotify/artist/albums] isSingle values: ${[...new Set(allItems.map(a => String(a.isSingle)))].join(', ')} | trackCounts sampled: ${allItems.slice(0,5).map(a=>a.trackCount).join(', ')}`);
+    const filtered = allItems.filter(isAlbum);
+    console.log(`[/spotify/artist/albums] fetched ${allItems.length} total → ${filtered.length} after isAlbum filter`);
+
+    // Deduplicate by base title — keep the version without a parenthetical suffix;
+    // break ties by preferring higher trackCount then earlier year.
+    const dedupMap = new Map();
+    for (const item of filtered) {
+      const key = baseTitle(item.title);
+      const existing = dedupMap.get(key);
+      if (!existing) { dedupMap.set(key, item); continue; }
+      // Prefer the title with no parenthetical (canonical version)
+      const itemHasSuffix     = /[\(\[]/.test(item.title);
+      const existingHasSuffix = /[\(\[]/.test(existing.title);
+      if (!itemHasSuffix && existingHasSuffix) { dedupMap.set(key, item); continue; }
+      if (itemHasSuffix && !existingHasSuffix) continue;
+      // Both or neither have a suffix — prefer higher track count, then earlier year
+      if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { dedupMap.set(key, item); continue; }
+      if (item.year < existing.year) { dedupMap.set(key, item); }
+    }
+    const albums = [...dedupMap.values()];
+    console.log(`[/spotify/artist/albums] ${filtered.length} → ${albums.length} after dedup`);
 
     const grouped = { albums, singles: [], compilations: [] };
 
