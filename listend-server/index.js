@@ -834,15 +834,29 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     }
 
     const toItem = item => {
-      const rawType = item.attributes?.albumType ?? null;
+      const attrs = item.attributes ?? {};
       return {
-        id:         item.id,
-        title:      item.attributes?.name ?? '',
-        artworkUrl: amArtwork(item.attributes?.artwork),
-        year:       parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
-        type:       rawType ? rawType.toLowerCase() : 'unknown',
-        rawType,
+        id:            item.id,
+        title:         attrs.name ?? '',
+        artworkUrl:    amArtwork(attrs.artwork),
+        year:          parseInt(attrs.releaseDate?.slice(0, 4) ?? '0', 10),
+        isSingle:      attrs.isSingle      ?? null,
+        isCompilation: attrs.isCompilation ?? null,
+        trackCount:    attrs.trackCount    ?? null,
+        url:           attrs.url           ?? '',
+        type:          (attrs.albumType ?? '').toLowerCase() || 'unknown',
       };
+    };
+
+    const isAlbum = item => {
+      // Primary: trust Apple Music boolean flags when present
+      if (item.isSingle      === true) return false;
+      if (item.isCompilation === true) return false;
+      // Secondary: single-track releases are almost always singles
+      if (item.isSingle === null && item.trackCount !== null && item.trackCount <= 1) return false;
+      // Tertiary: URL path contains "/single/" in Apple Music catalog URLs
+      if (item.url && item.url.toLowerCase().includes('/single/')) return false;
+      return true;
     };
 
     let allItems = [];
@@ -854,8 +868,10 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       try {
         const data = await amFetch(nextPath);
         if (page === 0 && data.data?.length) {
-          console.log(`[/spotify/artist/albums] first item raw fields: ${JSON.stringify(data.data[0])}`);
-          console.log(`[/spotify/artist/albums] page 1 albumTypes: ${data.data.map(i => `"${i.attributes?.albumType ?? 'null'}"`).join(', ')}`);
+          data.data.slice(0, 3).forEach((item, i) => {
+            const a = item.attributes ?? {};
+            console.log(`[/spotify/artist/albums] item[${i}] attrs: name="${a.name}" isSingle=${a.isSingle} isCompilation=${a.isCompilation} trackCount=${a.trackCount} albumType="${a.albumType}" url="${a.url}"`);
+          });
         }
         allItems = allItems.concat((data.data ?? []).map(toItem));
         nextPath = data.next ? data.next.replace('/v1', '') : null;
@@ -865,18 +881,14 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       }
       page++;
     }
-    console.log(`[/spotify/artist/albums] fetched ${allItems.length} total across ${page} page(s)`);
-    console.log(`[/spotify/artist/albums] distinct type values: ${[...new Set(allItems.map(a => a.type))].join(', ')}`);
 
-    // Exclude known non-album types; anything unrecognised (including 'lp', 'album', 'unknown') is kept.
-    const NON_ALBUM_TYPES = new Set(['single', 'ep', 'compilation']);
-    const grouped = {
-      albums:       allItems.filter(a => !NON_ALBUM_TYPES.has(a.type)),
-      singles:      [],
-      compilations: [],
-    };
+    const albums = allItems.filter(isAlbum);
+    console.log(`[/spotify/artist/albums] fetched ${allItems.length} total → ${albums.length} albums after filter`);
+    console.log(`[/spotify/artist/albums] isSingle values: ${[...new Set(allItems.map(a => String(a.isSingle)))].join(', ')} | trackCounts sampled: ${allItems.slice(0,5).map(a=>a.trackCount).join(', ')}`);
 
-    console.log(`[/spotify/artist/albums] success — ${allItems.length} total → ${grouped.albums.length} albums after filter`);
+    const grouped = { albums, singles: [], compilations: [] };
+
+    console.log(`[/spotify/artist/albums] success — ${grouped.albums.length} albums`);
     cacheSet(CACHE_KEY, grouped, TTL_6H);
     await setCache(CACHE_KEY, grouped);
     res.json(grouped);

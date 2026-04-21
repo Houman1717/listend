@@ -66,6 +66,10 @@ type SpotifyAlbum = {
   artworkUrl: string;
   year: number;
   type: string;
+  isSingle?: boolean | null;
+  isCompilation?: boolean | null;
+  trackCount?: number | null;
+  url?: string;
 };
 
 type SpotifyDiscography = {
@@ -271,15 +275,21 @@ export default function ArtistDetailScreen() {
           return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
         })
         .then(data => {
-          const NON_ALBUM = new Set(['single', 'ep', 'compilation']);
           const rawAlbums: SpotifyAlbum[] = Array.isArray(data?.albums) ? data.albums : [];
-          console.log('[artist-detail] raw album types:', rawAlbums.map((a: SpotifyAlbum) => a.type).join(', '));
+          console.log('[artist-detail] raw albums sample — isSingle:', rawAlbums.slice(0,5).map(a => a.isSingle).join(', '), '| trackCount:', rawAlbums.slice(0,5).map(a => a.trackCount).join(', '));
+          const isAlbum = (a: SpotifyAlbum) => {
+            if (a.isSingle      === true) return false;
+            if (a.isCompilation === true) return false;
+            if (a.isSingle === null && a.trackCount != null && a.trackCount <= 1) return false;
+            if (a.url && a.url.toLowerCase().includes('/single/')) return false;
+            return true;
+          };
           const disc: SpotifyDiscography = {
-            albums:       rawAlbums.filter((a: SpotifyAlbum) => !NON_ALBUM.has((a.type ?? '').toLowerCase())),
+            albums:       rawAlbums.filter(isAlbum),
             singles:      [],
             compilations: [],
           };
-          console.log('[artist-detail] discography after filter:', disc.albums.length, 'albums');
+          console.log('[artist-detail] discography after filter:', disc.albums.length, 'albums from', rawAlbums.length, 'raw');
           if (!cancelled) setDiscography(disc);
         })
         .catch(err => {
