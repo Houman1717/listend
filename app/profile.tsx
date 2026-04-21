@@ -327,6 +327,28 @@ export default function ProfileScreen() {
 
       <View style={[s.rule, { backgroundColor: BORDER }]} />
 
+      {/* My Playlists */}
+      <Pressable
+        style={({ pressed }) => [s.wantRow, { opacity: pressed ? 0.7 : 1 }]}
+        onPress={() => router.push('/my-playlists')}>
+        <FontAwesome name="list" size={14} color={SUBTEXT} style={{ marginTop: 1 }} />
+        <Text style={s.wantLabel}>My Playlists</Text>
+        <FontAwesome name="chevron-right" size={12} color={SUBTEXT} />
+      </Pressable>
+
+      <View style={[s.rule, { backgroundColor: BORDER }]} />
+
+      {/* Liked Artists */}
+      <Pressable
+        style={({ pressed }) => [s.wantRow, { opacity: pressed ? 0.7 : 1 }]}
+        onPress={() => router.push('/liked-artists')}>
+        <FontAwesome name="heart" size={14} color="#FF3CAC" style={{ marginTop: 1 }} />
+        <Text style={s.wantLabel}>Liked Artists</Text>
+        <FontAwesome name="chevron-right" size={12} color={SUBTEXT} />
+      </Pressable>
+
+      <View style={[s.rule, { backgroundColor: BORDER }]} />
+
       {/* Favourite Albums */}
       <View style={s.favSection}>
         <View style={s.favHeader}>

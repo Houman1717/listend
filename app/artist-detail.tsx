@@ -6,12 +6,15 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useLikedArtists } from '@/context/LikedArtistsContext';
+import { useAlbums } from '@/context/AlbumsContext';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -137,9 +140,27 @@ export default function ArtistDetailScreen() {
   const [albumsError, setAlbumsError]     = useState('');
 
   const [bioExpanded, setBioExpanded]     = useState(false);
+  const [toastMsg, setToastMsg]         = useState('');
+  const toastOpacity                    = useRef(new Animated.Value(0)).current;
+  const { isLiked, toggleLike }         = useLikedArtists();
+  const liked                           = isLiked(resolvedId || artistName);
+  const { loggedAlbums }               = useAlbums();
 
   // Prevent double-firing if effect runs twice (Strict Mode / nav back)
   const spotifyFetched = useRef(false);
+
+  // ── Listened % — derived from already-fetched discography + logged albums ────
+  const albumsOnly   = discography?.albums ?? [];
+  const totalAlbums  = albumsOnly.length;
+  const listenedCount = totalAlbums === 0 ? 0 : albumsOnly.filter(spotifyAlbum => {
+    const artistLower = artistName.toLowerCase();
+    return loggedAlbums.some(logged =>
+      logged.id === spotifyAlbum.id ||
+      (logged.title.toLowerCase() === spotifyAlbum.title.toLowerCase() &&
+       logged.artist.toLowerCase() === artistLower)
+    );
+  }).length;
+  const listenedPct  = totalAlbums === 0 ? null : Math.round((listenedCount / totalAlbums) * 100);
 
   const sectionBg   = isDark ? '#111' : '#f5f5f5';
   const borderColor = isDark ? '#222' : '#e8e8e8';
@@ -270,6 +291,21 @@ export default function ArtistDetailScreen() {
     return () => { cancelled = true; };
   }, [artistName, paramId]); // paramId is stable from route; artistName drives re-run when pushing a new artist
 
+  function showToast(msg: string) {
+    setToastMsg(msg);
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(1600),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+  }
+
+  function handleToggleLike() {
+    const artistId = resolvedId || artistName;
+    toggleLike({ id: artistId, name: artistName, artworkUrl: artworkUrl || null });
+    showToast(!liked ? 'Artist liked' : 'Artist removed');
+  }
+
   function handleAlbumPress(album: SpotifyAlbum) {
     router.push({
       pathname: '/album-detail',
@@ -309,6 +345,7 @@ export default function ArtistDetailScreen() {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
     <ScrollView
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={[sc.container, { paddingHorizontal: GRID_PAD }]}
@@ -316,6 +353,16 @@ export default function ArtistDetailScreen() {
 
       {/* ── 1. Artist header ─────────────────────────────────────────────────── */}
       <View style={sc.header}>
+        <Pressable
+          style={sc.heartBtn}
+          onPress={handleToggleLike}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <FontAwesome
+            name={liked ? 'heart' : 'heart-o'}
+            size={24}
+            color={liked ? '#FF3CAC' : '#666'}
+          />
+        </Pressable>
         {artworkUrl ? (
           <Image source={{ uri: artworkUrl }} style={sc.avatar} />
         ) : (
@@ -324,6 +371,15 @@ export default function ArtistDetailScreen() {
           </View>
         )}
         <Text style={[sc.name, { color: colors.text }]}>{artistName}</Text>
+        {listenedPct !== null && (
+          <View style={sc.listenedWrap}>
+            <View style={sc.listenedRow}>
+              <FontAwesome name="headphones" size={13} color="#FF3CAC" />
+              <Text style={sc.listenedPct}>{listenedPct}%</Text>
+            </View>
+            <Text style={sc.listenedSub}>{listenedCount} of {totalAlbums} albums listened</Text>
+          </View>
+        )}
         {lastfmLoading ? (
           <ActivityIndicator size="small" color="#FF3CAC" style={{ marginTop: 8 }} />
         ) : lastfm?.listeners ? (
@@ -409,26 +465,34 @@ export default function ArtistDetailScreen() {
         <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
           <SectionHeader label="Similar Artists" color={colors.subtext} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sc.similarScroll}>
-            {lastfm.similar.map(sim => (
-              <Pressable
-                key={sim.name}
-                style={({ pressed }) => [sc.similarChip, { opacity: pressed ? 0.6 : 1 }]}
-                onPress={() => handleSimilarArtistPress(sim.name)}>
-                {sim.imageUrl ? (
-                  <Image source={{ uri: sim.imageUrl }} style={sc.similarAvatar} />
-                ) : (
-                  <View style={[sc.similarAvatar, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
-                    <Text style={[sc.similarInitial, { color: colors.subtext }]}>{sim.name.charAt(0)}</Text>
-                  </View>
-                )}
-                <Text style={[sc.similarName, { color: colors.text }]} numberOfLines={2}>{sim.name}</Text>
-              </Pressable>
-            ))}
+            {lastfm.similar.map(sim => {
+              const appleImageUrl = sim.imageUrl && !sim.imageUrl.includes('scdn.co') ? sim.imageUrl : null;
+              return (
+                <Pressable
+                  key={sim.name}
+                  style={({ pressed }) => [sc.similarChip, { opacity: pressed ? 0.6 : 1 }]}
+                  onPress={() => handleSimilarArtistPress(sim.name)}>
+                  {appleImageUrl ? (
+                    <Image source={{ uri: appleImageUrl }} style={sc.similarAvatar} />
+                  ) : (
+                    <View style={[sc.similarAvatar, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                      <Text style={[sc.similarInitial, { color: colors.subtext }]}>{sim.name.charAt(0)}</Text>
+                    </View>
+                  )}
+                  <Text style={[sc.similarName, { color: colors.text }]} numberOfLines={2}>{sim.name}</Text>
+                </Pressable>
+              );
+            })}
           </ScrollView>
         </View>
       ) : null}
 
     </ScrollView>
+
+    <Animated.View style={[sc.toast, { opacity: toastOpacity }]} pointerEvents="none">
+      <Text style={sc.toastText}>{toastMsg}</Text>
+    </Animated.View>
+    </View>
   );
 }
 
@@ -437,10 +501,30 @@ const sc = StyleSheet.create({
 
   // Header
   header: { alignItems: 'center', paddingTop: 28, paddingBottom: 20 },
+  heartBtn: { position: 'absolute', top: 20, right: 0, zIndex: 10, padding: 4 },
+
+  // Toast
+  toast: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: '#1e1e1e',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#333',
+  },
+  toastText: { color: '#f0f0f0', fontSize: 14, fontWeight: '500' },
+
   avatar: { width: 120, height: 120, borderRadius: 60, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 16 },
   avatarPlaceholder: { backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
   avatarInitial: { color: '#FF3CAC', fontSize: 44, fontWeight: '700' },
   name: { marginTop: 14, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
+  listenedWrap: { alignItems: 'center', marginTop: 8, gap: 3 },
+  listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  listenedPct: { color: '#FF3CAC', fontSize: 15, fontWeight: '700' },
+  listenedSub: { color: '#666', fontSize: 12 },
   listeners: { marginTop: 4, fontSize: 13 },
 
   // Error

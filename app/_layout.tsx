@@ -12,6 +12,7 @@ import { AlbumsProvider } from '@/context/AlbumsContext';
 import { FlipProvider } from '@/context/FlipContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { NotificationsProvider } from '@/context/NotificationsContext';
+import { LikedArtistsProvider } from '@/context/LikedArtistsContext';
 import { FavoritesSyncer } from '@/components/FavoritesSyncer';
 
 export {
@@ -80,6 +81,7 @@ function RootLayoutNav() {
     <AuthProvider>
     <NotificationsProvider>
     <AlbumsProvider>
+    <LikedArtistsProvider>
     <FlipProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AuthGate />
@@ -124,9 +126,11 @@ function RootLayoutNav() {
           <Stack.Screen name="recent-activity" options={{ title: 'Recent Activity', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="notifications" options={{ title: 'Notifications', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
           <Stack.Screen name="popular-reviews" options={{ title: 'Popular Reviews This Week', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="liked-artists" options={{ title: 'Liked Artists', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
         </Stack>
       </ThemeProvider>
     </FlipProvider>
+    </LikedArtistsProvider>
     </AlbumsProvider>
     </NotificationsProvider>
     </AuthProvider>
