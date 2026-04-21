@@ -277,10 +277,10 @@ export default function ArtistDetailScreen() {
         .then(data => {
           const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
           const baseTitle = (title: string) => title.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
-          const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance)\b|apple\s+presents/i;
+          const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance|highlights?|collection|greatest\s+hits?)\b|best\s+of\b|apple(?:\s+music)?\s+presents/i;
           const isAlbum = (a: SpotifyAlbum) => {
             if (a.isSingle === true) return false;
-            if (a.isCompilation === true && (a.trackCount == null || a.trackCount < 10)) return false;
+            if (a.isCompilation === true && (a.trackCount == null || a.trackCount < 30)) return false;
             if (a.trackCount != null && a.trackCount < 6) return false;
             if (a.url && a.url.toLowerCase().includes('/single/')) return false;
             if (TITLE_EXCLUDE_RE.test(a.title)) return false;

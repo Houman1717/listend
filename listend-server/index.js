@@ -854,13 +854,13 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     const baseTitle = title => title.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
 
     // Keywords anywhere in the title that mark a non-album release
-    const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance)\b|apple\s+presents/i;
+    const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance|highlights?|collection|greatest\s+hits?)\b|best\s+of\b|apple(?:\s+music)?\s+presents/i;
 
     const isAlbum = item => {
       if (item.isSingle === true) return false;
-      // Allow large diverse compilations (e.g. Trilogy) — exclude only small ones
-      // which are typically remix/version bundles
-      if (item.isCompilation === true && (item.trackCount === null || item.trackCount < 10)) return false;
+      // Keep only large diverse compilations (e.g. Trilogy at 33 tracks).
+      // Best-of / playlist compilations are typically < 30 tracks.
+      if (item.isCompilation === true && (item.trackCount === null || item.trackCount < 30)) return false;
       // Real albums have at least 6 tracks; single bundles/EPs typically don't
       if (item.trackCount !== null && item.trackCount < 6) return false;
       if (item.url && item.url.toLowerCase().includes('/single/')) return false;
