@@ -871,7 +871,7 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       if (inAllowlist(t)) return 'epsAndMixtapes';
       if (item.isCompilation === true || COLLECTION_RE.test(t)) return 'collections';
       if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
-      if (item.isSingle === true || (item.url && item.url.toLowerCase().includes('/single/'))) return 'epsAndMixtapes';
+      if (item.url && item.url.toLowerCase().includes('/single/')) return 'epsAndMixtapes';
       if (item.trackCount !== null && item.trackCount < 6) return 'epsAndMixtapes';
       return 'albums';
     };
@@ -901,9 +901,17 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
 
     console.log(`[/spotify/artist/albums] ALL titles fetched (${allItems.length}):`, allItems.map(i => `"${i.title}" isSingle=${i.isSingle} isCompilation=${i.isCompilation} trackCount=${i.trackCount}`));
 
+    // Global singles exclusion — runs before tab categorisation
+    const isSingleRelease = item =>
+      item.isSingle === true ||
+      item.trackCount === 1 ||
+      /\s*-\s*single\b/i.test(item.title);
+    const nonSingles = allItems.filter(item => !isSingleRelease(item));
+    console.log(`[/spotify/artist/albums] ${allItems.length} total → ${nonSingles.length} after singles exclusion`);
+
     // Bucket items into 4 tab categories
     const buckets = { albums: [], epsAndMixtapes: [], collections: [], live: [] };
-    for (const item of allItems) buckets[categorize(item)].push(item);
+    for (const item of nonSingles) buckets[categorize(item)].push(item);
 
     // Deduplicate albums only — keep canonical title (no parenthetical), prefer higher trackCount then earlier year
     const dedupMap = new Map();
