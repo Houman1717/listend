@@ -913,22 +913,37 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     const buckets = { albums: [], epsAndMixtapes: [], collections: [], live: [] };
     for (const item of nonSingles) buckets[categorize(item)].push(item);
 
-    // Deduplicate albums only — keep canonical title (no parenthetical), prefer higher trackCount then earlier year
-    const dedupMap = new Map();
+    // Deduplicate each bucket: same title (case-insensitive) + same year → keep higher trackCount
+    const dedupBucket = items => {
+      const map = new Map();
+      for (const item of items) {
+        const key = `${item.title.toLowerCase()}::${item.year}`;
+        const existing = map.get(key);
+        if (!existing || (item.trackCount ?? 0) > (existing.trackCount ?? 0)) map.set(key, item);
+      }
+      return [...map.values()];
+    };
+
+    // Albums get additional base-title dedup (strips parenthetical suffixes across years)
+    const albumBaseMap = new Map();
     for (const item of buckets.albums) {
       const key = baseTitle(item.title);
-      const existing = dedupMap.get(key);
-      if (!existing) { dedupMap.set(key, item); continue; }
+      const existing = albumBaseMap.get(key);
+      if (!existing) { albumBaseMap.set(key, item); continue; }
       const itemHasSuffix     = /[\(\[]/.test(item.title);
       const existingHasSuffix = /[\(\[]/.test(existing.title);
-      if (!itemHasSuffix && existingHasSuffix) { dedupMap.set(key, item); continue; }
+      if (!itemHasSuffix && existingHasSuffix) { albumBaseMap.set(key, item); continue; }
       if (itemHasSuffix && !existingHasSuffix) continue;
-      if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { dedupMap.set(key, item); continue; }
-      if (item.year < existing.year) { dedupMap.set(key, item); }
+      if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { albumBaseMap.set(key, item); continue; }
+      if (item.year < existing.year) { albumBaseMap.set(key, item); }
     }
-    const albums = [...dedupMap.values()];
 
-    const grouped = { albums, epsAndMixtapes: buckets.epsAndMixtapes, collections: buckets.collections, live: buckets.live };
+    const grouped = {
+      albums:         dedupBucket([...albumBaseMap.values()]),
+      epsAndMixtapes: dedupBucket(buckets.epsAndMixtapes),
+      collections:    dedupBucket(buckets.collections),
+      live:           dedupBucket(buckets.live),
+    };
 
     console.log(`[/spotify/artist/albums] success — albums:${grouped.albums.length} eps:${grouped.epsAndMixtapes.length} collections:${grouped.collections.length} live:${grouped.live.length}`);
     cacheSet(CACHE_KEY, grouped, TTL_6H);
