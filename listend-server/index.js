@@ -900,6 +900,7 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
       page++;
     }
 
+    console.log(`[/spotify/artist/albums] ALL titles fetched (${allItems.length}):`, allItems.map(i => `"${i.title}" isSingle=${i.isSingle} isCompilation=${i.isCompilation} trackCount=${i.trackCount}`));
     const filtered = allItems.filter(isAlbum);
     console.log(`[/spotify/artist/albums] fetched ${allItems.length} total → ${filtered.length} after isAlbum filter`);
 
