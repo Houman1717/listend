@@ -858,8 +858,8 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
 
     // Titles that should always be included regardless of keyword filters
     const TITLE_ALLOWLIST = [
-      'christmas carollll',
-      'members only',
+      'members only, vol.',
+      'a ghetto christmas carol',
     ];
     const inAllowlist = title => TITLE_ALLOWLIST.some(t => title.toLowerCase().includes(t));
 
