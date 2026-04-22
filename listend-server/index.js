@@ -80,24 +80,29 @@ app.get('/home', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const [albumsRes, songsRes, artistsRes] = await Promise.all([
-      supabase.from('home_albums').select('*').order('updated_at', { ascending: false }).limit(10),
+    // TODO: swap chartAlbums to a Supabase query once real user listening data exists
+    const [chartData, songsRes, artistsRes] = await Promise.all([
+      amFetch('/catalog/us/charts?types=albums&limit=10'),
       supabase.from('home_songs').select('*').order('updated_at', { ascending: false }).limit(10),
       supabase.from('home_artists').select('*').order('updated_at', { ascending: false }).limit(8),
     ]);
 
-    if (albumsRes.error) throw albumsRes.error;
     if (songsRes.error) throw songsRes.error;
     if (artistsRes.error) throw artistsRes.error;
 
+    const chartAlbums = (chartData?.results?.albums?.[0]?.data ?? []).map(item => {
+      const attrs = item.attributes ?? {};
+      return {
+        id:         item.id,
+        title:      attrs.name ?? '',
+        artist:     attrs.artistName ?? '',
+        artworkUrl: amArtwork(attrs.artwork),
+        year:       parseInt(attrs.releaseDate?.slice(0, 4) ?? '0', 10),
+      };
+    });
+
     const payload = {
-      albums: (albumsRes.data ?? []).map(r => ({
-        id: r.spotify_id,
-        title: r.title,
-        artist: r.artist,
-        artworkUrl: r.artwork_url,
-        year: r.year ?? 0,
-      })),
+      albums: chartAlbums,
       songs: (songsRes.data ?? []).map(r => ({
         id: r.spotify_id,
         title: r.title,
