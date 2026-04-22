@@ -488,7 +488,7 @@ export default function ArtistDetailScreen() {
         <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
           <SectionHeader label="Similar Artists" color={colors.subtext} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sc.similarScroll}>
-            {lastfm.similar.map(sim => {
+            {lastfm.similar.filter(sim => !/(&|feat\.|ft\.|(?<![a-z])x |( and ))/i.test(sim.name)).map(sim => {
               const appleImageUrl = sim.imageUrl && !sim.imageUrl.includes('scdn.co') ? sim.imageUrl : null;
               return (
                 <Pressable
