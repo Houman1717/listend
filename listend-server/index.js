@@ -853,28 +853,27 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
 
     const baseTitle = title => title.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
 
-    // Keywords anywhere in the title that mark a non-album release
-    const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance|highlights?|collection|greatest\s+hits?|chopnotslop)\b|best\s+of\b|apple(?:\s+music)?\s+presents|chopped\s+not\s+slopped/i;
-
-    // Titles that should always be included regardless of keyword filters
+    // Allowlist: these titles always go into EPs & Mixtapes regardless of other flags
     const TITLE_ALLOWLIST = [
       'members only, vol.',
       'a ghetto christmas carol',
     ];
     const inAllowlist = title => TITLE_ALLOWLIST.some(t => title.toLowerCase().includes(t));
 
-    const isAlbum = item => {
-      if (inAllowlist(item.title)) return true;
-      if (item.isSingle === true) return false;
-      // Keep only large diverse compilations (e.g. Trilogy at 33 tracks).
-      // Best-of / playlist compilations are typically < 30 tracks.
-      if (item.isCompilation === true && (item.trackCount === null || item.trackCount < 30)) return false;
-      // Real albums have at least 6 tracks; single bundles/EPs typically don't
-      if (item.trackCount !== null && item.trackCount < 6) return false;
-      if (item.url && item.url.toLowerCase().includes('/single/')) return false;
-      // Reject if the title itself contains any version-indicator keyword
-      if (TITLE_EXCLUDE_RE.test(item.title)) return false;
-      return true;
+    const LIVE_RE       = /\b(live|concert|tour|session|performance)\b|apple(?:\s+music)?\s+presents|chopnotslop|chopped\s+not\s+slopped/i;
+    const COLLECTION_RE = /\b(greatest\s+hits?|highlights?|collection|deluxe)\b|best\s+of\b/i;
+    const EP_MIX_RE     = /\b(ep|mixtape|acoustic|acapella|a\s+cappella|remixes?|instrumental|karaoke)\b/i;
+
+    // Returns which tab bucket an item belongs to
+    const categorize = item => {
+      const t = item.title;
+      if (LIVE_RE.test(t)) return 'live';
+      if (inAllowlist(t)) return 'epsAndMixtapes';
+      if (item.isCompilation === true || COLLECTION_RE.test(t)) return 'collections';
+      if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
+      if (item.isSingle === true || (item.url && item.url.toLowerCase().includes('/single/'))) return 'epsAndMixtapes';
+      if (item.trackCount !== null && item.trackCount < 6) return 'epsAndMixtapes';
+      return 'albums';
     };
 
     let allItems = [];
@@ -901,31 +900,29 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     }
 
     console.log(`[/spotify/artist/albums] ALL titles fetched (${allItems.length}):`, allItems.map(i => `"${i.title}" isSingle=${i.isSingle} isCompilation=${i.isCompilation} trackCount=${i.trackCount}`));
-    const filtered = allItems.filter(isAlbum);
-    console.log(`[/spotify/artist/albums] fetched ${allItems.length} total → ${filtered.length} after isAlbum filter`);
 
-    // Deduplicate by base title — keep the version without a parenthetical suffix;
-    // break ties by preferring higher trackCount then earlier year.
+    // Bucket items into 4 tab categories
+    const buckets = { albums: [], epsAndMixtapes: [], collections: [], live: [] };
+    for (const item of allItems) buckets[categorize(item)].push(item);
+
+    // Deduplicate albums only — keep canonical title (no parenthetical), prefer higher trackCount then earlier year
     const dedupMap = new Map();
-    for (const item of filtered) {
+    for (const item of buckets.albums) {
       const key = baseTitle(item.title);
       const existing = dedupMap.get(key);
       if (!existing) { dedupMap.set(key, item); continue; }
-      // Prefer the title with no parenthetical (canonical version)
       const itemHasSuffix     = /[\(\[]/.test(item.title);
       const existingHasSuffix = /[\(\[]/.test(existing.title);
       if (!itemHasSuffix && existingHasSuffix) { dedupMap.set(key, item); continue; }
       if (itemHasSuffix && !existingHasSuffix) continue;
-      // Both or neither have a suffix — prefer higher track count, then earlier year
       if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { dedupMap.set(key, item); continue; }
       if (item.year < existing.year) { dedupMap.set(key, item); }
     }
     const albums = [...dedupMap.values()];
-    console.log(`[/spotify/artist/albums] ${filtered.length} → ${albums.length} after dedup`);
 
-    const grouped = { albums, singles: [], compilations: [] };
+    const grouped = { albums, epsAndMixtapes: buckets.epsAndMixtapes, collections: buckets.collections, live: buckets.live };
 
-    console.log(`[/spotify/artist/albums] success — ${grouped.albums.length} albums`);
+    console.log(`[/spotify/artist/albums] success — albums:${grouped.albums.length} eps:${grouped.epsAndMixtapes.length} collections:${grouped.collections.length} live:${grouped.live.length}`);
     cacheSet(CACHE_KEY, grouped, TTL_6H);
     await setCache(CACHE_KEY, grouped);
     res.json(grouped);

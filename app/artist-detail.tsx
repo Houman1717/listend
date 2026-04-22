@@ -74,9 +74,18 @@ type SpotifyAlbum = {
 
 type SpotifyDiscography = {
   albums: SpotifyAlbum[];
-  singles: SpotifyAlbum[];
-  compilations: SpotifyAlbum[];
+  epsAndMixtapes: SpotifyAlbum[];
+  collections: SpotifyAlbum[];
+  live: SpotifyAlbum[];
 };
+
+const DISC_TABS = [
+  { key: 'albums',        label: 'Albums' },
+  { key: 'epsAndMixtapes', label: 'EPs & Mixtapes' },
+  { key: 'collections',   label: 'Collections' },
+  { key: 'live',          label: 'Live' },
+] as const;
+type DiscTab = typeof DISC_TABS[number]['key'];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -144,6 +153,7 @@ export default function ArtistDetailScreen() {
   const [albumsError, setAlbumsError]     = useState('');
 
   const [bioExpanded, setBioExpanded]     = useState(false);
+  const [activeDiscTab, setActiveDiscTab] = useState<DiscTab>('albums');
   const [toastMsg, setToastMsg]         = useState('');
   const toastOpacity                    = useRef(new Animated.Value(0)).current;
   const { isLiked, toggleLike }         = useLikedArtists();
@@ -275,36 +285,13 @@ export default function ArtistDetailScreen() {
           return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
         })
         .then(data => {
-          const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
-          const baseTitle = (title: string) => title.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
-          const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance|highlights?|collection|greatest\s+hits?|chopnotslop)\b|best\s+of\b|apple(?:\s+music)?\s+presents|chopped\s+not\s+slopped/i;
-          const isAlbum = (a: SpotifyAlbum) => {
-            if (a.isSingle === true) return false;
-            if (a.isCompilation === true && (a.trackCount == null || a.trackCount < 30)) return false;
-            if (a.trackCount != null && a.trackCount < 6) return false;
-            if (a.url && a.url.toLowerCase().includes('/single/')) return false;
-            if (TITLE_EXCLUDE_RE.test(a.title)) return false;
-            return true;
-          };
-          const rawAlbums: SpotifyAlbum[] = Array.isArray(data?.albums) ? data.albums : [];
-          const filtered = rawAlbums.filter(isAlbum);
-          const dedupMap = new Map<string, SpotifyAlbum>();
-          for (const item of filtered) {
-            const key = baseTitle(item.title);
-            const existing = dedupMap.get(key);
-            if (!existing) { dedupMap.set(key, item); continue; }
-            const itemHasSuffix     = /[\(\[]/.test(item.title);
-            const existingHasSuffix = /[\(\[]/.test(existing.title);
-            if (!itemHasSuffix && existingHasSuffix) { dedupMap.set(key, item); continue; }
-            if (itemHasSuffix && !existingHasSuffix) continue;
-            if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { dedupMap.set(key, item); continue; }
-            if (item.year < existing.year) dedupMap.set(key, item);
-          }
           const disc: SpotifyDiscography = {
-            albums: [...dedupMap.values()],
-            singles: [], compilations: [],
+            albums:         Array.isArray(data?.albums)         ? data.albums         : [],
+            epsAndMixtapes: Array.isArray(data?.epsAndMixtapes) ? data.epsAndMixtapes : [],
+            collections:    Array.isArray(data?.collections)    ? data.collections    : [],
+            live:           Array.isArray(data?.live)           ? data.live           : [],
           };
-          console.log('[artist-detail] discography:', rawAlbums.length, 'raw →', filtered.length, 'filtered →', disc.albums.length, 'deduped');
+          console.log('[artist-detail] discography — albums:', disc.albums.length, 'eps:', disc.epsAndMixtapes.length, 'collections:', disc.collections.length, 'live:', disc.live.length);
           if (!cancelled) setDiscography(disc);
         })
         .catch(err => {
@@ -462,10 +449,37 @@ export default function ArtistDetailScreen() {
           <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
         ) : albumsError ? (
           <Text style={[sc.errorText, { color: '#f87171' }]}>{albumsError}</Text>
-        ) : discography && discography.albums.length > 0 ? (
-          renderAlbumRow([...discography.albums].sort((a, b) => b.year - a.year))
         ) : (
-          <Text style={[sc.empty, { color: mutedText }]}>No albums available</Text>
+          <>
+            {/* Tab pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={sc.discTabBar}
+              style={{ marginBottom: 12 }}>
+              {DISC_TABS.map(tab => {
+                const active = activeDiscTab === tab.key;
+                return (
+                  <Pressable
+                    key={tab.key}
+                    style={[sc.discTab, active && sc.discTabActive]}
+                    onPress={() => setActiveDiscTab(tab.key)}>
+                    <Text style={[sc.discTabText, active && sc.discTabTextActive]}>
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {/* Content for active tab */}
+            {(() => {
+              const items = discography?.[activeDiscTab] ?? [];
+              const sorted = [...items].sort((a, b) => b.year - a.year);
+              return sorted.length > 0
+                ? renderAlbumRow(sorted)
+                : <Text style={[sc.empty, { color: mutedText }]}>Nothing here yet</Text>;
+            })()}
+          </>
         )}
       </View>
 
@@ -552,6 +566,13 @@ const sc = StyleSheet.create({
   trackTitle: { fontSize: 14, fontWeight: '500' },
   trackSub: { fontSize: 12 },
   trackDuration: { fontSize: 13, marginLeft: 8 },
+
+  // Discography tabs
+  discTabBar:       { flexDirection: 'row', gap: 6, paddingVertical: 2 },
+  discTab:          { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#444' },
+  discTabActive:    { backgroundColor: '#FF3CAC', borderColor: '#FF3CAC' },
+  discTabText:      { fontSize: 12, fontWeight: '500', color: '#888' },
+  discTabTextActive:{ color: '#fff', fontWeight: '700' },
 
   // Discography carousel
   discGroupLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
