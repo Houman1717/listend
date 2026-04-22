@@ -856,7 +856,15 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
     // Keywords anywhere in the title that mark a non-album release
     const TITLE_EXCLUDE_RE = /\b(singles?|ep|live|session|acoustic|acapella|a cappella|remixes?|edit|remaster(?:ed)?|version|instrumental|karaoke|concert|tour|performance|highlights?|collection|greatest\s+hits?|chopnotslop)\b|best\s+of\b|apple(?:\s+music)?\s+presents|chopped\s+not\s+slopped/i;
 
+    // Titles that should always be included regardless of keyword filters
+    const TITLE_ALLOWLIST = [
+      'christmas carollll',
+      'members only',
+    ];
+    const inAllowlist = title => TITLE_ALLOWLIST.some(t => title.toLowerCase().includes(t));
+
     const isAlbum = item => {
+      if (inAllowlist(item.title)) return true;
       if (item.isSingle === true) return false;
       // Keep only large diverse compilations (e.g. Trilogy at 33 tracks).
       // Best-of / playlist compilations are typically < 30 tracks.
