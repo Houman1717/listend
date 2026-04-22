@@ -1050,6 +1050,20 @@ app.get('/api/admin/refresh-home-artists', async (req, res) => {
   }
 });
 
+// ── GET /api/admin/purge-home-cache ──────────────────────────────────────────
+
+app.get('/api/admin/purge-home-cache', async (req, res) => {
+  try {
+    cacheClear('home');
+    await deleteCache('home');
+    console.log('[/api/admin/purge-home-cache] done.');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[/api/admin/purge-home-cache]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
+  }
+});
+
 // ── GET /api/admin/purge-artist-album-cache ───────────────────────────────────
 
 app.get('/api/admin/purge-artist-album-cache', async (req, res) => {
