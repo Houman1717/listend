@@ -330,6 +330,9 @@ app.get('/discover/popular', async (req, res) => {
 });
 
 // ── GET /discover/coming-soon ─────────────────────────────────────────────────
+// Pulls Apple Music's top-pre-adds chart (covers top pre-adds, coming this week,
+// coming next week, and editor's picks in one ranked feed).
+// Cached 6 h in-memory, 7 days in Supabase — weekly cron busts it every Monday.
 
 app.get('/discover/coming-soon', async (req, res) => {
   const CACHE_KEY = 'discover:coming-soon';
@@ -337,19 +340,43 @@ app.get('/discover/coming-soon', async (req, res) => {
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(mem);
 
-  const db = await getCached(CACHE_KEY, TTL_24H);
+  const db = await getCached(CACHE_KEY, TTL_7D);
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const year = new Date().getFullYear();
-    const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(`coming soon ${year}`)}&types=albums&limit=10`);
-    const results = (data.results?.albums?.data ?? []).map(item => ({
-      id: item.id,
-      title: item.attributes?.name ?? '',
-      artist: item.attributes?.artistName ?? '',
-      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+    // Fetch pre-adds and upcoming new releases in parallel then deduplicate.
+    const [preAdds, newReleases] = await Promise.allSettled([
+      amFetch('/catalog/us/charts?types=albums&chart=top-pre-adds&limit=30'),
+      amFetch('/catalog/us/charts?types=albums&chart=most-played&limit=20'),
+    ]);
+
+    const normalize = item => ({
+      id:         item.id,
+      title:      item.attributes?.name ?? '',
+      artist:     item.attributes?.artistName ?? '',
+      year:       parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
       artworkUrl: amArtwork(item.attributes?.artwork),
-    }));
+    });
+
+    const seen    = new Set();
+    const results = [];
+
+    const addItems = items => {
+      for (const item of items) {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          results.push(normalize(item));
+        }
+      }
+    };
+
+    if (preAdds.status === 'fulfilled') {
+      addItems(preAdds.value?.results?.albums?.[0]?.data ?? []);
+    }
+    if (newReleases.status === 'fulfilled') {
+      addItems(newReleases.value?.results?.albums?.[0]?.data ?? []);
+    }
+
     cacheSet(CACHE_KEY, results, TTL_6H);
     await setCache(CACHE_KEY, results);
     res.json(results);
@@ -1411,6 +1438,14 @@ cron.schedule('0 */6 * * *', () => {
                'discover:classics', 'discover:top-rated', 'discover:recommended');
     console.log('[cron] Cache cleared after refresh.');
   });
+});
+
+// Weekly Monday 6 am — bust coming-soon so it re-fetches fresh pre-adds for the new week.
+cron.schedule('0 6 * * 1', async () => {
+  console.log('[cron:weekly] Refreshing coming-soon cache...');
+  cacheClear('discover:coming-soon');
+  await deleteCache('discover:coming-soon');
+  console.log('[cron:weekly] coming-soon cache cleared — will re-fetch on next request.');
 });
 
 // ── POST /api/upload-avatar ───────────────────────────────────────────────────
