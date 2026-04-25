@@ -312,7 +312,7 @@ app.get('/discover/popular', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await amFetch('/catalog/us/charts?types=albums&chart=top-albums&limit=48&genre=all');
+    const data = await amFetch('/catalog/us/charts?types=albums&limit=48');
     const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
       id: item.id,
       title: item.attributes?.name ?? '',
@@ -1233,6 +1233,22 @@ app.get('/api/admin/purge-artist-album-cache', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('[/api/admin/purge-artist-album-cache]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
+  }
+});
+
+// ── GET /api/admin/purge-discover-cache ──────────────────────────────────────
+
+app.get('/api/admin/purge-discover-cache', async (req, res) => {
+  try {
+    const keys = ['discover:new-releases', 'discover:popular', 'discover:coming-soon',
+                  'discover:classics', 'discover:top-rated', 'discover:recommended'];
+    cacheClear(...keys);
+    await Promise.all(keys.map(k => deleteCache(k)));
+    console.log('[/api/admin/purge-discover-cache] done.');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[/api/admin/purge-discover-cache]', err.message ?? err);
     res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
   }
 });
