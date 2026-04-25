@@ -459,6 +459,58 @@ app.get('/discover/classics', async (req, res) => {
 });
 
 // ── GET /discover/top-rated ───────────────────────────────────────────────────
+// Acclaimed Music aggregate top 48 albums of all time
+
+const TOP_RATED_IDS = [
+  1440841241,  // Pet Sounds – The Beach Boys
+  1440783617,  // Nevermind – Nirvana
+  1441164670,  // Revolver – The Beatles
+  1440851613,  // The Velvet Underground & Nico – The Velvet Underground
+  1538081586,  // What's Going On – Marvin Gaye
+  1441164604,  // Sgt. Pepper's Lonely Hearts Club Band – The Beatles
+  684811762,   // London Calling – The Clash
+  1097861387,  // OK Computer – Radiohead
+  178049863,   // Blonde on Blonde – Bob Dylan
+  1440872228,  // Exile on Main St. – The Rolling Stones
+  201281514,   // Highway 61 Revisited – Bob Dylan
+  266317242,   // Never Mind the Bollocks – Sex Pistols
+  1441133180,  // The Beatles (White Album) – The Beatles
+  357225315,   // Are You Experienced – Jimi Hendrix
+  1031002336,  // Astral Weeks – Van Morrison
+  310730204,   // Born to Run – Bruce Springsteen
+  1440828886,  // To Pimp a Butterfly – Kendrick Lamar
+  1440837788,  // It Takes a Nation of Millions to Hold Us Back – Public Enemy
+  1039796877,  // The Rise and Fall of Ziggy Stardust – David Bowie
+  1441164426,  // Abbey Road – The Beatles
+  1065973699,  // The Dark Side of the Moon – Pink Floyd
+  158320766,   // Blood on the Tracks – Bob Dylan
+  269572838,   // Thriller – Michael Jackson
+  1249417623,  // Funeral – Arcade Fire
+  1038568061,  // Horses – Patti Smith
+  1440742903,  // My Beautiful Dark Twisted Fantasy – Kanye West
+  800092985,   // The Queen Is Dead – The Smiths
+  1049069472,  // Marquee Moon – Television
+  268443092,   // Kind of Blue – Miles Davis
+  212852926,   // Sign o' the Times – Prince
+  357652252,   // Electric Ladyland – Jimi Hendrix
+  1441164359,  // Rubber Soul – The Beatles
+  580708175,   // Led Zeppelin IV – Led Zeppelin
+  266376953,   // Is This It – The Strokes
+  1097862870,  // Kid A – Radiohead
+  1622368510,  // The Doors – The Doors
+  300948043,   // Remain in Light – Talking Heads
+  1440850317,  // Who's Next – The Who
+  1500643395,  // Beggars Banquet – The Rolling Stones
+  1443155637,  // The Joshua Tree – U2
+  847972873,   // Ramones – Ramones
+  1500642838,  // Let It Bleed – The Rolling Stones
+  715864097,   // Blue Lines – Massive Attack
+  1445669062,  // Live at the Apollo – James Brown
+  1440788438,  // Songs in the Key of Life – Stevie Wonder
+  1440949853,  // Automatic for the People – R.E.M.
+  1746833068,  // Purple Rain – Prince
+  1440806790,  // Innervisions – Stevie Wonder
+].join(',');
 
 app.get('/discover/top-rated', async (req, res) => {
   const CACHE_KEY = 'discover:top-rated';
@@ -470,8 +522,8 @@ app.get('/discover/top-rated', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await amFetch('/catalog/us/charts?types=albums&chart=top-albums&limit=20');
-    const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
+    const data = await amFetch(`/catalog/us/albums?ids=${TOP_RATED_IDS}`);
+    const results = (data.data ?? []).map(item => ({
       id: item.id,
       title: item.attributes?.name ?? '',
       artist: item.attributes?.artistName ?? '',
