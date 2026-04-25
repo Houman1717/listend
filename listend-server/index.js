@@ -1260,8 +1260,8 @@ app.get('/api/admin/purge-lastfm-cache', async (req, res) => {
 // Run once after deploying a new genre list. Takes ~60–90 s for 576 albums.
 
 app.get('/api/admin/populate-genres', async (req, res) => {
-  const BATCH = 8;   // concurrent AM searches per batch
-  const DELAY = 150; // ms between batches
+  const BATCH = 4;   // smaller batches to stay under AM rate limit
+  const DELAY = 500; // ms between batches
 
   const populated = [];
   const errors    = [];
@@ -1292,17 +1292,19 @@ app.get('/api/admin/populate-genres', async (req, res) => {
             const amTitle    = item.attributes?.name    ?? title;
             const amArtist   = item.attributes?.artistName ?? artist;
 
-            const { error: upsertErr } = await supabase.from('genre_albums').insert({
+            // ignoreDuplicates handles the case where two search queries resolve
+            // to the same AM album ID within the same genre — just keep the first.
+            const { error: insertErr } = await supabase.from('genre_albums').upsert({
               genre_label: genre,
               spotify_id:  item.id,
               title:       amTitle,
               artist:      amArtist,
               artwork_url: artworkUrl,
               year,
-            });
+            }, { onConflict: 'genre_label,spotify_id', ignoreDuplicates: true });
 
-            if (upsertErr) {
-              errors.push({ genre, artist, title, error: upsertErr.message });
+            if (insertErr) {
+              errors.push({ genre, artist, title, error: insertErr.message });
             } else {
               populated.push({ genre, title: amTitle, artist: amArtist, id: item.id });
             }
