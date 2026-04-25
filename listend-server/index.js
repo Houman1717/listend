@@ -729,6 +729,108 @@ app.get('/discover/top-artists', async (req, res) => {
   }
 });
 
+// ── GET /discover/top-songs ───────────────────────────────────────────────────
+// Hardcoded 48 critically-acclaimed / highest-streamed songs searched via AM.
+
+const TOP_SONGS = [
+  { artist: 'The Beatles',              title: 'A Day in the Life' },
+  { artist: 'Queen',                    title: 'Bohemian Rhapsody' },
+  { artist: 'The Weeknd',               title: 'Blinding Lights' },
+  { artist: 'Michael Jackson',          title: 'Billie Jean' },
+  { artist: 'Nirvana',                  title: 'Smells Like Teen Spirit' },
+  { artist: 'Aretha Franklin',          title: 'Respect' },
+  { artist: 'Taylor Swift',             title: 'All Too Well (10 Minute Version) (Taylor\'s Version)' },
+  { artist: 'Bob Dylan',                title: 'Like a Rolling Stone' },
+  { artist: 'Ed Sheeran',               title: 'Shape of You' },
+  { artist: 'Prince',                   title: 'Purple Rain' },
+  { artist: 'Fleetwood Mac',            title: 'Dreams' },
+  { artist: 'Beyoncé',                  title: 'Formation' },
+  { artist: 'Marvin Gaye',              title: "What's Going On" },
+  { artist: 'Billie Eilish',            title: 'bad guy' },
+  { artist: 'Eagles',                   title: 'Hotel California' },
+  { artist: 'The Rolling Stones',       title: "(I Can't Get No) Satisfaction" },
+  { artist: 'Adele',                    title: 'Rolling in the Deep' },
+  { artist: 'David Bowie',              title: 'Life on Mars?' },
+  { artist: 'Drake',                    title: 'One Dance' },
+  { artist: 'Led Zeppelin',             title: 'Stairway to Heaven' },
+  { artist: 'Kendrick Lamar',           title: 'Alright' },
+  { artist: 'Whitney Houston',          title: 'I Will Always Love You' },
+  { artist: 'Harry Styles',             title: 'As It Was' },
+  { artist: 'Pink Floyd',               title: 'Wish You Were Here' },
+  { artist: 'Amy Winehouse',            title: 'Back to Black' },
+  { artist: 'Outkast',                  title: 'Hey Ya!' },
+  { artist: 'Bruce Springsteen',        title: 'Born to Run' },
+  { artist: 'SZA',                      title: 'Kill Bill' },
+  { artist: 'The Beach Boys',           title: 'God Only Knows' },
+  { artist: 'Eminem',                   title: 'Lose Yourself' },
+  { artist: 'Lorde',                    title: 'Royals' },
+  { artist: 'Stevie Wonder',            title: 'Superstition' },
+  { artist: 'Radiohead',                title: 'Paranoid Android' },
+  { artist: 'Bruno Mars',               title: 'Uptown Funk' },
+  { artist: 'The Killers',              title: 'Mr. Brightside' },
+  { artist: 'Kate Bush',                title: 'Running Up That Hill (A Deal with God)' },
+  { artist: 'Frank Ocean',              title: 'Pyramids' },
+  { artist: 'Coldplay',                 title: 'Viva La Vida' },
+  { artist: 'Arctic Monkeys',           title: 'Do I Wanna Know?' },
+  { artist: "Guns N' Roses",            title: 'Sweet Child O\' Mine' },
+  { artist: 'Rihanna',                  title: 'Umbrella' },
+  { artist: 'Oasis',                    title: 'Wonderwall' },
+  { artist: 'ABBA',                     title: 'Dancing Queen' },
+  { artist: 'Lady Gaga',                title: 'Bad Romance' },
+  { artist: 'Hozier',                   title: 'Take Me To Church' },
+  { artist: 'Lana Del Rey',             title: 'Video Games' },
+  { artist: 'The Police',               title: 'Every Breath You Take' },
+  { artist: 'Bob Marley & The Wailers', title: 'No Woman, No Cry' },
+];
+
+app.get('/discover/top-songs', async (req, res) => {
+  const CACHE_KEY = 'discover:top-songs';
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const results = [];
+    const BATCH = 4, DELAY = 500;
+
+    for (let i = 0; i < TOP_SONGS.length; i += BATCH) {
+      const batch = TOP_SONGS.slice(i, i + BATCH);
+      const fetched = await Promise.all(batch.map(async ({ artist, title }) => {
+        try {
+          const q = encodeURIComponent(`${artist} ${title}`);
+          const data = await amFetch(`/catalog/us/search?types=songs&term=${q}&limit=5`);
+          const songs = data?.results?.songs?.data ?? [];
+          const match = songs.find(s =>
+            s.attributes?.name?.toLowerCase() === title.toLowerCase()
+          ) ?? songs.find(s =>
+            s.attributes?.name?.toLowerCase().includes(title.toLowerCase().slice(0, 10))
+          ) ?? songs[0];
+          if (!match) return null;
+          return {
+            id:          match.id,
+            title:       match.attributes?.name ?? title,
+            artist:      match.attributes?.artistName ?? artist,
+            artworkUrl:  amArtwork(match.attributes?.artwork),
+            releaseDate: match.attributes?.releaseDate ?? '',
+          };
+        } catch { return null; }
+      }));
+      results.push(...fetched.filter(Boolean));
+      if (i + BATCH < TOP_SONGS.length) await new Promise(r => setTimeout(r, DELAY));
+    }
+
+    cacheSet(CACHE_KEY, results, TTL_6H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/discover/top-songs]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /lastfm/artist — ?artist=<name> ───────────────────────────────────────
 // Switched from path params to query params to safely handle names with /&?# etc.
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -32,33 +32,21 @@ const GENRES = [
   'Country', 'Jazz', 'Folk / Singer-Songwriter',
 ];
 
-// ─── Module-level home cache ──────────────────────────────────────────────────
-
-const homeCache: {
-  songs?:   SpotifyTrack[];
-  artists?: SpotifyArtist[];
-} = {};
-
-async function fetchHome(): Promise<{ albums: SpotifyAlbum[]; songs: SpotifyTrack[]; artists: SpotifyArtist[] }> {
-  const res = await fetch(`${API_URL}/home`);
-  if (!res.ok) throw new Error(`/home → ${res.status}`);
-  return res.json();
-}
-
 async function fetchSections(): Promise<void> {
   const safe = (p: Promise<SpotifyAlbum[]>) => p.catch(() => [] as SpotifyAlbum[]);
   const fetchJson = (path: string): Promise<SpotifyAlbum[]> =>
     fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
 
-  const fetchArtists = (path: string): Promise<SpotifyArtist[]> =>
+  const fetchTyped = <T,>(path: string): Promise<T[]> =>
     fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
 
-  const [newReleases, popular, classics, topRated, topArtists] = await Promise.all([
+  const [newReleases, popular, classics, topRated, topArtists, topSongs] = await Promise.all([
     safe(fetchJson('/discover/new-releases')),
     safe(fetchJson('/discover/popular')),
     safe(fetchJson('/discover/classics')),
     safe(fetchJson('/discover/top-rated')),
-    fetchArtists('/discover/top-artists').catch(() => [] as SpotifyArtist[]),
+    fetchTyped<SpotifyArtist>('/discover/top-artists').catch(() => [] as SpotifyArtist[]),
+    fetchTyped<SpotifyTrack>('/discover/top-songs').catch(() => [] as SpotifyTrack[]),
   ]);
 
   discoverSections.newReleases  = newReleases;
@@ -66,6 +54,7 @@ async function fetchSections(): Promise<void> {
   discoverSections.classics     = classics;
   discoverSections.topRated     = topRated;
   discoverSections.topArtists   = topArtists;
+  discoverSections.topSongs     = topSongs;
 }
 
 // ─── Card sizes ───────────────────────────────────────────────────────────────
@@ -314,27 +303,18 @@ export default function DiscoverScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
 
-  const [songs,        setSongs]        = useState<SpotifyTrack[]>(homeCache.songs   ?? []);
   const [newReleases,  setNewReleases]  = useState<SpotifyAlbum[]>(discoverSections.newReleases);
   const [popular,      setPopular]      = useState<SpotifyAlbum[]>(discoverSections.popular);
   const [classics,     setClassics]     = useState<SpotifyAlbum[]>(discoverSections.classics);
   const [topRated,     setTopRated]     = useState<SpotifyAlbum[]>(discoverSections.topRated);
   const [topArtists,   setTopArtists]   = useState<SpotifyArtist[]>(discoverSections.topArtists);
+  const [topSongs,     setTopSongs]     = useState<SpotifyTrack[]>(discoverSections.topSongs);
 
-  const [loading,          setLoading]          = useState(!homeCache.songs);
   const [sectionsLoading,  setSectionsLoading]  = useState(discoverSections.newReleases.length === 0);
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      fetchHome()
-        .then((data) => {
-          homeCache.songs = data.songs;
-          setSongs(data.songs);
-        })
-        .catch((err) => console.error('[Discover] fetchHome failed:', err?.message ?? err))
-        .finally(() => setLoading(false));
-
       if (discoverSections.newReleases.length === 0) {
         fetchSections()
           .then(() => {
@@ -343,6 +323,7 @@ export default function DiscoverScreen() {
             setClassics([...discoverSections.classics]);
             setTopRated([...discoverSections.topRated]);
             setTopArtists([...discoverSections.topArtists]);
+            setTopSongs([...discoverSections.topSongs]);
           })
           .catch((err) => console.error('[Discover] fetchSections failed:', err?.message ?? err))
           .finally(() => setSectionsLoading(false));
@@ -456,22 +437,23 @@ export default function DiscoverScreen() {
 
       {/* ── Top Songs ── */}
       <Section title="Top Songs">
-        {loading ? (
+        {sectionsLoading && topSongs.length === 0 ? (
           <View style={s.loader}><ActivityIndicator color="#FF3CAC" /></View>
         ) : (
           <FlatList
             horizontal
-            data={Array.from({ length: 10 }, (_, i) => songs[i] ?? null) as (SpotifyTrack | null)[]}
-            keyExtractor={(item, index) => item?.id ?? `song-placeholder-${index}`}
+            data={topSongs.slice(0, 10)}
+            keyExtractor={(item) => item.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.row}
-            renderItem={({ item, index }) =>
-              item ? (
-                <SongCard item={item} index={index} isDark={isDark} onPress={() => setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate })} />
-              ) : (
-                <View style={[s.placeholderCard, { backgroundColor: isDark ? '#1e1e2e' : '#e5e5e5' }]} />
-              )
-            }
+            renderItem={({ item, index }) => (
+              <SongCard
+                item={item}
+                index={index}
+                isDark={isDark}
+                onPress={() => setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate })}
+              />
+            )}
             ListFooterComponent={<SeeMoreButton onPress={() => router.push('/discover-top-songs' as any)} isDark={isDark} />}
             ListFooterComponentStyle={{ marginLeft: 12 }}
           />
