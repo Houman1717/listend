@@ -282,9 +282,8 @@ app.get('/discover/new-releases', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const year = new Date().getFullYear();
-    const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(`new releases ${year}`)}&types=albums&limit=10`);
-    const results = (data.results?.albums?.data ?? []).map(item => ({
+    const data = await amFetch('/catalog/us/charts?types=albums&chart=most-played&limit=20');
+    const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
       id: item.id,
       title: item.attributes?.name ?? '',
       artist: item.attributes?.artistName ?? '',
@@ -312,9 +311,8 @@ app.get('/discover/popular', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const year = new Date().getFullYear();
-    const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(`best albums ${year}`)}&types=albums&limit=10`);
-    const results = (data.results?.albums?.data ?? []).map(item => ({
+    const data = await amFetch('/catalog/us/charts?types=albums&chart=top-albums&limit=20');
+    const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
       id: item.id,
       title: item.attributes?.name ?? '',
       artist: item.attributes?.artistName ?? '',
@@ -356,6 +354,163 @@ app.get('/discover/coming-soon', async (req, res) => {
     res.json(results);
   } catch (err) {
     console.error('[/discover/coming-soon]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /discover/classics ────────────────────────────────────────────────────
+
+// 48 all-time classic albums — Apple Music catalog IDs in list order
+const CLASSIC_IDS = [
+  268443092,   // Kind of Blue – Miles Davis
+  1538081586,  // What's Going On – Marvin Gaye
+  1065973699,  // The Dark Side of the Moon – Pink Floyd
+  1441164426,  // Abbey Road – The Beatles
+  1440788438,  // Songs in the Key of Life – Stevie Wonder
+  594061854,   // Rumours – Fleetwood Mac
+  1039796877,  // The Rise and Fall of Ziggy Stardust – David Bowie
+  1746833068,  // Purple Rain – Prince
+  269572838,   // Thriller – Michael Jackson
+  1492263092,  // Blue – Joni Mitchell
+  1440851613,  // The Velvet Underground & Nico – The Velvet Underground
+  1440841241,  // Pet Sounds – The Beach Boys
+  684811762,   // London Calling – The Clash
+  1440783617,  // Nevermind – Nirvana
+  1276760743,  // The Miseducation of Lauryn Hill – Lauryn Hill
+  580708175,   // Led Zeppelin IV – Led Zeppelin
+  201281514,   // Highway 61 Revisited – Bob Dylan
+  1440713018,  // A Love Supreme – John Coltrane
+  1422677780,  // Back to Black – Amy Winehouse
+  1440828886,  // To Pimp a Butterfly – Kendrick Lamar
+  1097861387,  // OK Computer – Radiohead
+  800092985,   // The Queen Is Dead – The Smiths
+  1377813284,  // Appetite for Destruction – Guns N' Roses
+  310730204,   // Born to Run – Bruce Springsteen
+  324127933,   // Bridge Over Troubled Water – Simon & Garfunkel
+  697194953,   // Discovery – Daft Punk
+  186166282,   // Off the Wall – Michael Jackson
+  1440872228,  // Exile on Main St. – The Rolling Stones
+  1039798000,  // Hunky Dory – David Bowie
+  1440806790,  // Innervisions – Stevie Wonder
+  1441164670,  // Revolver – The Beatles
+  1443155637,  // The Joshua Tree – U2
+  212852926,   // Sign o' the Times – Prince
+  204669326,   // Ready to Die – The Notorious B.I.G.
+  1065975633,  // The Wall – Pink Floyd
+  529574560,   // Graceland – Paul Simon
+  357652252,   // Electric Ladyland – Jimi Hendrix
+  357225315,   // Are You Experienced – Jimi Hendrix
+  1440673959,  // Synchronicity – The Police
+  747087657,   // Tapestry – Carole King
+  1038568061,  // Horses – Patti Smith
+  158320766,   // Blood on the Tracks – Bob Dylan
+  1065973975,  // Wish You Were Here – Pink Floyd
+  1097862870,  // Kid A – Radiohead
+  662324135,   // Illmatic – Nas
+  266376953,   // Is This It – The Strokes
+  1440798539,  // Moving Pictures – Rush
+  1440742903,  // My Beautiful Dark Twisted Fantasy – Kanye West
+].join(',');
+
+app.get('/discover/classics', async (req, res) => {
+  const CACHE_KEY = 'discover:classics';
+
+  try {
+    const mem = cacheGet(CACHE_KEY);
+    if (mem) return res.json(mem);
+
+    const db = await getCached(CACHE_KEY, TTL_24H);
+    if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+    const url = `https://api.music.apple.com/v1/catalog/us/albums?ids=${CLASSIC_IDS}`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${generateAppleToken()}` },
+    });
+
+    const rawText = await resp.text();
+    console.log(`[/discover/classics] AM status=${resp.status} body[0..200]=${rawText.slice(0, 200)}`);
+
+    if (!resp.ok) {
+      throw new Error(`Apple Music /catalog/us/albums → ${resp.status}: ${rawText.slice(0, 200)}`);
+    }
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseErr) {
+      throw new Error(`Apple Music returned non-JSON (status ${resp.status}): ${rawText.slice(0, 200)}`);
+    }
+
+    const results = (data.data ?? []).map(item => ({
+      id: item.id,
+      title: item.attributes?.name ?? '',
+      artist: item.attributes?.artistName ?? '',
+      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+      artworkUrl: amArtwork(item.attributes?.artwork),
+    }));
+    cacheSet(CACHE_KEY, results, TTL_6H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/discover/classics] error:', err.message ?? err);
+    res.status(500).json({ error: true, message: err.message ?? 'Internal server error' });
+  }
+});
+
+// ── GET /discover/top-rated ───────────────────────────────────────────────────
+
+app.get('/discover/top-rated', async (req, res) => {
+  const CACHE_KEY = 'discover:top-rated';
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const data = await amFetch('/catalog/us/charts?types=albums&chart=top-albums&limit=20');
+    const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
+      id: item.id,
+      title: item.attributes?.name ?? '',
+      artist: item.attributes?.artistName ?? '',
+      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+      artworkUrl: amArtwork(item.attributes?.artwork),
+    }));
+    cacheSet(CACHE_KEY, results, TTL_6H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/discover/top-rated]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /discover/recommended ─────────────────────────────────────────────────
+
+app.get('/discover/recommended', async (req, res) => {
+  const CACHE_KEY = 'discover:recommended';
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const data = await amFetch('/catalog/us/charts?types=albums&chart=most-played&limit=30');
+    const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
+      id: item.id,
+      title: item.attributes?.name ?? '',
+      artist: item.attributes?.artistName ?? '',
+      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+      artworkUrl: amArtwork(item.attributes?.artwork),
+    }));
+    cacheSet(CACHE_KEY, results, TTL_6H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/discover/recommended]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1026,7 +1181,8 @@ app.get('/refresh', async (req, res) => {
   try {
     await runRefresh();
     cacheClear('home', 'genres', 'decades',
-               'discover:new-releases', 'discover:popular', 'discover:coming-soon');
+               'discover:new-releases', 'discover:popular', 'discover:coming-soon',
+               'discover:classics', 'discover:top-rated', 'discover:recommended');
     console.log('[/refresh] Cache cleared after refresh.');
     res.json({ success: true });
   } catch (err) {
@@ -1104,7 +1260,8 @@ cron.schedule('0 */6 * * *', () => {
   console.log('[cron] Triggering scheduled refresh...');
   runRefresh().then(() => {
     cacheClear('home', 'genres', 'decades',
-               'discover:new-releases', 'discover:popular', 'discover:coming-soon');
+               'discover:new-releases', 'discover:popular', 'discover:coming-soon',
+               'discover:classics', 'discover:top-rated', 'discover:recommended');
     console.log('[cron] Cache cleared after refresh.');
   });
 });
