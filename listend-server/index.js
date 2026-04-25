@@ -668,6 +668,67 @@ app.get('/discover/recommended', async (req, res) => {
   }
 });
 
+// ── GET /discover/top-artists ─────────────────────────────────────────────────
+// Hardcoded 48 all-time most popular artists searched via Apple Music catalog.
+
+const TOP_ARTIST_NAMES = [
+  'The Beatles', 'Michael Jackson', 'Taylor Swift', 'Elvis Presley', 'Queen',
+  'Drake', 'Elton John', 'Madonna', 'The Weeknd', 'Led Zeppelin',
+  'Bad Bunny', 'Pink Floyd', 'Eminem', 'Rihanna', 'Ed Sheeran',
+  'AC/DC', 'Rolling Stones', 'Justin Bieber', 'Whitney Houston', 'Bruno Mars',
+  'Eagles', 'Beyoncé', 'Coldplay', 'Kanye West', 'Billie Eilish',
+  'Ariana Grande', 'Adele', 'Metallica', 'Post Malone', 'BTS',
+  'Celine Dion', 'U2', 'Garth Brooks', 'Mariah Carey', 'Kendrick Lamar',
+  'Maroon 5', 'Katy Perry', 'Bob Marley', 'Fleetwood Mac', 'David Bowie',
+  'Lady Gaga', 'Harry Styles', 'Linkin Park', "Guns N' Roses",
+  'SZA', 'Lana Del Rey', 'Nirvana', 'Travis Scott',
+];
+
+app.get('/discover/top-artists', async (req, res) => {
+  const CACHE_KEY = 'discover:top-artists';
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const results = [];
+    const BATCH = 4, DELAY = 500;
+
+    for (let i = 0; i < TOP_ARTIST_NAMES.length; i += BATCH) {
+      const batch = TOP_ARTIST_NAMES.slice(i, i + BATCH);
+      const fetched = await Promise.all(batch.map(async (name) => {
+        try {
+          const q = encodeURIComponent(name);
+          const data = await amFetch(`/catalog/us/search?types=artists&term=${q}&limit=3`);
+          const artists = data?.results?.artists?.data ?? [];
+          const match = artists.find(a =>
+            a.attributes?.name?.toLowerCase() === name.toLowerCase()
+          ) ?? artists[0];
+          if (!match) return null;
+          return {
+            id:         match.id,
+            name:       match.attributes?.name ?? name,
+            genre:      match.attributes?.genreNames?.[0] ?? '',
+            artworkUrl: amArtwork(match.attributes?.artwork),
+          };
+        } catch { return null; }
+      }));
+      results.push(...fetched.filter(Boolean));
+      if (i + BATCH < TOP_ARTIST_NAMES.length) await new Promise(r => setTimeout(r, DELAY));
+    }
+
+    cacheSet(CACHE_KEY, results, TTL_6H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/discover/top-artists]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /lastfm/artist — ?artist=<name> ───────────────────────────────────────
 // Switched from path params to query params to safely handle names with /&?# etc.
 

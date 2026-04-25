@@ -50,19 +50,22 @@ async function fetchSections(): Promise<void> {
   const fetchJson = (path: string): Promise<SpotifyAlbum[]> =>
     fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
 
-  const [newReleases, popular, classics, topRated, recommended] = await Promise.all([
+  const fetchArtists = (path: string): Promise<SpotifyArtist[]> =>
+    fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
+
+  const [newReleases, popular, classics, topRated, topArtists] = await Promise.all([
     safe(fetchJson('/discover/new-releases')),
     safe(fetchJson('/discover/popular')),
     safe(fetchJson('/discover/classics')),
     safe(fetchJson('/discover/top-rated')),
-    safe(fetchJson('/discover/recommended')),
+    fetchArtists('/discover/top-artists').catch(() => [] as SpotifyArtist[]),
   ]);
 
   discoverSections.newReleases  = newReleases;
   discoverSections.popular      = popular;
   discoverSections.classics     = classics;
   discoverSections.topRated     = topRated;
-  discoverSections.recommended  = recommended;
+  discoverSections.topArtists   = topArtists;
 }
 
 // ─── Card sizes ───────────────────────────────────────────────────────────────
@@ -312,12 +315,11 @@ export default function DiscoverScreen() {
   const router = useRouter();
 
   const [songs,        setSongs]        = useState<SpotifyTrack[]>(homeCache.songs   ?? []);
-  const [artists,      setArtists]      = useState<SpotifyArtist[]>(homeCache.artists ?? []);
   const [newReleases,  setNewReleases]  = useState<SpotifyAlbum[]>(discoverSections.newReleases);
   const [popular,      setPopular]      = useState<SpotifyAlbum[]>(discoverSections.popular);
   const [classics,     setClassics]     = useState<SpotifyAlbum[]>(discoverSections.classics);
   const [topRated,     setTopRated]     = useState<SpotifyAlbum[]>(discoverSections.topRated);
-  const [recommended,  setRecommended]  = useState<SpotifyAlbum[]>(discoverSections.recommended);
+  const [topArtists,   setTopArtists]   = useState<SpotifyArtist[]>(discoverSections.topArtists);
 
   const [loading,          setLoading]          = useState(!homeCache.songs);
   const [sectionsLoading,  setSectionsLoading]  = useState(discoverSections.newReleases.length === 0);
@@ -327,10 +329,8 @@ export default function DiscoverScreen() {
     useCallback(() => {
       fetchHome()
         .then((data) => {
-          homeCache.songs   = data.songs;
-          homeCache.artists = data.artists;
+          homeCache.songs = data.songs;
           setSongs(data.songs);
-          setArtists(data.artists);
         })
         .catch((err) => console.error('[Discover] fetchHome failed:', err?.message ?? err))
         .finally(() => setLoading(false));
@@ -342,7 +342,7 @@ export default function DiscoverScreen() {
             setPopular([...discoverSections.popular]);
             setClassics([...discoverSections.classics]);
             setTopRated([...discoverSections.topRated]);
-            setRecommended([...discoverSections.recommended]);
+            setTopArtists([...discoverSections.topArtists]);
           })
           .catch((err) => console.error('[Discover] fetchSections failed:', err?.message ?? err))
           .finally(() => setSectionsLoading(false));
@@ -430,42 +430,24 @@ export default function DiscoverScreen() {
         )}
       </Section>
 
-      {/* ── Based on Your Taste ── */}
-      <Section title="Based on Your Taste">
-        {sectionsLoading && recommended.length === 0 ? (
-          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-recommended' as any)} />
-        ) : (
-          <AlbumRow
-            data={recommended}
-            isDark={isDark}
-            onAlbumPress={goToAlbum}
-            onSeeMore={() => router.push('/discover-recommended' as any)}
-          />
-        )}
-      </Section>
-
       {/* ── Top Artists ── */}
       <Section title="Top Artists">
-        {loading ? (
+        {sectionsLoading && topArtists.length === 0 ? (
           <View style={s.loader}><ActivityIndicator color="#FF3CAC" /></View>
         ) : (
           <FlatList
             horizontal
-            data={Array.from({ length: 10 }, (_, i) => artists[i] ?? null) as (SpotifyArtist | null)[]}
-            keyExtractor={(item, index) => item?.id ?? `artist-placeholder-${index}`}
+            data={topArtists.slice(0, 10)}
+            keyExtractor={(item) => item.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.row}
-            renderItem={({ item }) =>
-              item ? (
-                <ArtistCard
-                  item={item}
-                  isDark={isDark}
-                  onPress={() => router.push({ pathname: '/artist-detail', params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl } } as any)}
-                />
-              ) : (
-                <View style={[s.artistPlaceholder, { backgroundColor: isDark ? '#1e1e2e' : '#e5e5e5' }]} />
-              )
-            }
+            renderItem={({ item }) => (
+              <ArtistCard
+                item={item}
+                isDark={isDark}
+                onPress={() => router.push({ pathname: '/artist-detail', params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl } } as any)}
+              />
+            )}
             ListFooterComponent={<SeeMoreButton onPress={() => router.push('/discover-top-artists' as any)} isDark={isDark} size={ARTIST_SIZE} circular />}
             ListFooterComponentStyle={{ marginLeft: 12 }}
           />
