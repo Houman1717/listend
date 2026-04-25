@@ -301,6 +301,58 @@ app.get('/discover/new-releases', async (req, res) => {
 });
 
 // ── GET /discover/popular ─────────────────────────────────────────────────────
+// Hardcoded list of 48 widely-streamed albums searched via Apple Music catalog.
+
+const POPULAR_ALBUMS = [
+  { artist: 'Bad Bunny',        title: 'Un Verano Sin Ti' },
+  { artist: 'The Weeknd',       title: 'Starboy' },
+  { artist: 'Ed Sheeran',       title: '÷' },
+  { artist: 'Olivia Rodrigo',   title: 'SOUR' },
+  { artist: 'The Weeknd',       title: 'After Hours' },
+  { artist: 'SZA',              title: 'SOS' },
+  { artist: 'Post Malone',      title: "Hollywood's Bleeding" },
+  { artist: 'Taylor Swift',     title: 'Lover' },
+  { artist: 'Arctic Monkeys',   title: 'AM' },
+  { artist: 'Billie Eilish',    title: 'WHEN WE ALL FALL ASLEEP, WHERE DO WE GO?' },
+  { artist: 'Dua Lipa',         title: 'Future Nostalgia' },
+  { artist: 'Post Malone',      title: 'beerbongs & bentleys' },
+  { artist: 'XXXTENTACION',     title: '?' },
+  { artist: 'Karol G',          title: 'MAÑANA SERÁ BONITO' },
+  { artist: 'Bad Bunny',        title: 'YHLQMDLG' },
+  { artist: 'Bruno Mars',       title: "Doo-Wops & Hooligans" },
+  { artist: 'Drake',            title: 'Views' },
+  { artist: 'Taylor Swift',     title: 'Midnights' },
+  { artist: 'Drake',            title: 'Scorpion' },
+  { artist: 'The Weeknd',       title: 'Beauty Behind The Madness' },
+  { artist: 'Taylor Swift',     title: 'folklore' },
+  { artist: 'Travis Scott',     title: 'ASTROWORLD' },
+  { artist: 'Harry Styles',     title: 'Fine Line' },
+  { artist: 'Justin Bieber',    title: 'Purpose' },
+  { artist: 'Ed Sheeran',       title: 'x' },
+  { artist: 'Juice WRLD',       title: 'Goodbye & Good Riddance' },
+  { artist: 'Lana Del Rey',     title: 'Born to Die' },
+  { artist: 'Taylor Swift',     title: 'reputation' },
+  { artist: 'Lewis Capaldi',    title: 'Divinely Uninspired To A Hellish Extent' },
+  { artist: 'Kendrick Lamar',   title: 'DAMN.' },
+  { artist: 'Sam Smith',        title: 'In The Lonely Hour' },
+  { artist: 'XXXTENTACION',     title: '17' },
+  { artist: 'Billie Eilish',    title: "don't smile at me" },
+  { artist: 'Taylor Swift',     title: '1989' },
+  { artist: 'Ariana Grande',    title: 'thank u, next' },
+  { artist: 'Harry Styles',     title: "Harry's House" },
+  { artist: 'Dua Lipa',         title: 'Dua Lipa' },
+  { artist: 'Imagine Dragons',  title: 'Evolve' },
+  { artist: 'Post Malone',      title: 'Stoney' },
+  { artist: 'Khalid',           title: 'American Teen' },
+  { artist: 'Ariana Grande',    title: 'Dangerous Woman' },
+  { artist: 'J Balvin',         title: 'Vibras' },
+  { artist: 'Maroon 5',         title: 'V' },
+  { artist: 'The Chainsmokers', title: 'Collage' },
+  { artist: 'Hozier',           title: 'Hozier' },
+  { artist: 'One Direction',    title: 'Midnight Memories' },
+  { artist: 'Shawn Mendes',     title: 'Illuminate' },
+  { artist: '21 Savage',        title: 'i am > i was' },
+];
 
 app.get('/discover/popular', async (req, res) => {
   const CACHE_KEY = 'discover:popular';
@@ -308,18 +360,39 @@ app.get('/discover/popular', async (req, res) => {
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(mem);
 
-  const db = await getCached(CACHE_KEY, TTL_24H);
+  const db = await getCached(CACHE_KEY, TTL_7D);
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await amFetch('/catalog/us/charts?types=albums&limit=48');
-    const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
-      id: item.id,
-      title: item.attributes?.name ?? '',
-      artist: item.attributes?.artistName ?? '',
-      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
-      artworkUrl: amArtwork(item.attributes?.artwork),
-    }));
+    const results = [];
+    const BATCH = 4, DELAY = 500;
+
+    for (let i = 0; i < POPULAR_ALBUMS.length; i += BATCH) {
+      const batch = POPULAR_ALBUMS.slice(i, i + BATCH);
+      const fetched = await Promise.all(batch.map(async ({ artist, title }) => {
+        try {
+          const q = encodeURIComponent(`${artist} ${title}`);
+          const data = await amFetch(`/catalog/us/search?types=albums&term=${q}&limit=5`);
+          const albums = data?.results?.albums?.data ?? [];
+          const match = albums.find(a =>
+            a.attributes?.name?.toLowerCase() === title.toLowerCase()
+          ) ?? albums.find(a =>
+            a.attributes?.name?.toLowerCase().includes(title.toLowerCase().slice(0, 8))
+          ) ?? albums[0];
+          if (!match) return null;
+          return {
+            id:         match.id,
+            title:      match.attributes?.name ?? title,
+            artist:     match.attributes?.artistName ?? artist,
+            year:       parseInt(match.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+            artworkUrl: amArtwork(match.attributes?.artwork),
+          };
+        } catch { return null; }
+      }));
+      results.push(...fetched.filter(Boolean));
+      if (i + BATCH < POPULAR_ALBUMS.length) await new Promise(r => setTimeout(r, DELAY));
+    }
+
     cacheSet(CACHE_KEY, results, TTL_6H);
     await setCache(CACHE_KEY, results);
     res.json(results);

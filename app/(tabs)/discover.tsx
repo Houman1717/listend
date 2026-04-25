@@ -50,10 +50,9 @@ async function fetchSections(): Promise<void> {
   const fetchJson = (path: string): Promise<SpotifyAlbum[]> =>
     fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
 
-  const [newReleases, popular, comingSoon, classics, topRated, recommended] = await Promise.all([
+  const [newReleases, popular, classics, topRated, recommended] = await Promise.all([
     safe(fetchJson('/discover/new-releases')),
     safe(fetchJson('/discover/popular')),
-    safe(fetchJson('/discover/coming-soon')),
     safe(fetchJson('/discover/classics')),
     safe(fetchJson('/discover/top-rated')),
     safe(fetchJson('/discover/recommended')),
@@ -61,7 +60,6 @@ async function fetchSections(): Promise<void> {
 
   discoverSections.newReleases  = newReleases;
   discoverSections.popular      = popular;
-  discoverSections.comingSoon   = comingSoon;
   discoverSections.classics     = classics;
   discoverSections.topRated     = topRated;
   discoverSections.recommended  = recommended;
@@ -317,7 +315,6 @@ export default function DiscoverScreen() {
   const [artists,      setArtists]      = useState<SpotifyArtist[]>(homeCache.artists ?? []);
   const [newReleases,  setNewReleases]  = useState<SpotifyAlbum[]>(discoverSections.newReleases);
   const [popular,      setPopular]      = useState<SpotifyAlbum[]>(discoverSections.popular);
-  const [comingSoon,   setComingSoon]   = useState<SpotifyAlbum[]>(discoverSections.comingSoon);
   const [classics,     setClassics]     = useState<SpotifyAlbum[]>(discoverSections.classics);
   const [topRated,     setTopRated]     = useState<SpotifyAlbum[]>(discoverSections.topRated);
   const [recommended,  setRecommended]  = useState<SpotifyAlbum[]>(discoverSections.recommended);
@@ -343,7 +340,6 @@ export default function DiscoverScreen() {
           .then(() => {
             setNewReleases([...discoverSections.newReleases]);
             setPopular([...discoverSections.popular]);
-            setComingSoon([...discoverSections.comingSoon]);
             setClassics([...discoverSections.classics]);
             setTopRated([...discoverSections.topRated]);
             setRecommended([...discoverSections.recommended]);
@@ -388,20 +384,6 @@ export default function DiscoverScreen() {
             isDark={isDark}
             onAlbumPress={goToAlbum}
             onSeeMore={() => router.push('/discover-new-releases' as any)}
-          />
-        )}
-      </Section>
-
-      {/* ── Coming Soon ── */}
-      <Section title="Coming Soon">
-        {sectionsLoading && comingSoon.length === 0 ? (
-          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-coming-soon' as any)} />
-        ) : (
-          <AlbumRow
-            data={comingSoon}
-            isDark={isDark}
-            onAlbumPress={goToAlbum}
-            onSeeMore={() => router.push('/discover-coming-soon' as any)}
           />
         )}
       </Section>
