@@ -1,17 +1,32 @@
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, ScrollView, useWindowDimensions } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
+import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
+import { SpotifyAlbum } from '@/context/SpotifyService';
+import { discoverSections } from '@/context/discoverSections';
 
-const PLACEHOLDER_COUNT = 48;
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+const PLACEHOLDER_COUNT = 20;
 
 export default function DiscoverComingSoonScreen() {
   const { width } = useWindowDimensions();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
+  const router = useRouter();
   const cw = cardWidth(width);
+
+  const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => discoverSections.comingSoon);
+
+  useEffect(() => {
+    if (albums.length > 0) return;
+    fetch(`${API_URL}/discover/coming-soon`)
+      .then(r => r.json())
+      .then((data: SpotifyAlbum[]) => { discoverSections.comingSoon = data; setAlbums(data); })
+      .catch(console.error);
+  }, []);
 
   return (
     <>
@@ -21,9 +36,22 @@ export default function DiscoverComingSoonScreen() {
         contentContainerStyle={s.gridWrap}
         showsVerticalScrollIndicator={false}>
         <View style={s.grid}>
-          {Array.from({ length: PLACEHOLDER_COUNT }).map((_, i) => (
-            <AlbumGridCardPlaceholder key={i} width={cw} isDark={isDark} />
-          ))}
+          {albums.length === 0
+            ? Array.from({ length: PLACEHOLDER_COUNT }).map((_, i) => (
+                <AlbumGridCardPlaceholder key={i} width={cw} isDark={isDark} />
+              ))
+            : albums.map(album => (
+                <AlbumGridCard
+                  key={album.id}
+                  album={album}
+                  width={cw}
+                  isDark={isDark}
+                  textColor={colors.text}
+                  subColor={isDark ? '#888' : '#666'}
+                  onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } } as any)}
+                />
+              ))
+          }
         </View>
       </ScrollView>
     </>
