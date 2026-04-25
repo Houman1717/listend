@@ -16,6 +16,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { discoverSections } from '@/context/discoverSections';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
@@ -25,7 +26,11 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 // ─── Static lists ─────────────────────────────────────────────────────────────
 
 const DECADES = ['2020s', '2010s', '2000s', '1990s', '1980s', '1970s', '1960s', '1950s'];
-const GENRES  = ['Rap', 'R&B', 'Pop', 'Rock', 'House', 'Jazz', 'Soul', 'Country'];
+const GENRES = [
+  'Hip-Hop / Rap', 'Pop', 'Rock', 'Reggaeton', 'Afrobeats',
+  'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
+  'Country', 'Jazz', 'Folk / Singer-Songwriter',
+];
 
 // ─── Module-level home cache ──────────────────────────────────────────────────
 
@@ -38,6 +43,26 @@ async function fetchHome(): Promise<{ albums: SpotifyAlbum[]; songs: SpotifyTrac
   const res = await fetch(`${API_URL}/home`);
   if (!res.ok) throw new Error(`/home → ${res.status}`);
   return res.json();
+}
+
+async function fetchSections(): Promise<void> {
+  const safe = (p: Promise<SpotifyAlbum[]>) => p.catch(() => [] as SpotifyAlbum[]);
+  const fetchJson = (path: string): Promise<SpotifyAlbum[]> =>
+    fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
+
+  const [newReleases, popular, classics, topRated, recommended] = await Promise.all([
+    safe(fetchJson('/discover/new-releases')),
+    safe(fetchJson('/discover/popular')),
+    safe(fetchJson('/discover/classics')),
+    safe(fetchJson('/discover/top-rated')),
+    safe(fetchJson('/discover/recommended')),
+  ]);
+
+  discoverSections.newReleases  = newReleases;
+  discoverSections.popular      = popular;
+  discoverSections.classics     = classics;
+  discoverSections.topRated     = topRated;
+  discoverSections.recommended  = recommended;
 }
 
 // ─── Card sizes ───────────────────────────────────────────────────────────────
@@ -71,9 +96,9 @@ function ArtFallback({ size, radius, label }: { size: number; radius: number; la
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
-function AlbumCard({ item, isDark }: { item: SpotifyAlbum; isDark: boolean }) {
+function AlbumCard({ item, isDark, onPress }: { item: SpotifyAlbum; isDark: boolean; onPress?: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [s.card, { width: CARD_SIZE, opacity: pressed ? 0.7 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: CARD_SIZE, opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
         <Image source={{ uri: item.artworkUrl }} style={{ width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 }} />
       ) : (
@@ -158,6 +183,36 @@ function PlaceholderRow({ isDark, onSeeMore }: { isDark: boolean; onSeeMore: () 
   );
 }
 
+// ─── Album row (real data) ────────────────────────────────────────────────────
+
+function AlbumRow({
+  data,
+  isDark,
+  onAlbumPress,
+  onSeeMore,
+}: {
+  data: SpotifyAlbum[];
+  isDark: boolean;
+  onAlbumPress: (album: SpotifyAlbum) => void;
+  onSeeMore: () => void;
+}) {
+  if (data.length === 0) return <PlaceholderRow isDark={isDark} onSeeMore={onSeeMore} />;
+  return (
+    <FlatList
+      horizontal
+      data={data.slice(0, 10)}
+      keyExtractor={item => item.id}
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={s.row}
+      renderItem={({ item }) => (
+        <AlbumCard item={item} isDark={isDark} onPress={() => onAlbumPress(item)} />
+      )}
+      ListFooterComponent={<SeeMoreButton onPress={onSeeMore} isDark={isDark} />}
+      ListFooterComponentStyle={{ marginLeft: 12 }}
+    />
+  );
+}
+
 // ─── Chip ────────────────────────────────────────────────────────────────────
 
 function Chip({ label, onPress, isDark }: { label: string; onPress: () => void; isDark: boolean }) {
@@ -174,43 +229,34 @@ function Chip({ label, onPress, isDark }: { label: string; onPress: () => void; 
 }
 
 // ─── Bird's-eye turntable icon ────────────────────────────────────────────────
-// Pure RN views — no SVG dependency needed.
-// Layout (40×40): platter circle → groove ring → pink label → tonearm shaft → pivot dot
 
 function TurntableIcon() {
   return (
     <View style={{ width: 40, height: 40 }}>
-      {/* Platter */}
       <View style={{
         position: 'absolute', top: 0, left: 0, width: 40, height: 40,
         borderRadius: 20,
         backgroundColor: 'rgba(255,255,255,0.13)',
         borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.55)',
       }} />
-      {/* Groove ring */}
       <View style={{
         position: 'absolute', top: 6, left: 6, width: 28, height: 28,
         borderRadius: 14, borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.25)', backgroundColor: 'transparent',
       }} />
-      {/* Label (centre circle, pink) */}
       <View style={{
         position: 'absolute', top: 14, left: 14, width: 12, height: 12,
         borderRadius: 6, backgroundColor: '#FF3CAC', opacity: 0.9,
       }} />
-      {/* Spindle dot */}
       <View style={{
         position: 'absolute', top: 18.5, left: 18.5, width: 3, height: 3,
         borderRadius: 1.5, backgroundColor: 'rgba(0,0,0,0.55)',
       }} />
-      {/* Tonearm shaft — top end = pivot (upper-right), bottom end = needle (near label) */}
-      {/* Center of 2×20 rect at (29,12); rotate +37° → top end ≈(35,4), bottom end ≈(23,20) */}
       <View style={{
         position: 'absolute', top: 2, left: 28, width: 2, height: 20,
         borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.9)',
         transform: [{ rotate: '37deg' }],
       }} />
-      {/* Pivot dot */}
       <View style={{
         position: 'absolute', top: 1, left: 32, width: 6, height: 6,
         borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.85)',
@@ -227,7 +273,6 @@ function FlipEntryCard({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       style={({ pressed }) => [se.card, { opacity: pressed ? 0.88 : 1 }]}>
 
-      {/* Dark gradient background — always dark regardless of color scheme */}
       <LinearGradient
         colors={['#0d0d14', '#131325', '#1a1035']}
         start={{ x: 0, y: 0 }}
@@ -235,10 +280,8 @@ function FlipEntryCard({ onPress }: { onPress: () => void }) {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Pink left-edge accent bar */}
       <View style={se.accentBar} />
 
-      {/* Top row: icon + badge */}
       <View style={se.topRow}>
         <View style={se.iconWrap}>
           <TurntableIcon />
@@ -248,13 +291,11 @@ function FlipEntryCard({ onPress }: { onPress: () => void }) {
         </View>
       </View>
 
-      {/* Title + subtitle */}
       <View style={se.textBlock}>
         <Text style={se.title}>Flip a Record</Text>
         <Text style={se.subtitle}>Discover a random album from the 1001 list</Text>
       </View>
 
-      {/* Bottom CTA */}
       <View style={se.bottomRow}>
         <Text style={se.cta}>Try it →</Text>
       </View>
@@ -270,9 +311,16 @@ export default function DiscoverScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
 
-  const [songs,   setSongs]   = useState<SpotifyTrack[]>(homeCache.songs   ?? []);
-  const [artists, setArtists] = useState<SpotifyArtist[]>(homeCache.artists ?? []);
-  const [loading, setLoading] = useState(!homeCache.songs);
+  const [songs,        setSongs]        = useState<SpotifyTrack[]>(homeCache.songs   ?? []);
+  const [artists,      setArtists]      = useState<SpotifyArtist[]>(homeCache.artists ?? []);
+  const [newReleases,  setNewReleases]  = useState<SpotifyAlbum[]>(discoverSections.newReleases);
+  const [popular,      setPopular]      = useState<SpotifyAlbum[]>(discoverSections.popular);
+  const [classics,     setClassics]     = useState<SpotifyAlbum[]>(discoverSections.classics);
+  const [topRated,     setTopRated]     = useState<SpotifyAlbum[]>(discoverSections.topRated);
+  const [recommended,  setRecommended]  = useState<SpotifyAlbum[]>(discoverSections.recommended);
+
+  const [loading,          setLoading]          = useState(!homeCache.songs);
+  const [sectionsLoading,  setSectionsLoading]  = useState(discoverSections.newReleases.length === 0);
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   useFocusEffect(
@@ -286,8 +334,25 @@ export default function DiscoverScreen() {
         })
         .catch((err) => console.error('[Discover] fetchHome failed:', err?.message ?? err))
         .finally(() => setLoading(false));
+
+      if (discoverSections.newReleases.length === 0) {
+        fetchSections()
+          .then(() => {
+            setNewReleases([...discoverSections.newReleases]);
+            setPopular([...discoverSections.popular]);
+            setClassics([...discoverSections.classics]);
+            setTopRated([...discoverSections.topRated]);
+            setRecommended([...discoverSections.recommended]);
+          })
+          .catch((err) => console.error('[Discover] fetchSections failed:', err?.message ?? err))
+          .finally(() => setSectionsLoading(false));
+      }
     }, [])
   );
+
+  function goToAlbum(album: SpotifyAlbum) {
+    router.push({ pathname: '/album-detail', params: { id: album.id } } as any);
+  }
 
   return (
     <>
@@ -311,7 +376,16 @@ export default function DiscoverScreen() {
 
       {/* ── New Releases ── */}
       <Section title="New Releases">
-        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-new-releases' as any)} />
+        {sectionsLoading && newReleases.length === 0 ? (
+          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-new-releases' as any)} />
+        ) : (
+          <AlbumRow
+            data={newReleases}
+            isDark={isDark}
+            onAlbumPress={goToAlbum}
+            onSeeMore={() => router.push('/discover-new-releases' as any)}
+          />
+        )}
       </Section>
 
       {/* ── Coming Soon ── */}
@@ -321,22 +395,58 @@ export default function DiscoverScreen() {
 
       {/* ── Top Rated Albums ── */}
       <Section title="Top Rated Albums">
-        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-top-rated' as any)} />
+        {sectionsLoading && topRated.length === 0 ? (
+          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-top-rated' as any)} />
+        ) : (
+          <AlbumRow
+            data={topRated}
+            isDark={isDark}
+            onAlbumPress={goToAlbum}
+            onSeeMore={() => router.push('/discover-top-rated' as any)}
+          />
+        )}
       </Section>
 
       {/* ── Most Popular Albums ── */}
       <Section title="Most Popular Albums">
-        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-most-popular' as any)} />
+        {sectionsLoading && popular.length === 0 ? (
+          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-most-popular' as any)} />
+        ) : (
+          <AlbumRow
+            data={popular}
+            isDark={isDark}
+            onAlbumPress={goToAlbum}
+            onSeeMore={() => router.push('/discover-most-popular' as any)}
+          />
+        )}
       </Section>
 
       {/* ── All-Time Classics ── */}
       <Section title="All-Time Classics">
-        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-all-time-classics' as any)} />
+        {sectionsLoading && classics.length === 0 ? (
+          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-all-time-classics' as any)} />
+        ) : (
+          <AlbumRow
+            data={classics}
+            isDark={isDark}
+            onAlbumPress={goToAlbum}
+            onSeeMore={() => router.push('/discover-all-time-classics' as any)}
+          />
+        )}
       </Section>
 
       {/* ── Based on Your Taste ── */}
       <Section title="Based on Your Taste">
-        <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-recommended' as any)} />
+        {sectionsLoading && recommended.length === 0 ? (
+          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-recommended' as any)} />
+        ) : (
+          <AlbumRow
+            data={recommended}
+            isDark={isDark}
+            onAlbumPress={goToAlbum}
+            onSeeMore={() => router.push('/discover-recommended' as any)}
+          />
+        )}
       </Section>
 
       {/* ── Top Artists ── */}
@@ -466,7 +576,6 @@ const se = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 20,
     gap: 14,
-    // Glow shadow using pink
     shadowColor: '#FF3CAC',
     shadowOpacity: 0.25,
     shadowRadius: 16,
@@ -474,7 +583,6 @@ const se = StyleSheet.create({
     elevation: 8,
   },
 
-  // Vertical pink accent bar on the left edge
   accentBar: {
     position: 'absolute',
     left: 0, top: 0, bottom: 0,
@@ -482,7 +590,6 @@ const se = StyleSheet.create({
     backgroundColor: '#FF3CAC',
   },
 
-  // Top row: icon on left, badge on right
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -508,12 +615,10 @@ const se = StyleSheet.create({
   },
   badgeText: { fontSize: 11, fontWeight: '700', color: '#FF3CAC', letterSpacing: 0.2 },
 
-  // Title + subtitle
   textBlock: { gap: 5 },
   title:     { fontSize: 20, fontWeight: '800', color: '#fff', letterSpacing: -0.4 },
   subtitle:  { fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 18 },
 
-  // Bottom CTA row
   bottomRow: { flexDirection: 'row', alignItems: 'center' },
   cta:       { fontSize: 13, fontWeight: '700', color: '#FF3CAC', letterSpacing: 0.1 },
 });

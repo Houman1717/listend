@@ -7,6 +7,7 @@ const supabase = require('./db');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
+const { GENRE_ALBUMS } = require('./genreData');
 
 async function amFetch(path) {
   const resp = await fetch(`https://api.music.apple.com/v1${path}`, {
@@ -1251,6 +1252,81 @@ app.get('/api/admin/purge-lastfm-cache', async (req, res) => {
   } catch (err) {
     console.error('[/api/admin/purge-lastfm-cache]', err.message ?? err);
     res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
+  }
+});
+
+// ── GET /api/admin/populate-genres ───────────────────────────────────────────
+// Searches AM for every album in GENRE_ALBUMS, then replaces genre_albums rows.
+// Run once after deploying a new genre list. Takes ~60–90 s for 576 albums.
+
+app.get('/api/admin/populate-genres', async (req, res) => {
+  const BATCH = 8;   // concurrent AM searches per batch
+  const DELAY = 150; // ms between batches
+
+  const populated = [];
+  const errors    = [];
+
+  try {
+    // Wipe existing rows so there are no duplicates from old genre labels.
+    const { error: delErr } = await supabase.from('genre_albums').delete().neq('id', 0);
+    if (delErr) throw delErr;
+
+    for (const [genre, albums] of Object.entries(GENRE_ALBUMS)) {
+      for (let i = 0; i < albums.length; i += BATCH) {
+        const batch = albums.slice(i, i + BATCH);
+
+        await Promise.all(batch.map(async ({ artist, title }) => {
+          try {
+            const q    = encodeURIComponent(`${artist} ${title}`);
+            const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=1`);
+            const item = data.results?.albums?.data?.[0];
+
+            if (!item) {
+              errors.push({ genre, artist, title, error: 'not found in AM catalog' });
+              return;
+            }
+
+            const artworkUrl = amArtwork(item.attributes?.artwork);
+            const year       = parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10);
+            const amTitle    = item.attributes?.name    ?? title;
+            const amArtist   = item.attributes?.artistName ?? artist;
+
+            const { error: upsertErr } = await supabase.from('genre_albums').insert({
+              genre_label: genre,
+              spotify_id:  item.id,
+              title:       amTitle,
+              artist:      amArtist,
+              artwork_url: artworkUrl,
+              year,
+            });
+
+            if (upsertErr) {
+              errors.push({ genre, artist, title, error: upsertErr.message });
+            } else {
+              populated.push({ genre, title: amTitle, artist: amArtist, id: item.id });
+            }
+          } catch (e) {
+            errors.push({ genre, artist, title, error: e.message });
+          }
+        }));
+
+        if (i + BATCH < albums.length) {
+          await new Promise(r => setTimeout(r, DELAY));
+        }
+      }
+
+      console.log(`[populate-genres] ${genre}: done (${albums.length} albums)`);
+    }
+
+    // Bust the genres cache so the next client request fetches fresh data.
+    cacheClear('genres');
+    await deleteCache('genres');
+
+    console.log(`[populate-genres] complete — ${populated.length} inserted, ${errors.length} errors`);
+    res.json({ ok: true, inserted: populated.length, errors: errors.length, errorDetails: errors });
+  } catch (err) {
+    console.error('[populate-genres] fatal:', err.message ?? err);
+    res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
   }
 });
 

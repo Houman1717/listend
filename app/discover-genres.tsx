@@ -19,7 +19,11 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Display order for genre sections ────────────────────────────────────────
 
-const GENRE_LABELS = ['Rap', 'R&B', 'Pop', 'Rock', 'House', 'Jazz', 'Soul', 'Country'];
+const GENRE_LABELS = [
+  'Hip-Hop / Rap', 'Pop', 'Rock', 'Reggaeton', 'Afrobeats',
+  'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
+  'Country', 'Jazz', 'Folk / Singer-Songwriter',
+];
 
 // ─── Module-level cache + shared fetch promise ────────────────────────────────
 
