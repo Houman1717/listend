@@ -48,7 +48,7 @@ export default function DiscoverMostPopularScreen() {
                   isDark={isDark}
                   textColor={colors.text}
                   subColor={isDark ? '#888' : '#666'}
-                  onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } } as any)}
+                  onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl } } as any)}
                 />
               ))
           }
