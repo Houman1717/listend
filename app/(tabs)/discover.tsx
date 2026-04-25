@@ -341,7 +341,7 @@ export default function DiscoverScreen() {
         song={activeSong}
         onClose={() => setActiveSong(null)}
         onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-        onAlbumPress={(id) => router.push({ pathname: '/album-detail', params: { id } })}
+        onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
       />
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}

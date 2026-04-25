@@ -1144,6 +1144,7 @@ app.get('/spotify/track/:id', async (req, res) => {
       artist:      t?.attributes?.artistName ?? '',
       artworkUrl:  amArtwork(t?.attributes?.artwork),
       albumId:     t?.relationships?.albums?.data?.[0]?.id ?? '',
+      albumTitle:  t?.attributes?.albumName ?? '',
       releaseDate: t?.attributes?.releaseDate ?? '',
     };
     cacheSet(CACHE_KEY, payload, TTL_6H);

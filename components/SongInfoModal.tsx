@@ -22,7 +22,16 @@ export type SongInfo = {
   artist:       string;
   artworkUrl?:  string;
   albumId?:     string;
+  albumTitle?:  string;
   releaseDate?: string;
+};
+
+export type AlbumNavParams = {
+  id:         string;
+  title:      string;
+  artist:     string;
+  year:       string;
+  artworkUrl: string;
 };
 
 function formatReleaseDate(raw: string): string {
@@ -49,18 +58,20 @@ export function SongInfoModal({
   song:           SongInfo | null;
   onClose:        () => void;
   onArtistPress?: (name: string) => void;
-  onAlbumPress?:  (albumId: string) => void;
+  onAlbumPress?:  (params: AlbumNavParams) => void;
 }) {
   const colorScheme = useColorScheme();
   const isDark      = colorScheme === 'dark';
-  const [fetchedDate,    setFetchedDate]    = useState<string>('');
-  const [fetchedAlbumId, setFetchedAlbumId] = useState<string>('');
+  const [fetchedDate,       setFetchedDate]       = useState<string>('');
+  const [fetchedAlbumId,    setFetchedAlbumId]    = useState<string>('');
+  const [fetchedAlbumTitle, setFetchedAlbumTitle] = useState<string>('');
 
   useEffect(() => {
     setFetchedDate('');
     setFetchedAlbumId('');
+    setFetchedAlbumTitle('');
     if (!song) return;
-    if ((song.releaseDate && song.albumId) || !song.id) return;
+    if ((song.releaseDate && song.albumId && song.albumTitle) || !song.id) return;
     let cancelled = false;
     fetch(`${API_URL}/spotify/track/${song.id}`)
       .then(r => (r.ok ? r.json() : null))
@@ -68,13 +79,15 @@ export function SongInfoModal({
         if (cancelled) return;
         if (data?.releaseDate) setFetchedDate(data.releaseDate);
         if (data?.albumId)     setFetchedAlbumId(data.albumId);
+        if (data?.albumTitle)  setFetchedAlbumTitle(data.albumTitle);
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [song?.id, song?.releaseDate, song?.albumId]);
+  }, [song?.id, song?.releaseDate, song?.albumId, song?.albumTitle]);
 
-  const displayDate    = formatReleaseDate(song?.releaseDate || fetchedDate || '');
-  const displayAlbumId = song?.albumId || fetchedAlbumId;
+  const displayDate       = formatReleaseDate(song?.releaseDate || fetchedDate || '');
+  const displayAlbumId    = song?.albumId    || fetchedAlbumId;
+  const displayAlbumTitle = song?.albumTitle || fetchedAlbumTitle;
 
   return (
     <Modal
@@ -116,7 +129,13 @@ export function SongInfoModal({
               onPress={() => {
                 if (!displayAlbumId) return;
                 onClose();
-                onAlbumPress?.(displayAlbumId);
+                onAlbumPress?.({
+                  id:         displayAlbumId,
+                  title:      displayAlbumTitle,
+                  artist:     song?.artist ?? '',
+                  year:       (song?.releaseDate || fetchedDate || '').slice(0, 4),
+                  artworkUrl: song?.artworkUrl ?? '',
+                });
               }}
             >
               <Text
