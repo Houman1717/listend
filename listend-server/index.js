@@ -312,7 +312,7 @@ app.get('/discover/popular', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await amFetch('/catalog/us/charts?types=albums&chart=top-albums&limit=20');
+    const data = await amFetch('/catalog/us/charts?types=albums&chart=top-albums&limit=48&genre=all');
     const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
       id: item.id,
       title: item.attributes?.name ?? '',

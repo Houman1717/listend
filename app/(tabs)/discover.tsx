@@ -407,8 +407,8 @@ export default function DiscoverScreen() {
         )}
       </Section>
 
-      {/* ── Most Popular Albums ── */}
-      <Section title="Most Popular Albums">
+      {/* ── Popular Albums ── */}
+      <Section title="Popular Albums">
         {sectionsLoading && popular.length === 0 ? (
           <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-most-popular' as any)} />
         ) : (

@@ -30,7 +30,7 @@ export default function DiscoverMostPopularScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Most Popular Albums' }} />
+      <Stack.Screen options={{ title: 'Popular Albums' }} />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}
