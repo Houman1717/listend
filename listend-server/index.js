@@ -1267,8 +1267,9 @@ app.get('/api/admin/populate-genres', async (req, res) => {
   const errors    = [];
 
   try {
-    // Wipe existing rows so there are no duplicates from old genre labels.
-    const { error: delErr } = await supabase.from('genre_albums').delete().neq('id', 0);
+    // Wipe existing rows for the genres we're about to insert.
+    const genreNames = Object.keys(GENRE_ALBUMS);
+    const { error: delErr } = await supabase.from('genre_albums').delete().in('genre_label', genreNames);
     if (delErr) throw delErr;
 
     for (const [genre, albums] of Object.entries(GENRE_ALBUMS)) {
