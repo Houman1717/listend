@@ -8,6 +8,7 @@ const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
 const { GENRE_ALBUMS } = require('./genreData');
+const { DECADE_ALBUMS } = require('./decadeData');
 
 async function amFetch(path) {
   const resp = await fetch(`https://api.music.apple.com/v1${path}`, {
@@ -1661,6 +1662,80 @@ app.get('/api/admin/populate-genres', async (req, res) => {
     res.json({ ok: true, inserted: populated.length, errors: errors.length, errorDetails: errors });
   } catch (err) {
     console.error('[populate-genres] fatal:', err.message ?? err);
+    res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
+  }
+});
+
+// ── GET /api/admin/populate-decades ──────────────────────────────────────────
+// Searches AM for every album in DECADE_ALBUMS, then replaces decade_albums rows.
+// Run once after deploying a new decade list. Takes ~90–120 s for 384 albums.
+
+app.get('/api/admin/populate-decades', async (req, res) => {
+  const BATCH = 4;
+  const DELAY = 500;
+
+  const populated = [];
+  const errors    = [];
+
+  try {
+    const decadeNames = Object.keys(DECADE_ALBUMS);
+    const { error: delErr } = await supabase.from('decade_albums').delete().in('decade_label', decadeNames);
+    if (delErr) throw delErr;
+
+    for (const [decade, albums] of Object.entries(DECADE_ALBUMS)) {
+      for (let i = 0; i < albums.length; i += BATCH) {
+        const batch = albums.slice(i, i + BATCH);
+
+        await Promise.all(batch.map(async ({ artist, title }) => {
+          try {
+            const q    = encodeURIComponent(`${artist} ${title}`);
+            const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=1`);
+            const item = data.results?.albums?.data?.[0];
+
+            if (!item) {
+              errors.push({ decade, artist, title, error: 'not found in AM catalog' });
+              return;
+            }
+
+            const artworkUrl = amArtwork(item.attributes?.artwork);
+            const year       = parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10);
+            const amTitle    = item.attributes?.name       ?? title;
+            const amArtist   = item.attributes?.artistName ?? artist;
+
+            const { error: insertErr } = await supabase.from('decade_albums').upsert({
+              decade_label: decade,
+              spotify_id:   item.id,
+              title:        amTitle,
+              artist:       amArtist,
+              artwork_url:  artworkUrl,
+              year,
+            }, { onConflict: 'decade_label,spotify_id', ignoreDuplicates: true });
+
+            if (insertErr) {
+              errors.push({ decade, artist, title, error: insertErr.message });
+            } else {
+              populated.push({ decade, title: amTitle, artist: amArtist, id: item.id });
+            }
+          } catch (e) {
+            errors.push({ decade, artist, title, error: e.message });
+          }
+        }));
+
+        if (i + BATCH < albums.length) {
+          await new Promise(r => setTimeout(r, DELAY));
+        }
+      }
+
+      console.log(`[populate-decades] ${decade}: done (${albums.length} albums)`);
+    }
+
+    cacheClear('decades');
+    await deleteCache('decades');
+
+    console.log(`[populate-decades] complete — ${populated.length} inserted, ${errors.length} errors`);
+    res.json({ ok: true, inserted: populated.length, errors: errors.length, errorDetails: errors });
+  } catch (err) {
+    console.error('[populate-decades] fatal:', err.message ?? err);
     res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
   }
 });
