@@ -20,7 +20,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useFlip, FlipStatus } from '@/context/FlipContext';
 import { useAlbums } from '@/context/AlbumsContext';
-import { FLIP_POOL } from '@/constants/FlipPool';
+import { FLIP_POOL, FlipAlbum } from '@/constants/FlipPool';
 
 const API_URL   = process.env.EXPO_PUBLIC_API_URL ?? '';
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -139,6 +139,117 @@ function HistoryThumb({
     </View>
   );
 }
+
+// ─── Full Pool Modal ──────────────────────────────────────────────────────────
+
+function FullPoolModal({
+  visible,
+  onClose,
+  history,
+  onAlbumPress,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  history: FlippedRecord[];
+  onAlbumPress: (album: FlipAlbum) => void;
+}) {
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+  const isDark      = colorScheme === 'dark';
+
+  const statusMap: Record<string, FlipStatus> = {};
+  for (const r of history) statusMap[r.id] = r.status;
+
+  const loggedCount = Object.values(statusMap).filter(s => s === 'logged').length;
+  const total       = FLIP_POOL.length;
+  const listenedPct = total > 0 ? Math.round(loggedCount / total * 100) : 0;
+
+  const bg        = isDark ? '#111' : '#fff';
+  const borderCol = isDark ? '#222' : '#e0e0e0';
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={[sfl.container, { backgroundColor: bg }]}>
+        <View style={[sfl.header, { borderBottomColor: borderCol }]}>
+          <Text style={[sfl.title, { color: colors.text }]}>1001 Albums List</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={12}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={[sfl.summary, { borderBottomColor: borderCol }]}>
+          <View style={sfl.summaryRow}>
+            <Text style={[sfl.summaryCount, { color: colors.subtext }]}>{total} Albums</Text>
+            <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
+              <Text style={{ color: '#4ade80', fontWeight: '700' }}>{listenedPct}%</Text> listened
+              {'  ·  '}
+              <Text style={{ color: '#FF3CAC', fontWeight: '700' }}>{loggedCount}</Text> logged
+            </Text>
+          </View>
+          <View style={[sfl.track, { backgroundColor: isDark ? '#222' : '#e5e5e5' }]}>
+            <View style={[sfl.fill, { width: `${Math.max(listenedPct, listenedPct > 0 ? 2 : 0)}%` as any }]} />
+          </View>
+        </View>
+
+        <FlatList
+          data={FLIP_POOL}
+          keyExtractor={item => item.id}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => {
+            const status = statusMap[item.id] ?? null;
+            return (
+              <TouchableOpacity
+                style={[sfl.row, { borderBottomColor: borderCol }]}
+                activeOpacity={0.7}
+                onPress={() => onAlbumPress(item)}>
+                <View style={[sfl.thumb, { backgroundColor: item.coverColor }]}>
+                  <Text style={sfl.thumbLetter}>{item.title.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={sfl.info}>
+                  <Text style={[sfl.itemTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                  <Text style={[sfl.itemSub,   { color: colors.subtext }]} numberOfLines={1}>{item.artist} · {item.year}</Text>
+                </View>
+                {status === 'logged' && (
+                  <View style={[sfl.statusDot, { backgroundColor: '#0f2e1a' }]}>
+                    <Ionicons name="checkmark" size={14} color="#4ade80" />
+                  </View>
+                )}
+                {status === 'pending' && (
+                  <View style={[sfl.statusDot, { backgroundColor: '#2e1f00' }]}>
+                    <Ionicons name="time-outline" size={14} color="#f59e0b" />
+                  </View>
+                )}
+                {status === 'didnt_listen' && (
+                  <View style={[sfl.statusDot, { backgroundColor: '#1e1e1e' }]}>
+                    <Ionicons name="close" size={14} color="#888" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+const sfl = StyleSheet.create({
+  container:   { flex: 1 },
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  title:       { fontSize: 20, fontWeight: '700', letterSpacing: -0.4 },
+  summary:     { paddingHorizontal: 20, paddingVertical: 14, gap: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  summaryRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  summaryCount:{ fontSize: 13 },
+  track:       { height: 5, borderRadius: 3, overflow: 'hidden' },
+  fill:        { height: 5, borderRadius: 3, backgroundColor: '#4ade80' },
+  row:         { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
+  thumb:       { width: 46, height: 46, borderRadius: 7, overflow: 'hidden', flexShrink: 0, justifyContent: 'center', alignItems: 'center' },
+  thumbLetter: { color: 'rgba(255,255,255,0.75)', fontSize: 18, fontWeight: '700' },
+  info:        { flex: 1, gap: 3 },
+  itemTitle:   { fontSize: 14, fontWeight: '600' },
+  itemSub:     { fontSize: 12 },
+  statusDot:   { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+});
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -289,6 +400,7 @@ export default function FlipARecordScreen() {
 
   const [now, setNow]                          = useState(Date.now());
   const [historyModalVisible, setHistoryModal] = useState(false);
+  const [fullListVisible, setFullListVisible]  = useState(false);
   const [artworkUrl, setArtworkUrl]            = useState('');
   const [spotifyId,  setSpotifyId]             = useState('');
   // Cache for the "Recently Flipped" mini-list thumbnails + Spotify IDs
@@ -398,6 +510,18 @@ export default function FlipARecordScreen() {
       <Stack.Screen options={{ title: 'Flip a Record' }} />
 
       <FlipHistoryModal visible={historyModalVisible} onClose={() => setHistoryModal(false)} />
+      <FullPoolModal
+        visible={fullListVisible}
+        onClose={() => setFullListVisible(false)}
+        history={history}
+        onAlbumPress={(album) => {
+          setFullListVisible(false);
+          router.push({
+            pathname: '/album-detail',
+            params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: '' },
+          } as any);
+        }}
+      />
 
       {hasAlbum && currentFlip && (
         <View
@@ -582,23 +706,32 @@ export default function FlipARecordScreen() {
 
         {/* ── Progress stats ──────────────────────────────────────────── */}
         {!poolExhausted && (() => {
-          const total   = FLIP_POOL.length;
-          const flipped = new Set(history.map(r => r.id)).size;
-          const pct     = total > 0 ? flipped / total : 0;
+          const total       = FLIP_POOL.length;
+          const flipped     = new Set(history.map(r => r.id)).size;
+          const loggedCount = new Set(history.filter(r => r.status === 'logged').map(r => r.id)).size;
+          const listenedPct = total > 0 ? Math.round(loggedCount / total * 100) : 0;
+          const flipPct     = total > 0 ? flipped / total : 0;
           return (
-            <View style={sf.statsBlock}>
+            <Pressable
+              style={({ pressed }) => [sf.statsBlock, { opacity: pressed ? 0.75 : 1 }]}
+              onPress={() => setFullListVisible(true)}>
               <View style={sf.statsRow}>
                 <Text style={[sf.statsLabel, { color: colors.subtext }]}>
                   {total} Albums
                 </Text>
-                <Text style={[sf.statsLabel, { color: colors.subtext }]}>
-                  <Text style={{ color: '#FF3CAC', fontWeight: '700' }}>{flipped}</Text> flipped by you
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[sf.statsLabel, { color: colors.subtext }]}>
+                    <Text style={{ color: '#FF3CAC', fontWeight: '700' }}>{flipped}</Text> flipped
+                    {'  ·  '}
+                    <Text style={{ color: '#4ade80', fontWeight: '700' }}>{listenedPct}%</Text> listened
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={isDark ? '#444' : '#bbb'} />
+                </View>
               </View>
               <View style={[sf.track, { backgroundColor: isDark ? '#222' : '#e5e5e5' }]}>
-                <View style={[sf.fill, { width: `${Math.max(pct * 100, pct > 0 ? 2 : 0)}%` as any }]} />
+                <View style={[sf.fill, { width: `${Math.max(flipPct * 100, flipPct > 0 ? 2 : 0)}%` as any }]} />
               </View>
-            </View>
+            </Pressable>
           );
         })()}
 
