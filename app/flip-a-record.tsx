@@ -152,7 +152,7 @@ function FullPoolModal({
   visible: boolean;
   onClose: () => void;
   history: FlippedRecord[];
-  onAlbumPress: (album: FlipAlbum) => void;
+  onAlbumPress: (album: FlipAlbum) => void | Promise<void>;
 }) {
   const colorScheme = useColorScheme();
   const colors      = Colors[colorScheme ?? 'light'];
@@ -515,11 +515,12 @@ export default function FlipARecordScreen() {
         visible={fullListVisible}
         onClose={() => setFullListVisible(false)}
         history={history}
-        onAlbumPress={(album) => {
+        onAlbumPress={async (album) => {
           setFullListVisible(false);
+          const { artworkUrl: url, spotifyId: sid } = await fetchAlbumData(album.title, album.artist);
           router.push({
             pathname: '/album-detail',
-            params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: '' },
+            params: { id: sid || album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: url },
           } as any);
         }}
       />
