@@ -65,9 +65,9 @@ async function fetchSections(): Promise<void> {
 
 const CARD_SIZE   = 120;
 const ARTIST_SIZE = 90;
-const FALLBACK_BG = '#1e1e2e';
+const FALLBACK_BG = '#2e2018';
 
-const PLACEHOLDER_COLORS = ['#1e1e2e', '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f', '#12122a', '#1c1c3a', '#0d1b2a', '#131328', '#0e1f3a'];
+const PLACEHOLDER_COLORS = ['#2e2018', '#3a2818', '#2a1e14', '#1c1410', '#241808', '#1e1610', '#2c2015', '#2a1c12', '#321e14', '#281a10'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -100,8 +100,8 @@ function AlbumCard({ item, isDark, onPress }: { item: SpotifyAlbum; isDark: bool
       ) : (
         <ArtFallback size={CARD_SIZE} radius={6} label={item.title} />
       )}
-      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{item.title}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666' }]} numberOfLines={1}>{item.artist}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
   );
 }
@@ -119,8 +119,8 @@ function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index:
           <Text style={s.rankText}>#{index + 1}</Text>
         </View>
       </View>
-      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{item.title}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666' }]} numberOfLines={1}>{item.artist}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
   );
 }
@@ -133,8 +133,8 @@ function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: bo
       ) : (
         <ArtFallback size={ARTIST_SIZE} radius={ARTIST_SIZE / 2} label={item.name} />
       )}
-      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111', textAlign: 'center' }]} numberOfLines={1}>{item.name}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666', textAlign: 'center' }]} numberOfLines={1}>{item.genre}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410', textAlign: 'center' }]} numberOfLines={1}>{item.name}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535', textAlign: 'center' }]} numberOfLines={1}>{item.genre}</Text>
     </Pressable>
   );
 }
@@ -150,12 +150,12 @@ function SeeMoreButton({ onPress, isDark, size = CARD_SIZE, circular = false }: 
           width: size,
           height: size,
           borderRadius: circular ? size / 2 : 6,
-          backgroundColor: isDark ? '#1a1a1a' : '#ebebeb',
+          backgroundColor: isDark ? '#2e2018' : '#ebebeb',
           opacity: pressed ? 0.7 : 1,
         },
       ]}
       onPress={onPress}>
-      <Text style={[s.seeMoreText, { color: isDark ? '#f0f0f0' : '#111' }]}>See{'\n'}More</Text>
+      <Text style={[s.seeMoreText, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>See{'\n'}More</Text>
     </Pressable>
   );
 }
@@ -216,10 +216,10 @@ function Chip({ label, onPress, isDark }: { label: string; onPress: () => void; 
     <Pressable
       style={({ pressed }) => [
         s.chip,
-        { backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', borderColor: isDark ? '#333' : '#ddd', opacity: pressed ? 0.7 : 1 },
+        { backgroundColor: isDark ? '#2e2018' : '#f5e6c8', borderColor: isDark ? '#3a2818' : '#ddd', opacity: pressed ? 0.7 : 1 },
       ]}
       onPress={onPress}>
-      <Text style={[s.chipText, { color: isDark ? '#f0f0f0' : '#111' }]}>{label}</Text>
+      <Text style={[s.chipText, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -242,7 +242,7 @@ function TurntableIcon() {
       }} />
       <View style={{
         position: 'absolute', top: 14, left: 14, width: 12, height: 12,
-        borderRadius: 6, backgroundColor: '#FF3CAC', opacity: 0.9,
+        borderRadius: 6, backgroundColor: '#e8963a', opacity: 0.9,
       }} />
       <View style={{
         position: 'absolute', top: 18.5, left: 18.5, width: 3, height: 3,
@@ -446,7 +446,7 @@ export default function DiscoverScreen() {
       {/* ── Top Artists ── */}
       <Section title="Top Artists">
         {sectionsLoading && topArtists.length === 0 ? (
-          <View style={s.loader}><ActivityIndicator color="#FF3CAC" /></View>
+          <View style={s.loader}><ActivityIndicator color="#e8963a" /></View>
         ) : (
           <FlatList
             horizontal
@@ -470,7 +470,7 @@ export default function DiscoverScreen() {
       {/* ── Top Songs ── */}
       <Section title="Top Songs">
         {sectionsLoading && topSongs.length === 0 ? (
-          <View style={s.loader}><ActivityIndicator color="#FF3CAC" /></View>
+          <View style={s.loader}><ActivityIndicator color="#e8963a" /></View>
         ) : (
           <FlatList
             horizontal
@@ -539,7 +539,7 @@ const se = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 20,
     gap: 14,
-    shadowColor: '#FF3CAC',
+    shadowColor: '#e8963a',
     shadowOpacity: 0.25,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
@@ -550,7 +550,7 @@ const se = StyleSheet.create({
     position: 'absolute',
     left: 0, top: 0, bottom: 0,
     width: 4,
-    backgroundColor: '#FF3CAC',
+    backgroundColor: '#e8963a',
   },
 
   topRow: {
@@ -576,12 +576,12 @@ const se = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  badgeText: { fontSize: 11, fontWeight: '700', color: '#FF3CAC', letterSpacing: 0.2 },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#e8963a', letterSpacing: 0.2 },
 
   textBlock: { gap: 5 },
   title:     { fontSize: 20, fontWeight: '800', color: '#fff', letterSpacing: -0.4 },
   subtitle:  { fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 18 },
 
   bottomRow: { flexDirection: 'row', alignItems: 'center' },
-  cta:       { fontSize: 13, fontWeight: '700', color: '#FF3CAC', letterSpacing: 0.1 },
+  cta:       { fontSize: 13, fontWeight: '700', color: '#e8963a', letterSpacing: 0.1 },
 });

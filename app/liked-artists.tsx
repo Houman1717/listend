@@ -10,12 +10,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useLikedArtists, LikedArtist } from '@/context/LikedArtistsContext';
 
-const DARK_BG = '#0d0d0d';
-const CARD_BG = '#111';
-const BORDER = '#222';
-const TEXT = '#f0f0f0';
-const SUBTEXT = '#888';
-const ACCENT = '#FF3CAC';
+const DARK_BG = '#1c1410';
+const CARD_BG = '#1c1410';
+const BORDER = '#2a1e14';
+const TEXT = '#f5e6c8';
+const SUBTEXT = '#a07850';
+const ACCENT = '#e8963a';
 
 export default function LikedArtistsScreen() {
   const params = useLocalSearchParams<{ readOnly?: string }>();
@@ -92,7 +92,7 @@ const s = StyleSheet.create({
 
   avatar: { width: 50, height: 50, borderRadius: 25 },
   avatarPlaceholder: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#2a1e14',
     justifyContent: 'center',
     alignItems: 'center',
   },

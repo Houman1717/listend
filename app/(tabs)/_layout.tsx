@@ -23,11 +23,11 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.tint,
         tabBarInactiveTintColor: colors.tabIconDefault,
         tabBarStyle: {
-          backgroundColor: colorScheme === 'dark' ? '#111' : '#fff',
-          borderTopColor: colorScheme === 'dark' ? '#222' : '#e5e5e5',
+          backgroundColor: colorScheme === 'dark' ? '#1c1410' : '#fff',
+          borderTopColor: colorScheme === 'dark' ? '#2a1e14' : '#e5e5e5',
         },
         headerStyle: {
-          backgroundColor: colorScheme === 'dark' ? '#111' : '#fff',
+          backgroundColor: colorScheme === 'dark' ? '#1c1410' : '#fff',
         },
         headerTintColor: colors.text,
         headerShown: useClientOnlyValue(false, true),
@@ -63,8 +63,8 @@ export default function TabLayout() {
           title: 'Listend',
           tabBarIcon: ({ color }) => <TabBarIcon name="headphones" color={color} />,
           headerTitle: 'Listend',
-          headerStyle: { backgroundColor: '#0d0d0d' },
-          headerTintColor: '#f0f0f0',
+          headerStyle: { backgroundColor: '#1c1410' },
+          headerTintColor: '#f5e6c8',
           // headerRight is injected dynamically from listend.tsx via useNavigation().setOptions
         }}
       />

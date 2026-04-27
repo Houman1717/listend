@@ -49,7 +49,7 @@ function AlbumCard({
         />
       ) : (
         <View style={[s.fallback, { width: cardWidth, height: cardWidth }]}>
-          <FontAwesome name="music" size={cardWidth * 0.28} color="#555" />
+          <FontAwesome name="music" size={cardWidth * 0.28} color="#7a5535" />
         </View>
       )}
       <Text style={[s.albumTitle, { color: textColor }]} numberOfLines={1}>{album.title}</Text>
@@ -160,7 +160,7 @@ const s = StyleSheet.create({
   albumTitle:  { fontSize: 12, fontWeight: '600', marginTop: 2 },
   albumArtist: { fontSize: 11 },
 
-  fallback:     { borderRadius: 8, backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
+  fallback:     { borderRadius: 8, backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' },
   fallbackText: { color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
 
   empty:        { alignItems: 'center', marginTop: 80, paddingHorizontal: 32 },

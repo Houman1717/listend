@@ -48,7 +48,7 @@ function PlaylistMosaic({
             {url ? (
               <Image source={{ uri: url }} style={{ width: half, height: half }} resizeMode="cover" />
             ) : (
-              <View style={{ width: half, height: half, backgroundColor: '#1e1e1e' }} />
+              <View style={{ width: half, height: half, backgroundColor: '#2e2018' }} />
             )}
           </View>
         );
@@ -89,8 +89,8 @@ function PlaylistCard({
       style={({ pressed }) => [
         s.playlistCard,
         {
-          backgroundColor: isDark ? '#111' : '#f7f7f7',
-          borderColor:     isDark ? '#222' : '#e8e8e8',
+          backgroundColor: isDark ? '#1c1410' : '#f7f7f7',
+          borderColor:     isDark ? '#2a1e14' : '#e8e8e8',
           opacity:         pressed ? 0.7 : 1,
         },
       ]}>
@@ -115,24 +115,24 @@ function PlaylistCard({
             <FontAwesome
               name={isLiked ? 'heart' : 'heart-o'}
               size={16}
-              color={isLiked ? '#FF3CAC' : '#666'}
+              color={isLiked ? '#e8963a' : '#7a5535'}
             />
             {(likeCount ?? 0) > 0 && (
-              <Text style={[s.likeCount, { color: isLiked ? '#FF3CAC' : '#666' }]}>
+              <Text style={[s.likeCount, { color: isLiked ? '#e8963a' : '#7a5535' }]}>
                 {likeCount}
               </Text>
             )}
           </Pressable>
         ) : (
           <View style={s.likeBtn}>
-            <FontAwesome name="heart" size={16} color="#FF3CAC" />
+            <FontAwesome name="heart" size={16} color="#e8963a" />
             {(likeCount ?? 0) > 0 && (
-              <Text style={[s.likeCount, { color: '#FF3CAC' }]}>{likeCount}</Text>
+              <Text style={[s.likeCount, { color: '#e8963a' }]}>{likeCount}</Text>
             )}
           </View>
         )
       )}
-      <FontAwesome name="chevron-right" size={13} color={isDark ? '#444' : '#bbb'} />
+      <FontAwesome name="chevron-right" size={13} color={isDark ? '#4a3020' : '#a07850'} />
     </Pressable>
   );
 }
@@ -180,7 +180,7 @@ function NewPlaylistModal({
 
           <Text style={[s.modalLabel, { color: colors.subtext }]}>Name</Text>
           <TextInput
-            style={[s.modalInput, { color: colors.text, backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2', borderColor: isDark ? '#333' : '#e0e0e0' }]}
+            style={[s.modalInput, { color: colors.text, backgroundColor: isDark ? '#2e2018' : '#f2f2f2', borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
             placeholder="e.g. Summer Road Trip"
             placeholderTextColor={colors.subtext}
             value={name}
@@ -193,7 +193,7 @@ function NewPlaylistModal({
             Description <Text style={{ fontWeight: '400' }}>(optional)</Text>
           </Text>
           <TextInput
-            style={[s.modalInput, s.modalInputMulti, { color: colors.text, backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2', borderColor: isDark ? '#333' : '#e0e0e0' }]}
+            style={[s.modalInput, s.modalInputMulti, { color: colors.text, backgroundColor: isDark ? '#2e2018' : '#f2f2f2', borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
             placeholder="What's this list about?"
             placeholderTextColor={colors.subtext}
             value={desc}
@@ -204,7 +204,7 @@ function NewPlaylistModal({
           />
 
           <Pressable
-            style={[s.createBtn, { backgroundColor: name.trim() ? '#FF3CAC' : (isDark ? '#2a2a2a' : '#ddd') }]}
+            style={[s.createBtn, { backgroundColor: name.trim() ? '#e8963a' : (isDark ? '#2a1e14' : '#ddd') }]}
             onPress={handleCreate}
             disabled={!name.trim()}>
             <Text style={[s.createBtnText, { color: name.trim() ? '#fff' : colors.subtext }]}>
@@ -496,7 +496,7 @@ export default function MyPlaylistsScreen() {
   if (loadingOther) {
     return (
       <View style={[s.root, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color="#FF3CAC" size="large" />
+        <ActivityIndicator color="#e8963a" size="large" />
       </View>
     );
   }
@@ -507,18 +507,18 @@ export default function MyPlaylistsScreen() {
 
       {/* Tab bar — own user only */}
       {!viewingOther && (
-        <View style={[s.tabRow, { borderBottomColor: isDark ? '#1e1e1e' : '#e8e8e8' }]}>
+        <View style={[s.tabRow, { borderBottomColor: isDark ? '#2e2018' : '#e8e8e8' }]}>
           <Pressable
             onPress={() => setActiveTab('mine')}
             style={[s.tab, activeTab === 'mine' && s.tabActive]}>
-            <Text style={[s.tabText, { color: activeTab === 'mine' ? '#FF3CAC' : '#888' }]}>
+            <Text style={[s.tabText, { color: activeTab === 'mine' ? '#e8963a' : '#a07850' }]}>
               My Playlists
             </Text>
           </Pressable>
           <Pressable
             onPress={() => setActiveTab('liked')}
             style={[s.tab, activeTab === 'liked' && s.tabActive]}>
-            <Text style={[s.tabText, { color: activeTab === 'liked' ? '#FF3CAC' : '#888' }]}>
+            <Text style={[s.tabText, { color: activeTab === 'liked' ? '#e8963a' : '#a07850' }]}>
               Liked Playlists
             </Text>
           </Pressable>
@@ -530,7 +530,7 @@ export default function MyPlaylistsScreen() {
         <Pressable
           onPress={() => setShowNewPlaylist(true)}
           style={({ pressed }) => [s.newBtn, { opacity: pressed ? 0.7 : 1 }]}>
-          <FontAwesome name="plus" size={13} color="#FF3CAC" />
+          <FontAwesome name="plus" size={13} color="#e8963a" />
           <Text style={s.newBtnText}>New Playlist</Text>
         </Pressable>
       )}
@@ -540,7 +540,7 @@ export default function MyPlaylistsScreen() {
         <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
           {otherPlaylists.length === 0 ? (
             <View style={s.emptyWrap}>
-              <FontAwesome name="list" size={36} color={isDark ? '#333' : '#ddd'} />
+              <FontAwesome name="list" size={36} color={isDark ? '#3a2818' : '#ddd'} />
               <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
               <Text style={[s.emptySub, { color: colors.subtext }]}>
                 This user has no playlists.
@@ -576,7 +576,7 @@ export default function MyPlaylistsScreen() {
         <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
           {playlists.length === 0 ? (
             <View style={s.emptyWrap}>
-              <FontAwesome name="list" size={36} color={isDark ? '#333' : '#ddd'} />
+              <FontAwesome name="list" size={36} color={isDark ? '#3a2818' : '#ddd'} />
               <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
               <Text style={[s.emptySub, { color: colors.subtext }]}>
                 Create one to start organising your albums.
@@ -605,13 +605,13 @@ export default function MyPlaylistsScreen() {
         /* ── Liked playlists ───────────────────────────────────────────── */
         likedLoading ? (
           <View style={s.likedLoadingWrap}>
-            <ActivityIndicator color="#FF3CAC" size="large" />
+            <ActivityIndicator color="#e8963a" size="large" />
           </View>
         ) : (
           <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
             {likedPlaylists.length === 0 ? (
               <View style={s.emptyWrap}>
-                <FontAwesome name="heart-o" size={36} color={isDark ? '#333' : '#ddd'} />
+                <FontAwesome name="heart-o" size={36} color={isDark ? '#3a2818' : '#ddd'} />
                 <Text style={[s.emptyTitle, { color: colors.text }]}>No liked playlists</Text>
                 <Text style={[s.emptySub, { color: colors.subtext }]}>
                   Like playlists from other users to find them here.
@@ -675,7 +675,7 @@ const s = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: '#FF3CAC',
+    borderBottomColor: '#e8963a',
   },
   tabText: {
     fontSize: 14,
@@ -691,7 +691,7 @@ const s = StyleSheet.create({
     marginTop: 14,
     marginBottom: 4,
   },
-  newBtnText: { color: '#FF3CAC', fontSize: 15, fontWeight: '600' },
+  newBtnText: { color: '#e8963a', fontSize: 15, fontWeight: '600' },
 
   // ── List ─────────────────────────────────────────────────────────────────────
   listWrap: { padding: 16, paddingBottom: 48, gap: 10 },
@@ -742,7 +742,7 @@ const s = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#444',
+    backgroundColor: '#4a3020',
     alignSelf: 'center',
     marginBottom: 20,
   },

@@ -63,12 +63,12 @@ function AlbumCard({
       {album.artworkUrl ? (
         <Image source={{ uri: album.artworkUrl }} style={s.cardImage} />
       ) : (
-        <View style={[s.cardImage, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]} />
+        <View style={[s.cardImage, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
       )}
-      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>
         {album.title}
       </Text>
-      <Text style={[s.cardArtist, { color: isDark ? '#888' : '#666' }]} numberOfLines={1}>
+      <Text style={[s.cardArtist, { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={1}>
         {album.artist}
       </Text>
     </Pressable>
@@ -108,7 +108,7 @@ function DecadeSection({
       <Text style={[s.sectionLabel, { color: colors.text }]}>{label}</Text>
       {loading ? (
         <View style={s.sectionLoader}>
-          <ActivityIndicator color="#FF3CAC" />
+          <ActivityIndicator color="#e8963a" />
         </View>
       ) : albums.length === 0 ? (
         <View style={s.sectionLoader}>

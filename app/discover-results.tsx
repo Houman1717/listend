@@ -93,7 +93,7 @@ export default function DiscoverResultsScreen() {
       <Stack.Screen options={{ title: title ?? 'Discover' }} />
       {loading ? (
         <View style={s.center}>
-          <ActivityIndicator color="#FF3CAC" size="large" />
+          <ActivityIndicator color="#e8963a" size="large" />
         </View>
       ) : error ? (
         <View style={[s.center, { backgroundColor: colors.background }]}>
@@ -106,7 +106,7 @@ export default function DiscoverResultsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={s.list}
           ItemSeparatorComponent={() => (
-            <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
+            <View style={[s.separator, { backgroundColor: isDark ? '#2a1e14' : '#eee' }]} />
           )}
           ListEmptyComponent={() => (
             <View style={s.center}>
@@ -117,7 +117,7 @@ export default function DiscoverResultsScreen() {
             <Pressable
               style={({ pressed }) => [
                 s.row,
-                { backgroundColor: pressed ? (isDark ? '#1a1a1a' : '#f5f5f5') : 'transparent' },
+                { backgroundColor: pressed ? (isDark ? '#2e2018' : '#f5f5f5') : 'transparent' },
               ]}
               onPress={() => handleLog(item)}>
               {showRank && (
@@ -126,7 +126,7 @@ export default function DiscoverResultsScreen() {
               {item.artworkUrl ? (
                 <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
               ) : (
-                <View style={[s.artwork, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]} />
+                <View style={[s.artwork, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
               )}
               <View style={s.info}>
                 <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
@@ -160,5 +160,5 @@ const s = StyleSheet.create({
   info: { flex: 1, gap: 2 },
   title: { fontSize: 15, fontWeight: '600' },
   artist: { fontSize: 13 },
-  logHint: { color: '#FF3CAC', fontSize: 13, fontWeight: '600' },
+  logHint: { color: '#e8963a', fontSize: 13, fontWeight: '600' },
 });

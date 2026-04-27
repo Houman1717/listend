@@ -47,7 +47,7 @@ export default function DiscoverComingSoonScreen() {
                   width={cw}
                   isDark={isDark}
                   textColor={colors.text}
-                  subColor={isDark ? '#888' : '#666'}
+                  subColor={isDark ? '#a07850' : '#7a5535'}
                   onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } } as any)}
                 />
               ))

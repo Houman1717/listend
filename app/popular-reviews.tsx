@@ -34,22 +34,22 @@ function ReviewRow({
       style={[
         s.row,
         {
-          backgroundColor: isDark ? '#1a1a1a' : '#fff',
-          borderColor: isDark ? '#2a2a2a' : '#e8e8e8',
+          backgroundColor: isDark ? '#2e2018' : '#fff',
+          borderColor: isDark ? '#2a1e14' : '#e8e8e8',
         },
       ]}>
       {/* Top: art + album meta */}
       <View style={s.topRow}>
         <Image source={{ uri: item.artworkUrl }} style={s.art} />
         <View style={s.albumInfo}>
-          <Text style={[s.albumTitle, { color: isDark ? '#f0f0f0' : '#111' }]}>
+          <Text style={[s.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>
             {item.albumTitle}
           </Text>
-          <Text style={[s.albumArtist, { color: isDark ? '#888' : '#666' }]}>
+          <Text style={[s.albumArtist, { color: isDark ? '#a07850' : '#7a5535' }]}>
             {item.albumArtist} · {item.albumYear}
           </Text>
           <View style={s.ratingRow}>
-            <FontAwesome name="volume-up" size={11} color="#FF3CAC" />
+            <FontAwesome name="volume-up" size={11} color="#e8963a" />
             <View style={s.ratingBadge}>
               <Text style={s.ratingNum}>{item.rating}</Text>
             </View>
@@ -58,7 +58,7 @@ function ReviewRow({
       </View>
 
       {/* Full review text */}
-      <Text style={[s.reviewText, { color: isDark ? '#ccc' : '#333' }]}>
+      <Text style={[s.reviewText, { color: isDark ? '#a07850' : '#3a2818' }]}>
         "{item.review}"
       </Text>
 
@@ -68,15 +68,15 @@ function ReviewRow({
           <View style={[s.avatar, { backgroundColor: avatarColor(item.username) }]}>
             <Text style={s.avatarLetter}>{item.username[0].toUpperCase()}</Text>
           </View>
-          <Text style={[s.username, { color: '#FF3CAC' }]}>@{item.username}</Text>
+          <Text style={[s.username, { color: '#e8963a' }]}>@{item.username}</Text>
         </View>
         <Pressable onPress={onLike} hitSlop={10} style={s.likeBtn}>
           <FontAwesome
             name={liked ? 'heart' : 'heart-o'}
             size={14}
-            color={liked ? '#FF3CAC' : (isDark ? '#555' : '#bbb')}
+            color={liked ? '#e8963a' : (isDark ? '#7a5535' : '#a07850')}
           />
-          <Text style={[s.likeCount, { color: isDark ? '#555' : '#bbb' }]}>
+          <Text style={[s.likeCount, { color: isDark ? '#7a5535' : '#a07850' }]}>
             {displayCount}
           </Text>
         </Pressable>
@@ -158,7 +158,7 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   ratingBadge: {
-    backgroundColor: '#FF3CAC',
+    backgroundColor: '#e8963a',
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,

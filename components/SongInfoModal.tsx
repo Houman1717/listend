@@ -104,21 +104,21 @@ export function SongInfoModal({
         style={[
           s.sheet,
           {
-            backgroundColor: isDark ? '#1a1a1a' : '#fff',
-            borderColor:      isDark ? '#2a2a2a' : '#e8e8e8',
+            backgroundColor: isDark ? '#2e2018' : '#fff',
+            borderColor:      isDark ? '#2a1e14' : '#e8e8e8',
           },
         ]}
       >
         {/* Drag handle */}
-        <View style={[s.handle, { backgroundColor: isDark ? '#444' : '#ddd' }]} />
+        <View style={[s.handle, { backgroundColor: isDark ? '#4a3020' : '#ddd' }]} />
 
         {/* Content */}
         <View style={s.content}>
           {song?.artworkUrl ? (
             <Image source={{ uri: song.artworkUrl }} style={s.art} />
           ) : (
-            <View style={[s.artPlaceholder, { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0' }]}>
-              <FontAwesome name="music" size={28} color="#FF3CAC" />
+            <View style={[s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#f5e6c8' }]}>
+              <FontAwesome name="music" size={28} color="#e8963a" />
             </View>
           )}
 
@@ -139,7 +139,7 @@ export function SongInfoModal({
               }}
             >
               <Text
-                style={[s.title, { color: isDark ? '#f0f0f0' : '#111' }, displayAlbumId ? s.titleTappable : null]}
+                style={[s.title, { color: isDark ? '#f5e6c8' : '#1c1410' }, displayAlbumId ? s.titleTappable : null]}
                 numberOfLines={2}
               >
                 {song?.title}
@@ -156,17 +156,17 @@ export function SongInfoModal({
               }}
               style={s.artistRow}
             >
-              <Text style={[s.artist, { color: '#FF3CAC' }]} numberOfLines={1}>
+              <Text style={[s.artist, { color: '#e8963a' }]} numberOfLines={1}>
                 {song?.artist}
               </Text>
-              <FontAwesome name="chevron-right" size={10} color="#FF3CAC" />
+              <FontAwesome name="chevron-right" size={10} color="#e8963a" />
             </Pressable>
 
             {/* Release date */}
             {displayDate ? (
               <View style={s.dateRow}>
-                <FontAwesome name="calendar-o" size={11} color={isDark ? '#666' : '#aaa'} />
-                <Text style={[s.date, { color: isDark ? '#666' : '#aaa' }]}>
+                <FontAwesome name="calendar-o" size={11} color={isDark ? '#7a5535' : '#a07850'} />
+                <Text style={[s.date, { color: isDark ? '#7a5535' : '#a07850' }]}>
                   {displayDate}
                 </Text>
               </View>
@@ -178,9 +178,9 @@ export function SongInfoModal({
         <Pressable
           onPress={onClose}
           hitSlop={12}
-          style={[s.closeBtn, { backgroundColor: isDark ? '#2a2a2a' : '#f4f4f4' }]}
+          style={[s.closeBtn, { backgroundColor: isDark ? '#2a1e14' : '#f4f4f4' }]}
         >
-          <Text style={[s.closeBtnText, { color: isDark ? '#ccc' : '#555' }]}>Done</Text>
+          <Text style={[s.closeBtnText, { color: isDark ? '#a07850' : '#7a5535' }]}>Done</Text>
         </Pressable>
       </View>
     </Modal>

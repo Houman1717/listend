@@ -94,39 +94,39 @@ function RootLayoutNav() {
           <Stack.Screen name="log-album" options={{ presentation: 'modal', title: 'Log Album' }} />
           <Stack.Screen name="album-detail" options={{ presentation: 'modal', title: 'Album' }} />
           <Stack.Screen name="pick-item" options={{ presentation: 'modal', title: 'Search' }} />
-          <Stack.Screen name="discover-results" options={{ headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-new-releases" options={{ title: 'New Releases', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-coming-soon" options={{ title: 'Coming Soon', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-top-rated" options={{ title: 'Top Rated Albums', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-most-popular" options={{ title: 'Most Popular Albums', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-all-time-classics" options={{ title: 'All-Time Classics', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-recommended" options={{ title: 'Based on Your Taste', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-top-artists" options={{ title: 'Top Artists', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-top-songs" options={{ title: 'Top Songs', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-genres" options={{ title: 'Genres', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-decades" options={{ title: 'By Decade', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-decade-grid" options={{ headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="discover-genre-grid" options={{ headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="my-listend" options={{ title: 'My Listend', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="my-playlists" options={{ title: 'My Playlists', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="playlist-detail" options={{ title: 'Playlist', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="playlist-add-albums" options={{ title: 'Add Albums', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="my-stats" options={{ title: 'My Stats', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="want-to-listen" options={{ title: 'Want to Listen', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="recent-listens" options={{ title: 'Recent Listens', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="my-reviews" options={{ title: 'My Reviews', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="edit-profile" options={{ title: 'Edit Profile', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="user-profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="followers-following" options={{ title: '', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="artist-detail" options={{ title: '', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="dms" options={{ title: 'Messages', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="dm-conversation" options={{ title: '', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="sessions" options={{ title: 'Sessions', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="recent-activity" options={{ title: 'Recent Activity', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="notifications" options={{ title: 'Notifications', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="popular-reviews" options={{ title: 'Popular Reviews This Week', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
-          <Stack.Screen name="liked-artists" options={{ title: 'Liked Artists', headerStyle: { backgroundColor: '#0d0d0d' }, headerTintColor: '#f0f0f0' }} />
+          <Stack.Screen name="discover-results" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-new-releases" options={{ title: 'New Releases', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-coming-soon" options={{ title: 'Coming Soon', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-top-rated" options={{ title: 'Top Rated Albums', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-most-popular" options={{ title: 'Most Popular Albums', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-all-time-classics" options={{ title: 'All-Time Classics', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-recommended" options={{ title: 'Based on Your Taste', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-top-artists" options={{ title: 'Top Artists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-top-songs" options={{ title: 'Top Songs', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-genres" options={{ title: 'Genres', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-decades" options={{ title: 'By Decade', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-decade-grid" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-genre-grid" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="my-listend" options={{ title: 'My Listend', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="my-playlists" options={{ title: 'My Playlists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="playlist-detail" options={{ title: 'Playlist', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="playlist-add-albums" options={{ title: 'Add Albums', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="my-stats" options={{ title: 'My Stats', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="want-to-listen" options={{ title: 'Want to Listen', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="recent-listens" options={{ title: 'Recent Listens', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="my-reviews" options={{ title: 'My Reviews', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="edit-profile" options={{ title: 'Edit Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="user-profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="followers-following" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="artist-detail" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="dms" options={{ title: 'Messages', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="dm-conversation" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="sessions" options={{ title: 'Sessions', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="recent-activity" options={{ title: 'Recent Activity', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="notifications" options={{ title: 'Notifications', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="popular-reviews" options={{ title: 'Popular Reviews This Week', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="liked-artists" options={{ title: 'Liked Artists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
         </Stack>
       </ThemeProvider>
     </FlipProvider>

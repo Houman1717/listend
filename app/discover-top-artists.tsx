@@ -42,7 +42,7 @@ export default function DiscoverTopArtistsScreen() {
         contentContainerStyle={s.gridWrap}
         showsVerticalScrollIndicator={false}>
         {loading ? (
-          <ActivityIndicator color="#FF3CAC" style={{ marginTop: 48 }} />
+          <ActivityIndicator color="#e8963a" style={{ marginTop: 48 }} />
         ) : (
           <View style={s.grid}>
             {artists.map(artist => (
@@ -56,8 +56,8 @@ export default function DiscoverTopArtistsScreen() {
                     style={{ width: cardSize, height: cardSize, borderRadius: cardSize / 2 }}
                   />
                 ) : (
-                  <View style={[s.fallback, { width: cardSize, height: cardSize, borderRadius: cardSize / 2, backgroundColor: isDark ? '#1e1e2e' : '#e0e0e0' }]}>
-                    <Text style={[s.fallbackText, { fontSize: cardSize * 0.35, color: isDark ? '#888' : '#666' }]}>
+                  <View style={[s.fallback, { width: cardSize, height: cardSize, borderRadius: cardSize / 2, backgroundColor: isDark ? '#2e2018' : '#e0e0e0' }]}>
+                    <Text style={[s.fallbackText, { fontSize: cardSize * 0.35, color: isDark ? '#a07850' : '#7a5535' }]}>
                       {artist.name[0]?.toUpperCase()}
                     </Text>
                   </View>

@@ -60,7 +60,7 @@ export default function DiscoverTopSongsScreen() {
                   width={cw}
                   isDark={isDark}
                   textColor={colors.text}
-                  subColor={isDark ? '#888' : '#666'}
+                  subColor={isDark ? '#a07850' : '#7a5535'}
                   onPress={() => setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate })}
                 />
               ))

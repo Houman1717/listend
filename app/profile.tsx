@@ -18,24 +18,24 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useState, useEffect } from 'react';
 
-const GRADIENT: [string, string, string] = ['#FF3CAC', '#784BA0', '#2B86C5'];
-const DARK_BG = '#0d0d0d';
-const CARD_BG = '#1a1a1a';
-const BORDER = '#2a2a2a';
-const TEXT = '#f0f0f0';
-const SUBTEXT = '#888';
+const GRADIENT: [string, string, string] = ['#e8963a', '#c8722a', '#e8963a'];
+const DARK_BG = '#1c1410';
+const CARD_BG = '#2e2018';
+const BORDER = '#2a1e14';
+const TEXT = '#f5e6c8';
+const SUBTEXT = '#a07850';
 
 const BADGE_HEIGHTS = [3, 4, 5, 6, 7, 8, 10, 11, 13, 14];
 
 function VolumeBadge({ rating }: { rating: number }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 5 }}>
-      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#FF3CAC' : '#444'} />
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#e8963a' : '#4a3020'} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
         {BADGE_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={{ width: 3, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#FF3CAC' : '#333' }}
+            style={{ width: 3, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#e8963a' : '#3a2818' }}
           />
         ))}
       </View>
@@ -250,7 +250,7 @@ export default function ProfileScreen() {
 
       {/* Header gradient banner — pointerEvents="none" so it never intercepts taps */}
       <LinearGradient
-        colors={['#FF3CAC18', '#784BA012', '#2B86C508']}
+        colors={['#e8963a18', '#c8722a12', '#e8963a08']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={s.banner}
@@ -342,7 +342,7 @@ export default function ProfileScreen() {
       <Pressable
         style={({ pressed }) => [s.wantRow, { opacity: pressed ? 0.7 : 1 }]}
         onPress={() => router.push('/liked-artists')}>
-        <FontAwesome name="heart" size={14} color="#FF3CAC" style={{ marginTop: 1 }} />
+        <FontAwesome name="heart" size={14} color="#e8963a" style={{ marginTop: 1 }} />
         <Text style={s.wantLabel}>Liked Artists</Text>
         <FontAwesome name="chevron-right" size={12} color={SUBTEXT} />
       </Pressable>
@@ -459,7 +459,7 @@ export default function ProfileScreen() {
       <Pressable
         style={({ pressed }) => [s.signOutRow, { opacity: pressed ? 0.7 : 1 }]}
         onPress={handleSignOut}>
-        <FontAwesome name="sign-out" size={14} color="#FF3CAC" style={{ marginTop: 1 }} />
+        <FontAwesome name="sign-out" size={14} color="#e8963a" style={{ marginTop: 1 }} />
         <Text style={s.signOutLabel}>Sign Out</Text>
       </Pressable>
 
@@ -566,12 +566,12 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     gap: 8,
   },
-  signOutLabel: { color: '#FF3CAC', fontSize: 15, fontWeight: '500' },
+  signOutLabel: { color: '#e8963a', fontSize: 15, fontWeight: '500' },
 
   favSection: { paddingHorizontal: 20, paddingVertical: 16 },
   favHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   favTitle: { color: SUBTEXT, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
-  editLabel: { color: '#FF3CAC', fontSize: 12 },
+  editLabel: { color: '#e8963a', fontSize: 12 },
   albumCount: { color: SUBTEXT, fontSize: 12 },
 
   favRow: {
@@ -589,7 +589,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2e2e2e',
+    borderColor: '#2a1e14',
   },
   favInitialBg: {
     width: FAV_SLOT_SIZE,
@@ -597,7 +597,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  favInitial: { color: '#555', fontSize: 16, fontWeight: '700' },
+  favInitial: { color: '#7a5535', fontSize: 16, fontWeight: '700' },
   favPlus: { color: '#505050', fontSize: 20, fontWeight: '300' },
 
   gridSection: { paddingHorizontal: 20, paddingVertical: 16 },
@@ -654,7 +654,7 @@ const rm = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#444',
+    backgroundColor: '#4a3020',
     alignSelf: 'center',
     marginTop: 10,
     marginBottom: 4,
@@ -683,7 +683,7 @@ const rm = StyleSheet.create({
     marginBottom: 20,
   },
   avgValue: {
-    color: '#FF3CAC',
+    color: '#e8963a',
     fontSize: 56,
     fontWeight: '700',
     letterSpacing: -2,
@@ -714,13 +714,13 @@ const rm = StyleSheet.create({
     flex: 1,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#2a1e14',
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
     borderRadius: 4,
-    backgroundColor: '#FF3CAC',
+    backgroundColor: '#e8963a',
   },
   distCount: {
     color: TEXT,

@@ -84,7 +84,7 @@ export default function GenreGridScreen() {
 
       {loading ? (
         <View style={[s.centered, { backgroundColor: colors.background }]}>
-          <ActivityIndicator color="#FF3CAC" size="large" />
+          <ActivityIndicator color="#e8963a" size="large" />
         </View>
       ) : (
         <ScrollView

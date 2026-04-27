@@ -169,7 +169,7 @@ const ARTIST_CARD      = 90;
 const SONG_CARD        = 120;
 const FRIEND_CARD      = 140;
 const REVIEW_CARD_W    = 220;
-const FALLBACK_BG      = '#1e1e2e';
+const FALLBACK_BG      = '#2e2018';
 
 // ─── Shared components ────────────────────────────────────────────────────────
 
@@ -181,7 +181,7 @@ function Section({ title, loading, children }: { title: string; loading: boolean
       <Text style={[s.sectionLabel, { color: colors.text }]}>{title}</Text>
       {loading ? (
         <View style={s.sectionLoader}>
-          <ActivityIndicator color="#FF3CAC" />
+          <ActivityIndicator color="#e8963a" />
         </View>
       ) : children}
     </View>
@@ -206,8 +206,8 @@ function AlbumCard({ item, isDark, onPress }: { item: SpotifyAlbum; isDark: bool
       ) : (
         <ArtFallback size={ALBUM_CARD} radius={6} label={item.title} />
       )}
-      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{item.title}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666' }]} numberOfLines={1}>{item.artist}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
   );
 }
@@ -227,8 +227,8 @@ function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index:
           <Text style={s.rankText}>#{index + 1}</Text>
         </View>
       </View>
-      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{item.title}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666' }]} numberOfLines={1}>{item.artist}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
   );
 }
@@ -243,8 +243,8 @@ function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: bo
       ) : (
         <ArtFallback size={ARTIST_CARD} radius={ARTIST_CARD / 2} label={item.name} />
       )}
-      <Text style={[s.cardTitle, { color: isDark ? '#f0f0f0' : '#111', textAlign: 'center' }]} numberOfLines={1}>{item.name}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#888'   : '#666', textAlign: 'center' }]} numberOfLines={1}>{item.genre}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410', textAlign: 'center' }]} numberOfLines={1}>{item.name}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535', textAlign: 'center' }]} numberOfLines={1}>{item.genre}</Text>
     </Pressable>
   );
 }
@@ -271,7 +271,7 @@ function PopularReviewCard({
   colors: any;
 }) {
   const displayCount = item.likeCount + (liked ? 1 : 0);
-  const subtext = isDark ? '#555' : '#bbb';
+  const subtext = isDark ? '#7a5535' : '#a07850';
   return (
     <Pressable
       onPress={onPress}
@@ -279,8 +279,8 @@ function PopularReviewCard({
         pr.card,
         {
           width: REVIEW_CARD_W,
-          backgroundColor: isDark ? '#1a1a1a' : '#fff',
-          borderColor: isDark ? '#2a2a2a' : '#e5e5e5',
+          backgroundColor: isDark ? '#2e2018' : '#fff',
+          borderColor: isDark ? '#2a1e14' : '#e5e5e5',
           opacity: pressed ? 0.85 : 1,
         },
       ]}>
@@ -288,17 +288,17 @@ function PopularReviewCard({
       <View style={pr.topRow}>
         <Image source={{ uri: item.artworkUrl }} style={pr.art} />
         <View style={pr.albumInfo}>
-          <Text style={[pr.albumTitle, { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={2}>
+          <Text style={[pr.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={2}>
             {item.albumTitle}
           </Text>
-          <Text style={[pr.albumArtist, { color: isDark ? '#888' : '#666' }]} numberOfLines={1}>
+          <Text style={[pr.albumArtist, { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={1}>
             {item.albumArtist}
           </Text>
-          <Text style={[pr.albumYear, { color: isDark ? '#555' : '#aaa' }]}>
+          <Text style={[pr.albumYear, { color: isDark ? '#7a5535' : '#a07850' }]}>
             {item.albumYear}
           </Text>
           <View style={pr.ratingRow}>
-            <FontAwesome name="volume-up" size={10} color="#FF3CAC" />
+            <FontAwesome name="volume-up" size={10} color="#e8963a" />
             <View style={pr.ratingBadge}>
               <Text style={pr.ratingNum}>{item.rating}</Text>
             </View>
@@ -307,7 +307,7 @@ function PopularReviewCard({
       </View>
 
       {/* Review snippet */}
-      <Text style={[pr.reviewText, { color: isDark ? '#bbb' : '#444' }]} numberOfLines={3}>
+      <Text style={[pr.reviewText, { color: isDark ? '#a07850' : '#4a3020' }]} numberOfLines={3}>
         "{item.review}"
       </Text>
 
@@ -317,7 +317,7 @@ function PopularReviewCard({
           <View style={[pr.avatar, { backgroundColor: avatarColor(item.username) }]}>
             <Text style={pr.avatarLetter}>{item.username[0].toUpperCase()}</Text>
           </View>
-          <Text style={[pr.username, { color: '#FF3CAC' }]} numberOfLines={1}>
+          <Text style={[pr.username, { color: '#e8963a' }]} numberOfLines={1}>
             @{item.username}
           </Text>
         </View>
@@ -336,9 +336,9 @@ function PopularReviewCard({
             <FontAwesome
               name={liked ? 'heart' : 'heart-o'}
               size={12}
-              color={liked ? '#FF3CAC' : subtext}
+              color={liked ? '#e8963a' : subtext}
             />
-            <Text style={[pr.actionCount, { color: liked ? '#FF3CAC' : subtext }]}>
+            <Text style={[pr.actionCount, { color: liked ? '#e8963a' : subtext }]}>
               {displayCount}
             </Text>
           </Pressable>
@@ -370,8 +370,8 @@ function PopularReviewModal({
   colors: any;
 }) {
   const commentCount = comments.length;
-  const bg = isDark ? '#0d0d0d' : colors.background;
-  const border = isDark ? '#2a2a2a' : '#e5e5e5';
+  const bg = isDark ? '#1c1410' : colors.background;
+  const border = isDark ? '#2a1e14' : '#e5e5e5';
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -383,9 +383,9 @@ function PopularReviewModal({
           {/* Header */}
           <View style={[rm.header, { borderBottomColor: border }]}>
             <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="chevron-down" size={16} color={isDark ? '#888' : '#666'} />
+              <FontAwesome name="chevron-down" size={16} color={isDark ? '#a07850' : '#7a5535'} />
             </Pressable>
-            <Text style={[rm.headerTitle, { color: isDark ? '#f0f0f0' : '#111' }]}>Review</Text>
+            <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>Review</Text>
             <View style={{ width: 24 }} />
           </View>
 
@@ -398,12 +398,12 @@ function PopularReviewModal({
             <View style={rm.albumRow}>
               <Image source={{ uri: review.artworkUrl }} style={rm.art} />
               <View style={{ flex: 1, gap: 3 }}>
-                <Text style={[rm.albumTitle, { color: isDark ? '#f0f0f0' : '#111' }]}>{review.albumTitle}</Text>
-                <Text style={[rm.albumArtist, { color: isDark ? '#888' : '#666' }]}>
+                <Text style={[rm.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>{review.albumTitle}</Text>
+                <Text style={[rm.albumArtist, { color: isDark ? '#a07850' : '#7a5535' }]}>
                   {review.albumArtist} · {review.albumYear}
                 </Text>
                 <View style={rm.ratingRow}>
-                  <FontAwesome name="volume-up" size={10} color="#FF3CAC" />
+                  <FontAwesome name="volume-up" size={10} color="#e8963a" />
                   <View style={rm.ratingBadge}>
                     <Text style={rm.ratingNum}>{review.rating}</Text>
                   </View>
@@ -420,7 +420,7 @@ function PopularReviewModal({
             </View>
 
             {/* Full review */}
-            <Text style={[rm.reviewText, { color: isDark ? '#ccc' : '#333' }]}>
+            <Text style={[rm.reviewText, { color: isDark ? '#a07850' : '#3a2818' }]}>
               "{review.review}"
             </Text>
 
@@ -432,9 +432,9 @@ function PopularReviewModal({
               <FontAwesome
                 name="comment-o"
                 size={13}
-                color={commentsExpanded ? '#FF3CAC' : (isDark ? '#555' : '#aaa')}
+                color={commentsExpanded ? '#e8963a' : (isDark ? '#7a5535' : '#a07850')}
               />
-              <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#FF3CAC' : (isDark ? '#555' : '#aaa') }]}>
+              <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#e8963a' : (isDark ? '#7a5535' : '#a07850') }]}>
                 {commentCount === 0
                   ? 'No comments yet'
                   : `${commentCount} comment${commentCount !== 1 ? 's' : ''}`}
@@ -442,7 +442,7 @@ function PopularReviewModal({
               <FontAwesome
                 name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
                 size={10}
-                color={isDark ? '#555' : '#aaa'}
+                color={isDark ? '#7a5535' : '#a07850'}
                 style={{ marginLeft: 'auto' }}
               />
             </Pressable>
@@ -485,8 +485,8 @@ function FriendCard({
         s.friendCard,
         {
           width: FRIEND_CARD,
-          backgroundColor: isDark ? '#1a1a1a' : '#fff',
-          borderColor: isDark ? '#2a2a2a' : '#e5e5e5',
+          backgroundColor: isDark ? '#2e2018' : '#fff',
+          borderColor: isDark ? '#2a1e14' : '#e5e5e5',
           opacity: pressed ? 0.7 : 1,
         },
       ]}>
@@ -495,9 +495,9 @@ function FriendCard({
       ) : (
         <ArtFallback size={artSize} radius={6} label={friend.album} />
       )}
-      <Text style={[s.friendUser, { color: '#FF3CAC' }]} numberOfLines={1}>@{friend.user}</Text>
-      <Text style={[s.cardTitle,  { color: isDark ? '#f0f0f0' : '#111' }]} numberOfLines={1}>{friend.album}</Text>
-      <Text style={[s.cardSub,    { color: isDark ? '#888' : '#666' }]} numberOfLines={1}>{friend.artist}</Text>
+      <Text style={[s.friendUser, { color: '#e8963a' }]} numberOfLines={1}>@{friend.user}</Text>
+      <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>{friend.album}</Text>
+      <Text style={[s.cardSub,    { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={1}>{friend.artist}</Text>
       <Text style={[s.friendAgo,  { color: colors.subtext }]}>{ago}</Text>
     </Pressable>
   );
@@ -669,13 +669,13 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 pr.seeMoreCard,
                 {
-                  backgroundColor: isDark ? '#1a1a1a' : '#fff',
-                  borderColor: isDark ? '#2a2a2a' : '#e5e5e5',
+                  backgroundColor: isDark ? '#2e2018' : '#fff',
+                  borderColor: isDark ? '#2a1e14' : '#e5e5e5',
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}>
-              <FontAwesome name="arrow-right" size={20} color="#FF3CAC" />
-              <Text style={[pr.seeMoreText, { color: isDark ? '#f0f0f0' : '#111' }]}>
+              <FontAwesome name="arrow-right" size={20} color="#e8963a" />
+              <Text style={[pr.seeMoreText, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>
                 See{'\n'}All
               </Text>
             </Pressable>
@@ -818,7 +818,7 @@ const pr = StyleSheet.create({
     marginTop: 4,
   },
   ratingBadge: {
-    backgroundColor: '#FF3CAC',
+    backgroundColor: '#e8963a',
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -896,7 +896,7 @@ const rm = StyleSheet.create({
   albumArtist: { fontSize: 13 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   ratingBadge: {
-    backgroundColor: '#FF3CAC',
+    backgroundColor: '#e8963a',
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -912,7 +912,7 @@ const rm = StyleSheet.create({
     alignItems: 'center',
   },
   avatarLetter: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  username: { color: '#FF3CAC', fontSize: 13, fontWeight: '600' },
+  username: { color: '#e8963a', fontSize: 13, fontWeight: '600' },
 
   reviewText: { fontSize: 14, lineHeight: 22, fontStyle: 'italic' },
 

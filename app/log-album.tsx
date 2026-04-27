@@ -46,8 +46,8 @@ function RatingBar({
   containerWidth: number;
   isDark: boolean;
 }) {
-  const activeColor   = '#FF3CAC';
-  const inactiveColor = isDark ? '#2e2e2e' : '#e0e0e0';
+  const activeColor   = '#e8963a';
+  const inactiveColor = isDark ? '#2a1e14' : '#e0e0e0';
 
   const tap = Gesture.Tap()
     .runOnJS(true)
@@ -90,8 +90,8 @@ function RatingBar({
 
 function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
   const [barWidth, setBarWidth] = useState(0);
-  const activeColor   = '#FF3CAC';
-  const inactiveColor = isDark ? '#2e2e2e' : '#e0e0e0';
+  const activeColor   = '#e8963a';
+  const inactiveColor = isDark ? '#2a1e14' : '#e0e0e0';
 
   return (
     <View style={styles.ratingContainer}>
@@ -113,7 +113,7 @@ function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: 
           </Text>
         </View>
       </View>
-      <Text style={[styles.ratingHint, { color: isDark ? '#888' : '#999' }]}>
+      <Text style={[styles.ratingHint, { color: isDark ? '#a07850' : '#a07850' }]}>
         {rating > 0 ? RATING_LABELS[rating] : ' '}
       </Text>
     </View>
@@ -168,8 +168,8 @@ export default function LogAlbumScreen() {
             styles.reviewInput,
             {
               color: colors.text,
-              backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2',
-              borderColor: isDark ? '#333' : '#e0e0e0',
+              backgroundColor: isDark ? '#2e2018' : '#f2f2f2',
+              borderColor: isDark ? '#3a2818' : '#e0e0e0',
             },
           ]}
           placeholder="What did you think?"
@@ -187,7 +187,7 @@ export default function LogAlbumScreen() {
         )}
 
         <Pressable
-          style={[styles.logButton, { backgroundColor: '#FF3CAC' }]}
+          style={[styles.logButton, { backgroundColor: '#e8963a' }]}
           onPress={handleLog}>
           <Text style={[styles.logButtonText, { color: '#fff' }]}>
             Log Album

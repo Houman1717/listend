@@ -25,12 +25,12 @@ import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const API_URL    = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
-const DARK_BG    = '#0d0d0d';
-const CARD_BG    = '#1a1a1a';
-const BORDER     = '#2a2a2a';
-const TEXT       = '#f0f0f0';
-const SUBTEXT    = '#888';
-const ACCENT     = '#FF3CAC';
+const DARK_BG    = '#1c1410';
+const CARD_BG    = '#2e2018';
+const BORDER     = '#2a1e14';
+const TEXT       = '#f5e6c8';
+const SUBTEXT    = '#a07850';
+const ACCENT     = '#e8963a';
 const AVATAR_SIZE = 80;
 
 const FAV_GAP    = 3;
@@ -233,7 +233,7 @@ function FavSlotEdit({
         </View>
       ) : (
         <View style={[s.favSlot, s.favEmptyEdit, { borderRadius: radius }]}>
-          <FontAwesome name="plus" size={14} color="#555" />
+          <FontAwesome name="plus" size={14} color="#7a5535" />
         </View>
       )}
     </Pressable>
@@ -1020,14 +1020,14 @@ const s = StyleSheet.create({
     marginTop: -(AVATAR_SIZE / 2),
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#333',
-    backgroundColor: '#222',
+    borderColor: '#3a2818',
+    backgroundColor: '#2a1e14',
   },
   avatarWrapNoCover: { marginTop: 0 },
   avatarImg: { width: '100%', height: '100%' },
   avatarFallback: {
     flex: 1,
-    backgroundColor: '#1f1f1f',
+    backgroundColor: '#2a1e14',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1036,7 +1036,7 @@ const s = StyleSheet.create({
   // Text
   name:     { color: TEXT,    fontSize: 20, fontWeight: '700', textAlign: 'center' },
   username: { color: SUBTEXT, fontSize: 14, marginTop: 2,      textAlign: 'center' },
-  bio:      { color: '#aaa',  fontSize: 14, lineHeight: 20,    textAlign: 'center', marginTop: 10, maxWidth: 320 },
+  bio:      { color: '#a07850',  fontSize: 14, lineHeight: 20,    textAlign: 'center', marginTop: 10, maxWidth: 320 },
 
   // Social counts
   socialRow: {
@@ -1129,11 +1129,11 @@ const s = StyleSheet.create({
   },
   favEmpty: {
     borderWidth: 1,
-    borderColor: '#2e2e2e',
+    borderColor: '#2a1e14',
   },
   favEmptyEdit: {
     borderWidth: 1.5,
-    borderColor: '#3a3a3a',
+    borderColor: '#3a2818',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1160,16 +1160,16 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  favInitial: { color: '#555', fontSize: 16, fontWeight: '700' },
+  favInitial: { color: '#7a5535', fontSize: 16, fontWeight: '700' },
 
   // Nav rows
   navGroup: {
     marginTop: 24,
     marginHorizontal: 20,
-    backgroundColor: '#111',
+    backgroundColor: '#1c1410',
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#222',
+    borderColor: '#2a1e14',
     overflow: 'hidden',
   },
   navRow: {
@@ -1183,7 +1183,7 @@ const s = StyleSheet.create({
   navRowText:  { flex: 1, gap: 2 },
   navLabel:    { color: TEXT,    fontSize: 16, fontWeight: '600' },
   navSub:      { color: SUBTEXT, fontSize: 13 },
-  navSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: '#222', marginLeft: 58 },
+  navSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: '#2a1e14', marginLeft: 58 },
 });
 
 // ─── Rating modal styles ──────────────────────────────────────────────────────
@@ -1205,7 +1205,7 @@ const rm = StyleSheet.create({
   },
   handle: {
     width: 36, height: 4, borderRadius: 2,
-    backgroundColor: '#444',
+    backgroundColor: '#4a3020',
     alignSelf: 'center',
     marginTop: 10, marginBottom: 4,
   },
@@ -1237,7 +1237,7 @@ const rm = StyleSheet.create({
   barTrack: {
     flex: 1, flexDirection: 'row',
     height: 6, borderRadius: 3,
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#2a1e14',
     overflow: 'hidden', marginHorizontal: 8,
   },
   barFilled: { height: 6, backgroundColor: ACCENT, borderRadius: 3 },

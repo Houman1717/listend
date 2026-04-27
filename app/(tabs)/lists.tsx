@@ -50,7 +50,7 @@ function AlbumSlot({
         </Pressable>
       ) : (
         <Pressable
-          style={[styles.emptySlot, { backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', borderColor: isDark ? '#2a2a2a' : '#e0e0e0' }]}
+          style={[styles.emptySlot, { backgroundColor: isDark ? '#2e2018' : '#f5e6c8', borderColor: isDark ? '#2a1e14' : '#e0e0e0' }]}
           onPress={onAdd}>
           <Text style={[styles.addText, { color: colors.tint }]}>+ Add album</Text>
         </Pressable>
@@ -94,7 +94,7 @@ function SongSlot({
         </Pressable>
       ) : (
         <Pressable
-          style={[styles.emptySlot, { backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', borderColor: isDark ? '#2a2a2a' : '#e0e0e0' }]}
+          style={[styles.emptySlot, { backgroundColor: isDark ? '#2e2018' : '#f5e6c8', borderColor: isDark ? '#2a1e14' : '#e0e0e0' }]}
           onPress={onAdd}>
           <Text style={[styles.addText, { color: colors.tint }]}>+ Add song</Text>
         </Pressable>
@@ -144,7 +144,7 @@ export default function ListsScreen() {
         ))}
       </View>
 
-      <View style={[styles.divider, { backgroundColor: isDark ? '#222' : '#e5e5e5' }]} />
+      <View style={[styles.divider, { backgroundColor: isDark ? '#2a1e14' : '#e5e5e5' }]} />
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Top 5 Songs</Text>

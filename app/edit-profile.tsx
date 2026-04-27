@@ -23,12 +23,12 @@ import { supabase } from '@/lib/supabase'; // still used for profile read/upsert
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DARK_BG   = '#0d0d0d';
-const CARD_BG   = '#1a1a1a';
-const BORDER    = '#2a2a2a';
-const TEXT      = '#f0f0f0';
-const SUBTEXT   = '#888';
-const ACCENT    = '#FF3CAC';
+const DARK_BG   = '#1c1410';
+const CARD_BG   = '#2e2018';
+const BORDER    = '#2a1e14';
+const TEXT      = '#f5e6c8';
+const SUBTEXT   = '#a07850';
+const ACCENT    = '#e8963a';
 const COVER_H   = 160;
 const AVATAR_SIZE = 80;
 const AVATAR_OFFSET = COVER_H - AVATAR_SIZE / 2;
@@ -70,12 +70,12 @@ const t = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1f1f1f',
+    backgroundColor: '#2a1e14',
     borderRadius: 20,
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#333',
+    borderColor: '#3a2818',
   },
   text: { color: TEXT, fontSize: 14, fontWeight: '600' },
 });
@@ -383,7 +383,7 @@ export default function EditProfileScreen() {
                 <Image source={{ uri: coverUri }} style={s.coverImg} resizeMode="cover" />
               ) : (
                 <View style={s.coverPlaceholder}>
-                  <FontAwesome name="image" size={28} color="#444" />
+                  <FontAwesome name="image" size={28} color="#4a3020" />
                   <Text style={s.coverHint}>Tap to add cover photo</Text>
                 </View>
               )}
@@ -566,14 +566,14 @@ const s = StyleSheet.create({
   cover: {
     width: '100%',
     height: COVER_H,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#2e2018',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   coverImg: { width: '100%', height: '100%' },
   coverPlaceholder: { alignItems: 'center', gap: 8 },
-  coverHint: { color: '#555', fontSize: 13 },
+  coverHint: { color: '#7a5535', fontSize: 13 },
   coverEditBadge: {
     position: 'absolute',
     bottom: 10,
@@ -598,12 +598,12 @@ const s = StyleSheet.create({
     borderWidth: 3,
     borderColor: DARK_BG,
     overflow: 'hidden',
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#2a1e14',
   },
   avatarImg: { width: '100%', height: '100%' },
   avatarPlaceholder: {
     flex: 1,
-    backgroundColor: '#1f1f1f',
+    backgroundColor: '#2a1e14',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -22,12 +22,12 @@ const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 function VolumeBadge({ rating }: { rating: number }) {
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#FF3CAC' : '#3a3a3a'} />
+      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#e8963a' : '#3a2818'} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#FF3CAC' : '#2e2e2e' }]}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#e8963a' : '#2a1e14' }]}
           />
         ))}
       </View>
@@ -109,7 +109,7 @@ const s = StyleSheet.create({
   badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
   badgeBar:  { width: 2.5, borderRadius: 1 },
-  badgeNum:  { color: '#FF3CAC', fontSize: 9, fontWeight: '700', lineHeight: 14 },
+  badgeNum:  { color: '#e8963a', fontSize: 9, fontWeight: '700', lineHeight: 14 },
 
   emptyText: { textAlign: 'center', marginTop: 80, fontSize: 15 },
 });

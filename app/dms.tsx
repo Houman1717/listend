@@ -16,11 +16,11 @@ import { supabase } from '@/lib/supabase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DARK_BG = '#0d0d0d';
-const BORDER  = '#1e1e1e';
-const TEXT    = '#f0f0f0';
-const SUBTEXT = '#666';
-const ACCENT  = '#FF3CAC';
+const DARK_BG = '#1c1410';
+const BORDER  = '#2e2018';
+const TEXT    = '#f5e6c8';
+const SUBTEXT = '#7a5535';
+const ACCENT  = '#e8963a';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -225,7 +225,7 @@ const s = StyleSheet.create({
 
   avatar: { width: 50, height: 50, borderRadius: 25, flexShrink: 0 },
   avatarFallback: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#2a1e14',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -241,8 +241,8 @@ const s = StyleSheet.create({
   emptyWrap: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 40 },
   emptyIconRing: {
     width: 84, height: 84, borderRadius: 42,
-    backgroundColor: '#1a0d14',
-    borderWidth: 1, borderColor: '#3a1a2a',
+    backgroundColor: '#2e2018',
+    borderWidth: 1, borderColor: '#3a2818',
     justifyContent: 'center', alignItems: 'center',
     marginBottom: 20,
   },

@@ -27,12 +27,12 @@ const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 function VolumeBadge({ rating }: { rating: number }) {
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#FF3CAC' : '#555'} />
+      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#e8963a' : '#7a5535'} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#FF3CAC' : '#2e2e2e' }]}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#e8963a' : '#2a1e14' }]}
           />
         ))}
       </View>
@@ -80,7 +80,7 @@ function AlbumCard({
       {/* Remove button — own user only */}
       {!readOnly && (
         <Pressable onPress={onRemove} style={s.removeBtn} hitSlop={4}>
-          <FontAwesome name="times-circle" size={16} color="#FF3CAC" />
+          <FontAwesome name="times-circle" size={16} color="#e8963a" />
         </Pressable>
       )}
     </View>
@@ -160,7 +160,7 @@ export default function PlaylistDetailScreen() {
           rating:     ua?.rating     ?? 0,
           dateLogged: '',
           artworkUrl: ua?.artwork_url ?? undefined,
-          coverColor: ['#2d5a27','#7a4a2e','#1e3a5f','#d4a017','#5c2d82','#8b1a1a'][i % 6],
+          coverColor: ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a'][i % 6],
         };
       });
 
@@ -219,7 +219,7 @@ export default function PlaylistDetailScreen() {
   if (loading) {
     return (
       <View style={[s.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color="#FF3CAC" size="large" />
+        <ActivityIndicator color="#e8963a" size="large" />
       </View>
     );
   }
@@ -236,7 +236,7 @@ export default function PlaylistDetailScreen() {
                   }
                   hitSlop={12}
                   style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: '100%', paddingHorizontal: 4 }}>
-                  <FontAwesome name="plus" size={20} color="#FF3CAC" />
+                  <FontAwesome name="plus" size={20} color="#e8963a" />
                 </Pressable>
               )
             : undefined,
@@ -262,17 +262,17 @@ export default function PlaylistDetailScreen() {
           {/* Delete button — own user only */}
           {!viewingOther && (
             <Pressable onPress={confirmDeletePlaylist} hitSlop={8} style={s.deleteBtn}>
-              <FontAwesome name="trash-o" size={18} color="#FF3CAC" />
+              <FontAwesome name="trash-o" size={18} color="#e8963a" />
             </Pressable>
           )}
         </View>
 
-        <View style={[s.divider, { backgroundColor: isDark ? '#222' : '#e8e8e8' }]} />
+        <View style={[s.divider, { backgroundColor: isDark ? '#2a1e14' : '#e8e8e8' }]} />
 
         {/* Album grid */}
         {albums.length === 0 ? (
           <View style={s.emptyWrap}>
-            <FontAwesome name="music" size={36} color={isDark ? '#333' : '#ddd'} />
+            <FontAwesome name="music" size={36} color={isDark ? '#3a2818' : '#ddd'} />
             <Text style={[s.emptyTitle, { color: colors.text }]}>No albums yet</Text>
             <Text style={[s.emptySub, { color: colors.subtext }]}>
               {viewingOther ? 'This playlist is empty.' : 'Tap the + button above to search and add albums.'}
@@ -325,7 +325,7 @@ const s = StyleSheet.create({
   badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
   badgeBar:  { width: 2.5, borderRadius: 1 },
-  badgeNum:  { color: '#FF3CAC', fontSize: 9, fontWeight: '700', lineHeight: 14 },
+  badgeNum:  { color: '#e8963a', fontSize: 9, fontWeight: '700', lineHeight: 14 },
 
   removeBtn: {
     position: 'absolute',

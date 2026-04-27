@@ -14,12 +14,12 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
-const DARK_BG = '#0d0d0d';
-const CARD_BG  = '#111';
-const BORDER   = '#1e1e1e';
-const TEXT     = '#f0f0f0';
-const SUBTEXT  = '#888';
-const ACCENT   = '#FF3CAC';
+const DARK_BG = '#1c1410';
+const CARD_BG  = '#1c1410';
+const BORDER   = '#2e2018';
+const TEXT     = '#f5e6c8';
+const SUBTEXT  = '#a07850';
+const ACCENT   = '#e8963a';
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTH_NAMES = [
@@ -49,7 +49,7 @@ function RatingPip({ rating }: { rating: number }) {
 }
 const rb = StyleSheet.create({
   wrap: {
-    backgroundColor: '#1a0d14',
+    backgroundColor: '#2e2018',
     borderWidth: 1,
     borderColor: ACCENT,
     borderRadius: 5,
@@ -60,7 +60,7 @@ const rb = StyleSheet.create({
   text: { color: ACCENT, fontSize: 11, fontWeight: '700' },
 });
 
-const COVER_COLORS = ['#2d5a27','#7a4a2e','#1e3a5f','#d4a017','#5c2d82','#8b1a1a','#1a5a5a','#4a2d7a'];
+const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a','#1a5a5a','#4a2818'];
 
 export default function SessionsScreen() {
   const { width } = useWindowDimensions();
@@ -246,7 +246,7 @@ export default function SessionsScreen() {
                 {album.artworkUrl ? (
                   <Image source={{ uri: album.artworkUrl }} style={s.monthArt} />
                 ) : (
-                  <View style={[s.monthArt, { backgroundColor: album.coverColor ?? '#2a2a2a', justifyContent: 'center', alignItems: 'center' }]}>
+                  <View style={[s.monthArt, { backgroundColor: album.coverColor ?? '#2a1e14', justifyContent: 'center', alignItems: 'center' }]}>
                     <Text style={s.monthArtInitial}>{album.title.charAt(0)}</Text>
                   </View>
                 )}
@@ -355,7 +355,7 @@ const s = StyleSheet.create({
     gap: 3,
   },
   dayCellSelected: { backgroundColor: ACCENT },
-  dayCellToday:    { backgroundColor: '#1a0d14', borderWidth: 1, borderColor: '#3a1a2a' },
+  dayCellToday:    { backgroundColor: '#2e2018', borderWidth: 1, borderColor: '#3a2818' },
   dayNum:         { color: TEXT, fontSize: 13, fontWeight: '500' },
   dayNumSelected: { color: '#fff', fontWeight: '700' },
   dayNumToday:    { color: ACCENT },

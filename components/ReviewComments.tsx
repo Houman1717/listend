@@ -23,7 +23,7 @@ export type ReviewComment = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function avatarColor(username: string): string {
-  const palette = ['#FF3CAC', '#7B61FF', '#00BCD4', '#FF6B35', '#4CAF50', '#FFC107'];
+  const palette = ['#e8963a', '#c8722a', '#e8963a', '#FF6B35', '#4CAF50', '#FFC107'];
   let hash = 0;
   for (const c of username) hash = (hash * 31 + c.charCodeAt(0)) % palette.length;
   return palette[Math.abs(hash)];
@@ -45,7 +45,7 @@ export function CommentBubble({
   onReply: () => void;
 }) {
   return (
-    <View style={[cms.commentRow, isReply && cms.replyRow, { borderBottomColor: isDark ? '#1f1f1f' : '#f0f0f0' }]}>
+    <View style={[cms.commentRow, isReply && cms.replyRow, { borderBottomColor: isDark ? '#2a1e14' : '#f5e6c8' }]}>
       <View style={[cms.commentAvatar, { backgroundColor: avatarColor(comment.username) }]}>
         <Text style={cms.commentAvatarLetter}>{comment.username[0].toUpperCase()}</Text>
       </View>
@@ -54,7 +54,7 @@ export function CommentBubble({
           <Text style={cms.commentUsername}>@{comment.username}</Text>
           <Text style={[cms.commentDate, { color: colors.subtext }]}>{comment.createdAt}</Text>
         </View>
-        <Text style={[cms.commentText, { color: isDark ? '#ccc' : '#333' }]}>{comment.body}</Text>
+        <Text style={[cms.commentText, { color: isDark ? '#a07850' : '#3a2818' }]}>{comment.body}</Text>
         <Pressable onPress={onReply} hitSlop={6}>
           <Text style={[cms.replyLabel, { color: colors.subtext }]}>Reply</Text>
         </Pressable>
@@ -82,7 +82,7 @@ export function CommentsSection({
 
   const topLevel   = comments.filter(c => !c.parentCommentId);
   const repliesFor = (id: string) => comments.filter(c => c.parentCommentId === id);
-  const borderColor = isDark ? '#1f1f1f' : '#f0f0f0';
+  const borderColor = isDark ? '#2a1e14' : '#f5e6c8';
 
   function submitReply(parentId: string) {
     if (!replyText.trim()) return;
@@ -123,7 +123,7 @@ export function CommentsSection({
             {replyingToId === comment.id && (
               <View style={[cms.replyInputRow, { borderTopColor: borderColor }]}>
                 <TextInput
-                  style={[cms.replyInput, { color: colors.text, backgroundColor: isDark ? '#1e1e1e' : '#f5f5f5', borderColor: isDark ? '#2e2e2e' : '#e0e0e0' }]}
+                  style={[cms.replyInput, { color: colors.text, backgroundColor: isDark ? '#2e2018' : '#f5f5f5', borderColor: isDark ? '#2a1e14' : '#e0e0e0' }]}
                   placeholder={`Reply to @${comment.username}…`}
                   placeholderTextColor={colors.subtext}
                   value={replyText}
@@ -138,7 +138,7 @@ export function CommentsSection({
                   onPress={() => submitReply(comment.id)}
                   hitSlop={8}
                   style={[cms.sendBtn, { opacity: replyText.trim() ? 1 : 0.35 }]}>
-                  <FontAwesome name="send" size={13} color="#FF3CAC" />
+                  <FontAwesome name="send" size={13} color="#e8963a" />
                 </Pressable>
               </View>
             )}
@@ -149,7 +149,7 @@ export function CommentsSection({
       {/* New top-level comment */}
       <View style={[cms.newCommentRow, { borderTopColor: borderColor }]}>
         <TextInput
-          style={[cms.commentInput, { flex: 1, color: colors.text, backgroundColor: isDark ? '#1e1e1e' : '#f5f5f5', borderColor: isDark ? '#2e2e2e' : '#e0e0e0' }]}
+          style={[cms.commentInput, { flex: 1, color: colors.text, backgroundColor: isDark ? '#2e2018' : '#f5f5f5', borderColor: isDark ? '#2a1e14' : '#e0e0e0' }]}
           placeholder="Add a comment…"
           placeholderTextColor={colors.subtext}
           value={commentText}
@@ -163,7 +163,7 @@ export function CommentsSection({
           onPress={submitComment}
           hitSlop={8}
           style={[cms.sendBtn, { opacity: commentText.trim() ? 1 : 0.35 }]}>
-          <FontAwesome name="send" size={13} color="#FF3CAC" />
+          <FontAwesome name="send" size={13} color="#e8963a" />
         </Pressable>
       </View>
     </View>
@@ -192,7 +192,7 @@ const cms = StyleSheet.create({
   replyRow: {
     marginLeft: 22,
     borderLeftWidth: 2,
-    borderLeftColor: '#FF3CAC',
+    borderLeftColor: '#e8963a',
     paddingLeft: 8,
   },
   commentAvatar: {
@@ -207,7 +207,7 @@ const cms = StyleSheet.create({
   commentAvatarLetter: { color: '#fff', fontSize: 10, fontWeight: '700' },
   commentBody: { flex: 1, gap: 3 },
   commentTopLine: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  commentUsername: { fontSize: 11, fontWeight: '700', color: '#FF3CAC' },
+  commentUsername: { fontSize: 11, fontWeight: '700', color: '#e8963a' },
   commentDate: { fontSize: 10 },
   commentText: { fontSize: 12, lineHeight: 17 },
   replyLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },

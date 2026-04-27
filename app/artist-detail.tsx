@@ -108,7 +108,7 @@ function TrackRow({
       {track.artworkUrl ? (
         <Image source={{ uri: track.artworkUrl }} style={sc.trackArt} />
       ) : (
-        <View style={[sc.trackArt, { backgroundColor: '#2a2a2a' }]} />
+        <View style={[sc.trackArt, { backgroundColor: '#2a1e14' }]} />
       )}
       <View style={sc.trackInfo}>
         <Text style={[sc.trackTitle, { color: textColor }]} numberOfLines={1}>{track.title}</Text>
@@ -176,9 +176,9 @@ export default function ArtistDetailScreen() {
   }).length;
   const listenedPct  = totalAlbums === 0 ? null : Math.round((listenedCount / totalAlbums) * 100);
 
-  const sectionBg   = isDark ? '#111' : '#f5f5f5';
-  const borderColor = isDark ? '#222' : '#e8e8e8';
-  const mutedText   = isDark ? '#555' : '#bbb';
+  const sectionBg   = isDark ? '#1c1410' : '#f5f5f5';
+  const borderColor = isDark ? '#2a1e14' : '#e8e8e8';
+  const mutedText   = isDark ? '#7a5535' : '#a07850';
 
   const GRID_PAD = 20;
   const CARD_SIZE = 120;
@@ -343,8 +343,8 @@ export default function ArtistDetailScreen() {
             {album.artworkUrl ? (
               <Image source={{ uri: album.artworkUrl }} style={sc.albumArt} />
             ) : (
-              <View style={[sc.albumArt, { backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' }]}>
-                <FontAwesome name="music" size={24} color="#444" />
+              <View style={[sc.albumArt, { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' }]}>
+                <FontAwesome name="music" size={24} color="#4a3020" />
               </View>
             )}
             <Text style={[sc.albumTitle, { color: colors.text }]} numberOfLines={2}>{album.title}</Text>
@@ -375,7 +375,7 @@ export default function ArtistDetailScreen() {
           <FontAwesome
             name={liked ? 'heart' : 'heart-o'}
             size={24}
-            color={liked ? '#FF3CAC' : '#666'}
+            color={liked ? '#e8963a' : '#7a5535'}
           />
         </Pressable>
         {artworkUrl ? (
@@ -389,14 +389,14 @@ export default function ArtistDetailScreen() {
         {listenedPct !== null && (
           <View style={sc.listenedWrap}>
             <View style={sc.listenedRow}>
-              <FontAwesome name="headphones" size={13} color="#FF3CAC" />
+              <FontAwesome name="headphones" size={13} color="#e8963a" />
               <Text style={sc.listenedPct}>{listenedPct}%</Text>
             </View>
             <Text style={sc.listenedSub}>{listenedCount} of {totalAlbums} albums listened</Text>
           </View>
         )}
         {lastfmLoading ? (
-          <ActivityIndicator size="small" color="#FF3CAC" style={{ marginTop: 8 }} />
+          <ActivityIndicator size="small" color="#e8963a" style={{ marginTop: 8 }} />
         ) : lastfm?.listeners ? (
           <Text style={[sc.listeners, { color: colors.subtext }]}>{formatListeners(lastfm.listeners)}</Text>
         ) : lastfmError ? (
@@ -423,7 +423,7 @@ export default function ArtistDetailScreen() {
       <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
         <SectionHeader label="Top Tracks" color={colors.subtext} />
         {tracksLoading ? (
-          <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
+          <ActivityIndicator size="small" color="#e8963a" style={{ marginVertical: 16 }} />
         ) : tracksError ? (
           <Text style={[sc.errorText, { color: '#f87171' }]}>{tracksError}</Text>
         ) : topTracks && topTracks.length > 0 ? (
@@ -446,7 +446,7 @@ export default function ArtistDetailScreen() {
       <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
         <SectionHeader label="Discography" color={colors.subtext} />
         {albumsLoading ? (
-          <ActivityIndicator size="small" color="#FF3CAC" style={{ marginVertical: 16 }} />
+          <ActivityIndicator size="small" color="#e8963a" style={{ marginVertical: 16 }} />
         ) : albumsError ? (
           <Text style={[sc.errorText, { color: '#f87171' }]}>{albumsError}</Text>
         ) : (
@@ -498,7 +498,7 @@ export default function ArtistDetailScreen() {
                   {appleImageUrl ? (
                     <Image source={{ uri: appleImageUrl }} style={sc.similarAvatar} />
                   ) : (
-                    <View style={[sc.similarAvatar, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                    <View style={[sc.similarAvatar, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
                       <Text style={[sc.similarInitial, { color: colors.subtext }]}>{sim.name.charAt(0)}</Text>
                     </View>
                   )}
@@ -531,23 +531,23 @@ const sc = StyleSheet.create({
     position: 'absolute',
     bottom: 40,
     alignSelf: 'center',
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#2e2018',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#333',
+    borderColor: '#3a2818',
   },
-  toastText: { color: '#f0f0f0', fontSize: 14, fontWeight: '500' },
+  toastText: { color: '#f5e6c8', fontSize: 14, fontWeight: '500' },
 
   avatar: { width: 120, height: 120, borderRadius: 60, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 16 },
-  avatarPlaceholder: { backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
-  avatarInitial: { color: '#FF3CAC', fontSize: 44, fontWeight: '700' },
+  avatarPlaceholder: { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' },
+  avatarInitial: { color: '#e8963a', fontSize: 44, fontWeight: '700' },
   name: { marginTop: 14, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
   listenedWrap: { alignItems: 'center', marginTop: 8, gap: 3 },
   listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  listenedPct: { color: '#FF3CAC', fontSize: 15, fontWeight: '700' },
-  listenedSub: { color: '#666', fontSize: 12 },
+  listenedPct: { color: '#e8963a', fontSize: 15, fontWeight: '700' },
+  listenedSub: { color: '#7a5535', fontSize: 12 },
   listeners: { marginTop: 4, fontSize: 13 },
 
   // Error
@@ -569,9 +569,9 @@ const sc = StyleSheet.create({
 
   // Discography tabs
   discTabBar:       { flexDirection: 'row', gap: 6, paddingVertical: 2 },
-  discTab:          { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#444' },
-  discTabActive:    { backgroundColor: '#FF3CAC', borderColor: '#FF3CAC' },
-  discTabText:      { fontSize: 12, fontWeight: '500', color: '#888' },
+  discTab:          { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#4a3020' },
+  discTabActive:    { backgroundColor: '#e8963a', borderColor: '#e8963a' },
+  discTabText:      { fontSize: 12, fontWeight: '500', color: '#a07850' },
   discTabTextActive:{ color: '#fff', fontWeight: '700' },
 
   // Discography carousel
@@ -584,7 +584,7 @@ const sc = StyleSheet.create({
 
   // Bio
   bioText: { fontSize: 14, lineHeight: 22 },
-  bioToggle: { color: '#FF3CAC', fontSize: 13, fontWeight: '500', marginTop: 8 },
+  bioToggle: { color: '#e8963a', fontSize: 13, fontWeight: '500', marginTop: 8 },
 
   // Similar artists
   similarScroll: { marginHorizontal: -4 },

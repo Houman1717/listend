@@ -22,12 +22,12 @@ const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 function VolumeBadge({ rating }: { rating: number }) {
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#FF3CAC' : '#3a3a3a'} />
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#e8963a' : '#3a2818'} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#FF3CAC' : '#2a2a2a' }]}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#e8963a' : '#2a1e14' }]}
           />
         ))}
       </View>
@@ -82,7 +82,7 @@ function ReviewRow({
           {album.artist} · {album.year}
         </Text>
         <VolumeBadge rating={album.rating} />
-        <Text style={[s.review, { color: isDark ? '#aaa' : '#555' }]}>
+        <Text style={[s.review, { color: isDark ? '#a07850' : '#7a5535' }]}>
           {album.review}
         </Text>
 
@@ -95,10 +95,10 @@ function ReviewRow({
                 <FontAwesome
                   name={isLiked ? 'heart' : 'heart-o'}
                   size={13}
-                  color={isLiked ? '#FF3CAC' : '#666'}
+                  color={isLiked ? '#e8963a' : '#7a5535'}
                 />
                 {likeCount > 0 && (
-                  <Text style={[s.likeCount, { color: isLiked ? '#FF3CAC' : '#666' }]}>
+                  <Text style={[s.likeCount, { color: isLiked ? '#e8963a' : '#7a5535' }]}>
                     {likeCount}
                   </Text>
                 )}
@@ -106,8 +106,8 @@ function ReviewRow({
             ) : likeCount > 0 ? (
               // Read-only — own review, just show how many people liked it
               <View style={s.likeBtn}>
-                <FontAwesome name="heart" size={13} color="#FF3CAC" />
-                <Text style={[s.likeCount, { color: '#FF3CAC' }]}>{likeCount}</Text>
+                <FontAwesome name="heart" size={13} color="#e8963a" />
+                <Text style={[s.likeCount, { color: '#e8963a' }]}>{likeCount}</Text>
               </View>
             ) : null}
           </View>
@@ -119,7 +119,7 @@ function ReviewRow({
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const COVER_COLORS = ['#2d5a27','#7a4a2e','#1e3a5f','#d4a017','#5c2d82','#8b1a1a','#1a5a5a','#4a2d7a'];
+const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a','#1a5a5a','#4a2818'];
 
 export default function MyReviewsScreen() {
   const colorScheme = useColorScheme();
@@ -272,7 +272,7 @@ export default function MyReviewsScreen() {
       contentContainerStyle={s.listContent}
       showsVerticalScrollIndicator={false}
       ItemSeparatorComponent={() => (
-        <View style={[s.separator, { backgroundColor: isDark ? '#1e1e1e' : '#ebebeb' }]} />
+        <View style={[s.separator, { backgroundColor: isDark ? '#2e2018' : '#ebebeb' }]} />
       )}
       ListEmptyComponent={() => (
         <View style={s.empty}>
@@ -326,7 +326,7 @@ const s = StyleSheet.create({
   badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
   badgeBar:  { width: 2.5, borderRadius: 1 },
-  badgeNum:  { color: '#FF3CAC', fontSize: 10, fontWeight: '700', lineHeight: 15 },
+  badgeNum:  { color: '#e8963a', fontSize: 10, fontWeight: '700', lineHeight: 15 },
 
   // Like
   likeRow:   { marginTop: 4 },

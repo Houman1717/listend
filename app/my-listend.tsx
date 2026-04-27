@@ -35,12 +35,12 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 function VolumeBadge({ rating }: { rating: number }) {
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#FF3CAC' : '#555'} />
+      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#e8963a' : '#7a5535'} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#FF3CAC' : '#2e2e2e' }]}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#e8963a' : '#2a1e14' }]}
           />
         ))}
       </View>
@@ -97,9 +97,9 @@ function FilterPills({
               s.pill,
               isActive
                 ? s.pillActive
-                : { backgroundColor: isDark ? '#1e1e1e' : '#efefef', borderColor: isDark ? '#333' : '#ddd' },
+                : { backgroundColor: isDark ? '#2e2018' : '#efefef', borderColor: isDark ? '#3a2818' : '#ddd' },
             ]}>
-            <Text style={[s.pillText, { color: isActive ? '#fff' : isDark ? '#aaa' : '#555' }]}>
+            <Text style={[s.pillText, { color: isActive ? '#fff' : isDark ? '#a07850' : '#7a5535' }]}>
               {f.label}
             </Text>
           </Pressable>
@@ -109,7 +109,7 @@ function FilterPills({
   );
 }
 
-const COVER_COLORS = ['#2d5a27','#7a4a2e','#1e3a5f','#d4a017','#5c2d82','#8b1a1a','#1a5a5a','#4a2d7a'];
+const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a','#1a5a5a','#4a2818'];
 
 export default function MyListendScreen() {
   const { width } = useWindowDimensions();
@@ -195,7 +195,7 @@ const s = StyleSheet.create({
   pillsScroll: { flexGrow: 0 },
   pillsRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   pill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
-  pillActive: { backgroundColor: '#FF3CAC', borderColor: '#FF3CAC' },
+  pillActive: { backgroundColor: '#e8963a', borderColor: '#e8963a' },
   pillText: { fontSize: 13, fontWeight: '500' },
 
   // ── Grid ─────────────────────────────────────────────────────────────────────
@@ -208,6 +208,6 @@ const s = StyleSheet.create({
   badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
   badgeBar:  { width: 2.5, borderRadius: 1 },
-  badgeNum:  { color: '#FF3CAC', fontSize: 9, fontWeight: '700', lineHeight: 14 },
+  badgeNum:  { color: '#e8963a', fontSize: 9, fontWeight: '700', lineHeight: 14 },
   emptyText: { textAlign: 'center', marginTop: 80, fontSize: 15 },
 });

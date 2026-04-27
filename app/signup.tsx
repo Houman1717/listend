@@ -14,13 +14,13 @@ import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 
-const DARK_BG = '#0d0d0d';
-const CARD_BG = '#1a1a1a';
-const BORDER = '#2a2a2a';
-const TEXT = '#f0f0f0';
-const SUBTEXT = '#888';
-const ACCENT = '#FF3CAC';
-const GRADIENT: [string, string, string] = ['#FF3CAC', '#784BA0', '#2B86C5'];
+const DARK_BG = '#1c1410';
+const CARD_BG = '#2e2018';
+const BORDER = '#2a1e14';
+const TEXT = '#f5e6c8';
+const SUBTEXT = '#a07850';
+const ACCENT = '#e8963a';
+const GRADIENT: [string, string, string] = ['#e8963a', '#c8722a', '#e8963a'];
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -68,7 +68,7 @@ export default function SignUpScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
 
       <LinearGradient
-        colors={['#FF3CAC18', '#784BA012', '#2B86C508']}
+        colors={['#e8963a18', '#c8722a12', '#e8963a08']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}

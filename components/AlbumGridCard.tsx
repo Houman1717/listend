@@ -44,8 +44,8 @@ export function AlbumGridCard({
           resizeMode="cover"
         />
       ) : (
-        <View style={[s.fallback, { width, height: width, backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]}>
-          <FontAwesome name="music" size={width * 0.28} color={isDark ? '#555' : '#aaa'} />
+        <View style={[s.fallback, { width, height: width, backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]}>
+          <FontAwesome name="music" size={width * 0.28} color={isDark ? '#7a5535' : '#a07850'} />
         </View>
       )}
       <Text style={[s.title, { color: textColor }]} numberOfLines={1}>{album.title}</Text>
@@ -63,9 +63,9 @@ export function AlbumGridCardPlaceholder({
 }) {
   return (
     <View style={[s.card, { width }]}>
-      <View style={{ width, height: width, borderRadius: 8, backgroundColor: isDark ? '#1e1e1e' : '#e5e5e5' }} />
-      <View style={[s.placeholderText, { width: width * 0.7, backgroundColor: isDark ? '#2a2a2a' : '#ddd' }]} />
-      <View style={[s.placeholderText, { width: width * 0.5, backgroundColor: isDark ? '#222' : '#e8e8e8' }]} />
+      <View style={{ width, height: width, borderRadius: 8, backgroundColor: isDark ? '#2e2018' : '#e5e5e5' }} />
+      <View style={[s.placeholderText, { width: width * 0.7, backgroundColor: isDark ? '#2a1e14' : '#ddd' }]} />
+      <View style={[s.placeholderText, { width: width * 0.5, backgroundColor: isDark ? '#2a1e14' : '#e8e8e8' }]} />
     </View>
   );
 }

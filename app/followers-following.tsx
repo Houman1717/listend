@@ -13,11 +13,11 @@ import { supabase } from '@/lib/supabase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DARK_BG = '#0d0d0d';
-const BORDER  = '#1e1e1e';
-const TEXT    = '#f0f0f0';
-const SUBTEXT = '#888';
-const ACCENT  = '#FF3CAC';
+const DARK_BG = '#1c1410';
+const BORDER  = '#2e2018';
+const TEXT    = '#f5e6c8';
+const SUBTEXT = '#a07850';
+const ACCENT  = '#e8963a';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -167,7 +167,7 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
   avatarFallback: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#2a1e14',
     alignItems: 'center',
     justifyContent: 'center',
   },

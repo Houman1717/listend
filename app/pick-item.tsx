@@ -86,7 +86,7 @@ export default function PickItemScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.searchBar, { backgroundColor: isDark ? '#1e1e1e' : '#efefef' }]}>
+      <View style={[styles.searchBar, { backgroundColor: isDark ? '#2e2018' : '#efefef' }]}>
         <Text style={[styles.searchIcon, { color: colors.subtext }]}>⌕</Text>
         <TextInput
           style={[styles.input, { color: colors.text }]}
@@ -142,13 +142,13 @@ export default function PickItemScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.resultRow,
-                { backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
+                { backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' },
               ]}
               onPress={() => handleSelect(item)}>
               {item.artworkUrl ? (
                 <Image source={{ uri: item.artworkUrl }} style={[styles.artwork, { borderRadius: artworkRadius }]} />
               ) : (
-                <View style={[styles.artwork, { borderRadius: artworkRadius, backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]} />
+                <View style={[styles.artwork, { borderRadius: artworkRadius, backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
               )}
               <View style={styles.resultText}>
                 <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
@@ -159,7 +159,7 @@ export default function PickItemScreen() {
           );
         }}
         ItemSeparatorComponent={() => (
-          <View style={[styles.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
+          <View style={[styles.separator, { backgroundColor: isDark ? '#2a1e14' : '#eee' }]} />
         )}
       />
     </View>

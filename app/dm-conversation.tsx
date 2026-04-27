@@ -22,14 +22,14 @@ import { supabase } from '@/lib/supabase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DARK_BG   = '#0d0d0d';
-const CARD_BG   = '#1a1a1a';
-const BORDER    = '#2a2a2a';
-const TEXT      = '#f0f0f0';
-const SUBTEXT   = '#888';
-const ACCENT    = '#FF3CAC';
-const MY_BUBBLE = '#FF3CAC';
-const THEIR_BG  = '#1e1e1e';
+const DARK_BG   = '#1c1410';
+const CARD_BG   = '#2e2018';
+const BORDER    = '#2a1e14';
+const TEXT      = '#f5e6c8';
+const SUBTEXT   = '#a07850';
+const ACCENT    = '#e8963a';
+const MY_BUBBLE = '#e8963a';
+const THEIR_BG  = '#2e2018';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const POLL_INTERVAL_MS = 5000;
@@ -553,8 +553,8 @@ const s = StyleSheet.create({
   albumBtn: {
     width: 36, height: 36,
     borderRadius: 18,
-    backgroundColor: '#1a0d14',
-    borderWidth: 1, borderColor: '#3a1a2a',
+    backgroundColor: '#2e2018',
+    borderWidth: 1, borderColor: '#3a2818',
     alignItems: 'center', justifyContent: 'center',
     alignSelf: 'flex-end', marginBottom: 1,
   },
@@ -562,7 +562,7 @@ const s = StyleSheet.create({
     flex: 1,
     minHeight: 36,
     maxHeight: 120,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#2e2018',
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
@@ -612,9 +612,9 @@ const b = StyleSheet.create({
     overflow: 'hidden',
     padding: 12,
     gap: 10,
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#2e2018',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#333',
+    borderColor: '#3a2818',
   },
 
   albumTop: {
@@ -628,7 +628,7 @@ const b = StyleSheet.create({
     flexShrink: 0,
   },
   albumArtFallback: {
-    backgroundColor: '#333',
+    backgroundColor: '#3a2818',
     alignItems: 'center', justifyContent: 'center',
   },
   albumMeta: { flex: 1, gap: 2, paddingTop: 1 },
@@ -638,7 +638,7 @@ const b = StyleSheet.create({
 
   reviewDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#2e2e2e',
+    backgroundColor: '#2a1e14',
   },
 
   reviewSection: { gap: 4 },
@@ -653,7 +653,7 @@ const b = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#FF3CAC',
+    backgroundColor: '#e8963a',
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -661,7 +661,7 @@ const b = StyleSheet.create({
   ratingBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
 
   reviewText:        { color: 'rgba(240,240,240,0.65)', fontSize: 12, fontStyle: 'italic', lineHeight: 16 },
-  reviewPlaceholder: { color: '#444', fontSize: 12, fontStyle: 'italic' },
+  reviewPlaceholder: { color: '#4a3020', fontSize: 12, fontStyle: 'italic' },
 });
 
 // Album search sheet styles
@@ -681,7 +681,7 @@ const as = StyleSheet.create({
   },
   handle: {
     width: 36, height: 4, borderRadius: 2,
-    backgroundColor: '#444',
+    backgroundColor: '#4a3020',
     alignSelf: 'center',
     marginTop: 10, marginBottom: 6,
   },
@@ -699,7 +699,7 @@ const as = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#222',
+    backgroundColor: '#2a1e14',
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 42,
@@ -715,7 +715,7 @@ const as = StyleSheet.create({
     gap: 12,
   },
   artwork: { width: 48, height: 48, borderRadius: 4 },
-  artworkFallback: { backgroundColor: '#2a2a2a' },
+  artworkFallback: { backgroundColor: '#2a1e14' },
   resultText:   { flex: 1, gap: 3 },
   resultTitle:  { color: TEXT,    fontSize: 14, fontWeight: '600' },
   resultSub:    { color: SUBTEXT, fontSize: 12 },

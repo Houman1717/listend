@@ -16,11 +16,11 @@ import { supabase } from '@/lib/supabase';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
-const DARK_BG = '#0d0d0d';
-const BORDER  = '#1e1e1e';
-const TEXT    = '#f0f0f0';
+const DARK_BG = '#1c1410';
+const BORDER  = '#2e2018';
+const TEXT    = '#f5e6c8';
 const SUBTEXT = '#777';
-const ACCENT  = '#FF3CAC';
+const ACCENT  = '#e8963a';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,10 +38,10 @@ type NotificationItem = {
 // ─── Row ──────────────────────────────────────────────────────────────────────
 
 const NOTIF_META: Record<NotificationItem['type'], { body: string; iconName: string; iconColor: string }> = {
-  follow:        { body: 'started following you', iconName: 'user-plus', iconColor: '#38bdf8' },
-  message:       { body: 'sent you a message',    iconName: 'envelope',  iconColor: '#a78bfa' },
-  like_review:   { body: 'liked your review',     iconName: 'heart',     iconColor: '#FF3CAC' },
-  like_playlist: { body: 'liked your playlist',   iconName: 'heart',     iconColor: '#FF3CAC' },
+  follow:        { body: 'started following you', iconName: 'user-plus', iconColor: '#e8963a' },
+  message:       { body: 'sent you a message',    iconName: 'envelope',  iconColor: '#c8722a' },
+  like_review:   { body: 'liked your review',     iconName: 'heart',     iconColor: '#e8963a' },
+  like_playlist: { body: 'liked your playlist',   iconName: 'heart',     iconColor: '#e8963a' },
 };
 
 function NotifRow({ item, onPress }: { item: NotificationItem; onPress: () => void }) {
@@ -217,13 +217,13 @@ const n = StyleSheet.create({
 
   avatarWrap:    { position: 'relative', flexShrink: 0 },
   avatar:        { width: 48, height: 48, borderRadius: 24 },
-  avatarFallback:{ backgroundColor: '#1e1e1e', alignItems: 'center', justifyContent: 'center' },
+  avatarFallback:{ backgroundColor: '#2e2018', alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { color: 'rgba(255,255,255,0.45)', fontSize: 17, fontWeight: '700' },
   typeBadge: {
     position: 'absolute', bottom: 0, right: -2,
     width: 18, height: 18, borderRadius: 9,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: '#0d0d0d',
+    borderWidth: 1.5, borderColor: '#1c1410',
   },
 
   info:  { flex: 1, gap: 4 },
@@ -245,8 +245,8 @@ const n = StyleSheet.create({
   },
   emptyRing: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#1a0d14',
-    borderWidth: 1, borderColor: '#3a1a2a',
+    backgroundColor: '#2e2018',
+    borderWidth: 1, borderColor: '#3a2818',
     justifyContent: 'center', alignItems: 'center',
     marginBottom: 20,
   },

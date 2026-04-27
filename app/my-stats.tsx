@@ -10,7 +10,7 @@ export default function MyStatsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
-      <FontAwesome name="bar-chart" size={48} color={isDark ? '#333' : '#ddd'} />
+      <FontAwesome name="bar-chart" size={48} color={isDark ? '#3a2818' : '#ddd'} />
       <Text style={[s.title, { color: colors.text }]}>My Stats</Text>
       <Text style={[s.sub, { color: colors.subtext }]}>
         Your listening insights are coming soon.

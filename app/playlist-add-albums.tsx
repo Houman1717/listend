@@ -41,11 +41,11 @@ function AlbumRow({
   colors: typeof Colors.light;
 }) {
   return (
-    <View style={[s.row, { borderBottomColor: isDark ? '#1e1e1e' : '#f0f0f0' }]}>
+    <View style={[s.row, { borderBottomColor: isDark ? '#2e2018' : '#f5e6c8' }]}>
       {item.artworkUrl ? (
         <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
       ) : (
-        <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]} />
+        <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
       )}
       <View style={s.rowText}>
         <Text style={[s.rowTitle, { color: colors.text }]} numberOfLines={1}>
@@ -136,7 +136,7 @@ export default function PlaylistAddAlbumsScreen() {
 
       <View style={[s.container, { backgroundColor: colors.background }]}>
         {/* Search bar */}
-        <View style={[s.searchBar, { backgroundColor: isDark ? '#1e1e1e' : '#efefef', marginTop: 14 }]}>
+        <View style={[s.searchBar, { backgroundColor: isDark ? '#2e2018' : '#efefef', marginTop: 14 }]}>
           <FontAwesome name="search" size={15} color={colors.subtext} />
           <TextInput
             style={[s.input, { color: colors.text }]}
@@ -162,10 +162,10 @@ export default function PlaylistAddAlbumsScreen() {
 
         {/* Body */}
         {loading ? (
-          <ActivityIndicator style={s.spinner} color="#FF3CAC" />
+          <ActivityIndicator style={s.spinner} color="#e8963a" />
         ) : isEmpty ? (
           <View style={s.emptyState}>
-            <FontAwesome name="search" size={36} color={isDark ? '#333' : '#ddd'} />
+            <FontAwesome name="search" size={36} color={isDark ? '#3a2818' : '#ddd'} />
             <Text style={[s.emptyTitle, { color: colors.text }]}>Search for albums</Text>
             <Text style={[s.emptySub, { color: colors.subtext }]}>
               Type above to find albums and add them to this playlist.
@@ -173,7 +173,7 @@ export default function PlaylistAddAlbumsScreen() {
           </View>
         ) : searched && results.length === 0 ? (
           <View style={s.emptyState}>
-            <FontAwesome name="frown-o" size={36} color={isDark ? '#333' : '#ddd'} />
+            <FontAwesome name="frown-o" size={36} color={isDark ? '#3a2818' : '#ddd'} />
             <Text style={[s.emptyTitle, { color: colors.text }]}>No results</Text>
             <Text style={[s.emptySub, { color: colors.subtext }]}>Try a different search term.</Text>
           </View>
@@ -237,13 +237,13 @@ const s = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#FF3CAC',
+    backgroundColor: '#e8963a',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   addBtnDone: {
-    backgroundColor: '#3a3a3a',
+    backgroundColor: '#3a2818',
   },
 
   emptyState: {

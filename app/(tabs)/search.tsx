@@ -128,13 +128,13 @@ function AlbumRow({
       <Pressable
         style={({ pressed }) => [
           s.resultMain,
-          { backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
+          { backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' },
         ]}
         onPress={() => { onSaveRecent(); onView(); }}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
         ) : (
-          <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]} />
+          <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
         )}
         <View style={s.resultText}>
           <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
@@ -147,7 +147,7 @@ function AlbumRow({
         <FontAwesome
           name={isBookmarked ? 'bookmark' : 'bookmark-o'}
           size={17}
-          color={isBookmarked ? '#FF3CAC' : colors.subtext}
+          color={isBookmarked ? '#e8963a' : colors.subtext}
         />
       </Pressable>
       <Pressable onPress={() => { onSaveRecent(); onLog(); }} hitSlop={8} style={s.actionBtn}>
@@ -165,13 +165,13 @@ function SongRow({ item, isDark, colors, onSaveRecent }: {
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' }]}
+      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' }]}
       onPress={onSaveRecent}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
         ) : (
-          <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]}>
+          <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]}>
             <FontAwesome name="music" size={18} color={colors.subtext} />
           </View>
         )}
@@ -193,13 +193,13 @@ function ArtistRow({ item, isDark, colors, onPress, onSaveRecent }: {
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' }]}
+      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' }]}
       onPress={() => { onSaveRecent(); onPress(); }}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={[s.artwork, { borderRadius: 26 }]} />
         ) : (
-          <View style={[s.artwork, { borderRadius: 26, backgroundColor: isDark ? '#2a2a2a' : '#e5e5e5', justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={[s.artwork, { borderRadius: 26, backgroundColor: isDark ? '#2a1e14' : '#e5e5e5', justifyContent: 'center', alignItems: 'center' }]}>
             <Text style={[s.artistInitial, { color: colors.subtext }]}>{item.name.charAt(0).toUpperCase()}</Text>
           </View>
         )}
@@ -233,11 +233,11 @@ function PlaylistRow({
       onPress={onPress}
       style={({ pressed }) => [
         s.resultRow,
-        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
+        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' },
       ]}>
       <View style={s.resultMain}>
-        <View style={[s.playlistIcon, { backgroundColor: isDark ? '#2a2a2a' : '#e8e8e8' }]}>
-          <FontAwesome name="list" size={18} color="#FF3CAC" />
+        <View style={[s.playlistIcon, { backgroundColor: isDark ? '#2a1e14' : '#e8e8e8' }]}>
+          <FontAwesome name="list" size={18} color="#e8963a" />
         </View>
         <View style={s.resultText}>
           <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
@@ -247,7 +247,7 @@ function PlaylistRow({
           </Text>
         </View>
       </View>
-      <FontAwesome name="chevron-right" size={13} color={isDark ? '#444' : '#ccc'} />
+      <FontAwesome name="chevron-right" size={13} color={isDark ? '#4a3020' : '#a07850'} />
     </Pressable>
   );
 }
@@ -269,15 +269,15 @@ function RecentRow({
 }) {
   const imgRadius = item.circular ? 26 : 4;
   return (
-    <View style={[s.recentRow, { borderBottomColor: isDark ? '#222' : '#eee' }]}>
+    <View style={[s.recentRow, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
       <Pressable
-        style={({ pressed }) => [s.recentMain, { backgroundColor: pressed ? (isDark ? '#1a1a1a' : '#f5f5f5') : 'transparent' }]}
+        style={({ pressed }) => [s.recentMain, { backgroundColor: pressed ? (isDark ? '#2e2018' : '#f5f5f5') : 'transparent' }]}
         onPress={onPress}>
         {/* artwork */}
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={[s.recentArt, { borderRadius: imgRadius }]} />
         ) : (
-          <View style={[s.recentArt, { borderRadius: imgRadius, backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={[s.recentArt, { borderRadius: imgRadius, backgroundColor: isDark ? '#2a1e14' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
             <Text style={[s.recentInitial, { color: colors.subtext }]}>{item.title.charAt(0).toUpperCase()}</Text>
           </View>
         )}
@@ -289,7 +289,7 @@ function RecentRow({
           ) : null}
         </View>
         {/* kind pill */}
-        <View style={[s.kindPill, { backgroundColor: isDark ? '#2a2a2a' : '#e8e8e8' }]}>
+        <View style={[s.kindPill, { backgroundColor: isDark ? '#2a1e14' : '#e8e8e8' }]}>
           <Text style={[s.kindLabel, { color: colors.subtext }]}>
             {item.kind === 'album' ? 'Album' : item.kind === 'song' ? 'Song' : 'Artist'}
           </Text>
@@ -323,14 +323,14 @@ function UserRow({
       onPress={onPress}
       style={({ pressed }) => [
         s.resultRow,
-        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#222' : '#f0f0f0') : 'transparent' },
+        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' },
       ]}>
       <View style={s.resultMain}>
         {/* Avatar */}
         {item.avatar_url ? (
           <Image source={{ uri: item.avatar_url }} style={s.userAvatar} />
         ) : (
-          <View style={[s.userAvatar, s.userAvatarFallback, { backgroundColor: isDark ? '#2a2a2a' : '#e0e0e0' }]}>
+          <View style={[s.userAvatar, s.userAvatarFallback, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]}>
             <Text style={[s.userAvatarInitial, { color: colors.subtext }]}>{initial}</Text>
           </View>
         )}
@@ -341,7 +341,7 @@ function UserRow({
             <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
           ) : null}
         </View>
-        <FontAwesome name="chevron-right" size={13} color={isDark ? '#444' : '#ccc'} />
+        <FontAwesome name="chevron-right" size={13} color={isDark ? '#4a3020' : '#a07850'} />
       </View>
     </Pressable>
   );
@@ -531,7 +531,7 @@ export default function SearchScreen() {
     <View style={[s.container, { backgroundColor: colors.background }]}>
 
       {/* Search bar */}
-      <View style={[s.searchBar, { backgroundColor: isDark ? '#1e1e1e' : '#efefef' }]}>
+      <View style={[s.searchBar, { backgroundColor: isDark ? '#2e2018' : '#efefef' }]}>
         <FontAwesome name="search" size={15} color={colors.subtext} style={s.searchIcon} />
         <TextInput
           style={[s.input, { color: colors.text }]}
@@ -556,7 +556,7 @@ export default function SearchScreen() {
       </View>
 
       {/* Filter tabs */}
-      <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? '#222' : '#e5e5e5' }}>
+      <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? '#2a1e14' : '#e5e5e5' }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -572,7 +572,7 @@ export default function SearchScreen() {
                   paddingHorizontal: 16,
                   paddingVertical: 8,
                   borderRadius: 20,
-                  backgroundColor: active ? '#FF3CAC' : (isDark ? '#2C2C2E' : '#f0f0f0'),
+                  backgroundColor: active ? '#e8963a' : (isDark ? '#3a2818' : '#f5e6c8'),
                 }}>
                 <Text style={{ color: active ? '#fff' : colors.subtext, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
                   {label}
@@ -606,7 +606,7 @@ export default function SearchScreen() {
           </ScrollView>
         ) : (
           <View style={s.emptyState}>
-            <FontAwesome name="search" size={36} color={isDark ? '#2a2a2a' : '#ddd'} />
+            <FontAwesome name="search" size={36} color={isDark ? '#2a1e14' : '#ddd'} />
             <Text style={[s.emptyTitle, { color: colors.text }]}>
               {activeTab === 'users' ? 'Find people'
                : activeTab === 'playlists' ? 'Search playlists'
@@ -622,10 +622,10 @@ export default function SearchScreen() {
           </View>
         )
       ) : loading ? (
-        <ActivityIndicator style={s.spinner} color="#FF3CAC" />
+        <ActivityIndicator style={s.spinner} color="#e8963a" />
       ) : searched && activeTab === 'users' && userResults.length === 0 ? (
         <View style={s.emptyState}>
-          <FontAwesome name="user-o" size={36} color={isDark ? '#2a2a2a' : '#ddd'} />
+          <FontAwesome name="user-o" size={36} color={isDark ? '#2a1e14' : '#ddd'} />
           <Text style={[s.emptyTitle, { color: colors.text }]}>No users found</Text>
           <Text style={[s.emptySub, { color: colors.subtext }]}>
             No one matched "{query}". Try a different name or username.
@@ -638,7 +638,7 @@ export default function SearchScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 40 }}
           ItemSeparatorComponent={() => (
-            <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
+            <View style={[s.separator, { backgroundColor: isDark ? '#2a1e14' : '#eee' }]} />
           )}
           renderItem={({ item }) => (
             <UserRow
@@ -670,7 +670,7 @@ export default function SearchScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 40 }}
           ItemSeparatorComponent={() => (
-            <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
+            <View style={[s.separator, { backgroundColor: isDark ? '#2a1e14' : '#eee' }]} />
           )}
           renderItem={({ item }) => (
             <PlaylistRow
@@ -688,7 +688,7 @@ export default function SearchScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 40 }}
           ItemSeparatorComponent={() => (
-            <View style={[s.separator, { backgroundColor: isDark ? '#222' : '#eee' }]} />
+            <View style={[s.separator, { backgroundColor: isDark ? '#2a1e14' : '#eee' }]} />
           )}
           renderItem={({ item }) => {
             if (item.kind === 'album') {
@@ -762,7 +762,7 @@ const s = StyleSheet.create({
     paddingBottom: 10,
   },
   recentHeading: { fontSize: 17, fontWeight: '700' },
-  clearAll: { fontSize: 13, color: '#FF3CAC' },
+  clearAll: { fontSize: 13, color: '#e8963a' },
 
   recentRow: {
     flexDirection: 'row',

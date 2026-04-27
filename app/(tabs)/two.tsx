@@ -8,7 +8,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.avatar, { backgroundColor: '#FF3CAC' }]}>
+      <View style={[styles.avatar, { backgroundColor: '#e8963a' }]}>
         <Text style={styles.avatarInitial}>H</Text>
       </View>
       <Text style={[styles.username, { color: colors.text }]}>@houman</Text>
@@ -17,7 +17,7 @@ export default function ProfileScreen() {
           <Text style={[styles.statNumber, { color: colors.text }]}>6</Text>
           <Text style={[styles.statLabel, { color: colors.subtext }]}>Albums</Text>
         </View>
-        <View style={[styles.divider, { backgroundColor: colorScheme === 'dark' ? '#333' : '#ddd' }]} />
+        <View style={[styles.divider, { backgroundColor: colorScheme === 'dark' ? '#3a2818' : '#ddd' }]} />
         <View style={styles.statItem}>
           <Text style={[styles.statNumber, { color: colors.text }]}>4.5</Text>
           <Text style={[styles.statLabel, { color: colors.subtext }]}>Avg Rating</Text>

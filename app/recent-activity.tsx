@@ -16,15 +16,15 @@ import { supabase } from '@/lib/supabase';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
-const DARK_BG = '#0d0d0d';
-const BORDER   = '#1e1e1e';
-const TEXT     = '#f0f0f0';
+const DARK_BG = '#1c1410';
+const BORDER   = '#2e2018';
+const TEXT     = '#f5e6c8';
 const SUBTEXT  = '#777';
 
 const TYPE_META = {
-  reviewed:     { label: 'Reviewed',       color: '#818cf8', icon: 'pencil'     },
-  rated:        { label: 'Rated',           color: '#c084fc', icon: 'star'       },
-  listened:     { label: 'Listened',        color: '#FF3CAC', icon: 'headphones' },
+  reviewed:     { label: 'Reviewed',       color: '#e8963a', icon: 'pencil'     },
+  rated:        { label: 'Rated',           color: '#c8722a', icon: 'star'       },
+  listened:     { label: 'Listened',        color: '#e8963a', icon: 'headphones' },
   wantToListen: { label: 'Want to Listen',  color: '#34d399', icon: 'bookmark'   },
 } as const;
 
@@ -236,7 +236,7 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => voi
       {item.artworkUrl ? (
         <Image source={{ uri: item.artworkUrl }} style={s.art} />
       ) : (
-        <View style={[s.art, { backgroundColor: item.coverColor ?? '#2a2a2a', justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={[s.art, { backgroundColor: item.coverColor ?? '#2a1e14', justifyContent: 'center', alignItems: 'center' }]}>
           <Text style={s.artInitial}>{item.title.charAt(0)}</Text>
         </View>
       )}
@@ -258,7 +258,7 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => voi
           {BAR_HEIGHTS.map((h, i) => (
             <View
               key={i}
-              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? '#c084fc' : '#252525' }]}
+              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? '#c8722a' : '#2a1e14' }]}
             />
           ))}
         </View>
@@ -284,9 +284,9 @@ function FollowRow({ item, onPress }: { item: FollowItem; onPress: () => void })
         <Text style={s.title} numberOfLines={1}>{item.name}</Text>
         {item.username ? <Text style={s.artist} numberOfLines={1}>@{item.username}</Text> : null}
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: '#38bdf8' }]}>
-            <FontAwesome name="user-plus" size={9} color="#38bdf8" />
-            <Text style={[s.typeLabel, { color: '#38bdf8' }]}>Followed</Text>
+          <View style={[s.typePill, { borderColor: '#e8963a' }]}>
+            <FontAwesome name="user-plus" size={9} color="#e8963a" />
+            <Text style={[s.typeLabel, { color: '#e8963a' }]}>Followed</Text>
           </View>
           {item.dateLabel ? <Text style={s.date}>{item.dateLabel}</Text> : null}
         </View>
@@ -309,7 +309,7 @@ function Top5Row({ item, onPress }: { item: Top5ChangeItem; onPress: () => void 
           style={[s.art, item.category === 'artists' ? s.artCircle : null]}
         />
       ) : (
-        <View style={[s.art, { backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
+        <View style={[s.art, { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' },
           item.category === 'artists' ? s.artCircle : null]}>
           <Text style={s.artInitial}>{item.itemName.charAt(0)}</Text>
         </View>
@@ -448,7 +448,7 @@ export default function RecentActivityScreen() {
   if (loadingOther) {
     return (
       <View style={s.loadingWrap}>
-        <ActivityIndicator color="#FF3CAC" size="large" />
+        <ActivityIndicator color="#e8963a" size="large" />
       </View>
     );
   }
@@ -457,7 +457,7 @@ export default function RecentActivityScreen() {
     return (
       <View style={s.emptyWrap}>
         <View style={s.emptyRing}>
-          <FontAwesome name="clock-o" size={36} color="#FF3CAC" />
+          <FontAwesome name="clock-o" size={36} color="#e8963a" />
         </View>
         <Text style={s.emptyTitle}>No activity yet</Text>
         <Text style={s.emptySub}>
@@ -566,7 +566,7 @@ const s = StyleSheet.create({
 
   // Follow row
   followAvatar:        { width: 52, height: 52, borderRadius: 26, flexShrink: 0 },
-  followAvatarFallback:{ backgroundColor: '#1e1e1e', alignItems: 'center', justifyContent: 'center' },
+  followAvatarFallback:{ backgroundColor: '#2e2018', alignItems: 'center', justifyContent: 'center' },
   followInitial:       { color: 'rgba(255,255,255,0.45)', fontSize: 18, fontWeight: '700' },
 
   emptyWrap: {
@@ -578,8 +578,8 @@ const s = StyleSheet.create({
   },
   emptyRing: {
     width: 84, height: 84, borderRadius: 42,
-    backgroundColor: '#1a0d14',
-    borderWidth: 1, borderColor: '#3a1a2a',
+    backgroundColor: '#2e2018',
+    borderWidth: 1, borderColor: '#3a2818',
     justifyContent: 'center', alignItems: 'center',
     marginBottom: 20,
   },
