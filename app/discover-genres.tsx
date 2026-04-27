@@ -20,10 +20,14 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 // ─── Display order for genre sections ────────────────────────────────────────
 
 const GENRE_LABELS = [
-  'Hip-Hop / Rap', 'Pop', 'Rock', 'Reggaeton', 'Afrobeats',
-  'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
-  'Country', 'Jazz', 'Folk / Singer-Songwriter',
+  'Hip-Hop / Rap', 'Pop', 'Rock', 'Country', 'Electronic',
+  'Reggaeton', 'R&B / Soul', 'Jazz', 'Classical', 'Indie / Alternative',
+  'Metal', 'Afrobeats', 'Folk / Singer-Songwriter',
 ];
+
+const GENRE_DISPLAY_NAMES: Record<string, string> = {
+  'Reggaeton': 'Latin',
+};
 
 // ─── Module-level cache + shared fetch promise ────────────────────────────────
 
@@ -109,7 +113,7 @@ function GenreSection({
 
   return (
     <View style={s.section}>
-      <Text style={[s.sectionLabel, { color: colors.text }]}>{label}</Text>
+      <Text style={[s.sectionLabel, { color: colors.text }]}>{GENRE_DISPLAY_NAMES[label] ?? label}</Text>
       {loading ? (
         <View style={s.sectionLoader}>
           <ActivityIndicator color="#FF3CAC" />

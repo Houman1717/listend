@@ -27,10 +27,14 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 const DECADES = ['2020s', '2010s', '2000s', '1990s', '1980s', '1970s', '1960s', '1950s'];
 const GENRES = [
-  'Hip-Hop / Rap', 'Pop', 'Rock', 'Reggaeton', 'Afrobeats',
-  'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
-  'Country', 'Jazz', 'Folk / Singer-Songwriter',
+  'Hip-Hop / Rap', 'Pop', 'Rock', 'Country', 'Electronic',
+  'Reggaeton', 'R&B / Soul', 'Jazz', 'Classical', 'Indie / Alternative',
+  'Metal', 'Afrobeats', 'Folk / Singer-Songwriter',
 ];
+
+const GENRE_DISPLAY_NAMES: Record<string, string> = {
+  'Reggaeton': 'Latin',
+};
 
 async function fetchSections(): Promise<void> {
   const safe = (p: Promise<SpotifyAlbum[]>) => p.catch(() => [] as SpotifyAlbum[]);
@@ -355,20 +359,6 @@ export default function DiscoverScreen() {
         <FlipEntryCard onPress={() => router.push('/flip-a-record' as any)} />
       </View>
 
-      {/* ── New Releases ── */}
-      <Section title="New Releases">
-        {sectionsLoading && newReleases.length === 0 ? (
-          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-new-releases' as any)} />
-        ) : (
-          <AlbumRow
-            data={newReleases}
-            isDark={isDark}
-            onAlbumPress={goToAlbum}
-            onSeeMore={() => router.push('/discover-new-releases' as any)}
-          />
-        )}
-      </Section>
-
       {/* ── Top Rated Albums ── */}
       <Section title="Top Rated Albums">
         {sectionsLoading && topRated.length === 0 ? (
@@ -397,6 +387,34 @@ export default function DiscoverScreen() {
         )}
       </Section>
 
+      {/* ── Genre chips ── */}
+      <Section title="Genres">
+        <FlatList
+          horizontal
+          data={GENRES}
+          keyExtractor={(item) => item}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.row}
+          renderItem={({ item }) => (
+            <Chip label={GENRE_DISPLAY_NAMES[item] ?? item} isDark={isDark} onPress={() => router.push({ pathname: '/discover-genre-grid', params: { genre: item } } as any)} />
+          )}
+        />
+      </Section>
+
+      {/* ── By Decade chips ── */}
+      <Section title="By Decade">
+        <FlatList
+          horizontal
+          data={DECADES}
+          keyExtractor={(item) => item}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.row}
+          renderItem={({ item }) => (
+            <Chip label={item} isDark={isDark} onPress={() => router.push({ pathname: '/discover-decade-grid', params: { decade: item } } as any)} />
+          )}
+        />
+      </Section>
+
       {/* ── All-Time Classics ── */}
       <Section title="All-Time Classics">
         {sectionsLoading && classics.length === 0 ? (
@@ -407,6 +425,20 @@ export default function DiscoverScreen() {
             isDark={isDark}
             onAlbumPress={goToAlbum}
             onSeeMore={() => router.push('/discover-all-time-classics' as any)}
+          />
+        )}
+      </Section>
+
+      {/* ── New Releases ── */}
+      <Section title="New Releases">
+        {sectionsLoading && newReleases.length === 0 ? (
+          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-new-releases' as any)} />
+        ) : (
+          <AlbumRow
+            data={newReleases}
+            isDark={isDark}
+            onAlbumPress={goToAlbum}
+            onSeeMore={() => router.push('/discover-new-releases' as any)}
           />
         )}
       </Section>
@@ -458,34 +490,6 @@ export default function DiscoverScreen() {
             ListFooterComponentStyle={{ marginLeft: 12 }}
           />
         )}
-      </Section>
-
-      {/* ── By Decade chips ── */}
-      <Section title="By Decade">
-        <FlatList
-          horizontal
-          data={DECADES}
-          keyExtractor={(item) => item}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.row}
-          renderItem={({ item }) => (
-            <Chip label={item} isDark={isDark} onPress={() => router.push({ pathname: '/discover-decade-grid', params: { decade: item } } as any)} />
-          )}
-        />
-      </Section>
-
-      {/* ── Genre chips ── */}
-      <Section title="Genres">
-        <FlatList
-          horizontal
-          data={GENRES}
-          keyExtractor={(item) => item}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.row}
-          renderItem={({ item }) => (
-            <Chip label={item} isDark={isDark} onPress={() => router.push({ pathname: '/discover-genre-grid', params: { genre: item } } as any)} />
-          )}
-        />
       </Section>
 
     </ScrollView>
