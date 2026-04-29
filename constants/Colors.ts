@@ -16,13 +16,16 @@ export const PALETTE = {
 
 export default {
   light: {
-    text:            '#1a1a1a',
-    background:      '#f8f8f8',
+    text:            '#3D2B1A',
+    background:      '#F5F0E8',
     tint:            PALETTE.accent,
-    tabIconDefault:  '#a07850',
+    tabIconDefault:  '#A0896C',
     tabIconSelected: PALETTE.accent,
-    card:            '#fff',
-    subtext:         '#666',
+    card:            '#EDE9E3',
+    surface:         '#EDE9E3',
+    border:          '#DDD5C8',
+    subtext:         '#7A5535',
+    textMuted:       '#A0896C',
   },
   dark: {
     text:            PALETTE.textPrimary,
@@ -31,6 +34,9 @@ export default {
     tabIconDefault:  PALETTE.textMuted,
     tabIconSelected: PALETTE.accent,
     card:            PALETTE.surface,
+    surface:         PALETTE.surface,
+    border:          PALETTE.border,
     subtext:         PALETTE.textSecondary,
+    textMuted:       PALETTE.textMuted,
   },
 };

@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -268,13 +267,6 @@ function FlipEntryCard({ onPress }: { onPress: () => void }) {
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [se.card, { opacity: pressed ? 0.88 : 1 }]}>
-
-      <LinearGradient
-        colors={['#0d0d14', '#131325', '#1a1035']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
 
       <View style={se.accentBar} />
 
@@ -536,6 +528,7 @@ const se = StyleSheet.create({
   card: {
     borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: '#2E2018',
     paddingHorizontal: 20,
     paddingVertical: 20,
     gap: 14,
@@ -562,16 +555,16 @@ const se = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,60,172,0.18)',
+    backgroundColor: 'rgba(232,150,58,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(255,60,172,0.35)',
+    borderColor: 'rgba(232,150,58,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   badge: {
-    backgroundColor: 'rgba(255,60,172,0.15)',
+    backgroundColor: 'rgba(232,150,58,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,60,172,0.3)',
+    borderColor: 'rgba(232,150,58,0.4)',
     borderRadius: 100,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -579,8 +572,8 @@ const se = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '700', color: '#e8963a', letterSpacing: 0.2 },
 
   textBlock: { gap: 5 },
-  title:     { fontSize: 20, fontWeight: '800', color: '#fff', letterSpacing: -0.4 },
-  subtitle:  { fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 18 },
+  title:     { fontSize: 20, fontWeight: '800', color: '#f5e6c8', letterSpacing: -0.4 },
+  subtitle:  { fontSize: 13, color: 'rgba(245,230,200,0.55)', lineHeight: 18 },
 
   bottomRow: { flexDirection: 'row', alignItems: 'center' },
   cta:       { fontSize: 13, fontWeight: '700', color: '#e8963a', letterSpacing: 0.1 },

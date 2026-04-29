@@ -16,6 +16,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationsContext';
@@ -111,6 +113,8 @@ function ProfileHeader({
   onPressAlbums,
   onPressThisYear,
   onPressAvgRating,
+  isDark,
+  colors,
 }: {
   displayName: string;
   username: string;
@@ -126,6 +130,8 @@ function ProfileHeader({
   onPressAlbums: () => void;
   onPressThisYear: () => void;
   onPressAvgRating: () => void;
+  isDark: boolean;
+  colors: typeof Colors.light;
 }) {
   const router  = useRouter();
   const initial = (displayName || username || '?').charAt(0).toUpperCase();
@@ -186,7 +192,7 @@ function ProfileHeader({
   }
 
   return (
-    <View style={ph.outer}>
+    <View style={[ph.outer, { borderBottomColor: colors.border }]}>
 
       {/* ── Cover photo — only rendered when a URL exists ────────────────── */}
       {coverPhotoUrl ? (
@@ -215,29 +221,29 @@ function ProfileHeader({
         </View>
 
         {/* Name */}
-        <Text style={ph.name}>{displayName || username || ''}</Text>
+        <Text style={[ph.name, { color: colors.text }]}>{displayName || username || ''}</Text>
 
         {/* Username */}
-        {username ? <Text style={ph.username}>@{username}</Text> : null}
+        {username ? <Text style={[ph.username, { color: colors.subtext }]}>@{username}</Text> : null}
 
         {/* Bio */}
-        {bio ? <Text style={ph.bio}>{bio}</Text> : null}
+        {bio ? <Text style={[ph.bio, { color: colors.subtext }]}>{bio}</Text> : null}
 
         {/* Following / Followers */}
         <View style={ph.socialRow}>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: profileUserId, type: 'following' } })}>
-            <Text style={ph.socialCount}>{followingCount}</Text>
+            <Text style={[ph.socialCount, { color: colors.text }]}>{followingCount}</Text>
           </Pressable>
-          <Text style={ph.socialLabel}> Following</Text>
-          <Text style={ph.socialDot}> · </Text>
+          <Text style={[ph.socialLabel, { color: colors.subtext }]}> Following</Text>
+          <Text style={[ph.socialDot, { color: colors.subtext }]}> · </Text>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: profileUserId, type: 'followers' } })}>
-            <Text style={ph.socialCount}>{followersCount}</Text>
+            <Text style={[ph.socialCount, { color: colors.text }]}>{followersCount}</Text>
           </Pressable>
-          <Text style={ph.socialLabel}> Followers</Text>
+          <Text style={[ph.socialLabel, { color: colors.subtext }]}> Followers</Text>
         </View>
 
         {/* Follow button — only shown when viewing another user's profile */}
@@ -257,26 +263,30 @@ function ProfileHeader({
         )}
 
         {/* Stats row */}
-        <View style={ph.statsRow}>
+        <View style={[
+          ph.statsRow,
+          { backgroundColor: colors.card },
+          !isDark && { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+        ]}>
           <Pressable
             style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
             onPress={onPressAlbums}>
-            <Text style={ph.statValue}>{albumCount}</Text>
-            <Text style={ph.statLabel}>Albums</Text>
+            <Text style={[ph.statValue, { color: colors.text }]}>{albumCount}</Text>
+            <Text style={[ph.statLabel, { color: colors.textMuted }]}>Albums</Text>
           </Pressable>
-          <View style={ph.statDivider} />
+          <View style={[ph.statDivider, { backgroundColor: colors.border }]} />
           <Pressable
             style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
             onPress={onPressThisYear}>
-            <Text style={ph.statValue}>{thisYearCount}</Text>
-            <Text style={ph.statLabel}>This Year</Text>
+            <Text style={[ph.statValue, { color: colors.text }]}>{thisYearCount}</Text>
+            <Text style={[ph.statLabel, { color: colors.textMuted }]}>This Year</Text>
           </Pressable>
-          <View style={ph.statDivider} />
+          <View style={[ph.statDivider, { backgroundColor: colors.border }]} />
           <Pressable
             style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
             onPress={onPressAvgRating}>
-            <Text style={ph.statValue}>{avgRating}</Text>
-            <Text style={ph.statLabel}>Avg Rating</Text>
+            <Text style={[ph.statValue, { color: colors.text }]}>{avgRating}</Text>
+            <Text style={[ph.statLabel, { color: colors.textMuted }]}>Avg Rating</Text>
           </Pressable>
         </View>
 
@@ -465,11 +475,13 @@ function NavRow({
   label,
   sub,
   onPress,
+  colors,
 }: {
   icon: React.ComponentProps<typeof FontAwesome>['name'];
   label: string;
   sub: string;
   onPress: () => void;
+  colors: typeof Colors.light;
 }) {
   return (
     <Pressable
@@ -479,10 +491,10 @@ function NavRow({
         <FontAwesome name={icon} size={16} color="#e8963a" />
       </View>
       <View style={s.navRowText}>
-        <Text style={s.navLabel}>{label}</Text>
-        <Text style={s.navSub}>{sub}</Text>
+        <Text style={[s.navLabel, { color: colors.text }]}>{label}</Text>
+        <Text style={[s.navSub, { color: colors.subtext }]}>{sub}</Text>
       </View>
-      <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+      <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
     </Pressable>
   );
 }
@@ -797,6 +809,9 @@ function DraggableFavRow({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ListendScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  const isDark = colorScheme === 'dark';
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -843,6 +858,7 @@ export default function ListendScreen() {
 
   // Inject bell + hamburger into the tab header
   const openSettings = useCallback(() => setSettingsVisible(true), []);
+  const headerIconColor = isDark ? '#f5e6c8' : '#3D2B1A';
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -852,7 +868,7 @@ export default function ListendScreen() {
             onPress={() => router.push('/notifications')}
             hitSlop={12}
             style={{ position: 'relative' }}>
-            <FontAwesome name="bell-o" size={20} color="#f5e6c8" />
+            <FontAwesome name="bell-o" size={20} color={headerIconColor} />
             {unreadCount > 0 && (
               <View style={{
                 position: 'absolute',
@@ -864,12 +880,12 @@ export default function ListendScreen() {
           </Pressable>
           {/* Hamburger */}
           <Pressable onPress={openSettings} hitSlop={12}>
-            <FontAwesome name="bars" size={20} color="#f5e6c8" />
+            <FontAwesome name="bars" size={20} color={headerIconColor} />
           </Pressable>
         </View>
       ),
     });
-  }, [navigation, openSettings, unreadCount, router]);
+  }, [navigation, openSettings, unreadCount, router, headerIconColor]);
 
   const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
 
@@ -892,7 +908,7 @@ export default function ListendScreen() {
       onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
     />
     <ScrollView
-      style={s.container}
+      style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}>
 
@@ -912,6 +928,8 @@ export default function ListendScreen() {
         onPressAlbums={() => router.push('/my-listend')}
         onPressThisYear={() => router.push('/sessions')}
         onPressAvgRating={() => setRatingModalVisible(true)}
+        isDark={isDark}
+        colors={colors}
       />
 
       <RatingModal
@@ -929,7 +947,7 @@ export default function ListendScreen() {
       {/* Top 5 Albums */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>MY TOP 5 ALBUMS</Text>
+          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 ALBUMS</Text>
           <Pressable
             onPress={() => setTop5EditMode(v => !v)}
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
@@ -963,12 +981,12 @@ export default function ListendScreen() {
         )}
       </View>
 
-      <View style={s.rule} />
+      <View style={[s.rule, { backgroundColor: colors.border }]} />
 
       {/* Top 5 Songs */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>MY TOP 5 SONGS</Text>
+          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 SONGS</Text>
         </View>
         {top5EditMode ? (
           <DraggableFavRow
@@ -997,12 +1015,12 @@ export default function ListendScreen() {
         )}
       </View>
 
-      <View style={s.rule} />
+      <View style={[s.rule, { backgroundColor: colors.border }]} />
 
       {/* Top 5 Artists */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>MY TOP 5 ARTISTS</Text>
+          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 ARTISTS</Text>
         </View>
         {top5EditMode ? (
           <DraggableFavRow
@@ -1033,69 +1051,24 @@ export default function ListendScreen() {
       </View>
 
       {/* ── Nav rows ─────────────────────────────────────────────────────────── */}
-      <View style={s.navGroup}>
-        <NavRow
-          icon="music"
-          label="My Listend"
-          sub={`${loggedAlbums.length} albums`}
-          onPress={() => router.push('/my-listend')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="calendar"
-          label="Sessions"
-          sub="Your listening diary"
-          onPress={() => router.push('/sessions')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="bookmark-o"
-          label="Want to Listen"
-          sub={`${wantToListen.length} saved`}
-          onPress={() => router.push('/want-to-listen')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="clock-o"
-          label="Recent Activity"
-          sub={`${loggedAlbums.length} logged albums`}
-          onPress={() => router.push('/recent-activity')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="pencil"
-          label="My Reviews"
-          sub={`${reviewCount} reviews`}
-          onPress={() => router.push('/my-reviews')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="list"
-          label="My Playlists"
-          sub="Your album lists"
-          onPress={() => router.push('/my-playlists')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="heart"
-          label="Liked Artists"
-          sub="Your favourites"
-          onPress={() => router.push('/liked-artists')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="comments"
-          label="DMs"
-          sub="Messages"
-          onPress={() => router.push('/dms')}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="bar-chart"
-          label="My Stats"
-          sub="Your listening insights"
-          onPress={() => router.push('/my-stats')}
-        />
+      <View style={[s.navGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <NavRow colors={colors} icon="music"      label="My Listend"      sub={`${loggedAlbums.length} albums`}  onPress={() => router.push('/my-listend')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="calendar"   label="Sessions"        sub="Your listening diary"             onPress={() => router.push('/sessions')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="bookmark-o" label="Want to Listen"  sub={`${wantToListen.length} saved`}   onPress={() => router.push('/want-to-listen')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="clock-o"    label="Recent Activity" sub={`${loggedAlbums.length} logged albums`} onPress={() => router.push('/recent-activity')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="pencil"     label="My Reviews"      sub={`${reviewCount} reviews`}         onPress={() => router.push('/my-reviews')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="list"       label="My Playlists"    sub="Your album lists"                 onPress={() => router.push('/my-playlists')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="heart"      label="Liked Artists"   sub="Your favourites"                  onPress={() => router.push('/liked-artists')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                         onPress={() => router.push('/dms')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="bar-chart"  label="My Stats"        sub="Your listening insights"          onPress={() => router.push('/my-stats')} />
       </View>
 
     </ScrollView>

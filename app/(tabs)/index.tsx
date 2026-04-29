@@ -279,8 +279,8 @@ function PopularReviewCard({
         pr.card,
         {
           width: REVIEW_CARD_W,
-          backgroundColor: isDark ? '#2e2018' : '#fff',
-          borderColor: isDark ? '#2a1e14' : '#e5e5e5',
+          backgroundColor: isDark ? '#2e2018' : '#EDE9E3',
+          borderColor: isDark ? '#2a1e14' : '#DDD5C8',
           opacity: pressed ? 0.85 : 1,
         },
       ]}>
@@ -485,8 +485,8 @@ function FriendCard({
         s.friendCard,
         {
           width: FRIEND_CARD,
-          backgroundColor: isDark ? '#2e2018' : '#fff',
-          borderColor: isDark ? '#2a1e14' : '#e5e5e5',
+          backgroundColor: isDark ? '#2e2018' : '#EDE9E3',
+          borderColor: isDark ? '#2a1e14' : '#DDD5C8',
           opacity: pressed ? 0.7 : 1,
         },
       ]}>
@@ -669,8 +669,8 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 pr.seeMoreCard,
                 {
-                  backgroundColor: isDark ? '#2e2018' : '#fff',
-                  borderColor: isDark ? '#2a1e14' : '#e5e5e5',
+                  backgroundColor: isDark ? '#2e2018' : '#EDE9E3',
+                  borderColor: isDark ? '#2a1e14' : '#DDD5C8',
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}>

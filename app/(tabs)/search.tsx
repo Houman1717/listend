@@ -531,7 +531,11 @@ export default function SearchScreen() {
     <View style={[s.container, { backgroundColor: colors.background }]}>
 
       {/* Search bar */}
-      <View style={[s.searchBar, { backgroundColor: isDark ? '#2e2018' : '#efefef' }]}>
+      <View style={[s.searchBar, {
+        backgroundColor: isDark ? '#2e2018' : '#E8E0D0',
+        borderWidth: isDark ? 0 : 1,
+        borderColor: isDark ? undefined : '#D4C9B5',
+      }]}>
         <FontAwesome name="search" size={15} color={colors.subtext} style={s.searchIcon} />
         <TextInput
           style={[s.input, { color: colors.text }]}
@@ -540,7 +544,7 @@ export default function SearchScreen() {
             activeTab === 'songs'   ? 'Search songs…'   :
             activeTab === 'artists' ? 'Search artists…' : 'Search users…'
           }
-          placeholderTextColor={colors.subtext}
+          placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={handleChangeText}
           returnKeyType="search"
