@@ -142,26 +142,77 @@ function HistoryThumb({
   );
 }
 
-// ─── Per-row artwork cache (module-level so it survives modal close/reopen) ───
+// ─── Pool artwork: cache + concurrency limiter ───────────────────────────────
 
 const POOL_ARTWORK_KEY = '@listend:poolArtworks';
 const poolArtworkCache: Record<string, string> = {};
+let poolStorageLoaded = false;
+
+// Max 3 Apple Music searches at once so we don't get rate-limited
+let activeSlots = 0;
+const MAX_SLOTS = 3;
+const slotQueue: Array<() => void> = [];
+
+function acquireSlot(): Promise<void> {
+  return new Promise(resolve => {
+    if (activeSlots < MAX_SLOTS) { activeSlots++; resolve(); }
+    else slotQueue.push(() => { activeSlots++; resolve(); });
+  });
+}
+function releaseSlot() {
+  activeSlots--;
+  slotQueue.shift()?.();
+}
+
+async function loadPoolStorageOnce() {
+  if (poolStorageLoaded) return;
+  poolStorageLoaded = true;
+  try {
+    const raw = await AsyncStorage.getItem(POOL_ARTWORK_KEY);
+    if (raw) Object.assign(poolArtworkCache, JSON.parse(raw));
+  } catch {}
+}
+
+async function fetchPoolArtwork(id: string, title: string, artist: string): Promise<string> {
+  if (poolArtworkCache[id] != null) return poolArtworkCache[id];
+  await acquireSlot();
+  try {
+    if (poolArtworkCache[id] != null) return poolArtworkCache[id]; // re-check after wait
+    const { artworkUrl } = await fetchAlbumData(title, artist);
+    poolArtworkCache[id] = artworkUrl;
+    AsyncStorage.setItem(POOL_ARTWORK_KEY, JSON.stringify(poolArtworkCache)).catch(() => {});
+    return artworkUrl;
+  } finally {
+    releaseSlot();
+  }
+}
+
+// ─── Pool row ─────────────────────────────────────────────────────────────────
 
 function PoolRow({
   item,
-  artworkUrl,
   status,
   borderCol,
   colors,
   onPress,
 }: {
   item: FlipAlbum;
-  artworkUrl: string;
   status: FlipStatus | null;
   borderCol: string;
   colors: (typeof Colors)['dark'];
   onPress: () => void;
 }) {
+  const [artworkUrl, setArtworkUrl] = useState(poolArtworkCache[item.id] ?? '');
+
+  useEffect(() => {
+    if (poolArtworkCache[item.id]) { setArtworkUrl(poolArtworkCache[item.id]); return; }
+    let cancelled = false;
+    fetchPoolArtwork(item.id, item.title, item.artist).then(url => {
+      if (!cancelled && url) setArtworkUrl(url);
+    });
+    return () => { cancelled = true; };
+  }, [item.id]);
+
   return (
     <TouchableOpacity
       style={[sfl.row, { borderBottomColor: borderCol }]}
@@ -214,35 +265,11 @@ function FullPoolModal({
   const colors      = Colors[colorScheme ?? 'light'];
   const isDark      = colorScheme === 'dark';
 
-  const [artworkMap, setArtworkMap] = useState<Record<string, string>>(poolArtworkCache);
+  const [storageReady, setStorageReady] = useState(poolStorageLoaded);
 
-  // Load persisted artworks then fetch any still missing
   useEffect(() => {
-    if (!visible) return;
-
-    AsyncStorage.getItem(POOL_ARTWORK_KEY).then(raw => {
-      if (raw) {
-        const stored: Record<string, string> = JSON.parse(raw);
-        Object.assign(poolArtworkCache, stored);
-        setArtworkMap({ ...poolArtworkCache });
-      }
-
-      const missing = FLIP_POOL.filter(a => !poolArtworkCache[a.id]);
-      if (missing.length === 0) return;
-
-      fetch(`${API_URL}/api/flip-pool-artworks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(missing.map(a => ({ id: a.id, title: a.title, artist: a.artist }))),
-      })
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then((data: Record<string, string>) => {
-          Object.assign(poolArtworkCache, data);
-          setArtworkMap({ ...poolArtworkCache });
-          AsyncStorage.setItem(POOL_ARTWORK_KEY, JSON.stringify(poolArtworkCache)).catch(() => {});
-        })
-        .catch(() => {});
-    });
+    if (!visible || storageReady) return;
+    loadPoolStorageOnce().then(() => setStorageReady(true));
   }, [visible]);
 
   const statusMap: Record<string, FlipStatus> = {};
@@ -279,22 +306,22 @@ function FullPoolModal({
           </View>
         </View>
 
-        <FlatList
-          data={FLIP_POOL}
-          keyExtractor={item => item.id}
-          showsVerticalScrollIndicator={false}
-          extraData={artworkMap}
-          renderItem={({ item }) => (
-            <PoolRow
-              item={item}
-              artworkUrl={artworkMap[item.id] ?? ''}
-              status={statusMap[item.id] ?? null}
-              borderCol={borderCol}
-              colors={colors}
-              onPress={() => onAlbumPress(item)}
-            />
-          )}
-        />
+        {storageReady && (
+          <FlatList
+            data={FLIP_POOL}
+            keyExtractor={item => item.id}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <PoolRow
+                item={item}
+                status={statusMap[item.id] ?? null}
+                borderCol={borderCol}
+                colors={colors}
+                onPress={() => onAlbumPress(item)}
+              />
+            )}
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );
