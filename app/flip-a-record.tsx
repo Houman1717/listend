@@ -141,6 +141,72 @@ function HistoryThumb({
   );
 }
 
+// ─── Per-row artwork cache (module-level so it survives modal close/reopen) ───
+
+const poolArtworkCache: Record<string, string> = {};
+
+function PoolRow({
+  item,
+  status,
+  borderCol,
+  colors,
+  onPress,
+}: {
+  item: FlipAlbum;
+  status: FlipStatus | null;
+  borderCol: string;
+  colors: (typeof Colors)['dark'];
+  onPress: () => void;
+}) {
+  const [artworkUrl, setArtworkUrl] = useState<string>(poolArtworkCache[item.id] ?? '');
+
+  useEffect(() => {
+    if (poolArtworkCache[item.id]) { setArtworkUrl(poolArtworkCache[item.id]); return; }
+    let cancelled = false;
+    fetchAlbumData(item.title, item.artist).then(({ artworkUrl: url }) => {
+      if (!cancelled && url) {
+        poolArtworkCache[item.id] = url;
+        setArtworkUrl(url);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [item.id]);
+
+  return (
+    <TouchableOpacity
+      style={[sfl.row, { borderBottomColor: borderCol }]}
+      activeOpacity={0.7}
+      onPress={onPress}>
+      <View style={[sfl.thumb, { backgroundColor: item.coverColor }]}>
+        {artworkUrl ? (
+          <Image source={{ uri: artworkUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        ) : (
+          <Text style={sfl.thumbLetter}>{item.title.charAt(0).toUpperCase()}</Text>
+        )}
+      </View>
+      <View style={sfl.info}>
+        <Text style={[sfl.itemTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+        <Text style={[sfl.itemSub,   { color: colors.subtext }]} numberOfLines={1}>{item.artist} · {item.year}</Text>
+      </View>
+      {status === 'logged' && (
+        <View style={[sfl.statusDot, { backgroundColor: '#0f2e1a' }]}>
+          <Ionicons name="checkmark" size={14} color="#4ade80" />
+        </View>
+      )}
+      {status === 'pending' && (
+        <View style={[sfl.statusDot, { backgroundColor: '#2e1f00' }]}>
+          <Ionicons name="time-outline" size={14} color="#f59e0b" />
+        </View>
+      )}
+      {status === 'didnt_listen' && (
+        <View style={[sfl.statusDot, { backgroundColor: colors.surface }]}>
+          <Ionicons name="close" size={14} color={colors.subtext} />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 // ─── Full Pool Modal ──────────────────────────────────────────────────────────
 
 function FullPoolModal({
@@ -196,38 +262,15 @@ function FullPoolModal({
           data={FLIP_POOL}
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const status = statusMap[item.id] ?? null;
-            return (
-              <TouchableOpacity
-                style={[sfl.row, { borderBottomColor: borderCol }]}
-                activeOpacity={0.7}
-                onPress={() => onAlbumPress(item)}>
-                <View style={[sfl.thumb, { backgroundColor: item.coverColor }]}>
-                  <Text style={sfl.thumbLetter}>{item.title.charAt(0).toUpperCase()}</Text>
-                </View>
-                <View style={sfl.info}>
-                  <Text style={[sfl.itemTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                  <Text style={[sfl.itemSub,   { color: colors.subtext }]} numberOfLines={1}>{item.artist} · {item.year}</Text>
-                </View>
-                {status === 'logged' && (
-                  <View style={[sfl.statusDot, { backgroundColor: '#0f2e1a' }]}>
-                    <Ionicons name="checkmark" size={14} color="#4ade80" />
-                  </View>
-                )}
-                {status === 'pending' && (
-                  <View style={[sfl.statusDot, { backgroundColor: '#2e1f00' }]}>
-                    <Ionicons name="time-outline" size={14} color="#f59e0b" />
-                  </View>
-                )}
-                {status === 'didnt_listen' && (
-                  <View style={[sfl.statusDot, { backgroundColor: colors.surface }]}>
-                    <Ionicons name="close" size={14} color={colors.subtext} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          }}
+          renderItem={({ item }) => (
+            <PoolRow
+              item={item}
+              status={statusMap[item.id] ?? null}
+              borderCol={borderCol}
+              colors={colors}
+              onPress={() => onAlbumPress(item)}
+            />
+          )}
         />
       </SafeAreaView>
     </Modal>
