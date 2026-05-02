@@ -283,6 +283,7 @@ function FullPoolModal({
           data={FLIP_POOL}
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
+          extraData={artworkMap}
           renderItem={({ item }) => (
             <PoolRow
               item={item}
