@@ -35,7 +35,7 @@ type AlbumData = { spotifyId: string; artworkUrl: string };
 
 async function fetchAlbumData(title: string, artist: string): Promise<AlbumData> {
   try {
-    const q   = encodeURIComponent(`album:${title} artist:${artist}`);
+    const q   = encodeURIComponent(`${title} ${artist}`);
     const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
     if (!res.ok) return { spotifyId: '', artworkUrl: '' };
     const data: { id: string; artworkUrl: string }[] = await res.json();
