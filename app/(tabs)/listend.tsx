@@ -889,7 +889,6 @@ export default function ListendScreen() {
         username={profileUsername}
         avatarUrl={profileAvatarUrl}
         bio={profileBio}
-        coverPhotoUrl={profileCoverUrl}
         isOwnProfile={true}
         currentUserId={user?.id ?? ''}
         profileUserId={user?.id ?? ''}
