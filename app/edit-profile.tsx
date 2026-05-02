@@ -6,7 +6,6 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
-  ActionSheetIOS,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -29,9 +28,7 @@ const BORDER    = '#2a1e14';
 const TEXT      = '#f5e6c8';
 const SUBTEXT   = '#a07850';
 const ACCENT    = '#D4A017';
-const COVER_H   = 160;
 const AVATAR_SIZE = 80;
-const AVATAR_OFFSET = COVER_H - AVATAR_SIZE / 2;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -101,23 +98,6 @@ async function pickImage(): Promise<{ uri: string; base64: string } | null> {
   return { uri: result.assets[0].uri, base64: result.assets[0].base64 };
 }
 
-/** Pick a cover photo from the library (forced 16:9 crop). */
-async function pickCoverImage(): Promise<{ uri: string; base64: string } | null> {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== 'granted') {
-    Alert.alert('Permission needed', 'Please allow access to your photo library.');
-    return null;
-  }
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
-    aspect: [16, 9],
-    quality: 0.8,
-    base64: true,
-  });
-  if (result.canceled || !result.assets[0].base64) return null;
-  return { uri: result.assets[0].uri, base64: result.assets[0].base64 };
-}
 
 /**
  * Upload an image via the Railway backend (which uses the Supabase service-role
@@ -162,14 +142,8 @@ export default function EditProfileScreen() {
   const [tiktok,      setTiktok]      = useState('');
   const [twitter,     setTwitter]     = useState('');
 
-  // Display URIs — local preview URI for new picks, or remote URL for existing
   const [avatarUri,    setAvatarUri]    = useState<string | null>(null);
-  const [coverUri,     setCoverUri]     = useState<string | null>(null);
-  // Base64 strings — only set when the user picks a new image; null means no new pick
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
-  const [coverBase64,  setCoverBase64]  = useState<string | null>(null);
-  // True when the user explicitly removes their cover photo (write null on save)
-  const [coverRemoved, setCoverRemoved] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -180,7 +154,7 @@ export default function EditProfileScreen() {
     if (!user) return;
     supabase
       .from('profiles')
-      .select('display_name, username, bio, website_url, instagram_url, tiktok_url, twitter_url, avatar_url, cover_photo_url')
+      .select('display_name, username, bio, website_url, instagram_url, tiktok_url, twitter_url, avatar_url')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -193,7 +167,6 @@ export default function EditProfileScreen() {
           setTiktok(     data.tiktok_url    ?? '');
           setTwitter(    data.twitter_url   ?? '');
           setAvatarUri(  data.avatar_url    ?? null);
-          setCoverUri(   data.cover_photo_url ?? null);
         }
         setLoading(false);
       });
@@ -228,23 +201,6 @@ export default function EditProfileScreen() {
         finalAvatarUrl = await uploadViaBackend('upload-avatar', user.id, avatarBase64);
       }
 
-      let finalCoverUrl = coverUri;
-      if (coverBase64) {
-        finalCoverUrl = await uploadViaBackend('upload-cover', user.id, coverBase64);
-      } else if (coverRemoved) {
-        // Delete the file from Storage (best-effort — don't fail save if this errors)
-        try {
-          await fetch(`${API_URL}/api/delete-cover`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: user.id }),
-          });
-        } catch (e) {
-          console.warn('[EditProfile] delete-cover request failed (non-fatal):', e);
-        }
-        finalCoverUrl = null;
-      }
-
       // ── 3. Upsert — inserts if the row doesn't exist, updates if it does ───
       //    onConflict:'id' means: if a row with this id already exists, update it.
       const { error } = await supabase
@@ -260,7 +216,6 @@ export default function EditProfileScreen() {
             tiktok_url:      tiktok.trim(),
             twitter_url:     twitter.trim(),
             avatar_url:      finalAvatarUrl,
-            cover_photo_url: finalCoverUrl,
           },
           { onConflict: 'id' },
         );
@@ -269,9 +224,7 @@ export default function EditProfileScreen() {
 
       // Update preview URIs to the returned public URLs and clear base64 buffers
       if (finalAvatarUrl) setAvatarUri(finalAvatarUrl);
-      if (finalCoverUrl)  setCoverUri(finalCoverUrl);
       setAvatarBase64(null);
-      setCoverBase64(null);
 
       setToast(true);
       setTimeout(() => {
@@ -284,7 +237,7 @@ export default function EditProfileScreen() {
     } finally {
       setSaving(false);
     }
-  }, [user, displayName, username, bio, website, instagram, tiktok, twitter, avatarUri, coverUri, avatarBase64, coverBase64, coverRemoved]);
+  }, [user, displayName, username, bio, website, instagram, tiktok, twitter, avatarUri, avatarBase64]);
 
   // ── Inject Save button into header ───────────────────────────────────────
   useEffect(() => {
@@ -306,50 +259,6 @@ export default function EditProfileScreen() {
     if (picked) { setAvatarUri(picked.uri); setAvatarBase64(picked.base64); }
   }
 
-  async function onPickCover() {
-    // No existing cover — go straight to the picker
-    if (!coverUri) {
-      const picked = await pickCoverImage();
-      if (picked) { setCoverUri(picked.uri); setCoverBase64(picked.base64); setCoverRemoved(false); }
-      return;
-    }
-
-    // Existing cover — offer Change or Remove via action sheet
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Change Photo', 'Remove Cover Photo'],
-          destructiveButtonIndex: 2,
-          cancelButtonIndex: 0,
-        },
-        async (buttonIndex) => {
-          if (buttonIndex === 1) {
-            const picked = await pickCoverImage();
-            if (picked) { setCoverUri(picked.uri); setCoverBase64(picked.base64); setCoverRemoved(false); }
-          } else if (buttonIndex === 2) {
-            setCoverUri(null);
-            setCoverBase64(null);
-            setCoverRemoved(true);
-          }
-        },
-      );
-    } else {
-      Alert.alert('Cover Photo', undefined, [
-        { text: 'Change Photo', onPress: async () => {
-            const picked = await pickCoverImage();
-            if (picked) { setCoverUri(picked.uri); setCoverBase64(picked.base64); setCoverRemoved(false); }
-          },
-        },
-        { text: 'Remove Cover Photo', style: 'destructive', onPress: () => {
-            setCoverUri(null);
-            setCoverBase64(null);
-            setCoverRemoved(true);
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    }
-  }
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
@@ -375,25 +284,8 @@ export default function EditProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
 
-          {/* ── Cover + Avatar ─────────────────────────────────────────── */}
+          {/* ── Avatar ─────────────────────────────────────────────────── */}
           <View style={s.photoBlock}>
-            {/* Cover photo */}
-            <Pressable style={s.cover} onPress={onPickCover}>
-              {coverUri ? (
-                <Image source={{ uri: coverUri }} style={s.coverImg} resizeMode="cover" />
-              ) : (
-                <View style={s.coverPlaceholder}>
-                  <FontAwesome name="image" size={28} color="#4a3020" />
-                  <Text style={s.coverHint}>Tap to add cover photo</Text>
-                </View>
-              )}
-              {/* Edit overlay */}
-              <View style={s.coverEditBadge}>
-                <FontAwesome name="camera" size={12} color="#fff" />
-              </View>
-            </Pressable>
-
-            {/* Avatar — overlaps the cover at bottom-left */}
             <Pressable style={s.avatarWrap} onPress={onPickAvatar}>
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={s.avatarImg} resizeMode="cover" />
@@ -407,9 +299,6 @@ export default function EditProfileScreen() {
               </View>
             </Pressable>
           </View>
-
-          {/* Spacer so form doesn't hide behind the avatar overlap */}
-          <View style={{ height: AVATAR_SIZE / 2 + 16 }} />
 
           {/* ── Form fields ────────────────────────────────────────────── */}
           <View style={s.form}>
@@ -563,35 +452,10 @@ const s = StyleSheet.create({
     position: 'relative',
     marginBottom: 0,
   },
-  cover: {
-    width: '100%',
-    height: COVER_H,
-    backgroundColor: '#2e2018',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  coverImg: { width: '100%', height: '100%' },
-  coverPlaceholder: { alignItems: 'center', gap: 8 },
-  coverHint: { color: '#7a5535', fontSize: 13 },
-  coverEditBadge: {
-    position: 'absolute',
-    bottom: 10,
-    right: 12,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-
   avatarWrap: {
-    position: 'absolute',
-    bottom: -(AVATAR_SIZE / 2),
-    left: 20,
+    alignSelf: 'center',
+    marginTop: 20,
+    marginBottom: 8,
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,

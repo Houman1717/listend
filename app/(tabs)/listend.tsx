@@ -103,7 +103,6 @@ function ProfileHeader({
   username,
   avatarUrl,
   bio,
-  coverPhotoUrl,
   isOwnProfile,
   currentUserId,
   profileUserId,
@@ -120,7 +119,6 @@ function ProfileHeader({
   username: string;
   avatarUrl: string | null;
   bio: string;
-  coverPhotoUrl: string | null;
   isOwnProfile: boolean;
   currentUserId: string;
   profileUserId: string;
@@ -194,24 +192,10 @@ function ProfileHeader({
   return (
     <View style={[ph.outer, { borderBottomColor: colors.border }]}>
 
-      {/* ── Cover photo — only rendered when a URL exists ────────────────── */}
-      {coverPhotoUrl ? (
-        <View style={ph.cover}>
-          <Image source={{ uri: coverPhotoUrl }} style={ph.coverImg} resizeMode="cover" />
-          <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 100 }}>
-            <LinearGradient
-              colors={['transparent', '#000000']}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </View>
-      ) : null}
-
       {/* ── Body (avatar + text + buttons) ───────────────────────────────── */}
-      <View style={[ph.body, !coverPhotoUrl && ph.bodyNoCover]}>
+      <View style={[ph.body, ph.bodyNoCover]}>
 
-        {/* Avatar — straddles cover edge when cover exists; sits at top otherwise */}
-        <View style={[ph.avatarWrap, !coverPhotoUrl && ph.avatarWrapNoCover]}>
+        <View style={[ph.avatarWrap, ph.avatarWrapNoCover]}>
           {avatarUrl
             ? <Image source={{ uri: avatarUrl }} style={ph.avatarImg} resizeMode="cover" />
             : <View style={ph.avatarFallback}>
@@ -817,7 +801,6 @@ export default function ListendScreen() {
   const [profileUsername,    setProfileUsername]    = useState('');
   const [profileAvatarUrl,   setProfileAvatarUrl]   = useState<string | null>(null);
   const [profileBio,         setProfileBio]         = useState('');
-  const [profileCoverUrl,    setProfileCoverUrl]    = useState<string | null>(null);
 
   // "This Year" count — derived from loggedAlbums so it updates live when new albums are logged
   const thisYearCount = loggedAlbums.filter(a => {
@@ -830,7 +813,7 @@ export default function ListendScreen() {
       if (!user) return;
       supabase
         .from('profiles')
-        .select('display_name, username, avatar_url, bio, cover_photo_url')
+        .select('display_name, username, avatar_url, bio')
         .eq('id', user.id)
         .single()
         .then(({ data }) => {
@@ -839,7 +822,6 @@ export default function ListendScreen() {
             setProfileUsername(   data.username        ?? '');
             setProfileAvatarUrl(  data.avatar_url      ?? null);
             setProfileBio(        data.bio             ?? '');
-            setProfileCoverUrl(   data.cover_photo_url ?? null);
           }
         });
     }, [user])

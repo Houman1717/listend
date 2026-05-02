@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -50,7 +49,6 @@ type Profile = {
   username: string | null;
   bio: string | null;
   avatar_url: string | null;
-  cover_photo_url: string | null;
   top_albums:  FavAlbum[];
   top_songs:   FavSong[];
   top_artists: FavArtist[];
@@ -460,7 +458,7 @@ export default function UserProfileScreen() {
       try {
         const { data: prof, error: profErr } = await supabase
           .from('profiles')
-          .select('id, display_name, username, bio, avatar_url, cover_photo_url')
+          .select('id, display_name, username, bio, avatar_url')
           .eq('id', viewedUserId)
           .single();
 
@@ -671,23 +669,13 @@ export default function UserProfileScreen() {
       contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}>
 
-      {/* ── Cover photo ────────────────────────────────────────────────────── */}
-      {profile.cover_photo_url ? (
-        <View style={s.cover}>
-          <Image source={{ uri: profile.cover_photo_url }} style={s.coverImg} resizeMode="cover" />
-          <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 100 }}>
-            <LinearGradient colors={['transparent', colors.background]} style={{ flex: 1 }} />
-          </View>
-        </View>
-      ) : null}
-
       {/* ── Profile body ───────────────────────────────────────────────────── */}
-      <View style={[s.profileBody, !profile.cover_photo_url && s.profileBodyNoCover, { borderBottomColor: colors.border }]}>
+      <View style={[s.profileBody, s.profileBodyNoCover, { borderBottomColor: colors.border }]}>
 
         {/* Avatar */}
         <View style={[
           s.avatarWrap,
-          !profile.cover_photo_url && s.avatarWrapNoCover,
+          s.avatarWrapNoCover,
           { borderColor: colors.border, backgroundColor: colors.border },
         ]}>
           {profile.avatar_url ? (
