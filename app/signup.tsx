@@ -19,8 +19,8 @@ const CARD_BG = '#2e2018';
 const BORDER = '#2a1e14';
 const TEXT = '#f5e6c8';
 const SUBTEXT = '#a07850';
-const ACCENT = '#e8963a';
-const GRADIENT: [string, string, string] = ['#e8963a', '#c8722a', '#e8963a'];
+const ACCENT = '#D4A017';
+const GRADIENT: [string, string, string] = ['#D4A017', '#B8880F', '#D4A017'];
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -68,7 +68,7 @@ export default function SignUpScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
 
       <LinearGradient
-        colors={['#e8963a18', '#c8722a12', '#e8963a08']}
+        colors={['#D4A01718', '#B8880F12', '#D4A01708']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}

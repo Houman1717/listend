@@ -1,3 +1,5 @@
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 import React, {
   createContext,
   useContext,
@@ -21,6 +23,7 @@ export type LoggedAlbum = {
   dateLogged: string;
   artworkUrl?: string;
   coverColor: string;
+  durationMs?: number;
 };
 
 export type PendingAlbum = {
@@ -60,6 +63,7 @@ export type WantToListenAlbum = {
   year: number;
   artworkUrl: string;
   dateAdded?: string;
+  durationMs?: number;
 };
 
 export type Playlist = {
@@ -76,6 +80,8 @@ type AlbumsContextType = {
   setPendingAlbum: (album: PendingAlbum | null) => void;
   logAlbum: (rating: number, review: string) => void;
   updateReview: (id: string, rating: number, review: string) => void;
+  updateDuration: (id: string, durationMs: number) => void;
+  removeLoggedAlbum: (id: string) => void;
   topAlbums: TopAlbum[];
   topSongs: TopSong[];
   topArtists: TopArtist[];
@@ -196,8 +202,9 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       // 3a. Logged albums
       const { data: albumData, error: albumErr } = await supabase
         .from('user_albums')
-        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms')
         .eq('user_id', uid)
+        .not('listened_at', 'is', null)
         .order('listened_at', { ascending: false });
 
       if (!cancelled) {
@@ -214,6 +221,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
             dateLogged: row.listened_at ?? new Date().toISOString(),
             artworkUrl: row.artwork_url ?? undefined,
             coverColor: COVER_COLORS[i % COVER_COLORS.length],
+            durationMs: row.duration_ms ?? undefined,
           }));
           // Merge: preserve local state that is newer than what the DB returned.
           // Two cases this guards against:
@@ -233,7 +241,8 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
               }
               return a;
             });
-            const result = [...localOnly, ...merged];
+            const result = [...localOnly, ...merged]
+              .sort((a, b) => b.dateLogged.localeCompare(a.dateLogged));
             AsyncStorage.setItem(sk(KEY.LOGGED, uid), JSON.stringify(result)).catch(() => {});
             return result;
           });
@@ -431,6 +440,25 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function updateDuration(id: string, durationMs: number) {
+    setLoggedAlbums((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, durationMs } : a))
+    );
+    setWantToListen((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, durationMs } : a))
+    );
+
+    if (user) {
+      supabase
+        .from('user_albums')
+        .update({ duration_ms: durationMs })
+        .match({ user_id: user.id, spotify_id: id })
+        .then(({ error }) => {
+          if (error) console.warn('[AlbumsContext] updateDuration error:', error.message);
+        });
+    }
+  }
+
   function addTopAlbum(album: TopAlbum) {
     setTopAlbums((prev) => {
       if (prev.find((a) => a.id === album.id)) return prev;
@@ -537,6 +565,20 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       });
   }
 
+  function removeLoggedAlbum(id: string) {
+    setLoggedAlbums((prev) => prev.filter((a) => a.id !== id));
+
+    if (user) {
+      supabase
+        .from('user_albums')
+        .delete()
+        .match({ spotify_id: id, user_id: user.id })
+        .then(({ error }) => {
+          if (error) console.error('[AlbumsContext] removeLoggedAlbum error:', error.message);
+        });
+    }
+  }
+
   function removeFromWantToListen(id: string) {
     setWantToListen((prev) => prev.filter((a) => a.id !== id));
 
@@ -552,7 +594,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   }
 
   function createPlaylist(name: string, description?: string): string {
-    const id = `pl_${Date.now()}`;
+    const id = uuidv4();
     const createdAt = new Date().toISOString();
     const newPlaylist: Playlist = {
       id,
@@ -626,7 +668,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   return (
     <AlbumsContext.Provider value={{
-      loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, updateReview,
+      loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, updateReview, updateDuration, removeLoggedAlbum,
       topAlbums, topSongs, topArtists,
       addTopAlbum, removeTopAlbum, reorderTopAlbums,
       addTopSong, removeTopSong, reorderTopSongs,

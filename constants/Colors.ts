@@ -1,31 +1,33 @@
 // ─── Warm & Earthy Palette ────────────────────────────────────────────────────
 
 export const PALETTE = {
-  background:    '#1c1410',
-  surface:       '#2e2018',
-  elevated:      '#3a2818',
-  border:        '#2a1e14',
-  textPrimary:   '#f5e6c8',
-  textSecondary: '#a07850',
-  textMuted:     '#7a5535',
-  accent:        '#e8963a',
-  accentSoft:    '#c8722a',
-  tabActive:     '#e8963a',
+  background:    '#0F0A07',  // deep espresso
+  surface:       '#2E2018',  // walnut
+  elevated:      '#3A2820',  // mocha
+  border:        '#3A2818',
+  textPrimary:   '#F5ECD8',
+  textSecondary: '#A08060',  // muted tan
+  textMuted:     '#6B4C35',  // warm brown
+  accent:        '#D4A017',  // Warm Gold
+  accentLight:   '#E8B830',  // lighter gold (hover / soft tints)
+  accentDark:    '#B8880F',  // darker gold (gradients / pressed states)
+  tabActive:     '#D4A017',
   tabInactive:   '#4a3020',
 } as const;
 
 export default {
   light: {
-    text:            '#3D2B1A',
-    background:      '#F5F0E8',
+    text:            '#1A0F0A',  // dark coffee
+    background:      '#F2EBE0',  // warm ivory
     tint:            PALETTE.accent,
-    tabIconDefault:  '#A0896C',
+    tabIconDefault:  '#A08060',
     tabIconSelected: PALETTE.accent,
-    card:            '#EDE9E3',
-    surface:         '#EDE9E3',
+    card:            '#FFFFFF',
+    surface:         '#FFFFFF',
+    elevated:        '#EDE9E3',
     border:          '#DDD5C8',
-    subtext:         '#7A5535',
-    textMuted:       '#A0896C',
+    subtext:         '#6B4C35',
+    textMuted:       '#A08060',
   },
   dark: {
     text:            PALETTE.textPrimary,
@@ -35,6 +37,7 @@ export default {
     tabIconSelected: PALETTE.accent,
     card:            PALETTE.surface,
     surface:         PALETTE.surface,
+    elevated:        PALETTE.elevated,
     border:          PALETTE.border,
     subtext:         PALETTE.textSecondary,
     textMuted:       PALETTE.textMuted,

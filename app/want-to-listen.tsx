@@ -9,13 +9,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums, WantToListenAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -63,13 +64,17 @@ export default function WantToListenScreen() {
   const cardWidth = (width - PADDING * 2 - GAP * (COLS - 1)) / COLS;
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { wantToListen, removeFromWantToListen } = useAlbums();
+  const { wantToListen, removeFromWantToListen, updateDuration } = useAlbums();
   const { user } = useAuth();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = paramUserId || null;
   const [otherList, setOtherList] = useState<WantToListenAlbum[]>([]);
+  const [sortKey, setSortKey]     = useState<SortKey>('date_new');
+  const [shuffled, setShuffled]   = useState<WantToListenAlbum[] | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
     if (!viewingOther) return;
@@ -96,7 +101,41 @@ export default function WantToListenScreen() {
       });
   }, [viewingOther]);
 
-  const displayList = viewingOther ? otherList : wantToListen;
+  const sourceList = viewingOther ? otherList : wantToListen;
+
+  // Fetch durations for any album in the list that doesn't have one yet
+  useEffect(() => {
+    const missing = sourceList.filter(a => !a.durationMs).map(a => a.id);
+    if (missing.length === 0) return;
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+    fetch(`${API_URL}/api/album-durations?ids=${missing.join(',')}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((data: Record<string, number>) => {
+        Object.entries(data).forEach(([id, ms]) => {
+          if (viewingOther) {
+            setOtherList(prev => prev.map(a => a.id === id ? { ...a, durationMs: ms } : a));
+          } else {
+            updateDuration(id, ms);
+          }
+        });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceList.length, viewingOther]);
+
+  const displayList = useMemo(() => {
+    if (shuffled) return shuffled;
+    return applySort(sourceList, sortKey);
+  }, [sourceList, sortKey, shuffled]);
+
+  function handleSelectSort(key: SortKey) {
+    if (key === 'shuffle') {
+      setShuffled([...sourceList].sort(() => Math.random() - 0.5));
+    } else {
+      setShuffled(null);
+    }
+    setSortKey(key);
+  }
 
   function handleTap(album: WantToListenAlbum) {
     router.push({
@@ -119,35 +158,51 @@ export default function WantToListenScreen() {
   }
 
   return (
-    <ScrollView
-      style={[s.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={s.gridWrap}
-      showsVerticalScrollIndicator={false}>
-      {displayList.length === 0 ? (
-        <View style={s.empty}>
-          <Text style={[s.emptyTitle, { color: colors.text }]}>Nothing here yet</Text>
-          <Text style={[s.emptySubtext, { color: colors.subtext }]}>
-            {viewingOther
-              ? 'This user has nothing saved yet.'
-              : 'Tap the bookmark icon on any album in Search to save it here.'}
-          </Text>
-        </View>
-      ) : (
-        <View style={s.grid}>
-          {displayList.map((album) => (
-            <AlbumCard
-              key={album.id}
-              album={album}
-              cardWidth={cardWidth}
-              onPress={() => handleTap(album)}
-              onLongPress={() => !viewingOther && handleLongPress(album)}
-              textColor={colors.text}
-              subColor={colors.subtext}
-            />
-          ))}
-        </View>
-      )}
-    </ScrollView>
+    <View style={[s.container, { backgroundColor: colors.background }]}>
+      <SortBar
+        sortKey={sortKey}
+        count={sourceList.length}
+        noun="albums"
+        isDark={isDark}
+        onPress={() => setSheetOpen(true)}
+      />
+      <ScrollView
+        contentContainerStyle={s.gridWrap}
+        showsVerticalScrollIndicator={false}>
+        {displayList.length === 0 ? (
+          <View style={s.empty}>
+            <Text style={[s.emptyTitle, { color: colors.text }]}>Nothing here yet</Text>
+            <Text style={[s.emptySubtext, { color: colors.subtext }]}>
+              {viewingOther
+                ? 'This user has nothing saved yet.'
+                : 'Tap the bookmark icon on any album in Search to save it here.'}
+            </Text>
+          </View>
+        ) : (
+          <View style={s.grid}>
+            {displayList.map((album) => (
+              <AlbumCard
+                key={album.id}
+                album={album}
+                cardWidth={cardWidth}
+                onPress={() => handleTap(album)}
+                onLongPress={() => !viewingOther && handleLongPress(album)}
+                textColor={colors.text}
+                subColor={colors.subtext}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      <SortSheet
+        visible={sheetOpen}
+        activeKey={sortKey}
+        onSelect={handleSelectSort}
+        onClose={() => setSheetOpen(false)}
+        isDark={isDark}
+      />
+    </View>
   );
 }
 

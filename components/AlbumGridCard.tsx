@@ -1,5 +1,6 @@
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const GAP = 12;
 const COLS = 3;
@@ -25,6 +26,7 @@ export function AlbumGridCard({
   textColor,
   subColor,
   isDark,
+  isLogged,
 }: {
   album: Album;
   width: number;
@@ -32,22 +34,30 @@ export function AlbumGridCard({
   textColor: string;
   subColor: string;
   isDark: boolean;
+  isLogged?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [s.card, { width, opacity: pressed ? 0.7 : 1 }]}>
-      {album.artworkUrl ? (
-        <Image
-          source={{ uri: album.artworkUrl }}
-          style={{ width, height: width, borderRadius: 8 }}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={[s.fallback, { width, height: width, backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]}>
-          <FontAwesome name="music" size={width * 0.28} color={isDark ? '#7a5535' : '#a07850'} />
-        </View>
-      )}
+      <View>
+        {album.artworkUrl ? (
+          <Image
+            source={{ uri: album.artworkUrl }}
+            style={{ width, height: width, borderRadius: 8 }}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[s.fallback, { width, height: width, backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]}>
+            <FontAwesome name="music" size={width * 0.28} color={isDark ? '#7a5535' : '#a07850'} />
+          </View>
+        )}
+        {isLogged && (
+          <View style={s.loggedBadge}>
+            <Ionicons name="checkmark" size={9} color="#D4A017" />
+          </View>
+        )}
+      </View>
       <Text style={[s.title, { color: textColor }]} numberOfLines={1}>{album.title}</Text>
       <Text style={[s.artist, { color: subColor }]} numberOfLines={1}>{album.artist}</Text>
     </Pressable>
@@ -76,4 +86,5 @@ const s = StyleSheet.create({
   title:         { fontSize: 12, fontWeight: '600', marginTop: 2 },
   artist:        { fontSize: 11 },
   placeholderText: { height: 10, borderRadius: 4, marginTop: 2 },
+  loggedBadge: { position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1.5, borderColor: '#D4A017', alignItems: 'center', justifyContent: 'center' },
 });

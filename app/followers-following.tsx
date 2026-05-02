@@ -10,14 +10,8 @@ import {
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const DARK_BG = '#1c1410';
-const BORDER  = '#2e2018';
-const TEXT    = '#f5e6c8';
-const SUBTEXT = '#a07850';
-const ACCENT  = '#e8963a';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +27,9 @@ type UserRow = {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function FollowersFollowingScreen() {
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+
   const { userId, type } = useLocalSearchParams<{ userId: string; type: ListType }>();
   const navigation = useNavigation();
   const router     = useRouter();
@@ -51,7 +48,6 @@ export default function FollowersFollowingScreen() {
       setLoading(true);
 
       if (type === 'followers') {
-        // People who follow this user: follower_id → profiles
         const { data, error } = await supabase
           .from('follows')
           .select('profile:profiles!follower_id(id, display_name, username, avatar_url)')
@@ -67,7 +63,6 @@ export default function FollowersFollowingScreen() {
           );
         }
       } else {
-        // People this user follows: following_id → profiles
         const { data, error } = await supabase
           .from('follows')
           .select('profile:profiles!following_id(id, display_name, username, avatar_url)')
@@ -92,8 +87,8 @@ export default function FollowersFollowingScreen() {
 
   if (loading) {
     return (
-      <View style={s.center}>
-        <ActivityIndicator color={ACCENT} size="large" />
+      <View style={[s.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color="#D4A017" size="large" />
       </View>
     );
   }
@@ -102,13 +97,13 @@ export default function FollowersFollowingScreen() {
 
   return (
     <FlatList
-      style={s.container}
+      style={[s.container, { backgroundColor: colors.background }]}
       data={users}
       keyExtractor={(item) => item.id}
       contentContainerStyle={users.length === 0 ? s.centerContent : { paddingBottom: 40 }}
-      ItemSeparatorComponent={() => <View style={s.separator} />}
+      ItemSeparatorComponent={() => <View style={[s.separator, { backgroundColor: colors.border }]} />}
       ListEmptyComponent={() => (
-        <Text style={s.empty}>{emptyLabel}</Text>
+        <Text style={[s.empty, { color: colors.subtext }]}>{emptyLabel}</Text>
       )}
       renderItem={({ item }) => {
         const name    = item.display_name || item.username || 'Unknown';
@@ -119,19 +114,17 @@ export default function FollowersFollowingScreen() {
             onPress={() =>
               router.push({ pathname: '/user-profile', params: { userId: item.id } })
             }>
-            {/* Avatar */}
             {item.avatar_url ? (
               <Image source={{ uri: item.avatar_url }} style={s.avatar} />
             ) : (
-              <View style={[s.avatar, s.avatarFallback]}>
-                <Text style={s.avatarInitial}>{initial}</Text>
+              <View style={[s.avatar, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={[s.avatarInitial, { color: colors.subtext }]}>{initial}</Text>
               </View>
             )}
-            {/* Text */}
             <View style={s.textWrap}>
-              <Text style={s.name} numberOfLines={1}>{name}</Text>
+              <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{name}</Text>
               {item.username ? (
-                <Text style={s.username} numberOfLines={1}>@{item.username}</Text>
+                <Text style={[s.username, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
               ) : null}
             </View>
           </Pressable>
@@ -144,13 +137,13 @@ export default function FollowersFollowingScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: DARK_BG },
-  center:       { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: DARK_BG },
+  container:    { flex: 1 },
+  center:       { flex: 1, alignItems: 'center', justifyContent: 'center' },
   centerContent:{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
 
-  empty: { color: SUBTEXT, fontSize: 15, textAlign: 'center' },
+  empty: { fontSize: 15, textAlign: 'center' },
 
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginLeft: 76 },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: 76 },
 
   row: {
     flexDirection: 'row',
@@ -160,20 +153,10 @@ const s = StyleSheet.create({
     gap: 14,
   },
 
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    flexShrink: 0,
-  },
-  avatarFallback: {
-    backgroundColor: '#2a1e14',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: { color: SUBTEXT, fontSize: 20, fontWeight: '700' },
+  avatar: { width: 48, height: 48, borderRadius: 24, flexShrink: 0 },
+  avatarInitial: { fontSize: 20, fontWeight: '700' },
 
   textWrap: { flex: 1, gap: 2 },
-  name:     { color: TEXT,    fontSize: 15, fontWeight: '600' },
-  username: { color: SUBTEXT, fontSize: 13 },
+  name:     { fontSize: 15, fontWeight: '600' },
+  username: { fontSize: 13 },
 });

@@ -165,8 +165,8 @@ function FullPoolModal({
   const total       = FLIP_POOL.length;
   const listenedPct = total > 0 ? Math.round(loggedCount / total * 100) : 0;
 
-  const bg        = isDark ? '#1c1410' : '#fff';
-  const borderCol = isDark ? '#2a1e14' : '#e0e0e0';
+  const bg        = colors.background;
+  const borderCol = colors.border;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -184,10 +184,10 @@ function FullPoolModal({
             <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
               <Text style={{ color: '#4ade80', fontWeight: '700' }}>{listenedPct}%</Text> listened
               {'  ·  '}
-              <Text style={{ color: '#e8963a', fontWeight: '700' }}>{loggedCount}</Text> logged
+              <Text style={{ color: '#D4A017', fontWeight: '700' }}>{loggedCount}</Text> logged
             </Text>
           </View>
-          <View style={[sfl.track, { backgroundColor: isDark ? '#2a1e14' : '#e5e5e5' }]}>
+          <View style={[sfl.track, { backgroundColor: colors.border }]}>
             <View style={[sfl.fill, { width: `${Math.max(listenedPct, listenedPct > 0 ? 2 : 0)}%` as any }]} />
           </View>
         </View>
@@ -221,8 +221,8 @@ function FullPoolModal({
                   </View>
                 )}
                 {status === 'didnt_listen' && (
-                  <View style={[sfl.statusDot, { backgroundColor: '#2e2018' }]}>
-                    <Ionicons name="close" size={14} color="#a07850" />
+                  <View style={[sfl.statusDot, { backgroundColor: colors.surface }]}>
+                    <Ionicons name="close" size={14} color={colors.subtext} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -314,8 +314,8 @@ function FlipHistoryModal({ visible, onClose }: { visible: boolean; onClose: () 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, history.length]);
 
-  const borderCol = isDark ? '#2a1e14' : '#e0e0e0';
-  const bg        = isDark ? '#1c1410' : '#fff';
+  const borderCol = colors.border;
+  const bg        = colors.background;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -397,7 +397,7 @@ export default function FlipARecordScreen() {
   const navigation  = useNavigation();
 
   const { history, cooldownUntil, currentFlip, poolExhausted, flip, markLogged, markDidntListen } = useFlip();
-  const { setPendingAlbum, addToWantToListen, removeFromWantToListen, wantToListen } = useAlbums();
+  const { setPendingAlbum, addToWantToListen, removeFromWantToListen, wantToListen, loggedAlbums } = useAlbums();
 
   const [now, setNow]                          = useState(Date.now());
   const [historyModalVisible, setHistoryModal] = useState(false);
@@ -419,7 +419,7 @@ export default function FlipARecordScreen() {
       headerRight: history.length > 0
         ? () => (
             <Pressable onPress={() => setHistoryModal(true)} style={{ marginRight: 16 }} hitSlop={12}>
-              <Ionicons name="time-outline" size={22} color="#e8963a" />
+              <Ionicons name="time-outline" size={22} color="#D4A017" />
             </Pressable>
           )
         : undefined,
@@ -503,8 +503,12 @@ export default function FlipARecordScreen() {
     ? wantToListen.some(a => a.id === detailId || a.id === currentFlip.id)
     : false;
 
-  const borderCol = isDark ? '#2a1e14' : '#e0e0e0';
-  const cardBg    = isDark ? '#1c1410' : '#fff';
+  const isAlreadyLogged = currentFlip
+    ? loggedAlbums.some(a => a.id === detailId || a.id === currentFlip.id)
+    : false;
+
+  const borderCol = colors.border;
+  const cardBg    = colors.background;
 
   return (
     <>
@@ -540,7 +544,7 @@ export default function FlipARecordScreen() {
         {/* ── Pool exhausted ──────────────────────────────────────────── */}
         {poolExhausted && (
           <View style={[sf.emptyCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
-            <FontAwesome name="trophy" size={36} color="#e8963a" />
+            <FontAwesome name="trophy" size={36} color="#D4A017" />
             <Text style={[sf.emptyTitle, { color: colors.text }]}>You've flipped every record!</Text>
             <Text style={[sf.emptySubtext, { color: colors.subtext }]}>
               Albums return to the pool once you dismiss or log them.
@@ -596,6 +600,12 @@ export default function FlipARecordScreen() {
                   letter={currentFlip.title.charAt(0)}
                   size={ART_SIZE}
                 />
+                {isAlreadyLogged && (
+                  <View style={sf.loggedBadge}>
+                    <Ionicons name="checkmark" size={13} color="#D4A017" />
+                    <Text style={sf.loggedBadgeText}>Listend</Text>
+                  </View>
+                )}
                 <LinearGradient
                   colors={['transparent', isDark ? 'rgba(17,17,17,0.7)' : 'rgba(255,255,255,0.7)', cardBg]}
                   style={sf.artGradient}
@@ -605,8 +615,8 @@ export default function FlipARecordScreen() {
               {/* Info */}
               <View style={sf.infoBlock}>
                 {currentFlip.genre && (
-                  <View style={[sf.genrePill, { backgroundColor: isDark ? '#2e2018' : '#f5e6c8' }]}>
-                    <Text style={[sf.genreText, { color: isDark ? '#a07850' : '#7a5535' }]}>{currentFlip.genre}</Text>
+                  <View style={[sf.genrePill, { backgroundColor: isDark ? colors.surface : colors.elevated }]}>
+                    <Text style={[sf.genreText, { color: colors.subtext }]}>{currentFlip.genre}</Text>
                   </View>
                 )}
                 <Pressable
@@ -655,7 +665,7 @@ export default function FlipARecordScreen() {
                     <FontAwesome
                       name={isWanted ? 'bookmark' : 'bookmark-o'}
                       size={14}
-                      color={isWanted ? '#e8963a' : '#fff'}
+                      color={isWanted ? '#D4A017' : '#fff'}
                     />
                     <Text style={isWanted ? sf.actionSavedText : sf.actionPrimaryText}>
                       {isWanted ? 'Saved' : 'Want to Listen'}
@@ -723,14 +733,14 @@ export default function FlipARecordScreen() {
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={[sf.statsLabel, { color: colors.subtext }]}>
-                    <Text style={{ color: '#e8963a', fontWeight: '700' }}>{flipped}</Text> flipped
+                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipped}</Text> flipped
                     {'  ·  '}
                     <Text style={{ color: '#4ade80', fontWeight: '700' }}>{listenedPct}%</Text> listened
                   </Text>
-                  <Ionicons name="chevron-forward" size={14} color={isDark ? '#4a3020' : '#a07850'} />
+                  <Ionicons name="chevron-forward" size={14} color={colors.subtext} />
                 </View>
               </View>
-              <View style={[sf.track, { backgroundColor: isDark ? '#2a1e14' : '#e5e5e5' }]}>
+              <View style={[sf.track, { backgroundColor: colors.border }]}>
                 <View style={[sf.fill, { width: `${Math.max(flipPct * 100, flipPct > 0 ? 2 : 0)}%` as any }]} />
               </View>
             </Pressable>
@@ -748,7 +758,7 @@ export default function FlipARecordScreen() {
                   key={`${record.id}-${record.flippedAt}`}
                   style={({ pressed }) => [
                     sf.recentRow,
-                    { backgroundColor: isDark ? '#1c1410' : '#f9f9f9', borderColor: borderCol, opacity: pressed ? 0.7 : 1 },
+                    { backgroundColor: colors.surface, borderColor: borderCol, opacity: pressed ? 0.7 : 1 },
                   ]}
                   onPress={() => router.push({
                     pathname: '/album-detail',
@@ -766,7 +776,7 @@ export default function FlipARecordScreen() {
                     <Text style={[sf.recentTitle, { color: colors.text }]} numberOfLines={1}>{record.title}</Text>
                     <Text style={[sf.recentArtist, { color: colors.subtext }]} numberOfLines={1}>{record.artist}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={isDark ? '#4a3020' : '#a07850'} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.subtext} />
                 </Pressable>
               );
             })}
@@ -789,7 +799,7 @@ const sf = StyleSheet.create({
   idleCenter: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(128,128,128,0.2)' },
   idleHint:   { fontSize: 13, textAlign: 'center', lineHeight: 18 },
 
-  flipBtn:     { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#e8963a', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 16 },
+  flipBtn:     { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#D4A017', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 16 },
   flipBtnText: { color: '#fff', fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
 
   emptyCard:    { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, padding: 32, alignItems: 'center', gap: 14 },
@@ -799,6 +809,8 @@ const sf = StyleSheet.create({
   albumCard:   { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   artWrap:     { position: 'relative' },
   artGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 },
+  loggedBadge: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1.5, borderColor: '#D4A017', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  loggedBadgeText: { color: '#D4A017', fontSize: 12, fontWeight: '700' },
 
   infoBlock:  { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 4, gap: 6 },
   genrePill:  { alignSelf: 'flex-start', borderRadius: 100, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 2 },
@@ -811,10 +823,10 @@ const sf = StyleSheet.create({
   howWasHeading: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
   howWasRow:     { flexDirection: 'row', gap: 10 },
 
-  actionPrimary:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#e8963a', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16 },
-  actionSavedOutline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: 'transparent', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: '#e8963a' },
+  actionPrimary:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#D4A017', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16 },
+  actionSavedOutline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: 'transparent', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: '#D4A017' },
   actionPrimaryText:  { color: '#fff', fontSize: 15, fontWeight: '600' },
-  actionSavedText:    { color: '#e8963a', fontSize: 15, fontWeight: '600' },
+  actionSavedText:    { color: '#D4A017', fontSize: 15, fontWeight: '600' },
   actionSecondary:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, borderWidth: 1, paddingVertical: 14, paddingHorizontal: 16 },
   actionSecondaryText:{ fontSize: 15, fontWeight: '500' },
   flex1: { flex: 1 },
@@ -826,7 +838,7 @@ const sf = StyleSheet.create({
   statsRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statsLabel: { fontSize: 13 },
   track:      { height: 4, borderRadius: 2, overflow: 'hidden' },
-  fill:       { height: 4, borderRadius: 2, backgroundColor: '#e8963a' },
+  fill:       { height: 4, borderRadius: 2, backgroundColor: '#D4A017' },
 
   recentBlock:       { marginTop: 24, gap: 10 },
   recentHeading:     { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },

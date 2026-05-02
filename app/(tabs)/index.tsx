@@ -15,11 +15,13 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { useAlbums } from '@/context/AlbumsContext';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -28,12 +30,12 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 // ─── Placeholder friends ──────────────────────────────────────────────────────
 
 const PLACEHOLDER_FRIENDS = [
-  { id: '1', user: 'alex_m',  album: 'After Hours',            artist: 'The Weeknd',     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/500x500bb.jpg' },
-  { id: '2', user: 'sara_k',  album: 'folklore',               artist: 'Taylor Swift',   artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/80/dc/b580dca0-349d-036b-e09b-bd849f6affd8/20UMGIM64216.rgb.jpg/500x500bb.jpg' },
-  { id: '3', user: 'jvines',  album: 'DAMN.',                  artist: 'Kendrick Lamar', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/86/c9/bb/86c9bb30-fe3d-442e-33c1-c106c4d23705/17UMGIM88776.rgb.jpg/500x500bb.jpg' },
-  { id: '4', user: 'priya_r', album: 'SOS',                    artist: 'SZA',            artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/3b/a9/bd3ba9fb-9609-144f-bcfe-ead67b5f6ab3/196589564931.jpg/500x500bb.jpg' },
-  { id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk',      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/500x500bb.jpg' },
-  { id: '6', user: 'nadia_w', album: 'Currents',               artist: 'Tame Impala',    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/500x500bb.jpg' },
+  { id: '1', user: 'alex_m',  album: 'After Hours',            artist: 'The Weeknd',     year: '2020', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/500x500bb.jpg' },
+  { id: '2', user: 'sara_k',  album: 'folklore',               artist: 'Taylor Swift',   year: '2020', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/80/dc/b580dca0-349d-036b-e09b-bd849f6affd8/20UMGIM64216.rgb.jpg/500x500bb.jpg' },
+  { id: '3', user: 'jvines',  album: 'DAMN.',                  artist: 'Kendrick Lamar', year: '2017', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/86/c9/bb/86c9bb30-fe3d-442e-33c1-c106c4d23705/17UMGIM88776.rgb.jpg/500x500bb.jpg' },
+  { id: '4', user: 'priya_r', album: 'SOS',                    artist: 'SZA',            year: '2022', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/3b/a9/bd3ba9fb-9609-144f-bcfe-ead67b5f6ab3/196589564931.jpg/500x500bb.jpg' },
+  { id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk',      year: '2013', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/500x500bb.jpg' },
+  { id: '6', user: 'nadia_w', album: 'Currents',               artist: 'Tame Impala',    year: '2015', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/500x500bb.jpg' },
 ];
 
 const AGO = ['2m ago', '14m ago', '1h ago', '2h ago', '3h ago', '5h ago'];
@@ -181,7 +183,7 @@ function Section({ title, loading, children }: { title: string; loading: boolean
       <Text style={[s.sectionLabel, { color: colors.text }]}>{title}</Text>
       {loading ? (
         <View style={s.sectionLoader}>
-          <ActivityIndicator color="#e8963a" />
+          <ActivityIndicator color="#D4A017" />
         </View>
       ) : children}
     </View>
@@ -198,16 +200,23 @@ function ArtFallback({ size, radius, label }: { size: number; radius: number; la
 
 // ─── Album card ───────────────────────────────────────────────────────────────
 
-function AlbumCard({ item, isDark, onPress }: { item: SpotifyAlbum; isDark: boolean; onPress: () => void }) {
+function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; isDark: boolean; isLogged?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ALBUM_CARD, opacity: pressed ? 0.7 : 1 }]}>
-      {item.artworkUrl ? (
-        <Image source={{ uri: item.artworkUrl }} style={{ width: ALBUM_CARD, height: ALBUM_CARD, borderRadius: 6 }} />
-      ) : (
-        <ArtFallback size={ALBUM_CARD} radius={6} label={item.title} />
-      )}
-      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>{item.title}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535' }]} numberOfLines={1}>{item.artist}</Text>
+      <View>
+        {item.artworkUrl ? (
+          <Image source={{ uri: item.artworkUrl }} style={{ width: ALBUM_CARD, height: ALBUM_CARD, borderRadius: 6 }} />
+        ) : (
+          <ArtFallback size={ALBUM_CARD} radius={6} label={item.title} />
+        )}
+        {isLogged && (
+          <View style={s.loggedBadge}>
+            <Ionicons name="checkmark" size={9} color="#D4A017" />
+          </View>
+        )}
+      </View>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
   );
 }
@@ -227,8 +236,8 @@ function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index:
           <Text style={s.rankText}>#{index + 1}</Text>
         </View>
       </View>
-      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>{item.title}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535' }]} numberOfLines={1}>{item.artist}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
   );
 }
@@ -243,8 +252,8 @@ function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: bo
       ) : (
         <ArtFallback size={ARTIST_CARD} radius={ARTIST_CARD / 2} label={item.name} />
       )}
-      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1c1410', textAlign: 'center' }]} numberOfLines={1}>{item.name}</Text>
-      <Text style={[s.cardSub,   { color: isDark ? '#a07850'   : '#7a5535', textAlign: 'center' }]} numberOfLines={1}>{item.genre}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A', textAlign: 'center' }]} numberOfLines={1}>{item.name}</Text>
+      <Text style={[s.cardSub,   { color: isDark ? '#A08060' : '#6B4C35', textAlign: 'center' }]} numberOfLines={1}>{item.genre}</Text>
     </Pressable>
   );
 }
@@ -256,6 +265,7 @@ function PopularReviewCard({
   liked,
   onLike,
   onPress,
+  onAlbumPress,
   onCommentCountPress,
   commentCount = 0,
   isDark,
@@ -265,49 +275,51 @@ function PopularReviewCard({
   liked: boolean;
   onLike: () => void;
   onPress: () => void;
+  onAlbumPress: () => void;
   onCommentCountPress: () => void;
   commentCount?: number;
   isDark: boolean;
   colors: any;
 }) {
   const displayCount = item.likeCount + (liked ? 1 : 0);
-  const subtext = isDark ? '#7a5535' : '#a07850';
+  const subtext = isDark ? '#6B4C35' : '#A08060';
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
+      style={[
         pr.card,
         {
           width: REVIEW_CARD_W,
-          backgroundColor: isDark ? '#2e2018' : '#EDE9E3',
+          backgroundColor: isDark ? '#3A2820' : '#FFFFFF',
           borderColor: isDark ? '#2a1e14' : '#DDD5C8',
-          opacity: pressed ? 0.85 : 1,
         },
       ]}>
-      {/* Top row: art + album info */}
-      <View style={pr.topRow}>
+      {/* Top row: art + album info — tappable to go to album profile */}
+      <Pressable
+        onPress={(e) => { e.stopPropagation?.(); onAlbumPress(); }}
+        style={({ pressed }) => [pr.topRow, { opacity: pressed ? 0.7 : 1 }]}>
         <Image source={{ uri: item.artworkUrl }} style={pr.art} />
         <View style={pr.albumInfo}>
-          <Text style={[pr.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={2}>
+          <Text style={[pr.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={2}>
             {item.albumTitle}
           </Text>
-          <Text style={[pr.albumArtist, { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={1}>
+          <Text style={[pr.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>
             {item.albumArtist}
           </Text>
-          <Text style={[pr.albumYear, { color: isDark ? '#7a5535' : '#a07850' }]}>
+          <Text style={[pr.albumYear, { color: isDark ? '#6B4C35' : '#A08060' }]}>
             {item.albumYear}
           </Text>
           <View style={pr.ratingRow}>
-            <FontAwesome name="volume-up" size={10} color="#e8963a" />
+            <FontAwesome name="volume-up" size={10} color="#D4A017" />
             <View style={pr.ratingBadge}>
               <Text style={pr.ratingNum}>{item.rating}</Text>
             </View>
           </View>
         </View>
-      </View>
+      </Pressable>
 
       {/* Review snippet */}
-      <Text style={[pr.reviewText, { color: isDark ? '#a07850' : '#4a3020' }]} numberOfLines={3}>
+      <Text style={[pr.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={3}>
         "{item.review}"
       </Text>
 
@@ -317,7 +329,7 @@ function PopularReviewCard({
           <View style={[pr.avatar, { backgroundColor: avatarColor(item.username) }]}>
             <Text style={pr.avatarLetter}>{item.username[0].toUpperCase()}</Text>
           </View>
-          <Text style={[pr.username, { color: '#e8963a' }]} numberOfLines={1}>
+          <Text style={[pr.username, { color: '#D4A017' }]} numberOfLines={1}>
             @{item.username}
           </Text>
         </View>
@@ -336,9 +348,9 @@ function PopularReviewCard({
             <FontAwesome
               name={liked ? 'heart' : 'heart-o'}
               size={12}
-              color={liked ? '#e8963a' : subtext}
+              color={liked ? '#D4A017' : subtext}
             />
-            <Text style={[pr.actionCount, { color: liked ? '#e8963a' : subtext }]}>
+            <Text style={[pr.actionCount, { color: liked ? '#D4A017' : subtext }]}>
               {displayCount}
             </Text>
           </Pressable>
@@ -357,6 +369,7 @@ function PopularReviewModal({
   onToggleComments,
   onAddComment,
   onClose,
+  onAlbumPress,
   isDark,
   colors,
 }: {
@@ -366,11 +379,12 @@ function PopularReviewModal({
   onToggleComments: () => void;
   onAddComment: (body: string, parentId?: string | null) => void;
   onClose: () => void;
+  onAlbumPress: () => void;
   isDark: boolean;
   colors: any;
 }) {
   const commentCount = comments.length;
-  const bg = isDark ? '#1c1410' : colors.background;
+  const bg = isDark ? colors.background : colors.background;
   const border = isDark ? '#2a1e14' : '#e5e5e5';
 
   return (
@@ -383,9 +397,9 @@ function PopularReviewModal({
           {/* Header */}
           <View style={[rm.header, { borderBottomColor: border }]}>
             <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="chevron-down" size={16} color={isDark ? '#a07850' : '#7a5535'} />
+              <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
-            <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>Review</Text>
+            <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
             <View style={{ width: 24 }} />
           </View>
 
@@ -394,22 +408,24 @@ function PopularReviewModal({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
-            {/* Album row */}
-            <View style={rm.albumRow}>
+            {/* Album row — tappable to open album profile */}
+            <Pressable
+              onPress={onAlbumPress}
+              style={({ pressed }) => [rm.albumRow, { opacity: pressed ? 0.7 : 1 }]}>
               <Image source={{ uri: review.artworkUrl }} style={rm.art} />
               <View style={{ flex: 1, gap: 3 }}>
-                <Text style={[rm.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>{review.albumTitle}</Text>
-                <Text style={[rm.albumArtist, { color: isDark ? '#a07850' : '#7a5535' }]}>
+                <Text style={[rm.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>{review.albumTitle}</Text>
+                <Text style={[rm.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
                   {review.albumArtist} · {review.albumYear}
                 </Text>
                 <View style={rm.ratingRow}>
-                  <FontAwesome name="volume-up" size={10} color="#e8963a" />
+                  <FontAwesome name="volume-up" size={10} color="#D4A017" />
                   <View style={rm.ratingBadge}>
                     <Text style={rm.ratingNum}>{review.rating}</Text>
                   </View>
                 </View>
               </View>
-            </View>
+            </Pressable>
 
             {/* Author */}
             <View style={rm.authorRow}>
@@ -420,7 +436,7 @@ function PopularReviewModal({
             </View>
 
             {/* Full review */}
-            <Text style={[rm.reviewText, { color: isDark ? '#a07850' : '#3a2818' }]}>
+            <Text style={[rm.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
               "{review.review}"
             </Text>
 
@@ -432,9 +448,9 @@ function PopularReviewModal({
               <FontAwesome
                 name="comment-o"
                 size={13}
-                color={commentsExpanded ? '#e8963a' : (isDark ? '#7a5535' : '#a07850')}
+                color={commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060')}
               />
-              <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#e8963a' : (isDark ? '#7a5535' : '#a07850') }]}>
+              <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060') }]}>
                 {commentCount === 0
                   ? 'No comments yet'
                   : `${commentCount} comment${commentCount !== 1 ? 's' : ''}`}
@@ -442,7 +458,7 @@ function PopularReviewModal({
               <FontAwesome
                 name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
                 size={10}
-                color={isDark ? '#7a5535' : '#a07850'}
+                color={isDark ? '#6B4C35' : '#A08060'}
                 style={{ marginLeft: 'auto' }}
               />
             </Pressable>
@@ -485,7 +501,7 @@ function FriendCard({
         s.friendCard,
         {
           width: FRIEND_CARD,
-          backgroundColor: isDark ? '#2e2018' : '#EDE9E3',
+          backgroundColor: isDark ? '#3A2820' : '#FFFFFF',
           borderColor: isDark ? '#2a1e14' : '#DDD5C8',
           opacity: pressed ? 0.7 : 1,
         },
@@ -495,9 +511,9 @@ function FriendCard({
       ) : (
         <ArtFallback size={artSize} radius={6} label={friend.album} />
       )}
-      <Text style={[s.friendUser, { color: '#e8963a' }]} numberOfLines={1}>@{friend.user}</Text>
-      <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>{friend.album}</Text>
-      <Text style={[s.cardSub,    { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={1}>{friend.artist}</Text>
+      <Text style={[s.friendUser, { color: '#D4A017' }]} numberOfLines={1}>@{friend.user}</Text>
+      <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{friend.album}</Text>
+      <Text style={[s.cardSub,    { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{friend.artist}</Text>
       <Text style={[s.friendAgo,  { color: colors.subtext }]}>{ago}</Text>
     </Pressable>
   );
@@ -510,6 +526,9 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
+
+  const { loggedAlbums } = useAlbums();
+  const loggedIds = new Set(loggedAlbums.map((a) => a.id));
 
   const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(cache.albums   ?? []);
   const [songs,   setSongs]   = useState<SpotifyTrack[]>(cache.songs    ?? []);
@@ -536,6 +555,22 @@ export default function HomeScreen() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  async function navigateToAlbum(title: string, artist: string, artworkUrl: string, year: string) {
+    try {
+      const q = encodeURIComponent(`${title} ${artist}`);
+      const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
+      if (res.ok) {
+        const data: SpotifyAlbum[] = await res.json();
+        const match = data[0];
+        if (match) {
+          router.push({ pathname: '/album-detail', params: { id: match.id, title: match.title, artist: match.artist, year: String(match.year), artworkUrl: match.artworkUrl } });
+          return;
+        }
+      }
+    } catch {}
+    router.push({ pathname: '/album-detail', params: { id: '', title, artist, artworkUrl, year } });
   }
 
   function handleReviewCardPress(item: PopularReview) {
@@ -615,7 +650,7 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
           renderItem={({ item }) => (
-            <AlbumCard item={item} isDark={isDark} onPress={() => handleAlbumPress(item)} />
+            <AlbumCard item={item} isDark={isDark} isLogged={loggedIds.has(item.id)} onPress={() => handleAlbumPress(item)} />
           )}
         />
       </Section>
@@ -634,10 +669,7 @@ export default function HomeScreen() {
               ago={AGO[index] ?? ''}
               isDark={isDark}
               colors={colors}
-              onPress={() => router.push({
-                pathname: '/album-detail',
-                params: { title: item.album, artist: item.artist, artworkUrl: item.artworkUrl },
-              })}
+              onPress={() => navigateToAlbum(item.album, item.artist, item.artworkUrl, item.year)}
             />
           )}
         />
@@ -657,6 +689,7 @@ export default function HomeScreen() {
               liked={likedReviews.has(item.id)}
               onLike={() => handleLikeReview(item.id)}
               onPress={() => handleReviewCardPress(item)}
+              onAlbumPress={() => navigateToAlbum(item.albumTitle, item.albumArtist, item.artworkUrl, item.albumYear)}
               onCommentCountPress={() => handleReviewCommentCountPress(item)}
               commentCount={commentsMap.get(item.id)?.length ?? 0}
               isDark={isDark}
@@ -669,13 +702,13 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 pr.seeMoreCard,
                 {
-                  backgroundColor: isDark ? '#2e2018' : '#EDE9E3',
+                  backgroundColor: isDark ? '#3A2820' : '#FFFFFF',
                   borderColor: isDark ? '#2a1e14' : '#DDD5C8',
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}>
-              <FontAwesome name="arrow-right" size={20} color="#e8963a" />
-              <Text style={[pr.seeMoreText, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>
+              <FontAwesome name="arrow-right" size={20} color="#D4A017" />
+              <Text style={[pr.seeMoreText, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>
                 See{'\n'}All
               </Text>
             </Pressable>
@@ -702,6 +735,10 @@ export default function HomeScreen() {
           }
           onAddComment={(body, parentId) => handleAddComment(expandedReview.id, body, parentId)}
           onClose={() => { setExpandedReview(null); setExpandedCommentsId(null); }}
+          onAlbumPress={() => {
+            setExpandedReview(null);
+            navigateToAlbum(expandedReview.albumTitle, expandedReview.albumArtist, expandedReview.artworkUrl, expandedReview.albumYear);
+          }}
           isDark={isDark}
           colors={colors}
         />
@@ -764,6 +801,8 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 12, fontWeight: '600' },
   cardSub:   { fontSize: 11 },
 
+  loggedBadge: { position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1.5, borderColor: '#D4A017', alignItems: 'center', justifyContent: 'center' },
+
   rankBadge: {
     position: 'absolute',
     bottom: 6,
@@ -818,7 +857,7 @@ const pr = StyleSheet.create({
     marginTop: 4,
   },
   ratingBadge: {
-    backgroundColor: '#e8963a',
+    backgroundColor: '#D4A017',
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -896,7 +935,7 @@ const rm = StyleSheet.create({
   albumArtist: { fontSize: 13 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   ratingBadge: {
-    backgroundColor: '#e8963a',
+    backgroundColor: '#D4A017',
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -912,7 +951,7 @@ const rm = StyleSheet.create({
     alignItems: 'center',
   },
   avatarLetter: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  username: { color: '#e8963a', fontSize: 13, fontWeight: '600' },
+  username: { color: '#D4A017', fontSize: 13, fontWeight: '600' },
 
   reviewText: { fontSize: 14, lineHeight: 22, fontStyle: 'italic' },
 

@@ -11,6 +11,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum } from '@/context/SpotifyService';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
+import { useAlbums } from '@/context/AlbumsContext';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -53,6 +54,9 @@ export default function DecadeGridScreen() {
   const router = useRouter();
   const cw = cardWidth(width);
 
+  const { loggedAlbums } = useAlbums();
+  const loggedIds = new Set(loggedAlbums.map((a) => a.id));
+
   const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(() => cache[decade ?? ''] ?? []);
   const [loading, setLoading] = useState(!cache[decade ?? '']);
 
@@ -84,7 +88,7 @@ export default function DecadeGridScreen() {
 
       {loading ? (
         <View style={[s.centered, { backgroundColor: colors.background }]}>
-          <ActivityIndicator color="#e8963a" size="large" />
+          <ActivityIndicator color="#D4A017" size="large" />
         </View>
       ) : (
         <ScrollView
@@ -102,6 +106,7 @@ export default function DecadeGridScreen() {
                   textColor={colors.text}
                   subColor={colors.subtext}
                   isDark={isDark}
+                  isLogged={loggedIds.has(item.id)}
                 />
               ) : (
                 <AlbumGridCardPlaceholder key={`placeholder-${i}`} width={cw} isDark={isDark} />

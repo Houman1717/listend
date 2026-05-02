@@ -9,9 +9,12 @@ import {
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SpotifyAlbum } from '@/context/SpotifyService';
+import { useAlbums } from '@/context/AlbumsContext';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -60,6 +63,7 @@ export default function DiscoverResultsScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
+  const { loggedAlbums } = useAlbums();
   const { category, value, title } = useLocalSearchParams<{
     category: string;
     value?: string;
@@ -93,7 +97,7 @@ export default function DiscoverResultsScreen() {
       <Stack.Screen options={{ title: title ?? 'Discover' }} />
       {loading ? (
         <View style={s.center}>
-          <ActivityIndicator color="#e8963a" size="large" />
+          <ActivityIndicator color="#D4A017" size="large" />
         </View>
       ) : error ? (
         <View style={[s.center, { backgroundColor: colors.background }]}>
@@ -113,30 +117,43 @@ export default function DiscoverResultsScreen() {
               <Text style={[s.errorText, { color: colors.subtext }]}>No results found.</Text>
             </View>
           )}
-          renderItem={({ item, index }) => (
-            <Pressable
-              style={({ pressed }) => [
-                s.row,
-                { backgroundColor: pressed ? (isDark ? '#2e2018' : '#f5f5f5') : 'transparent' },
-              ]}
-              onPress={() => handleLog(item)}>
-              {showRank && (
-                <Text style={[s.rank, { color: colors.subtext }]}>{index + 1}</Text>
-              )}
-              {item.artworkUrl ? (
-                <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
-              ) : (
-                <View style={[s.artwork, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
-              )}
-              <View style={s.info}>
-                <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>
-                  {item.artist}{item.year ? ` · ${item.year}` : ''}
-                </Text>
-              </View>
-              <Text style={s.logHint}>+ Log</Text>
-            </Pressable>
-          )}
+          renderItem={({ item, index }) => {
+            const isLogged = !!loggedAlbums.find((a) => a.id === item.id);
+            return (
+              <Pressable
+                style={({ pressed }) => [
+                  s.row,
+                  { backgroundColor: pressed ? (isDark ? '#2e2018' : '#f5f5f5') : 'transparent' },
+                ]}
+                onPress={() => handleLog(item)}>
+                {showRank && (
+                  <Text style={[s.rank, { color: colors.subtext }]}>{index + 1}</Text>
+                )}
+                <View>
+                  {item.artworkUrl ? (
+                    <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
+                  ) : (
+                    <View style={[s.artwork, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
+                  )}
+                  {isLogged && (
+                    <View style={s.loggedBadge}>
+                      <Ionicons name="checkmark" size={9} color="#D4A017" />
+                    </View>
+                  )}
+                </View>
+                <View style={s.info}>
+                  <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                  <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>
+                    {item.artist}{item.year ? ` · ${item.year}` : ''}
+                  </Text>
+                  {isLogged && (
+                    <Text style={s.loggedLabel}>Listend</Text>
+                  )}
+                </View>
+                {!isLogged && <Text style={s.logHint}>+ Log</Text>}
+              </Pressable>
+            );
+          }}
         />
       )}
     </>
@@ -157,8 +174,22 @@ const s = StyleSheet.create({
   },
   rank: { width: 22, fontSize: 13, fontWeight: '700', textAlign: 'right' },
   artwork: { width: 52, height: 52, borderRadius: 4, flexShrink: 0 },
+  loggedBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1.5,
+    borderColor: '#D4A017',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loggedLabel: { fontSize: 11, fontWeight: '600', color: '#D4A017' },
   info: { flex: 1, gap: 2 },
   title: { fontSize: 15, fontWeight: '600' },
   artist: { fontSize: 13 },
-  logHint: { color: '#e8963a', fontSize: 13, fontWeight: '600' },
+  logHint: { color: '#D4A017', fontSize: 13, fontWeight: '600' },
 });

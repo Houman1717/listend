@@ -21,25 +21,24 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const API_URL    = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
-const DARK_BG    = '#1c1410';
-const CARD_BG    = '#2e2018';
-const BORDER     = '#2a1e14';
-const TEXT       = '#f5e6c8';
-const SUBTEXT    = '#a07850';
-const ACCENT     = '#e8963a';
+const API_URL     = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+const ACCENT      = '#D4A017';
 const AVATAR_SIZE = 80;
 
-const FAV_GAP    = 3;
-const FAV_SLOTS  = 5;
+const FAV_GAP      = 3;
+const FAV_SLOTS    = 5;
 const FAV_SLOT_SIZE = Math.floor(
   (Dimensions.get('window').width - 40 - FAV_GAP * (FAV_SLOTS - 1)) / FAV_SLOTS
 );
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type ColorsType = typeof Colors.light;
 
 type FavAlbum  = { id: string; title: string; artist: string; artworkUrl: string; year?: number };
 type FavSong   = { id: string; title: string; artist: string; artworkUrl: string; releaseDate?: string };
@@ -58,9 +57,6 @@ type Profile = {
 };
 
 // ─── JSONB normalisers ────────────────────────────────────────────────────────
-// The JSONB stored in Supabase may use camelCase (artworkUrl) from newer saves
-// or snake_case (artwork_url) from older saves. Normalise both so images always
-// resolve regardless of which format a user's data was written in.
 
 function normaliseTopAlbums(raw: any): FavAlbum[] {
   if (!Array.isArray(raw)) return [];
@@ -106,22 +102,25 @@ function RatingModal({
   avgRating: string;
   distribution: RatingDist[];
 }) {
-  const maxCount = Math.max(...distribution.map(d => d.count), 1);
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+  const maxCount    = Math.max(...distribution.map(d => d.count), 1);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={rm.container}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <SafeAreaView style={rm.sheet}>
-          <View style={rm.handle} />
+        <SafeAreaView style={[rm.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <View style={[rm.handle, { backgroundColor: colors.border }]} />
           <View style={rm.header}>
-            <Text style={rm.headerTitle}>Rating Breakdown</Text>
+            <Text style={[rm.headerTitle, { color: colors.text }]}>Rating Breakdown</Text>
             <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="times" size={16} color={SUBTEXT} />
+              <FontAwesome name="times" size={16} color={colors.subtext} />
             </Pressable>
           </View>
-          <View style={rm.avgBlock}>
+          <View style={[rm.avgBlock, { borderBottomColor: colors.border }]}>
             <Text style={rm.avgValue}>{avgRating}</Text>
-            <Text style={rm.avgLabel}>average rating</Text>
+            <Text style={[rm.avgLabel, { color: colors.subtext }]}>average rating</Text>
           </View>
           <View style={rm.distBlock}>
             {[...distribution].reverse().map(({ rating, count }) => {
@@ -129,15 +128,15 @@ function RatingModal({
               const empty  = 1 - filled;
               return (
                 <View key={rating} style={rm.distRow}>
-                  <Text style={rm.distRating}>{rating}</Text>
-                  <View style={rm.barTrack}>
+                  <Text style={[rm.distRating, { color: colors.subtext }]}>{rating}</Text>
+                  <View style={[rm.barTrack, { backgroundColor: colors.border }]}>
                     <View style={[rm.barFilled, {
                       flex: filled,
                       opacity: 0.4 + (count / maxCount) * 0.6,
                     }]} />
                     {empty > 0 && <View style={{ flex: empty }} />}
                   </View>
-                  <Text style={rm.distCount}>{count}</Text>
+                  <Text style={[rm.distCount, { color: colors.text }]}>{count}</Text>
                 </View>
               );
             })}
@@ -159,12 +158,14 @@ function FavSlotReadOnly({
   circular?: boolean;
   onPress?: () => void;
 }) {
-  const radius = circular ? FAV_SLOT_SIZE / 2 : 3;
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+  const radius      = circular ? FAV_SLOT_SIZE / 2 : 3;
 
   let inner: React.ReactNode;
   if (item?.artworkUrl) {
     inner = (
-      <View style={[s.favSlot, { borderRadius: radius }]}>
+      <View style={[s.favSlot, { borderRadius: radius, backgroundColor: colors.surface }]}>
         <Image
           source={{ uri: item.artworkUrl }}
           style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE, borderRadius: radius }}
@@ -174,15 +175,14 @@ function FavSlotReadOnly({
     );
   } else if (item) {
     inner = (
-      <View style={[s.favSlot, { borderRadius: radius }]}>
-        <View style={[s.favInitialBg, { borderRadius: radius }]}>
-          <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
+      <View style={[s.favSlot, { borderRadius: radius, backgroundColor: colors.surface }]}>
+        <View style={[s.favInitialBg, { borderRadius: radius, backgroundColor: colors.surface }]}>
+          <Text style={[s.favInitial, { color: colors.subtext }]}>{item.title.charAt(0)}</Text>
         </View>
       </View>
     );
   } else {
-    // Empty slot — read-only, no "+" button
-    return <View style={[s.favSlot, s.favEmpty, { borderRadius: radius }]} />;
+    return <View style={[s.favSlot, { borderRadius: radius, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]} />;
   }
 
   if (onPress) {
@@ -206,13 +206,16 @@ function FavSlotEdit({
   circular?: boolean;
   onPress: () => void;
 }) {
-  const radius = circular ? FAV_SLOT_SIZE / 2 : 3;
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+  const radius      = circular ? FAV_SLOT_SIZE / 2 : 3;
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
       {item?.artworkUrl ? (
-        <View style={[s.favSlot, { borderRadius: radius }]}>
+        <View style={[s.favSlot, { borderRadius: radius, backgroundColor: colors.surface }]}>
           <Image
             source={{ uri: item.artworkUrl }}
             style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE, borderRadius: radius }}
@@ -223,17 +226,25 @@ function FavSlotEdit({
           </View>
         </View>
       ) : item ? (
-        <View style={[s.favSlot, { borderRadius: radius }]}>
-          <View style={[s.favInitialBg, { borderRadius: radius }]}>
-            <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
+        <View style={[s.favSlot, { borderRadius: radius, backgroundColor: colors.surface }]}>
+          <View style={[s.favInitialBg, { borderRadius: radius, backgroundColor: colors.surface }]}>
+            <Text style={[s.favInitial, { color: colors.subtext }]}>{item.title.charAt(0)}</Text>
           </View>
           <View style={[s.favEditOverlay, { borderRadius: radius }]}>
             <FontAwesome name="pencil" size={10} color="#fff" />
           </View>
         </View>
       ) : (
-        <View style={[s.favSlot, s.favEmptyEdit, { borderRadius: radius }]}>
-          <FontAwesome name="plus" size={14} color="#7a5535" />
+        <View style={[s.favSlot, {
+          borderRadius: radius,
+          borderWidth: 1.5,
+          borderColor: colors.border,
+          borderStyle: 'dashed',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'transparent',
+        }]}>
+          <FontAwesome name="plus" size={14} color={colors.subtext} />
         </View>
       )}
     </Pressable>
@@ -253,6 +264,9 @@ function SlotPickerModal({
   onSelect: (item: FavAlbum | FavSong | FavArtist) => void;
   onClose: () => void;
 }) {
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+
   const [query,     setQuery]     = useState('');
   const [results,   setResults]   = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
@@ -293,28 +307,28 @@ function SlotPickerModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: DARK_BG }}
+        style={[{ flex: 1 }, { backgroundColor: colors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <SafeAreaView style={{ flex: 1 }}>
 
           {/* Header */}
-          <View style={sp.header}>
+          <View style={[sp.header, { borderBottomColor: colors.border }]}>
             <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="times" size={18} color={SUBTEXT} />
+              <FontAwesome name="times" size={18} color={colors.subtext} />
             </Pressable>
-            <Text style={sp.title}>{modalTitle}</Text>
+            <Text style={[sp.title, { color: colors.text }]}>{modalTitle}</Text>
             <View style={{ width: 18 }} />
           </View>
 
           {/* Search bar */}
-          <View style={sp.searchBar}>
-            <FontAwesome name="search" size={13} color={SUBTEXT} />
+          <View style={[sp.searchBar, { backgroundColor: colors.surface }]}>
+            <FontAwesome name="search" size={13} color={colors.subtext} />
             <TextInput
-              style={sp.searchInput}
+              style={[sp.searchInput, { color: colors.text }]}
               value={query}
               onChangeText={setQuery}
               placeholder={placeholder}
-              placeholderTextColor={SUBTEXT}
+              placeholderTextColor={colors.subtext}
               autoFocus
               clearButtonMode="while-editing"
               returnKeyType="search"
@@ -342,16 +356,16 @@ function SlotPickerModal({
                     {artwork ? (
                       <Image
                         source={{ uri: artwork }}
-                        style={[sp.resultArt, circular && { borderRadius: 22 }]}
+                        style={[sp.resultArt, circular && { borderRadius: 22 }, { backgroundColor: colors.surface }]}
                       />
                     ) : (
-                      <View style={[sp.resultArt, { backgroundColor: CARD_BG, justifyContent: 'center', alignItems: 'center' }, circular && { borderRadius: 22 }]}>
-                        <Text style={{ color: SUBTEXT, fontSize: 14 }}>{title.charAt(0)}</Text>
+                      <View style={[sp.resultArt, { backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }, circular && { borderRadius: 22 }]}>
+                        <Text style={{ color: colors.subtext, fontSize: 14 }}>{title.charAt(0)}</Text>
                       </View>
                     )}
                     <View style={sp.resultText}>
-                      <Text style={sp.resultTitle} numberOfLines={1}>{title}</Text>
-                      {sub ? <Text style={sp.resultSub} numberOfLines={1}>{sub}</Text> : null}
+                      <Text style={[sp.resultTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
+                      {sub ? <Text style={[sp.resultSub, { color: colors.subtext }]} numberOfLines={1}>{sub}</Text> : null}
                     </View>
                   </Pressable>
                 );
@@ -372,11 +386,13 @@ function NavRow({
   label,
   sub,
   onPress,
+  colors,
 }: {
   icon: React.ComponentProps<typeof FontAwesome>['name'];
   label: string;
   sub: string;
   onPress: () => void;
+  colors: ColorsType;
 }) {
   return (
     <Pressable
@@ -386,10 +402,10 @@ function NavRow({
         <FontAwesome name={icon} size={16} color={ACCENT} />
       </View>
       <View style={s.navRowText}>
-        <Text style={s.navLabel}>{label}</Text>
-        <Text style={s.navSub}>{sub}</Text>
+        <Text style={[s.navLabel, { color: colors.text }]}>{label}</Text>
+        <Text style={[s.navSub, { color: colors.subtext }]}>{sub}</Text>
       </View>
-      <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+      <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
     </Pressable>
   );
 }
@@ -397,8 +413,11 @@ function NavRow({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function UserProfileScreen() {
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+
   const { userId }     = useLocalSearchParams<{ userId: string }>();
-  const viewedUserId   = userId; // alias — makes nav params and logs unambiguous
+  const viewedUserId   = userId;
   const { user }       = useAuth();
   const navigation     = useNavigation();
   const router         = useRouter();
@@ -408,7 +427,6 @@ export default function UserProfileScreen() {
   const [profile,        setProfile]        = useState<Profile | null>(null);
   const [loading,        setLoading]        = useState(true);
 
-  // Top 5 edit mode
   const [top5EditMode,    setTop5EditMode]    = useState(false);
   const [isSaving,        setIsSaving]        = useState(false);
   const [draftTopAlbums,  setDraftTopAlbums]  = useState<FavAlbum[]>([]);
@@ -417,14 +435,12 @@ export default function UserProfileScreen() {
   const [slotPicker, setSlotPicker] = useState<{ type: 'album' | 'song' | 'artist'; index: number } | null>(null);
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
-  // Follow state — read from Supabase on load so it persists across sessions
   const [isFollowing,    setIsFollowing]    = useState(false);
   const [isMutual,       setIsMutual]       = useState(false);
   const [followLoading,  setFollowLoading]  = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
 
-  // Stats
   const [albumCount,    setAlbumCount]    = useState(0);
   const [thisYearCount, setThisYearCount] = useState(0);
   const [avgRating,     setAvgRating]     = useState('—');
@@ -433,44 +449,28 @@ export default function UserProfileScreen() {
   const [wantCount,     setWantCount]     = useState(0);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
 
-  // Top 5 come from the profiles JSONB columns (top_albums, top_songs, top_artists).
-  // derivedTopAlbums/Artists are no longer used — profile.top_albums etc. are used directly.
-
   // ── Load all data ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
 
-    // Capture both IDs up front so every log line is unambiguous
-    const currentUserId  = user?.id ?? null;
-    const viewedUserId   = userId;
-    console.log('[UserProfile] currentUserId :', currentUserId);
-    console.log('[UserProfile] viewedUserId  :', viewedUserId);
+    const currentUserId = user?.id ?? null;
 
     async function load() {
       setLoading(true);
       try {
-        // 1. Profile row — core columns only (top_albums/top_songs/top_artists
-        //    are fetched separately so a missing-column error doesn't block the
-        //    whole profile from loading).
         const { data: prof, error: profErr } = await supabase
           .from('profiles')
           .select('id, display_name, username, bio, avatar_url, cover_photo_url')
           .eq('id', viewedUserId)
           .single();
 
-        console.log('[UserProfile] profile data :', JSON.stringify(prof));
-        console.log('[UserProfile] profile error:', JSON.stringify(profErr));
-
         if (profErr) console.error('[UserProfile] profile fetch error:', profErr);
         if (prof) {
-          // Try to fetch top-5 favourites separately; ignore errors if columns
-          // haven't been added to the DB yet.
-          const { data: favData, error: favErr } = await supabase
+          const { data: favData } = await supabase
             .from('profiles')
             .select('top_albums, top_songs, top_artists')
             .eq('id', viewedUserId)
             .single();
-          console.log('[UserProfile] top5 result:', JSON.stringify(favData), JSON.stringify(favErr));
 
           setProfile({
             ...prof,
@@ -483,56 +483,38 @@ export default function UserProfileScreen() {
           });
         }
 
-        // 2. Followers / Following counts
-        const [{ count: followers, error: flwrsErr }, { count: following, error: flwngErr }] =
+        const [{ count: followers }, { count: following }] =
           await Promise.all([
-            supabase
-              .from('follows')
-              .select('*', { count: 'exact', head: true })
-              .eq('following_id', viewedUserId),
-            supabase
-              .from('follows')
-              .select('*', { count: 'exact', head: true })
-              .eq('follower_id', viewedUserId),
+            supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', viewedUserId),
+            supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', viewedUserId),
           ]);
-        if (flwrsErr) console.error('[UserProfile] followers count error:', flwrsErr);
-        if (flwngErr) console.error('[UserProfile] following count error:', flwngErr);
         setFollowersCount(followers ?? 0);
         setFollowingCount(following ?? 0);
 
-        // 3. Current user's follow state + mutual-follow check
-        //    Uses .match() + .single(); PGRST116 = "no row" = not following (not a real error)
         if (currentUserId) {
-          // Does current user follow viewed user?
           const { data: outgoing, error: outErr } = await supabase
             .from('follows')
             .select('id')
             .match({ follower_id: currentUserId, following_id: viewedUserId })
             .single();
-          console.log('[UserProfile] outgoing follow row:', outgoing, 'error:', outErr?.code);
           const currentFollowsViewed = !!outgoing && !outErr;
           setIsFollowing(currentFollowsViewed);
 
-          // Does viewed user follow current user back?
           const { data: incoming, error: inErr } = await supabase
             .from('follows')
             .select('id')
             .match({ follower_id: viewedUserId, following_id: currentUserId })
             .single();
-          console.log('[UserProfile] incoming follow row:', incoming, 'error:', inErr?.code);
           const viewedFollowsCurrent = !!incoming && !inErr;
-
           setIsMutual(currentFollowsViewed && viewedFollowsCurrent);
         }
 
-        // 4. Album stats + Top 5 Albums/Artists derived from user_albums
-        const { data: userAlbums, error: albumsErr } = await supabase
+        const { data: userAlbums } = await supabase
           .from('user_albums')
           .select('spotify_id, title, artist, artwork_url, rating, review, year, listened_at')
           .eq('user_id', viewedUserId)
           .order('listened_at', { ascending: false });
-        console.log('[UserProfile] user_albums result:', JSON.stringify(userAlbums), JSON.stringify(albumsErr));
-        if (albumsErr) console.error('[UserProfile] user_albums error:', albumsErr);
+
         if (userAlbums) {
           const thisYear = new Date().getFullYear();
           const withRating = userAlbums.filter((a: any) => a.rating > 0);
@@ -551,17 +533,12 @@ export default function UserProfileScreen() {
             }));
             setRatingDist(dist);
           }
-
-          // Top 5 Albums and Artists are read from profiles JSONB (see step 1 above),
-          // not derived from user_albums, so no further action needed here.
         }
 
-        // 5. Want-to-listen count
-        const { count: want, error: wantErr } = await supabase
+        const { count: want } = await supabase
           .from('want_to_listen')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', viewedUserId);
-        if (wantErr) console.error('[UserProfile] want_to_listen count error:', wantErr);
         setWantCount(want ?? 0);
 
       } catch (e) {
@@ -577,14 +554,7 @@ export default function UserProfileScreen() {
   // ── Follow / Unfollow ────────────────────────────────────────────────────────
   async function handleFollow() {
     const currentUserId = user?.id ?? null;
-    const viewedUserId  = userId;
-
-    console.log('[UserProfile] handleFollow — currentUserId:', currentUserId, 'viewedUserId:', viewedUserId, 'isFollowing:', isFollowing);
-
-    if (!currentUserId || !viewedUserId || followLoading) {
-      console.warn('[UserProfile] handleFollow bailed out — missing id or already loading');
-      return;
-    }
+    if (!currentUserId || !viewedUserId || followLoading) return;
     setFollowLoading(true);
 
     if (isFollowing) {
@@ -592,25 +562,20 @@ export default function UserProfileScreen() {
         .from('follows')
         .delete()
         .match({ follower_id: currentUserId, following_id: viewedUserId });
-      if (error) {
-        console.error('[UserProfile] unfollow error:', error);
-      } else {
-        console.log('[UserProfile] unfollowed successfully');
+      if (!error) {
         setIsFollowing(false);
-        setIsMutual(false); // can't be mutual if we no longer follow them
+        setIsMutual(false);
         setFollowersCount(n => Math.max(0, n - 1));
+      } else {
+        console.error('[UserProfile] unfollow error:', error);
       }
     } else {
       const { error } = await supabase
         .from('follows')
         .insert({ follower_id: currentUserId, following_id: viewedUserId });
-      if (error) {
-        console.error('[UserProfile] follow insert error:', error);
-      } else {
-        console.log('[UserProfile] followed successfully');
+      if (!error) {
         setIsFollowing(true);
         setFollowersCount(n => n + 1);
-        // Notify the followed user
         supabase.from('notifications').insert({
           user_id:  viewedUserId,
           type:     'follow',
@@ -618,13 +583,14 @@ export default function UserProfileScreen() {
         }).then(({ error: notifErr }) => {
           if (notifErr) console.error('[UserProfile] notification insert error:', notifErr.message);
         });
-        // Check if they already follow us back — if so, it's now mutual
         const { data: incoming } = await supabase
           .from('follows')
           .select('id')
           .match({ follower_id: viewedUserId, following_id: currentUserId })
           .single();
         setIsMutual(!!incoming);
+      } else {
+        console.error('[UserProfile] follow insert error:', error);
       }
     }
 
@@ -675,7 +641,7 @@ export default function UserProfileScreen() {
   // ── Loading / not found ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={s.center}>
+      <View style={[s.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={ACCENT} size="large" />
       </View>
     );
@@ -683,8 +649,8 @@ export default function UserProfileScreen() {
 
   if (!profile) {
     return (
-      <View style={s.center}>
-        <Text style={{ color: SUBTEXT, fontSize: 15 }}>User not found.</Text>
+      <View style={[s.center, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.subtext, fontSize: 15 }}>User not found.</Text>
       </View>
     );
   }
@@ -701,7 +667,7 @@ export default function UserProfileScreen() {
       onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
     />
     <ScrollView
-      style={s.container}
+      style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}>
 
@@ -710,49 +676,53 @@ export default function UserProfileScreen() {
         <View style={s.cover}>
           <Image source={{ uri: profile.cover_photo_url }} style={s.coverImg} resizeMode="cover" />
           <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 100 }}>
-            <LinearGradient colors={['transparent', DARK_BG]} style={{ flex: 1 }} />
+            <LinearGradient colors={['transparent', colors.background]} style={{ flex: 1 }} />
           </View>
         </View>
       ) : null}
 
       {/* ── Profile body ───────────────────────────────────────────────────── */}
-      <View style={[s.profileBody, !profile.cover_photo_url && s.profileBodyNoCover]}>
+      <View style={[s.profileBody, !profile.cover_photo_url && s.profileBodyNoCover, { borderBottomColor: colors.border }]}>
 
         {/* Avatar */}
-        <View style={[s.avatarWrap, !profile.cover_photo_url && s.avatarWrapNoCover]}>
+        <View style={[
+          s.avatarWrap,
+          !profile.cover_photo_url && s.avatarWrapNoCover,
+          { borderColor: colors.border, backgroundColor: colors.border },
+        ]}>
           {profile.avatar_url ? (
             <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} resizeMode="cover" />
           ) : (
-            <View style={s.avatarFallback}>
-              <Text style={s.avatarInitial}>{initial}</Text>
+            <View style={[s.avatarFallback, { backgroundColor: colors.border }]}>
+              <Text style={[s.avatarInitial, { color: colors.subtext }]}>{initial}</Text>
             </View>
           )}
         </View>
 
         {/* Name */}
-        <Text style={s.name}>{name}</Text>
+        <Text style={[s.name, { color: colors.text }]}>{name}</Text>
 
         {/* Username */}
-        {profile.username ? <Text style={s.username}>@{profile.username}</Text> : null}
+        {profile.username ? <Text style={[s.username, { color: colors.subtext }]}>@{profile.username}</Text> : null}
 
         {/* Bio */}
-        {profile.bio ? <Text style={s.bio}>{profile.bio}</Text> : null}
+        {profile.bio ? <Text style={[s.bio, { color: colors.subtext }]}>{profile.bio}</Text> : null}
 
         {/* Following / Followers */}
         <View style={s.socialRow}>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'following' } })}>
-            <Text style={s.socialCount}>{followingCount}</Text>
+            <Text style={[s.socialCount, { color: colors.text }]}>{followingCount}</Text>
           </Pressable>
-          <Text style={s.socialLabel}> Following</Text>
-          <Text style={s.socialDot}> · </Text>
+          <Text style={[s.socialLabel, { color: colors.subtext }]}> Following</Text>
+          <Text style={[s.socialDot, { color: colors.subtext }]}> · </Text>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'followers' } })}>
-            <Text style={s.socialCount}>{followersCount}</Text>
+            <Text style={[s.socialCount, { color: colors.text }]}>{followersCount}</Text>
           </Pressable>
-          <Text style={s.socialLabel}> Followers</Text>
+          <Text style={[s.socialLabel, { color: colors.subtext }]}> Followers</Text>
         </View>
 
         {/* Follow + Message buttons */}
@@ -760,47 +730,47 @@ export default function UserProfileScreen() {
           <Pressable
             style={({ pressed }) => [
               s.followBtn,
-              isFollowing && s.followBtnActive,
+              isFollowing && { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: ACCENT },
               isMutual && s.followBtnMutual,
               { opacity: pressed || followLoading ? 0.7 : 1 },
             ]}
             onPress={handleFollow}
             disabled={followLoading}>
-            <Text style={[s.followBtnText, isFollowing && s.followBtnTextActive]}>
+            <Text style={[s.followBtnText, isFollowing && { color: ACCENT }]}>
               {isFollowing ? 'Following' : 'Follow'}
             </Text>
           </Pressable>
 
           {isMutual && (
             <Pressable
-              style={({ pressed }) => [s.messageBtn, { opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [s.messageBtn, { borderColor: ACCENT, opacity: pressed ? 0.7 : 1 }]}
               onPress={() => router.push({ pathname: '/dm-conversation', params: { userId: viewedUserId } })}>
-              <Text style={s.messageBtnText}>Message</Text>
+              <Text style={[s.messageBtnText, { color: ACCENT }]}>Message</Text>
             </Pressable>
           )}
         </View>
 
         {/* Stats */}
-        <View style={s.statsRow}>
+        <View style={[s.statsRow, { backgroundColor: colors.surface }]}>
           <Pressable
             style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId } })}>
-            <Text style={s.statValue}>{albumCount}</Text>
-            <Text style={s.statLabel}>Albums</Text>
+            <Text style={[s.statValue, { color: colors.text }]}>{albumCount}</Text>
+            <Text style={[s.statLabel, { color: colors.subtext }]}>Albums</Text>
           </Pressable>
-          <View style={s.statDivider} />
+          <View style={[s.statDivider, { backgroundColor: colors.border }]} />
           <Pressable
             style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}>
-            <Text style={s.statValue}>{thisYearCount}</Text>
-            <Text style={s.statLabel}>This Year</Text>
+            <Text style={[s.statValue, { color: colors.text }]}>{thisYearCount}</Text>
+            <Text style={[s.statLabel, { color: colors.subtext }]}>This Year</Text>
           </Pressable>
-          <View style={s.statDivider} />
+          <View style={[s.statDivider, { backgroundColor: colors.border }]} />
           <Pressable
             style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => setRatingModalVisible(true)}>
-            <Text style={s.statValue}>{avgRating}</Text>
-            <Text style={s.statLabel}>Avg Rating</Text>
+            <Text style={[s.statValue, { color: colors.text }]}>{avgRating}</Text>
+            <Text style={[s.statLabel, { color: colors.subtext }]}>Avg Rating</Text>
           </Pressable>
         </View>
 
@@ -816,7 +786,7 @@ export default function UserProfileScreen() {
       {/* ── Top 5 Albums ───────────────────────────────────────────────────── */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>TOP 5 ALBUMS</Text>
+          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 ALBUMS</Text>
           {isOwnProfile && (
             top5EditMode ? (
               <Pressable
@@ -825,11 +795,11 @@ export default function UserProfileScreen() {
                 style={({ pressed }) => ({ opacity: pressed || isSaving ? 0.6 : 1 })}>
                 {isSaving
                   ? <ActivityIndicator size="small" color={ACCENT} />
-                  : <Text style={s.editBtn}>Done</Text>}
+                  : <Text style={[s.editBtn, { color: ACCENT }]}>Done</Text>}
               </Pressable>
             ) : (
               <Pressable onPress={handleEnterEditMode} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
-                <Text style={s.editBtn}>Edit</Text>
+                <Text style={[s.editBtn, { color: ACCENT }]}>Edit</Text>
               </Pressable>
             )
           )}
@@ -857,12 +827,12 @@ export default function UserProfileScreen() {
         </View>
       </View>
 
-      <View style={s.rule} />
+      <View style={[s.rule, { backgroundColor: colors.border }]} />
 
       {/* ── Top 5 Songs ────────────────────────────────────────────────────── */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>TOP 5 SONGS</Text>
+          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 SONGS</Text>
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
@@ -887,12 +857,12 @@ export default function UserProfileScreen() {
         </View>
       </View>
 
-      <View style={s.rule} />
+      <View style={[s.rule, { backgroundColor: colors.border }]} />
 
       {/* ── Top 5 Artists ──────────────────────────────────────────────────── */}
       <View style={s.section}>
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>TOP 5 ARTISTS</Text>
+          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 ARTISTS</Text>
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
@@ -920,62 +890,22 @@ export default function UserProfileScreen() {
       </View>
 
       {/* ── Nav rows ──────────────────────────────────────────────────────── */}
-      <View style={s.navGroup}>
-        <NavRow
-          icon="music"
-          label="Listend"
-          sub={`${albumCount} albums`}
-          onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId } })}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="calendar"
-          label="Sessions"
-          sub="Listening diary"
-          onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="bookmark-o"
-          label="Want to Listen"
-          sub={`${wantCount} saved`}
-          onPress={() => router.push({ pathname: '/want-to-listen', params: { userId: viewedUserId } })}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="clock-o"
-          label="Recent Activity"
-          sub={`${albumCount} logged albums`}
-          onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="pencil"
-          label="Reviews"
-          sub={`${reviewCount} reviews`}
-          onPress={() => router.push({ pathname: '/my-reviews', params: { userId: viewedUserId } })}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="list"
-          label="Playlists"
-          sub="Album lists"
-          onPress={() => router.push({ pathname: '/my-playlists', params: { userId: viewedUserId } })}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="heart"
-          label="Liked Artists"
-          sub="Their favourites"
-          onPress={() => router.push({ pathname: '/liked-artists', params: { readOnly: '1' } })}
-        />
-        <View style={s.navSeparator} />
-        <NavRow
-          icon="bar-chart"
-          label="Stats"
-          sub="Listening insights"
-          onPress={() => router.push({ pathname: '/my-stats', params: { userId: viewedUserId } })}
-        />
+      <View style={[s.navGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <NavRow icon="music"      label="Listend"        sub={`${albumCount} albums`}        onPress={() => router.push({ pathname: '/my-listend',      params: { userId: viewedUserId } })} colors={colors} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow icon="calendar"   label="Sessions"       sub="Listening diary"               onPress={() => router.push({ pathname: '/sessions',         params: { userId: viewedUserId } })} colors={colors} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow icon="bookmark-o" label="Want to Listen" sub={`${wantCount} saved`}          onPress={() => router.push({ pathname: '/want-to-listen',   params: { userId: viewedUserId } })} colors={colors} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`} onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })} colors={colors} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow icon="pencil"     label="Reviews"        sub={`${reviewCount} reviews`}      onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId } })} colors={colors} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow icon="list"       label="Playlists"      sub="Album lists"                   onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId } })} colors={colors} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow icon="heart"      label="Liked Artists"  sub="Their favourites"              onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId } })} colors={colors} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow icon="bar-chart"  label="Stats"          sub="Listening insights"            onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId } })} colors={colors} />
       </View>
 
       <SlotPickerModal
@@ -993,9 +923,9 @@ export default function UserProfileScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: DARK_BG },
+  container: { flex: 1 },
   content:   { paddingBottom: 48 },
-  center:    { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: DARK_BG },
+  center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Cover
   cover:    { width: '100%', aspectRatio: 16 / 9, overflow: 'hidden' },
@@ -1007,7 +937,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
   },
   profileBodyNoCover: { paddingTop: 24 },
 
@@ -1020,23 +949,16 @@ const s = StyleSheet.create({
     marginTop: -(AVATAR_SIZE / 2),
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#3a2818',
-    backgroundColor: '#2a1e14',
   },
   avatarWrapNoCover: { marginTop: 0 },
-  avatarImg: { width: '100%', height: '100%' },
-  avatarFallback: {
-    flex: 1,
-    backgroundColor: '#2a1e14',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: { color: SUBTEXT, fontSize: 28, fontWeight: '700' },
+  avatarImg:     { width: '100%', height: '100%' },
+  avatarFallback:{ flex: 1, alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { fontSize: 28, fontWeight: '700' },
 
   // Text
-  name:     { color: TEXT,    fontSize: 20, fontWeight: '700', textAlign: 'center' },
-  username: { color: SUBTEXT, fontSize: 14, marginTop: 2,      textAlign: 'center' },
-  bio:      { color: '#a07850',  fontSize: 14, lineHeight: 20,    textAlign: 'center', marginTop: 10, maxWidth: 320 },
+  name:     { fontSize: 20, fontWeight: '700', textAlign: 'center' },
+  username: { fontSize: 14, marginTop: 2, textAlign: 'center' },
+  bio:      { fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 10, maxWidth: 320 },
 
   // Social counts
   socialRow: {
@@ -1045,9 +967,9 @@ const s = StyleSheet.create({
     marginTop: 12,
     marginBottom: 4,
   },
-  socialCount: { color: TEXT,    fontSize: 13, fontWeight: '700' },
-  socialLabel: { color: SUBTEXT, fontSize: 13 },
-  socialDot:   { color: SUBTEXT, fontSize: 13 },
+  socialCount: { fontSize: 13, fontWeight: '700' },
+  socialLabel: { fontSize: 13 },
+  socialDot:   { fontSize: 13 },
 
   // Follow + Message button row
   actionRow: {
@@ -1058,41 +980,30 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
 
-  // Follow button (Follow = filled accent, Following = outlined)
+  // Follow button
   followBtn: {
     backgroundColor: ACCENT,
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 32,
   },
-  followBtnActive: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: ACCENT,
-  },
-  // When mutual, narrow the follow button slightly to make room for Message
-  followBtnMutual: {
-    paddingHorizontal: 20,
-  },
-  followBtnText:       { color: '#fff',  fontSize: 14, fontWeight: '700' },
-  followBtnTextActive: { color: ACCENT },
+  followBtnMutual: { paddingHorizontal: 20 },
+  followBtnText:   { color: '#fff', fontSize: 14, fontWeight: '700' },
 
-  // Message button — pink outline pill, only shown on mutual follows
+  // Message button
   messageBtn: {
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderWidth: 1.5,
-    borderColor: ACCENT,
     backgroundColor: 'transparent',
   },
-  messageBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  messageBtnText: { fontSize: 14, fontWeight: '700' },
 
   // Stats
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD_BG,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 8,
@@ -1100,9 +1011,9 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   statBox:     { flex: 1, alignItems: 'center', gap: 3 },
-  statValue:   { color: TEXT,    fontSize: 20, fontWeight: '700' },
-  statLabel:   { color: SUBTEXT, fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.8 },
-  statDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: BORDER },
+  statValue:   { fontSize: 20, fontWeight: '700' },
+  statLabel:   { fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.8 },
+  statDivider: { width: StyleSheet.hairlineWidth, height: 32 },
 
   // Sections (Top 5)
   section: { paddingHorizontal: 20, paddingVertical: 18 },
@@ -1112,64 +1023,40 @@ const s = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  sectionTitle: {
-    color: SUBTEXT, fontSize: 11, fontWeight: '700',
-    letterSpacing: 1.5, textTransform: 'uppercase',
-  },
-  rule: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 20 },
+  sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
+  rule:         { height: StyleSheet.hairlineWidth, marginHorizontal: 20 },
 
-  // Fav slots
+  // Fav slots (layout only — colors applied inline)
   favRow: { flexDirection: 'row', gap: FAV_GAP },
   favSlot: {
     width: FAV_SLOT_SIZE,
     height: FAV_SLOT_SIZE,
-    borderRadius: 3,
     overflow: 'hidden',
-    backgroundColor: CARD_BG,
-  },
-  favEmpty: {
-    borderWidth: 1,
-    borderColor: '#2a1e14',
-  },
-  favEmptyEdit: {
-    borderWidth: 1.5,
-    borderColor: '#3a2818',
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   favEditOverlay: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
+    bottom: 0, right: 0,
+    width: 20, height: 20,
     backgroundColor: 'rgba(0,0,0,0.65)',
     borderTopLeftRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  editBtn: {
-    color: ACCENT,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  editBtn: { fontSize: 13, fontWeight: '600' },
   favInitialBg: {
     width: FAV_SLOT_SIZE,
     height: FAV_SLOT_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  favInitial: { color: '#7a5535', fontSize: 16, fontWeight: '700' },
+  favInitial: { fontSize: 16, fontWeight: '700' },
 
   // Nav rows
   navGroup: {
     marginTop: 24,
     marginHorizontal: 20,
-    backgroundColor: '#1c1410',
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#2a1e14',
     overflow: 'hidden',
   },
   navRow: {
@@ -1179,11 +1066,11 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     gap: 14,
   },
-  navIconWrap: { width: 28, alignItems: 'center' },
-  navRowText:  { flex: 1, gap: 2 },
-  navLabel:    { color: TEXT,    fontSize: 16, fontWeight: '600' },
-  navSub:      { color: SUBTEXT, fontSize: 13 },
-  navSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: '#2a1e14', marginLeft: 58 },
+  navIconWrap:  { width: 28, alignItems: 'center' },
+  navRowText:   { flex: 1, gap: 2 },
+  navLabel:     { fontSize: 16, fontWeight: '600' },
+  navSub:       { fontSize: 13 },
+  navSeparator: { height: StyleSheet.hairlineWidth, marginLeft: 58 },
 });
 
 // ─── Rating modal styles ──────────────────────────────────────────────────────
@@ -1197,15 +1084,13 @@ const rm = StyleSheet.create({
   },
   sheet: {
     width: '100%', alignSelf: 'stretch',
-    backgroundColor: '#161616',
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingHorizontal: 16, paddingBottom: 32,
     overflow: 'hidden',
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   handle: {
     width: 36, height: 4, borderRadius: 2,
-    backgroundColor: '#4a3020',
     alignSelf: 'center',
     marginTop: 10, marginBottom: 4,
   },
@@ -1215,36 +1100,22 @@ const rm = StyleSheet.create({
   },
   headerTitle: {
     position: 'absolute', left: 0, right: 0,
-    color: TEXT, fontSize: 17, fontWeight: '700', letterSpacing: -0.2,
+    fontSize: 17, fontWeight: '700', letterSpacing: -0.2,
     textAlign: 'center',
   },
   avgBlock: {
     alignItems: 'center', paddingVertical: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: 20,
   },
   avgValue: { color: ACCENT, fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
-  avgLabel: { color: SUBTEXT, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
+  avgLabel: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
   distBlock: { gap: 10 },
-  distRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  distRating: {
-    color: SUBTEXT, fontSize: 13, fontWeight: '600',
-    width: 24, textAlign: 'right',
-  },
-  barTrack: {
-    flex: 1, flexDirection: 'row',
-    height: 6, borderRadius: 3,
-    backgroundColor: '#2a1e14',
-    overflow: 'hidden', marginHorizontal: 8,
-  },
+  distRow:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
+  distRating:{ fontSize: 13, fontWeight: '600', width: 24, textAlign: 'right' },
+  barTrack:  { flex: 1, flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', marginHorizontal: 8 },
   barFilled: { height: 6, backgroundColor: ACCENT, borderRadius: 3 },
-  distCount: {
-    color: TEXT, fontSize: 13, fontWeight: '600',
-    width: 28, textAlign: 'right',
-  },
+  distCount: { fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
 });
 
 // ─── Slot picker modal styles ─────────────────────────────────────────────────
@@ -1257,13 +1128,8 @@ const sp = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
   },
-  title: {
-    color: TEXT,
-    fontSize: 17,
-    fontWeight: '700',
-  },
+  title: { fontSize: 17, fontWeight: '700' },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1271,14 +1137,9 @@ const sp = StyleSheet.create({
     margin: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: CARD_BG,
     borderRadius: 10,
   },
-  searchInput: {
-    flex: 1,
-    color: TEXT,
-    fontSize: 15,
-  },
+  searchInput: { flex: 1, fontSize: 15 },
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1286,13 +1147,8 @@ const sp = StyleSheet.create({
     paddingVertical: 10,
     gap: 12,
   },
-  resultArt: {
-    width: 44,
-    height: 44,
-    borderRadius: 4,
-    backgroundColor: CARD_BG,
-  },
-  resultText: { flex: 1, gap: 3 },
-  resultTitle: { color: TEXT,    fontSize: 15, fontWeight: '600' },
-  resultSub:   { color: SUBTEXT, fontSize: 13 },
+  resultArt:   { width: 44, height: 44, borderRadius: 4 },
+  resultText:  { flex: 1, gap: 3 },
+  resultTitle: { fontSize: 15, fontWeight: '600' },
+  resultSub:   { fontSize: 13 },
 });

@@ -13,18 +13,15 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
-// ─── Palette ──────────────────────────────────────────────────────────────────
-
-const DARK_BG = '#1c1410';
-const BORDER   = '#2e2018';
-const TEXT     = '#f5e6c8';
-const SUBTEXT  = '#777';
+// ─── Static metadata ──────────────────────────────────────────────────────────
 
 const TYPE_META = {
-  reviewed:     { label: 'Reviewed',       color: '#e8963a', icon: 'pencil'     },
-  rated:        { label: 'Rated',           color: '#c8722a', icon: 'star'       },
-  listened:     { label: 'Listened',        color: '#e8963a', icon: 'headphones' },
+  reviewed:     { label: 'Reviewed',       color: '#D4A017', icon: 'pencil'     },
+  rated:        { label: 'Rated',           color: '#B8880F', icon: 'star'       },
+  listened:     { label: 'Listened',        color: '#D4A017', icon: 'headphones' },
   wantToListen: { label: 'Want to Listen',  color: '#34d399', icon: 'bookmark'   },
 } as const;
 
@@ -64,7 +61,7 @@ type FollowItem = {
 
 type Top5ChangeItem = {
   key:          string;
-  category:     string; // 'albums' | 'songs' | 'artists'
+  category:     string;
   itemId:       string;
   itemName:     string;
   itemArtist:   string | null;
@@ -97,7 +94,6 @@ function parseDate(s: string): number | null {
   if (!s) return null;
   let ms = new Date(s).getTime();
   if (!isNaN(ms)) return ms;
-  // "Mar 24, 2026" — toLocaleDateString format; Hermes can't parse this directly
   const m = s.match(/^(\w{3})\s+(\d{1,2}),\s+(\d{4})$/);
   if (m && MONTH_MAP[m[1]] !== undefined) {
     ms = new Date(parseInt(m[3], 10), MONTH_MAP[m[1]], parseInt(m[2], 10)).getTime();
@@ -106,7 +102,6 @@ function parseDate(s: string): number | null {
   return null;
 }
 
-/** Fetch the 20 most-recent people a user has followed + resolve their profiles. */
 async function fetchFollowsForUser(uid: string): Promise<FollowItem[]> {
   const { data: followRows, error } = await supabase
     .from('follows')
@@ -142,11 +137,9 @@ async function fetchFollowsForUser(uid: string): Promise<FollowItem[]> {
   });
 }
 
-/** Fetch another user's logged albums + want-to-listen from Supabase. */
 async function fetchActivityForUser(uid: string): Promise<ActivityItem[]> {
   const items: ActivityItem[] = [];
 
-  // Logged albums from user_albums (per-user Supabase table)
   const { data: logged } = await supabase
     .from('user_albums')
     .select('spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
@@ -172,7 +165,6 @@ async function fetchActivityForUser(uid: string): Promise<ActivityItem[]> {
     }
   }
 
-  // Want-to-listen
   const { data: want } = await supabase
     .from('want_to_listen')
     .select('spotify_id, title, artist, year, artwork_url, created_at')
@@ -200,7 +192,6 @@ async function fetchActivityForUser(uid: string): Promise<ActivityItem[]> {
   return items;
 }
 
-/** Fetch Top 5 change events for a user. */
 async function fetchTop5ChangesForUser(uid: string): Promise<Top5ChangeItem[]> {
   const { data, error } = await supabase
     .from('top5_changes')
@@ -216,7 +207,7 @@ async function fetchTop5ChangesForUser(uid: string): Promise<Top5ChangeItem[]> {
     category:     r.category,
     itemId:       r.item_id,
     itemName:     r.item_name,
-    itemArtist:   null,           // not in schema — omitted
+    itemArtist:   null,
     itemImageUrl: r.item_image_url ?? null,
     position:     r.position,
     dateMs:       new Date(r.changed_at).getTime(),
@@ -226,7 +217,9 @@ async function fetchTop5ChangesForUser(uid: string): Promise<Top5ChangeItem[]> {
 
 // ─── Row components ───────────────────────────────────────────────────────────
 
-function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => void }) {
+type ColorsType = typeof Colors.light;
+
+function ActivityRow({ item, onPress, colors }: { item: ActivityItem; onPress: () => void; colors: ColorsType }) {
   const meta = TYPE_META[item.type];
   return (
     <Pressable
@@ -236,20 +229,20 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => voi
       {item.artworkUrl ? (
         <Image source={{ uri: item.artworkUrl }} style={s.art} />
       ) : (
-        <View style={[s.art, { backgroundColor: item.coverColor ?? '#2a1e14', justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={[s.art, { backgroundColor: item.coverColor ?? colors.border, justifyContent: 'center', alignItems: 'center' }]}>
           <Text style={s.artInitial}>{item.title.charAt(0)}</Text>
         </View>
       )}
 
       <View style={s.info}>
-        <Text style={s.title} numberOfLines={1}>{item.title}</Text>
-        <Text style={s.artist} numberOfLines={1}>{item.artist}{item.year ? ` · ${item.year}` : ''}</Text>
+        <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+        <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>{item.artist}{item.year ? ` · ${item.year}` : ''}</Text>
         <View style={s.meta}>
           <View style={[s.typePill, { borderColor: meta.color }]}>
             <FontAwesome name={meta.icon as any} size={9} color={meta.color} />
             <Text style={[s.typeLabel, { color: meta.color }]}>{meta.label}</Text>
           </View>
-          {item.dateLabel ? <Text style={s.date}>{item.dateLabel}</Text> : null}
+          {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
       </View>
 
@@ -258,7 +251,7 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => voi
           {BAR_HEIGHTS.map((h, i) => (
             <View
               key={i}
-              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? '#c8722a' : '#2a1e14' }]}
+              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? '#B8880F' : colors.border }]}
             />
           ))}
         </View>
@@ -267,7 +260,7 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress: () => voi
   );
 }
 
-function FollowRow({ item, onPress }: { item: FollowItem; onPress: () => void }) {
+function FollowRow({ item, onPress, colors }: { item: FollowItem; onPress: () => void; colors: ColorsType }) {
   const initial = item.name.charAt(0).toUpperCase();
   return (
     <Pressable
@@ -276,19 +269,19 @@ function FollowRow({ item, onPress }: { item: FollowItem; onPress: () => void })
       {item.avatarUrl ? (
         <Image source={{ uri: item.avatarUrl }} style={s.followAvatar} />
       ) : (
-        <View style={[s.followAvatar, s.followAvatarFallback]}>
-          <Text style={s.followInitial}>{initial}</Text>
+        <View style={[s.followAvatar, { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }]}>
+          <Text style={[s.followInitial, { color: colors.subtext }]}>{initial}</Text>
         </View>
       )}
       <View style={s.info}>
-        <Text style={s.title} numberOfLines={1}>{item.name}</Text>
-        {item.username ? <Text style={s.artist} numberOfLines={1}>@{item.username}</Text> : null}
+        <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+        {item.username ? <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text> : null}
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: '#e8963a' }]}>
-            <FontAwesome name="user-plus" size={9} color="#e8963a" />
-            <Text style={[s.typeLabel, { color: '#e8963a' }]}>Followed</Text>
+          <View style={[s.typePill, { borderColor: '#D4A017' }]}>
+            <FontAwesome name="user-plus" size={9} color="#D4A017" />
+            <Text style={[s.typeLabel, { color: '#D4A017' }]}>Followed</Text>
           </View>
-          {item.dateLabel ? <Text style={s.date}>{item.dateLabel}</Text> : null}
+          {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
       </View>
     </Pressable>
@@ -297,7 +290,7 @@ function FollowRow({ item, onPress }: { item: FollowItem; onPress: () => void })
 
 const TOP5_COLOR = '#f59e0b';
 
-function Top5Row({ item, onPress }: { item: Top5ChangeItem; onPress: () => void }) {
+function Top5Row({ item, onPress, colors }: { item: Top5ChangeItem; onPress: () => void; colors: ColorsType }) {
   const catLabel = TOP5_CATEGORY_LABEL[item.category] ?? 'Top 5';
   return (
     <Pressable
@@ -309,15 +302,15 @@ function Top5Row({ item, onPress }: { item: Top5ChangeItem; onPress: () => void 
           style={[s.art, item.category === 'artists' ? s.artCircle : null]}
         />
       ) : (
-        <View style={[s.art, { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' },
+        <View style={[s.art, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
           item.category === 'artists' ? s.artCircle : null]}>
           <Text style={s.artInitial}>{item.itemName.charAt(0)}</Text>
         </View>
       )}
       <View style={s.info}>
-        <Text style={s.title} numberOfLines={1}>{item.itemName}</Text>
+        <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.itemName}</Text>
         {item.itemArtist ? (
-          <Text style={s.artist} numberOfLines={1}>{item.itemArtist}</Text>
+          <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>{item.itemArtist}</Text>
         ) : null}
         <View style={s.meta}>
           <View style={[s.typePill, { borderColor: TOP5_COLOR }]}>
@@ -326,7 +319,7 @@ function Top5Row({ item, onPress }: { item: Top5ChangeItem; onPress: () => void 
               {`Updated ${catLabel} · #${item.position}`}
             </Text>
           </View>
-          {item.dateLabel ? <Text style={s.date}>{item.dateLabel}</Text> : null}
+          {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
       </View>
     </Pressable>
@@ -336,31 +329,29 @@ function Top5Row({ item, onPress }: { item: Top5ChangeItem; onPress: () => void 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function RecentActivityScreen() {
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+
   const router = useRouter();
   const { user } = useAuth();
   const { loggedAlbums, wantToListen } = useAlbums();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
-  // If a userId param is present and it isn't ours, we're viewing someone else.
   const viewingOther = paramUserId || null;
 
-  // ── Own-feed follow items (fetched from Supabase for current user) ───────────
   const [ownFollowItems,   setOwnFollowItems]   = useState<FollowItem[]>([]);
   const [ownTop5Items,     setOwnTop5Items]     = useState<Top5ChangeItem[]>([]);
-  // ── Other-user feed (activity + follows, fetched from Supabase) ─────────────
   const [otherActivity,    setOtherActivity]    = useState<ActivityItem[]>([]);
   const [otherFollows,     setOtherFollows]     = useState<FollowItem[]>([]);
   const [otherTop5Items,   setOtherTop5Items]   = useState<Top5ChangeItem[]>([]);
   const [loadingOther,     setLoadingOther]     = useState(false);
 
-  // Fetch current user's recent follows + top5 changes
   useEffect(() => {
     if (!user || viewingOther) return;
     fetchFollowsForUser(user.id).then(setOwnFollowItems);
     fetchTop5ChangesForUser(user.id).then(setOwnTop5Items);
   }, [user?.id, viewingOther]);
 
-  // Fetch another user's full activity + follows + top5 changes
   useEffect(() => {
     if (!viewingOther) return;
     setLoadingOther(true);
@@ -376,7 +367,6 @@ export default function RecentActivityScreen() {
     });
   }, [viewingOther]);
 
-  // ── Build own-user feed from AlbumsContext ────────────────────────────────────
   const ownActivityItems = useMemo((): ActivityItem[] => {
     if (viewingOther) return [];
     const items: ActivityItem[] = [];
@@ -420,7 +410,6 @@ export default function RecentActivityScreen() {
     return items;
   }, [loggedAlbums, wantToListen, viewingOther]);
 
-  // ── Merge into final sorted feed ──────────────────────────────────────────────
   const feed = useMemo((): FeedItem[] => {
     const activityItems = viewingOther ? otherActivity   : ownActivityItems;
     const followItems   = viewingOther ? otherFollows    : ownFollowItems;
@@ -444,23 +433,22 @@ export default function RecentActivityScreen() {
     return combined;
   }, [ownActivityItems, otherActivity, ownFollowItems, otherFollows, ownTop5Items, otherTop5Items, viewingOther]);
 
-  // ── Loading spinner (other-user fetch only) ───────────────────────────────────
   if (loadingOther) {
     return (
-      <View style={s.loadingWrap}>
-        <ActivityIndicator color="#e8963a" size="large" />
+      <View style={[s.loadingWrap, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color="#D4A017" size="large" />
       </View>
     );
   }
 
   if (feed.length === 0) {
     return (
-      <View style={s.emptyWrap}>
-        <View style={s.emptyRing}>
-          <FontAwesome name="clock-o" size={36} color="#e8963a" />
+      <View style={[s.emptyWrap, { backgroundColor: colors.background }]}>
+        <View style={[s.emptyRing, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <FontAwesome name="clock-o" size={36} color="#D4A017" />
         </View>
-        <Text style={s.emptyTitle}>No activity yet</Text>
-        <Text style={s.emptySub}>
+        <Text style={[s.emptyTitle, { color: colors.text }]}>No activity yet</Text>
+        <Text style={[s.emptySub, { color: colors.subtext }]}>
           {viewingOther
             ? 'This user has no public activity yet.'
             : 'Log your first album to see\nyour activity here.'}
@@ -475,7 +463,6 @@ export default function RecentActivityScreen() {
     } else if (item.category === 'artists') {
       router.push({ pathname: '/artist-detail', params: { id: item.itemId, name: item.itemName } });
     } else {
-      // songs — navigate to artist detail using artist name
       router.push({ pathname: '/artist-detail', params: { name: item.itemArtist ?? item.itemName } });
     }
   }
@@ -484,15 +471,16 @@ export default function RecentActivityScreen() {
     <FlatList
       data={feed}
       keyExtractor={item => item.data.key}
-      style={s.container}
+      style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.list}
       showsVerticalScrollIndicator={false}
-      ItemSeparatorComponent={() => <View style={s.sep} />}
+      ItemSeparatorComponent={() => <View style={[s.sep, { backgroundColor: colors.border }]} />}
       renderItem={({ item }) => {
         if (item.kind === 'follow') {
           return (
             <FollowRow
               item={item.data}
+              colors={colors}
               onPress={() =>
                 router.push({ pathname: '/user-profile', params: { userId: item.data.followedId } })
               }
@@ -503,6 +491,7 @@ export default function RecentActivityScreen() {
           return (
             <Top5Row
               item={item.data}
+              colors={colors}
               onPress={() => handleTop5Press(item.data)}
             />
           );
@@ -510,6 +499,7 @@ export default function RecentActivityScreen() {
         return (
           <ActivityRow
             item={item.data}
+            colors={colors}
             onPress={() =>
               router.push({ pathname: '/album-detail', params: { id: item.data.id } })
             }
@@ -523,11 +513,11 @@ export default function RecentActivityScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: DARK_BG },
+  container: { flex: 1 },
   list:      { paddingVertical: 8, paddingBottom: 48 },
 
   loadingWrap: {
-    flex: 1, backgroundColor: DARK_BG,
+    flex: 1,
     alignItems: 'center', justifyContent: 'center',
   },
 
@@ -543,8 +533,8 @@ const s = StyleSheet.create({
   artInitial: { color: 'rgba(255,255,255,0.45)', fontSize: 18, fontWeight: '700' },
 
   info:   { flex: 1, gap: 3 },
-  title:  { color: TEXT, fontSize: 14, fontWeight: '600' },
-  artist: { color: SUBTEXT, fontSize: 12 },
+  title:  { fontSize: 14, fontWeight: '600' },
+  artist: { fontSize: 12 },
 
   meta:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3, flexWrap: 'wrap' },
   typePill: {
@@ -557,32 +547,28 @@ const s = StyleSheet.create({
     paddingVertical: 2,
   },
   typeLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-  date:      { color: SUBTEXT, fontSize: 11 },
+  date:      { fontSize: 11 },
 
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5, flexShrink: 0 },
   bar:  { width: 2.5, borderRadius: 1 },
 
-  sep: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginLeft: 83 },
+  sep: { height: StyleSheet.hairlineWidth, marginLeft: 83 },
 
-  // Follow row
-  followAvatar:        { width: 52, height: 52, borderRadius: 26, flexShrink: 0 },
-  followAvatarFallback:{ backgroundColor: '#2e2018', alignItems: 'center', justifyContent: 'center' },
-  followInitial:       { color: 'rgba(255,255,255,0.45)', fontSize: 18, fontWeight: '700' },
+  followAvatar:  { width: 52, height: 52, borderRadius: 26, flexShrink: 0 },
+  followInitial: { fontSize: 18, fontWeight: '700' },
 
   emptyWrap: {
     flex: 1,
-    backgroundColor: DARK_BG,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
   emptyRing: {
     width: 84, height: 84, borderRadius: 42,
-    backgroundColor: '#2e2018',
-    borderWidth: 1, borderColor: '#3a2818',
+    borderWidth: 1,
     justifyContent: 'center', alignItems: 'center',
     marginBottom: 20,
   },
-  emptyTitle: { color: TEXT,    fontSize: 18, fontWeight: '700', marginBottom: 10 },
-  emptySub:   { color: SUBTEXT, fontSize: 14, lineHeight: 21,    textAlign: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 10 },
+  emptySub:   { fontSize: 14, lineHeight: 21, textAlign: 'center' },
 });

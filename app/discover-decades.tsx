@@ -108,7 +108,7 @@ function DecadeSection({
       <Text style={[s.sectionLabel, { color: colors.text }]}>{label}</Text>
       {loading ? (
         <View style={s.sectionLoader}>
-          <ActivityIndicator color="#e8963a" />
+          <ActivityIndicator color="#D4A017" />
         </View>
       ) : albums.length === 0 ? (
         <View style={s.sectionLoader}>

@@ -13,16 +13,16 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
-const DARK_BG = '#1c1410';
-const CARD_BG = '#2e2018';
-const BORDER = '#2a1e14';
-const TEXT = '#f5e6c8';
-const SUBTEXT = '#a07850';
-const ACCENT = '#e8963a';
-const GRADIENT: [string, string, string] = ['#e8963a', '#c8722a', '#e8963a'];
+const ACCENT = '#D4A017';
+const GRADIENT: [string, string, string] = ['#D4A017', '#B8880F', '#D4A017'];
 
 export default function LoginScreen() {
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'dark'];
+
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,30 +44,26 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={s.root}
+      style={[s.root, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-
-      <LinearGradient
-        colors={['#e8963a18', '#c8722a12', '#e8963a08']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
 
       <View style={s.inner}>
         {/* Logo mark */}
         <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.logo}>
           <Text style={s.logoText}>L</Text>
         </LinearGradient>
-        <Text style={s.title}>Listend</Text>
-        <Text style={s.subtitle}>Sign in to your account</Text>
+        <Text style={[s.title, { color: colors.text }]}>Listend</Text>
+        <Text style={[s.subtitle, { color: colors.subtext }]}>Sign in to your account</Text>
 
         <View style={s.form}>
           <TextInput
-            style={s.input}
+            style={[s.input, {
+              backgroundColor: colors.surface,
+              borderColor:     colors.border,
+              color:           colors.text,
+            }]}
             placeholder="Email"
-            placeholderTextColor={SUBTEXT}
+            placeholderTextColor={colors.subtext}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -75,9 +71,13 @@ export default function LoginScreen() {
             textContentType="emailAddress"
           />
           <TextInput
-            style={s.input}
+            style={[s.input, {
+              backgroundColor: colors.surface,
+              borderColor:     colors.border,
+              color:           colors.text,
+            }]}
             placeholder="Password"
-            placeholderTextColor={SUBTEXT}
+            placeholderTextColor={colors.subtext}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -85,7 +85,7 @@ export default function LoginScreen() {
           />
 
           <Pressable
-            style={({ pressed }) => [s.btn, { opacity: pressed ? 0.85 : 1 }]}
+            style={({ pressed }) => [s.btn, { backgroundColor: ACCENT, opacity: pressed ? 0.85 : 1 }]}
             onPress={handleSignIn}
             disabled={loading}>
             {loading
@@ -95,7 +95,7 @@ export default function LoginScreen() {
         </View>
 
         <Pressable onPress={() => router.push('/signup')} style={s.switchRow}>
-          <Text style={s.switchText}>Don't have an account? </Text>
+          <Text style={[s.switchText, { color: colors.subtext }]}>Don't have an account? </Text>
           <Text style={[s.switchText, { color: ACCENT }]}>Sign Up</Text>
         </Pressable>
       </View>
@@ -104,7 +104,7 @@ export default function LoginScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: DARK_BG },
+  root: { flex: 1 },
   inner: {
     flex: 1,
     alignItems: 'center',
@@ -121,30 +121,23 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   logoText: { color: '#fff', fontSize: 32, fontWeight: '800' },
-  title: { color: TEXT, fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  subtitle: { color: SUBTEXT, fontSize: 15, marginBottom: 24 },
-  form: { width: '100%', gap: 12 },
+  title:    { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, marginBottom: 24 },
+  form:     { width: '100%', gap: 12 },
   input: {
-    backgroundColor: CARD_BG,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: TEXT,
     fontSize: 16,
   },
   btn: {
-    backgroundColor: ACCENT,
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
     marginTop: 4,
   },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  switchRow: {
-    flexDirection: 'row',
-    marginTop: 24,
-  },
-  switchText: { color: SUBTEXT, fontSize: 14 },
+  btnText:   { color: '#fff', fontSize: 16, fontWeight: '700' },
+  switchRow: { flexDirection: 'row', marginTop: 24 },
+  switchText: { fontSize: 14 },
 });

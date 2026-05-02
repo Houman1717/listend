@@ -14,6 +14,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { SpotifyAlbum } from '@/context/SpotifyService';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -77,6 +79,7 @@ export default function PlaylistAddAlbumsScreen() {
   const isDark = colorScheme === 'dark';
   const { playlistId } = useLocalSearchParams<{ playlistId: string }>();
   const { playlists, addAlbumToPlaylist } = useAlbums();
+  const { user } = useAuth();
 
   const playlist = playlists.find((p) => p.id === playlistId);
 
@@ -126,6 +129,29 @@ export default function PlaylistAddAlbumsScreen() {
     if (!playlist) return;
     addAlbumToPlaylist(playlist.id, album.id);
     setAddedIds((prev) => new Set([...prev, album.id]));
+
+    // Store album metadata so it's retrievable in playlist-detail even if never logged.
+    // ignoreDuplicates: true ensures we never overwrite an existing logged entry.
+    if (user) {
+      supabase
+        .from('user_albums')
+        .upsert(
+          {
+            user_id:     user.id,
+            spotify_id:  album.id,
+            title:       album.title,
+            artist:      album.artist,
+            year:        album.year ?? 0,
+            artwork_url: album.artworkUrl ?? null,
+            rating:      0,
+            listened_at: null,
+          },
+          { onConflict: 'user_id,spotify_id', ignoreDuplicates: true }
+        )
+        .then(({ error }) => {
+          if (error) console.error('[PlaylistAddAlbums] catalog upsert error:', error.message);
+        });
+    }
   }
 
   const isEmpty = !query.trim();
@@ -162,7 +188,7 @@ export default function PlaylistAddAlbumsScreen() {
 
         {/* Body */}
         {loading ? (
-          <ActivityIndicator style={s.spinner} color="#e8963a" />
+          <ActivityIndicator style={s.spinner} color="#D4A017" />
         ) : isEmpty ? (
           <View style={s.emptyState}>
             <FontAwesome name="search" size={36} color={isDark ? '#3a2818' : '#ddd'} />
@@ -237,7 +263,7 @@ const s = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#e8963a',
+    backgroundColor: '#D4A017',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

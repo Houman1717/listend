@@ -8,12 +8,13 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
 
@@ -22,12 +23,12 @@ const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 function VolumeBadge({ rating }: { rating: number }) {
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#e8963a' : '#3a2818'} />
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : '#3a2818'} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#e8963a' : '#2a1e14' }]}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#D4A017' : '#2a1e14' }]}
           />
         ))}
       </View>
@@ -95,10 +96,10 @@ function ReviewRow({
                 <FontAwesome
                   name={isLiked ? 'heart' : 'heart-o'}
                   size={13}
-                  color={isLiked ? '#e8963a' : '#7a5535'}
+                  color={isLiked ? '#D4A017' : '#7a5535'}
                 />
                 {likeCount > 0 && (
-                  <Text style={[s.likeCount, { color: isLiked ? '#e8963a' : '#7a5535' }]}>
+                  <Text style={[s.likeCount, { color: isLiked ? '#D4A017' : '#7a5535' }]}>
                     {likeCount}
                   </Text>
                 )}
@@ -106,8 +107,8 @@ function ReviewRow({
             ) : likeCount > 0 ? (
               // Read-only — own review, just show how many people liked it
               <View style={s.likeBtn}>
-                <FontAwesome name="heart" size={13} color="#e8963a" />
-                <Text style={[s.likeCount, { color: '#e8963a' }]}>{likeCount}</Text>
+                <FontAwesome name="heart" size={13} color="#D4A017" />
+                <Text style={[s.likeCount, { color: '#D4A017' }]}>{likeCount}</Text>
               </View>
             ) : null}
           </View>
@@ -126,13 +127,16 @@ export default function MyReviewsScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { loggedAlbums } = useAlbums();
+  const { loggedAlbums, updateDuration } = useAlbums();
   const { user } = useAuth();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = paramUserId || null;
   const [otherReviews, setOtherReviews] = useState<LoggedAlbum[]>([]);
   const [likesMap, setLikesMap] = useState<Map<string, LikeState>>(new Map());
+  const [sortKey, setSortKey]   = useState<SortKey>('date_new');
+  const [shuffled, setShuffled] = useState<LoggedAlbum[] | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // ── Load other user's reviews + like state ────────────────────────────────
   useEffect(() => {
@@ -142,7 +146,7 @@ export default function MyReviewsScreen() {
       // 1. Fetch the reviews
       const { data } = await supabase
         .from('user_albums')
-        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms')
         .eq('user_id', viewingOther!)
         .not('review', 'is', null)
         .order('listened_at', { ascending: false });
@@ -158,6 +162,7 @@ export default function MyReviewsScreen() {
         dateLogged: a.listened_at ?? new Date().toISOString(),
         artworkUrl: a.artwork_url ?? undefined,
         coverColor: COVER_COLORS[i % COVER_COLORS.length],
+        durationMs: a.duration_ms ?? undefined,
       })));
 
       // 2. Fetch all likes for this user's reviews (one query for counts + own state)
@@ -257,47 +262,98 @@ export default function MyReviewsScreen() {
   }
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const reviewed = viewingOther
+  const sourceReviews = viewingOther
     ? otherReviews
     : loggedAlbums.filter((a) => !!a.review);
+
+  // Fetch durations for any reviewed album that doesn't have one yet
+  useEffect(() => {
+    const missing = sourceReviews.filter(a => !a.durationMs).map(a => a.id);
+    if (missing.length === 0) return;
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+    fetch(`${API_URL}/api/album-durations?ids=${missing.join(',')}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((data: Record<string, number>) => {
+        Object.entries(data).forEach(([id, ms]) => {
+          if (viewingOther) {
+            setOtherReviews(prev => prev.map(a => a.id === id ? { ...a, durationMs: ms } : a));
+          } else {
+            updateDuration(id, ms);
+          }
+        });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceReviews.length, viewingOther]);
+
+  const reviewed = useMemo(() => {
+    if (shuffled) return shuffled;
+    return applySort(sourceReviews, sortKey);
+  }, [sourceReviews, sortKey, shuffled]);
+
+  function handleSelectSort(key: SortKey) {
+    if (key === 'shuffle') {
+      setShuffled([...sourceReviews].sort(() => Math.random() - 0.5));
+    } else {
+      setShuffled(null);
+    }
+    setSortKey(key);
+  }
 
   // Build the target_id prefix used for likes map lookups
   const ownerId = viewingOther ?? user?.id ?? '';
 
   return (
-    <FlatList
-      data={reviewed}
-      keyExtractor={(item) => item.id}
-      style={[s.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={s.listContent}
-      showsVerticalScrollIndicator={false}
-      ItemSeparatorComponent={() => (
-        <View style={[s.separator, { backgroundColor: isDark ? '#2e2018' : '#ebebeb' }]} />
-      )}
-      ListEmptyComponent={() => (
-        <View style={s.empty}>
-          <Text style={[s.emptyTitle, { color: colors.text }]}>No reviews yet</Text>
-          <Text style={[s.emptySubtext, { color: colors.subtext }]}>
-            Log an album and write your thoughts on it.
-          </Text>
-        </View>
-      )}
-      renderItem={({ item }) => {
-        const targetId  = `${ownerId}_${item.id}`;
-        const likeState = likesMap.get(targetId) ?? { liked: false, count: 0 };
-        return (
-          <ReviewRow
-            album={item}
-            colors={colors}
-            isDark={isDark}
-            onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
-            likeCount={likeState.count}
-            isLiked={likeState.liked}
-            onLike={viewingOther ? () => handleToggleLike(item) : undefined}
-          />
-        );
-      }}
-    />
+    <View style={[s.container, { backgroundColor: colors.background }]}>
+      <SortBar
+        sortKey={sortKey}
+        count={sourceReviews.length}
+        noun="reviews"
+        isDark={isDark}
+        onPress={() => setSheetOpen(true)}
+      />
+      <FlatList
+        data={reviewed}
+        keyExtractor={(item) => item.id}
+        style={{ flex: 1 }}
+        contentContainerStyle={s.listContent}
+        showsVerticalScrollIndicator={false}
+        ItemSeparatorComponent={() => (
+          <View style={[s.separator, { backgroundColor: isDark ? '#2e2018' : '#ebebeb' }]} />
+        )}
+        ListEmptyComponent={() => (
+          <View style={s.empty}>
+            <Text style={[s.emptyTitle, { color: colors.text }]}>No reviews yet</Text>
+            <Text style={[s.emptySubtext, { color: colors.subtext }]}>
+              Log an album and write your thoughts on it.
+            </Text>
+          </View>
+        )}
+        renderItem={({ item }) => {
+          const targetId  = `${ownerId}_${item.id}`;
+          const likeState = likesMap.get(targetId) ?? { liked: false, count: 0 };
+          return (
+            <ReviewRow
+              album={item}
+              colors={colors}
+              isDark={isDark}
+              onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id } })}
+              likeCount={likeState.count}
+              isLiked={likeState.liked}
+              onLike={viewingOther ? () => handleToggleLike(item) : undefined}
+            />
+          );
+        }}
+      />
+
+      <SortSheet
+        visible={sheetOpen}
+        activeKey={sortKey}
+        onSelect={handleSelectSort}
+        onClose={() => setSheetOpen(false)}
+        isDark={isDark}
+      />
+    </View>
   );
 }
 
@@ -326,7 +382,7 @@ const s = StyleSheet.create({
   badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
   badgeBar:  { width: 2.5, borderRadius: 1 },
-  badgeNum:  { color: '#e8963a', fontSize: 10, fontWeight: '700', lineHeight: 15 },
+  badgeNum:  { color: '#D4A017', fontSize: 10, fontWeight: '700', lineHeight: 15 },
 
   // Like
   likeRow:   { marginTop: 4 },

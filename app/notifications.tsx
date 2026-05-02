@@ -20,7 +20,7 @@ const DARK_BG = '#1c1410';
 const BORDER  = '#2e2018';
 const TEXT    = '#f5e6c8';
 const SUBTEXT = '#777';
-const ACCENT  = '#e8963a';
+const ACCENT  = '#D4A017';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,10 +38,10 @@ type NotificationItem = {
 // ─── Row ──────────────────────────────────────────────────────────────────────
 
 const NOTIF_META: Record<NotificationItem['type'], { body: string; iconName: string; iconColor: string }> = {
-  follow:        { body: 'started following you', iconName: 'user-plus', iconColor: '#e8963a' },
-  message:       { body: 'sent you a message',    iconName: 'envelope',  iconColor: '#c8722a' },
-  like_review:   { body: 'liked your review',     iconName: 'heart',     iconColor: '#e8963a' },
-  like_playlist: { body: 'liked your playlist',   iconName: 'heart',     iconColor: '#e8963a' },
+  follow:        { body: 'started following you', iconName: 'user-plus', iconColor: '#D4A017' },
+  message:       { body: 'sent you a message',    iconName: 'envelope',  iconColor: '#B8880F' },
+  like_review:   { body: 'liked your review',     iconName: 'heart',     iconColor: '#D4A017' },
+  like_playlist: { body: 'liked your playlist',   iconName: 'heart',     iconColor: '#D4A017' },
 };
 
 function NotifRow({ item, onPress }: { item: NotificationItem; onPress: () => void }) {

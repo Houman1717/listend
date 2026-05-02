@@ -118,7 +118,7 @@ export function SongInfoModal({
             <Image source={{ uri: song.artworkUrl }} style={s.art} />
           ) : (
             <View style={[s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#f5e6c8' }]}>
-              <FontAwesome name="music" size={28} color="#e8963a" />
+              <FontAwesome name="music" size={28} color="#D4A017" />
             </View>
           )}
 
@@ -156,10 +156,10 @@ export function SongInfoModal({
               }}
               style={s.artistRow}
             >
-              <Text style={[s.artist, { color: '#e8963a' }]} numberOfLines={1}>
+              <Text style={[s.artist, { color: '#D4A017' }]} numberOfLines={1}>
                 {song?.artist}
               </Text>
-              <FontAwesome name="chevron-right" size={10} color="#e8963a" />
+              <FontAwesome name="chevron-right" size={10} color="#D4A017" />
             </Pressable>
 
             {/* Release date */}

@@ -18,7 +18,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useState, useEffect } from 'react';
 
-const GRADIENT: [string, string, string] = ['#e8963a', '#c8722a', '#e8963a'];
+const GRADIENT: [string, string, string] = ['#D4A017', '#B8880F', '#D4A017'];
 const DARK_BG = '#1c1410';
 const CARD_BG = '#2e2018';
 const BORDER = '#2a1e14';
@@ -30,12 +30,12 @@ const BADGE_HEIGHTS = [3, 4, 5, 6, 7, 8, 10, 11, 13, 14];
 function VolumeBadge({ rating }: { rating: number }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 5 }}>
-      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#e8963a' : '#4a3020'} />
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : '#4a3020'} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
         {BADGE_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={{ width: 3, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#e8963a' : '#3a2818' }}
+            style={{ width: 3, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : '#3a2818' }}
           />
         ))}
       </View>
@@ -250,7 +250,7 @@ export default function ProfileScreen() {
 
       {/* Header gradient banner — pointerEvents="none" so it never intercepts taps */}
       <LinearGradient
-        colors={['#e8963a18', '#c8722a12', '#e8963a08']}
+        colors={['#D4A01718', '#B8880F12', '#D4A01708']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={s.banner}
@@ -342,7 +342,7 @@ export default function ProfileScreen() {
       <Pressable
         style={({ pressed }) => [s.wantRow, { opacity: pressed ? 0.7 : 1 }]}
         onPress={() => router.push('/liked-artists')}>
-        <FontAwesome name="heart" size={14} color="#e8963a" style={{ marginTop: 1 }} />
+        <FontAwesome name="heart" size={14} color="#D4A017" style={{ marginTop: 1 }} />
         <Text style={s.wantLabel}>Liked Artists</Text>
         <FontAwesome name="chevron-right" size={12} color={SUBTEXT} />
       </Pressable>
@@ -459,7 +459,7 @@ export default function ProfileScreen() {
       <Pressable
         style={({ pressed }) => [s.signOutRow, { opacity: pressed ? 0.7 : 1 }]}
         onPress={handleSignOut}>
-        <FontAwesome name="sign-out" size={14} color="#e8963a" style={{ marginTop: 1 }} />
+        <FontAwesome name="sign-out" size={14} color="#D4A017" style={{ marginTop: 1 }} />
         <Text style={s.signOutLabel}>Sign Out</Text>
       </Pressable>
 
@@ -566,12 +566,12 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     gap: 8,
   },
-  signOutLabel: { color: '#e8963a', fontSize: 15, fontWeight: '500' },
+  signOutLabel: { color: '#D4A017', fontSize: 15, fontWeight: '500' },
 
   favSection: { paddingHorizontal: 20, paddingVertical: 16 },
   favHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   favTitle: { color: SUBTEXT, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
-  editLabel: { color: '#e8963a', fontSize: 12 },
+  editLabel: { color: '#D4A017', fontSize: 12 },
   albumCount: { color: SUBTEXT, fontSize: 12 },
 
   favRow: {
@@ -683,7 +683,7 @@ const rm = StyleSheet.create({
     marginBottom: 20,
   },
   avgValue: {
-    color: '#e8963a',
+    color: '#D4A017',
     fontSize: 56,
     fontWeight: '700',
     letterSpacing: -2,
@@ -720,7 +720,7 @@ const rm = StyleSheet.create({
   barFill: {
     height: '100%',
     borderRadius: 4,
-    backgroundColor: '#e8963a',
+    backgroundColor: '#D4A017',
   },
   distCount: {
     color: TEXT,

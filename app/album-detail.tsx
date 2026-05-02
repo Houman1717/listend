@@ -150,7 +150,7 @@ const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
 
 function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
   const barsWidth = useRef(0);
-  const activeColor = '#e8963a';
+  const activeColor = '#D4A017';
   const inactiveColor = isDark ? '#2a1e14' : '#e0e0e0';
   function ratingFromX(x: number) {
     return Math.max(1, Math.min(10, Math.ceil((x / barsWidth.current) * 10)));
@@ -181,7 +181,7 @@ function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: 
 // ─── Mini rating bar (read-only display) ─────────────────────────────────────
 
 function MiniRatingBar({ rating, isDark }: { rating: number; isDark: boolean }) {
-  const activeColor = '#e8963a';
+  const activeColor = '#D4A017';
   const inactiveColor = isDark ? '#3a2818' : '#ddd';
   return (
     <View style={s.miniBarRow}>
@@ -220,7 +220,7 @@ function CommunityRatingSection({
   borderColor: string;
 }) {
   const fillLevel = parseFloat(COMMUNITY_AVG); // e.g. 7.7
-  const activeColor = '#e8963a';
+  const activeColor = '#D4A017';
   const inactiveColor = isDark ? '#2a1e14' : '#e0e0e0';
 
   return (
@@ -304,7 +304,7 @@ function ReviewCard({
         isOwn && s.reviewCardOwn,
       ]}>
       <View style={s.reviewCardHeader}>
-        <Text style={[s.reviewCardUsername, { color: isOwn ? '#e8963a' : colors.text }]}>
+        <Text style={[s.reviewCardUsername, { color: isOwn ? '#D4A017' : colors.text }]}>
           {username}
         </Text>
         {rating >= 1 && (
@@ -330,18 +330,18 @@ function ReviewCard({
               <FontAwesome
                 name={isLiked ? 'heart' : 'heart-o'}
                 size={12}
-                color={isLiked ? '#e8963a' : '#7a5535'}
+                color={isLiked ? '#D4A017' : '#7a5535'}
               />
               {likeCount > 0 && (
-                <Text style={[s.reviewCardLikeCount, { color: isLiked ? '#e8963a' : '#7a5535' }]}>
+                <Text style={[s.reviewCardLikeCount, { color: isLiked ? '#D4A017' : '#7a5535' }]}>
                   {likeCount}
                 </Text>
               )}
             </Pressable>
           ) : likeCount > 0 ? (
             <View style={s.reviewCardLikeBtn}>
-              <FontAwesome name="heart" size={12} color="#e8963a" />
-              <Text style={[s.reviewCardLikeCount, { color: '#e8963a' }]}>{likeCount}</Text>
+              <FontAwesome name="heart" size={12} color="#D4A017" />
+              <Text style={[s.reviewCardLikeCount, { color: '#D4A017' }]}>{likeCount}</Text>
             </View>
           ) : null}
         </View>
@@ -393,7 +393,7 @@ function AlbumReviewCard({
     { backgroundColor: isDark ? '#2e2018' : '#fff', borderColor },
     isOwn && s.reviewCardOwn,
     fullWidth && { width: '100%' },
-    highlighted && { borderColor: '#e8963a', borderWidth: 1.5 },
+    highlighted && { borderColor: '#D4A017', borderWidth: 1.5 },
   ];
   const layoutHandler = onLayout ? (e: any) => onLayout(e.nativeEvent.layout.y) : undefined;
 
@@ -402,10 +402,10 @@ function AlbumReviewCard({
       {/* Header: avatar + username | rating badge */}
       <View style={s.reviewCardHeader}>
         <View style={arc.userRow}>
-          <View style={[arc.avatar, { backgroundColor: isOwn ? '#e8963a' : avatarColor(review.username) }]}>
+          <View style={[arc.avatar, { backgroundColor: isOwn ? '#D4A017' : avatarColor(review.username) }]}>
             <Text style={arc.avatarLetter}>{review.username[0].toUpperCase()}</Text>
           </View>
-          <Text style={[arc.username, { color: '#e8963a' }]} numberOfLines={1}>
+          <Text style={[arc.username, { color: '#D4A017' }]} numberOfLines={1}>
             @{review.username}
           </Text>
         </View>
@@ -431,8 +431,8 @@ function AlbumReviewCard({
               onPress={onCommentCountPress}
               hitSlop={8}
               style={arc.commentCountBtn}>
-              <FontAwesome name="comment-o" size={11} color={commentsExpanded ? '#e8963a' : (isDark ? '#7a5535' : '#a07850')} />
-              <Text style={[arc.commentCountText, { color: commentsExpanded ? '#e8963a' : (isDark ? '#7a5535' : '#a07850') }]}>
+              <FontAwesome name="comment-o" size={11} color={commentsExpanded ? '#D4A017' : (isDark ? '#7a5535' : '#a07850')} />
+              <Text style={[arc.commentCountText, { color: commentsExpanded ? '#D4A017' : (isDark ? '#7a5535' : '#a07850') }]}>
                 {commentCount > 0 ? `${commentCount}` : '0'}
               </Text>
             </Pressable>
@@ -442,9 +442,9 @@ function AlbumReviewCard({
               <FontAwesome
                 name={liked ? 'heart' : 'heart-o'}
                 size={12}
-                color={liked ? '#e8963a' : (isDark ? '#7a5535' : '#a07850')}
+                color={liked ? '#D4A017' : (isDark ? '#7a5535' : '#a07850')}
               />
-              <Text style={[s.reviewCardLikeCount, { color: liked ? '#e8963a' : (isDark ? '#7a5535' : '#a07850') }]}>
+              <Text style={[s.reviewCardLikeCount, { color: liked ? '#D4A017' : (isDark ? '#7a5535' : '#a07850') }]}>
                 {displayCount}
               </Text>
             </Pressable>
@@ -496,7 +496,7 @@ export default function AlbumDetailScreen() {
   const { user } = useAuth();
 
   const {
-    loggedAlbums, updateReview, playlists, addAlbumToPlaylist, removeAlbumFromPlaylist,
+    loggedAlbums, updateReview, updateDuration, playlists, addAlbumToPlaylist, removeAlbumFromPlaylist,
     wantToListen, addToWantToListen, removeFromWantToListen,
     setPendingAlbum,
   } = useAlbums();
@@ -623,7 +623,15 @@ export default function AlbumDetailScreen() {
 
     fetch(`${API_URL}/spotify/album/${albumId}/tracks`)
       .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
-      .then(data => { if (!cancelled) setTracks(data); })
+      .then((data: Track[]) => {
+        if (cancelled) return;
+        setTracks(data);
+        // Cache total duration so the Duration sort filter works.
+        // Called unconditionally — updateDuration is a no-op if this album
+        // isn't in loggedAlbums, and skips Supabase if the user isn't signed in.
+        const totalMs = data.reduce((sum, t) => sum + t.durationMs, 0);
+        if (totalMs > 0) updateDuration(albumId, totalMs);
+      })
       .catch(err => { console.warn('[album-detail] tracklist error:', err); if (!cancelled) setTracks([]); })
       .finally(() => { if (!cancelled) setTracksLoading(false); });
 
@@ -824,7 +832,7 @@ export default function AlbumDetailScreen() {
                 onPress={() => setShowPlaylists(true)}
                 hitSlop={12}
                 style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
-                <FontAwesome name="list-alt" size={19} color="#e8963a" />
+                <FontAwesome name="list-alt" size={19} color="#D4A017" />
               </Pressable>
             ) : null,
         }}
@@ -847,7 +855,7 @@ export default function AlbumDetailScreen() {
         <Text style={[s.title, { color: colors.text }]} numberOfLines={2}>{albumTitle}</Text>
 
         <Pressable onPress={handleArtistPress}>
-          <Text style={[s.artist, { color: '#e8963a' }]}>
+          <Text style={[s.artist, { color: '#D4A017' }]}>
             {albumArtist}{albumYear > 0 ? ` · ${albumYear}` : ''}
           </Text>
         </Pressable>
@@ -906,7 +914,7 @@ export default function AlbumDetailScreen() {
               )}
               <View style={s.editBtnRow}>
                 <Pressable
-                  style={[s.primaryBtn, s.editBtnFlex, { backgroundColor: '#e8963a' }]}
+                  style={[s.primaryBtn, s.editBtnFlex, { backgroundColor: '#D4A017' }]}
                   onPress={handleSave}>
                   <Text style={[s.primaryBtnText, { color: '#fff' }]}>Save</Text>
                 </Pressable>
@@ -929,7 +937,7 @@ export default function AlbumDetailScreen() {
                 </Text>
               </View>
               <View style={s.editLogRight}>
-                <FontAwesome name="volume-up" size={14} color={loggedAlbum!.rating > 0 ? '#e8963a' : (isDark ? '#3a2818' : '#ddd')} />
+                <FontAwesome name="volume-up" size={14} color={loggedAlbum!.rating > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#ddd')} />
                 {loggedAlbum!.rating >= 1 && <MiniRatingBar rating={loggedAlbum!.rating} isDark={isDark} />}
                 <Pressable onPress={() => setEditMode(true)} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
                   <FontAwesome name="pencil" size={13} color={colors.subtext} />
@@ -948,8 +956,8 @@ export default function AlbumDetailScreen() {
             <Pressable
               style={[s.secondaryBtn, s.ctaFlex, { borderColor: isDark ? '#3a2818' : '#ddd' }]}
               onPress={handleWantToListen}>
-              <FontAwesome name={isWanted ? 'bookmark' : 'bookmark-o'} size={14} color={isWanted ? '#e8963a' : colors.subtext} />
-              <Text style={[s.secondaryBtnText, { color: isWanted ? '#e8963a' : colors.subtext }]}>
+              <FontAwesome name={isWanted ? 'bookmark' : 'bookmark-o'} size={14} color={isWanted ? '#D4A017' : colors.subtext} />
+              <Text style={[s.secondaryBtnText, { color: isWanted ? '#D4A017' : colors.subtext }]}>
                 {isWanted ? 'Saved' : 'Want to Listen'}
               </Text>
             </Pressable>
@@ -1014,7 +1022,7 @@ export default function AlbumDetailScreen() {
             )}
           </View>
           {tracksLoading ? (
-            <ActivityIndicator size="small" color="#e8963a" style={{ marginVertical: 16 }} />
+            <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
           ) : tracks && tracks.length > 0 ? (
             tracks.map(track => (
               <View key={track.id} style={[s.trackRow, { borderBottomColor: borderColor }]}>
@@ -1214,7 +1222,7 @@ const s = StyleSheet.create({
 
   // About
   bioText: { fontSize: 14, lineHeight: 22 },
-  bioToggle: { color: '#e8963a', fontSize: 13, fontWeight: '500', marginTop: 8 },
+  bioToggle: { color: '#D4A017', fontSize: 13, fontWeight: '500', marginTop: 8 },
 
   // Log / Edit buttons
   ctaRow: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 20 },
@@ -1234,7 +1242,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#e8963a',
+    backgroundColor: '#D4A017',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -1286,10 +1294,10 @@ const s = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  reviewCardOwn: { borderLeftWidth: 2, borderLeftColor: '#e8963a' },
+  reviewCardOwn: { borderLeftWidth: 2, borderLeftColor: '#D4A017' },
   reviewCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   reviewCardUsername: { fontSize: 13, fontWeight: '700', flex: 1, marginRight: 8 },
-  ratingBadge: { backgroundColor: '#e8963a', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, minWidth: 26, alignItems: 'center' },
+  ratingBadge: { backgroundColor: '#D4A017', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, minWidth: 26, alignItems: 'center' },
   ratingBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   reviewCardText: { fontSize: 13, lineHeight: 19 },
   reviewCardNoText: { fontSize: 13, fontStyle: 'italic' },
@@ -1332,7 +1340,7 @@ const s = StyleSheet.create({
   creditLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 },
   creditValue: { fontSize: 14 },
   creditsToggle: { marginTop: 6 },
-  creditsToggleText: { color: '#e8963a', fontSize: 13, fontWeight: '500' },
+  creditsToggleText: { color: '#D4A017', fontSize: 13, fontWeight: '500' },
 
   // Similar Albums
   similarCard:   { width: 110, marginHorizontal: 4, gap: 4 },
@@ -1355,7 +1363,7 @@ const s = StyleSheet.create({
   playlistRowName: { fontSize: 15, fontWeight: '500' },
   playlistRowCount: { fontSize: 12 },
   checkBox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#7a5535', alignItems: 'center', justifyContent: 'center' },
-  checkBoxActive: { backgroundColor: '#e8963a', borderColor: '#e8963a' },
+  checkBoxActive: { backgroundColor: '#D4A017', borderColor: '#D4A017' },
 });
 
 // ─── Album review card styles ─────────────────────────────────────────────────

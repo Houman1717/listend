@@ -42,7 +42,7 @@ export default function DiscoverTopArtistsScreen() {
         contentContainerStyle={s.gridWrap}
         showsVerticalScrollIndicator={false}>
         {loading ? (
-          <ActivityIndicator color="#e8963a" style={{ marginTop: 48 }} />
+          <ActivityIndicator color="#D4A017" style={{ marginTop: 48 }} />
         ) : (
           <View style={s.grid}>
             {artists.map(artist => (

@@ -1493,6 +1493,45 @@ app.get('/spotify/recommendations', async (req, res) => {
   }
 });
 
+// ── GET /api/album-durations?ids=id1,id2,... ─────────────────────────────────
+// Batch endpoint: returns total duration in ms for each album ID.
+// Reuses the existing per-album tracks cache so repeated calls are cheap.
+
+app.get('/api/album-durations', async (req, res) => {
+  const raw = req.query.ids ?? '';
+  const ids = String(raw).split(',').map(s => s.trim()).filter(Boolean);
+  if (ids.length === 0) return res.json({});
+
+  const result = {};
+
+  await Promise.all(ids.map(async (id) => {
+    const CACHE_KEY = `spotify_album_tracks_${id}`;
+    let tracks = cacheGet(CACHE_KEY);
+    if (!tracks) tracks = await getCached(CACHE_KEY, TTL_24H);
+    if (!tracks) {
+      try {
+        const data = await amFetch(`/catalog/us/albums/${id}/tracks`);
+        tracks = (data.data ?? []).map((t, i) => ({
+          number: t.attributes?.trackNumber ?? i + 1,
+          id: t.id,
+          title: t.attributes?.name ?? '',
+          durationMs: t.attributes?.durationInMillis ?? null,
+          featuredArtists: [],
+        }));
+        cacheSet(CACHE_KEY, tracks, TTL_6H);
+        await setCache(CACHE_KEY, tracks);
+      } catch (err) {
+        console.warn(`[/api/album-durations] failed for ${id}:`, err.message ?? err);
+        return;
+      }
+    }
+    const totalMs = (tracks ?? []).reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
+    if (totalMs > 0) result[id] = totalMs;
+  }));
+
+  res.json(result);
+});
+
 // ── GET /refresh ──────────────────────────────────────────────────────────────
 
 app.get('/refresh', async (req, res) => {

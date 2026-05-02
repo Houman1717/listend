@@ -23,7 +23,7 @@ export type ReviewComment = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function avatarColor(username: string): string {
-  const palette = ['#e8963a', '#c8722a', '#e8963a', '#FF6B35', '#4CAF50', '#FFC107'];
+  const palette = ['#D4A017', '#B8880F', '#D4A017', '#FF6B35', '#4CAF50', '#FFC107'];
   let hash = 0;
   for (const c of username) hash = (hash * 31 + c.charCodeAt(0)) % palette.length;
   return palette[Math.abs(hash)];
@@ -138,7 +138,7 @@ export function CommentsSection({
                   onPress={() => submitReply(comment.id)}
                   hitSlop={8}
                   style={[cms.sendBtn, { opacity: replyText.trim() ? 1 : 0.35 }]}>
-                  <FontAwesome name="send" size={13} color="#e8963a" />
+                  <FontAwesome name="send" size={13} color="#D4A017" />
                 </Pressable>
               </View>
             )}
@@ -163,7 +163,7 @@ export function CommentsSection({
           onPress={submitComment}
           hitSlop={8}
           style={[cms.sendBtn, { opacity: commentText.trim() ? 1 : 0.35 }]}>
-          <FontAwesome name="send" size={13} color="#e8963a" />
+          <FontAwesome name="send" size={13} color="#D4A017" />
         </Pressable>
       </View>
     </View>
@@ -192,7 +192,7 @@ const cms = StyleSheet.create({
   replyRow: {
     marginLeft: 22,
     borderLeftWidth: 2,
-    borderLeftColor: '#e8963a',
+    borderLeftColor: '#D4A017',
     paddingLeft: 8,
   },
   commentAvatar: {
@@ -207,7 +207,7 @@ const cms = StyleSheet.create({
   commentAvatarLetter: { color: '#fff', fontSize: 10, fontWeight: '700' },
   commentBody: { flex: 1, gap: 3 },
   commentTopLine: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  commentUsername: { fontSize: 11, fontWeight: '700', color: '#e8963a' },
+  commentUsername: { fontSize: 11, fontWeight: '700', color: '#D4A017' },
   commentDate: { fontSize: 10 },
   commentText: { fontSize: 12, lineHeight: 17 },
   replyLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },

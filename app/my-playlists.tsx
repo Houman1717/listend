@@ -31,10 +31,12 @@ function PlaylistMosaic({
   albumIds,
   albumMap,
   size,
+  fallbackColor,
 }: {
   albumIds: string[];
   albumMap: Map<string, string | undefined>;
   size: number;
+  fallbackColor: string;
 }) {
   const half  = size / 2;
   const slots = Array.from({ length: 4 }, (_, i) => albumIds[i] ?? null);
@@ -48,7 +50,7 @@ function PlaylistMosaic({
             {url ? (
               <Image source={{ uri: url }} style={{ width: half, height: half }} resizeMode="cover" />
             ) : (
-              <View style={{ width: half, height: half, backgroundColor: '#2e2018' }} />
+              <View style={{ width: half, height: half, backgroundColor: fallbackColor }} />
             )}
           </View>
         );
@@ -89,12 +91,17 @@ function PlaylistCard({
       style={({ pressed }) => [
         s.playlistCard,
         {
-          backgroundColor: isDark ? '#1c1410' : '#f7f7f7',
-          borderColor:     isDark ? '#2a1e14' : '#e8e8e8',
+          backgroundColor: colors.surface,
+          borderColor:     colors.border,
           opacity:         pressed ? 0.7 : 1,
         },
       ]}>
-      <PlaylistMosaic albumIds={playlist.albumIds} albumMap={albumMap} size={64} />
+      <PlaylistMosaic
+        albumIds={playlist.albumIds}
+        albumMap={albumMap}
+        size={64}
+        fallbackColor={isDark ? '#3a2820' : '#EDE9E3'}
+      />
       <View style={s.playlistInfo}>
         <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>
           {playlist.name}
@@ -115,19 +122,19 @@ function PlaylistCard({
             <FontAwesome
               name={isLiked ? 'heart' : 'heart-o'}
               size={16}
-              color={isLiked ? '#e8963a' : '#7a5535'}
+              color={isLiked ? '#D4A017' : '#7a5535'}
             />
             {(likeCount ?? 0) > 0 && (
-              <Text style={[s.likeCount, { color: isLiked ? '#e8963a' : '#7a5535' }]}>
+              <Text style={[s.likeCount, { color: isLiked ? '#D4A017' : '#7a5535' }]}>
                 {likeCount}
               </Text>
             )}
           </Pressable>
         ) : (
           <View style={s.likeBtn}>
-            <FontAwesome name="heart" size={16} color="#e8963a" />
+            <FontAwesome name="heart" size={16} color="#D4A017" />
             {(likeCount ?? 0) > 0 && (
-              <Text style={[s.likeCount, { color: '#e8963a' }]}>{likeCount}</Text>
+              <Text style={[s.likeCount, { color: '#D4A017' }]}>{likeCount}</Text>
             )}
           </View>
         )
@@ -204,7 +211,7 @@ function NewPlaylistModal({
           />
 
           <Pressable
-            style={[s.createBtn, { backgroundColor: name.trim() ? '#e8963a' : (isDark ? '#2a1e14' : '#ddd') }]}
+            style={[s.createBtn, { backgroundColor: name.trim() ? '#D4A017' : (isDark ? '#2a1e14' : '#ddd') }]}
             onPress={handleCreate}
             disabled={!name.trim()}>
             <Text style={[s.createBtnText, { color: name.trim() ? '#fff' : colors.subtext }]}>
@@ -469,9 +476,37 @@ export default function MyPlaylistsScreen() {
   }
 
   // ── Own user album artwork map ────────────────────────────────────────────
-  const ownAlbumMap = new Map<string, string | undefined>(
-    loggedAlbums.map((a) => [a.id, a.artworkUrl])
-  );
+  // Start with logged albums, then fill in any gaps from Supabase (covers albums
+  // added to playlists without being formally logged).
+  const [extraArtworkMap, setExtraArtworkMap] = useState<Map<string, string | undefined>>(new Map());
+
+  const ownAlbumMap = new Map<string, string | undefined>([
+    ...extraArtworkMap,
+    ...loggedAlbums.map((a): [string, string | undefined] => [a.id, a.artworkUrl]),
+  ]);
+
+  useEffect(() => {
+    if (!user || viewingOther || playlists.length === 0) return;
+    const loggedIds = new Set(loggedAlbums.map(a => a.id));
+    const neededIds = [...new Set(
+      playlists.flatMap(p => p.albumIds.slice(0, 4)).filter(id => !loggedIds.has(id))
+    )];
+    if (neededIds.length === 0) return;
+
+    supabase
+      .from('user_albums')
+      .select('spotify_id, artwork_url')
+      .eq('user_id', user.id)
+      .in('spotify_id', neededIds)
+      .then(({ data }) => {
+        if (!data || data.length === 0) return;
+        setExtraArtworkMap(prev => {
+          const next = new Map(prev);
+          for (const row of data as any[]) next.set(row.spotify_id, row.artwork_url ?? undefined);
+          return next;
+        });
+      });
+  }, [playlists, loggedAlbums, user?.id, viewingOther]);
 
   // ── New playlist modal ────────────────────────────────────────────────────
   const [showNewPlaylist, setShowNewPlaylist] = useState(false);
@@ -496,7 +531,7 @@ export default function MyPlaylistsScreen() {
   if (loadingOther) {
     return (
       <View style={[s.root, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color="#e8963a" size="large" />
+        <ActivityIndicator color="#D4A017" size="large" />
       </View>
     );
   }
@@ -511,14 +546,14 @@ export default function MyPlaylistsScreen() {
           <Pressable
             onPress={() => setActiveTab('mine')}
             style={[s.tab, activeTab === 'mine' && s.tabActive]}>
-            <Text style={[s.tabText, { color: activeTab === 'mine' ? '#e8963a' : '#a07850' }]}>
+            <Text style={[s.tabText, { color: activeTab === 'mine' ? '#D4A017' : '#a07850' }]}>
               My Playlists
             </Text>
           </Pressable>
           <Pressable
             onPress={() => setActiveTab('liked')}
             style={[s.tab, activeTab === 'liked' && s.tabActive]}>
-            <Text style={[s.tabText, { color: activeTab === 'liked' ? '#e8963a' : '#a07850' }]}>
+            <Text style={[s.tabText, { color: activeTab === 'liked' ? '#D4A017' : '#a07850' }]}>
               Liked Playlists
             </Text>
           </Pressable>
@@ -530,7 +565,7 @@ export default function MyPlaylistsScreen() {
         <Pressable
           onPress={() => setShowNewPlaylist(true)}
           style={({ pressed }) => [s.newBtn, { opacity: pressed ? 0.7 : 1 }]}>
-          <FontAwesome name="plus" size={13} color="#e8963a" />
+          <FontAwesome name="plus" size={13} color="#D4A017" />
           <Text style={s.newBtnText}>New Playlist</Text>
         </Pressable>
       )}
@@ -605,7 +640,7 @@ export default function MyPlaylistsScreen() {
         /* ── Liked playlists ───────────────────────────────────────────── */
         likedLoading ? (
           <View style={s.likedLoadingWrap}>
-            <ActivityIndicator color="#e8963a" size="large" />
+            <ActivityIndicator color="#D4A017" size="large" />
           </View>
         ) : (
           <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
@@ -675,7 +710,7 @@ const s = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: '#e8963a',
+    borderBottomColor: '#D4A017',
   },
   tabText: {
     fontSize: 14,
@@ -691,7 +726,7 @@ const s = StyleSheet.create({
     marginTop: 14,
     marginBottom: 4,
   },
-  newBtnText: { color: '#e8963a', fontSize: 15, fontWeight: '600' },
+  newBtnText: { color: '#D4A017', fontSize: 15, fontWeight: '600' },
 
   // ── List ─────────────────────────────────────────────────────────────────────
   listWrap: { padding: 16, paddingBottom: 48, gap: 10 },

@@ -6,6 +6,7 @@ import Colors from '@/constants/Colors';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
 import { SpotifyAlbum } from '@/context/SpotifyService';
 import { discoverSections } from '@/context/discoverSections';
+import { useAlbums } from '@/context/AlbumsContext';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const PLACEHOLDER_COUNT = 20;
@@ -17,6 +18,9 @@ export default function DiscoverMostPopularScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const cw = cardWidth(width);
+
+  const { loggedAlbums } = useAlbums();
+  const loggedIds = new Set(loggedAlbums.map((a) => a.id));
 
   const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => discoverSections.popular);
 
@@ -46,6 +50,7 @@ export default function DiscoverMostPopularScreen() {
                   album={album}
                   width={cw}
                   isDark={isDark}
+                  isLogged={loggedIds.has(album.id)}
                   textColor={colors.text}
                   subColor={isDark ? '#a07850' : '#7a5535'}
                   onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl } } as any)}

@@ -8,10 +8,14 @@ import {
   Image,
 } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { POPULAR_REVIEWS_DATA, PopularReview } from './(tabs)/index';
 import { avatarColor } from '@/components/ReviewComments';
+import { SpotifyAlbum } from '@/context/SpotifyService';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Full review row ──────────────────────────────────────────────────────────
 
@@ -19,12 +23,14 @@ function ReviewRow({
   item,
   liked,
   onLike,
+  onAlbumPress,
   isDark,
   colors,
 }: {
   item: PopularReview;
   liked: boolean;
   onLike: () => void;
+  onAlbumPress: () => void;
   isDark: boolean;
   colors: any;
 }) {
@@ -38,8 +44,10 @@ function ReviewRow({
           borderColor: isDark ? '#2a1e14' : '#e8e8e8',
         },
       ]}>
-      {/* Top: art + album meta */}
-      <View style={s.topRow}>
+      {/* Top: art + album meta — tappable to open album profile */}
+      <Pressable
+        onPress={onAlbumPress}
+        style={({ pressed }) => [s.topRow, { opacity: pressed ? 0.7 : 1 }]}>
         <Image source={{ uri: item.artworkUrl }} style={s.art} />
         <View style={s.albumInfo}>
           <Text style={[s.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>
@@ -49,13 +57,13 @@ function ReviewRow({
             {item.albumArtist} · {item.albumYear}
           </Text>
           <View style={s.ratingRow}>
-            <FontAwesome name="volume-up" size={11} color="#e8963a" />
+            <FontAwesome name="volume-up" size={11} color="#D4A017" />
             <View style={s.ratingBadge}>
               <Text style={s.ratingNum}>{item.rating}</Text>
             </View>
           </View>
         </View>
-      </View>
+      </Pressable>
 
       {/* Full review text */}
       <Text style={[s.reviewText, { color: isDark ? '#a07850' : '#3a2818' }]}>
@@ -68,13 +76,13 @@ function ReviewRow({
           <View style={[s.avatar, { backgroundColor: avatarColor(item.username) }]}>
             <Text style={s.avatarLetter}>{item.username[0].toUpperCase()}</Text>
           </View>
-          <Text style={[s.username, { color: '#e8963a' }]}>@{item.username}</Text>
+          <Text style={[s.username, { color: '#D4A017' }]}>@{item.username}</Text>
         </View>
         <Pressable onPress={onLike} hitSlop={10} style={s.likeBtn}>
           <FontAwesome
             name={liked ? 'heart' : 'heart-o'}
             size={14}
-            color={liked ? '#e8963a' : (isDark ? '#7a5535' : '#a07850')}
+            color={liked ? '#D4A017' : (isDark ? '#7a5535' : '#a07850')}
           />
           <Text style={[s.likeCount, { color: isDark ? '#7a5535' : '#a07850' }]}>
             {displayCount}
@@ -91,6 +99,7 @@ export default function PopularReviewsScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
+  const router = useRouter();
 
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
 
@@ -100,6 +109,22 @@ export default function PopularReviewsScreen() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  async function navigateToAlbum(title: string, artist: string, artworkUrl: string, year: string) {
+    try {
+      const q = encodeURIComponent(`${title} ${artist}`);
+      const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
+      if (res.ok) {
+        const data: SpotifyAlbum[] = await res.json();
+        const match = data[0];
+        if (match) {
+          router.push({ pathname: '/album-detail', params: { id: match.id, title: match.title, artist: match.artist, year: String(match.year), artworkUrl: match.artworkUrl } });
+          return;
+        }
+      }
+    } catch {}
+    router.push({ pathname: '/album-detail', params: { id: '', title, artist, artworkUrl, year } });
   }
 
   return (
@@ -114,6 +139,7 @@ export default function PopularReviewsScreen() {
           item={item}
           liked={likedReviews.has(item.id)}
           onLike={() => handleLike(item.id)}
+          onAlbumPress={() => navigateToAlbum(item.albumTitle, item.albumArtist, item.artworkUrl, item.albumYear)}
           isDark={isDark}
           colors={colors}
         />
@@ -158,7 +184,7 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   ratingBadge: {
-    backgroundColor: '#e8963a',
+    backgroundColor: '#D4A017',
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,

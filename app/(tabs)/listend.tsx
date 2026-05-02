@@ -9,9 +9,9 @@ import {
   Dimensions,
   Modal,
   SafeAreaView,
-  PanResponder,
-  Animated,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -24,12 +24,12 @@ import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
-const DARK_BG   = '#1c1410';
-const CARD_BG   = '#2e2018';
+const DARK_BG   = '#0F0A07';
+const CARD_BG   = '#2E2018';
 const BORDER    = '#2a1e14';
 const TEXT      = '#f5e6c8';
-const SUBTEXT   = '#a07850';
-const ACCENT    = '#e8963a';
+const SUBTEXT   = '#A08060';
+const ACCENT    = '#D4A017';
 
 // COVER_H removed — cover now uses aspectRatio: 16/9
 const AVATAR_SIZE = 80;
@@ -305,7 +305,7 @@ const ph = StyleSheet.create({
   cover: {
     width: '100%',
     aspectRatio: 16 / 9,
-    backgroundColor: '#1c1410',
+    backgroundColor: '#0F0A07',
     overflow: 'hidden',
   },
   coverImg: { width: '100%', height: '100%' },
@@ -460,7 +460,7 @@ function FavSlot({
   if (editMode) {
     return (
       <Pressable onPress={onPress} style={[s.favSlot, s.favEmptyEdit, { borderRadius: radius }]}>
-        <FontAwesome name="plus" size={14} color="#7a5535" />
+        <FontAwesome name="plus" size={14} color="#6B4C35" />
       </Pressable>
     );
   }
@@ -488,7 +488,7 @@ function NavRow({
       style={({ pressed }) => [s.navRow, { opacity: pressed ? 0.6 : 1 }]}
       onPress={onPress}>
       <View style={s.navIconWrap}>
-        <FontAwesome name={icon} size={16} color="#e8963a" />
+        <FontAwesome name={icon} size={16} color="#D4A017" />
       </View>
       <View style={s.navRowText}>
         <Text style={[s.navLabel, { color: colors.text }]}>{label}</Text>
@@ -529,7 +529,7 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
             onPress={() => { onClose(); router.push('/edit-profile'); }}>
             <View style={ss.iconWrap}>
-              <FontAwesome name="user-o" size={16} color="#e8963a" />
+              <FontAwesome name="user-o" size={16} color="#D4A017" />
             </View>
             <Text style={ss.rowLabel}>Edit Profile</Text>
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
@@ -540,7 +540,7 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
           {/* Subscription */}
           <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
             <View style={ss.iconWrap}>
-              <FontAwesome name="star-o" size={16} color="#e8963a" />
+              <FontAwesome name="star-o" size={16} color="#D4A017" />
             </View>
             <Text style={ss.rowLabel}>Subscription</Text>
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
@@ -551,7 +551,7 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
           {/* Help & Feedback */}
           <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
             <View style={ss.iconWrap}>
-              <FontAwesome name="question-circle-o" size={16} color="#e8963a" />
+              <FontAwesome name="question-circle-o" size={16} color="#D4A017" />
             </View>
             <Text style={ss.rowLabel}>Help &amp; Feedback</Text>
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
@@ -621,109 +621,96 @@ function DraggableFavRow({
   onSlotPress: (index: number, item: any) => void;
   onReorder: (newOrder: (any | undefined)[]) => void;
 }) {
-  const slotsRef = useRef(slots);
-  slotsRef.current = slots;
-  const onSlotPressRef = useRef(onSlotPress);
+  const slotsRef        = useRef(slots);
+  slotsRef.current      = slots;
+  const onSlotPressRef  = useRef(onSlotPress);
   onSlotPressRef.current = onSlotPress;
-  const onReorderRef = useRef(onReorder);
-  onReorderRef.current = onReorder;
+  const onReorderRef    = useRef(onReorder);
+  onReorderRef.current  = onReorder;
 
-  const isDraggingRef  = useRef(false);
-  const dragIdxRef     = useRef(-1);
-  const hoverIdxRef    = useRef(-1);
-  const timerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startPageXRef  = useRef(0);   // pageX at touch start — used as dx anchor
-  const floatX         = useRef(new Animated.Value(0)).current;
+  // Reanimated shared values — updated on JS thread, applied on UI thread
+  const floatX   = useSharedValue(0);
 
-  // Row's absolute x on screen — converts pageX → local slot index
-  const rowRef      = useRef<View>(null);
-  const rowPageXRef = useRef(0);
-
+  // JS-side state & refs
   const [dragState, setDragState] = useState<{
     dragIdx: number;
     hoverIdx: number;
     draggingItem: any;
   } | null>(null);
 
-  function clearTimer() {
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-  }
+  const isActiveRef   = useRef(false);
+  const dragIdxRef    = useRef(-1);
+  const hoverIdxRef   = useRef(-1);
+  const rowRef        = useRef<View>(null);
+  const rowPageXRef   = useRef(0);
 
   function slotIdxAt(px: number) {
     return Math.min(4, Math.max(0, Math.floor((px - rowPageXRef.current) / SLOT_STEP)));
   }
 
-  const panResponder = useRef(
-    PanResponder.create({
-      // Capture phase: claim touch before any child Pressable
-      onStartShouldSetPanResponderCapture: () => true,
-      // Reclaim responder if we're mid-drag and somehow lost it
-      onMoveShouldSetPanResponder: () => isDraggingRef.current,
-      // Never yield to the ScrollView parent — this is the key fix for the
-      // "only one hop" bug where the ScrollView stole the responder each move
-      onPanResponderTerminateRequest: () => false,
-
-      onPanResponderGrant: (evt) => {
-        const idx = slotIdxAt(evt.nativeEvent.pageX);
-        dragIdxRef.current   = idx;
-        hoverIdxRef.current  = idx;
-        startPageXRef.current = evt.nativeEvent.pageX;
-        floatX.setValue(idx * SLOT_STEP);
-
-        timerRef.current = setTimeout(() => {
-          const item = slotsRef.current[idx];
-          if (!item) return;
-          isDraggingRef.current = true;
-          setDragState({ dragIdx: idx, hoverIdx: idx, draggingItem: item });
-        }, 300);
-      },
-
-      onPanResponderMove: (evt, gs) => {
-        if (!isDraggingRef.current) {
-          if (Math.abs(gs.dx) > 8 || Math.abs(gs.dy) > 10) clearTimer();
-          return;
-        }
-        // Use live pageX instead of gestureState.dx to avoid drift across re-renders
-        const dx = evt.nativeEvent.pageX - startPageXRef.current;
-        const clamped = Math.max(0, Math.min(4 * SLOT_STEP, dragIdxRef.current * SLOT_STEP + dx));
-        floatX.setValue(clamped);
-        const newHover = Math.min(4, Math.max(0, Math.round((clamped + FAV_SLOT_SIZE / 2) / SLOT_STEP)));
-        if (newHover !== hoverIdxRef.current) {
-          hoverIdxRef.current = newHover;
-          setDragState(prev => prev ? { ...prev, hoverIdx: newHover } : null);
-        }
-      },
-
-      onPanResponderRelease: (evt) => {
-        clearTimer();
-        if (!isDraggingRef.current) {
-          const tapped = slotIdxAt(evt.nativeEvent.pageX);
-          onSlotPressRef.current(tapped, slotsRef.current[tapped]);
-          return;
-        }
-        const from = dragIdxRef.current;
-        const to   = hoverIdxRef.current;
-        isDraggingRef.current = false;
-        dragIdxRef.current    = -1;
-        hoverIdxRef.current   = -1;
-        setDragState(null);
-        if (from !== to) {
-          const next = [...slotsRef.current];
-          const [moved] = next.splice(from, 1);
-          next.splice(to, 0, moved);
-          onReorderRef.current(next);
-        }
-      },
-
-      onPanResponderTerminate: () => {
-        clearTimer();
-        isDraggingRef.current = false;
-        dragIdxRef.current    = -1;
-        hoverIdxRef.current   = -1;
-        setDragState(null);
-      },
+  // Gesture.Pan with activateAfterLongPress — runs callbacks on JS thread via .runOnJS(true)
+  const pan = Gesture.Pan()
+    .activateAfterLongPress(280)
+    .runOnJS(true)
+    .onBegin((e) => {
+      const idx = slotIdxAt(e.absoluteX);
+      dragIdxRef.current  = idx;
+      hoverIdxRef.current = idx;
+      floatX.value        = idx * SLOT_STEP;
     })
-  ).current;
+    .onStart((e) => {
+      const idx  = dragIdxRef.current;
+      const item = slotsRef.current[idx];
+      if (!item) return;
+      isActiveRef.current = true;
+      setDragState({ dragIdx: idx, hoverIdx: idx, draggingItem: item });
+    })
+    .onUpdate((e) => {
+      if (!isActiveRef.current) return;
+      const dx      = e.translationX;
+      const clamped = Math.max(0, Math.min(4 * SLOT_STEP, dragIdxRef.current * SLOT_STEP + dx));
+      floatX.value  = clamped;
+      const newHover = Math.min(4, Math.max(0, Math.round((clamped + FAV_SLOT_SIZE / 2) / SLOT_STEP)));
+      if (newHover !== hoverIdxRef.current) {
+        hoverIdxRef.current = newHover;
+        setDragState(prev => prev ? { ...prev, hoverIdx: newHover } : null);
+      }
+    })
+    .onEnd(() => {
+      if (!isActiveRef.current) return;
+      const from = dragIdxRef.current;
+      const to   = hoverIdxRef.current;
+      isActiveRef.current = false;
+      dragIdxRef.current  = -1;
+      hoverIdxRef.current = -1;
+      setDragState(null);
+      if (from !== to) {
+        const next = [...slotsRef.current];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        onReorderRef.current(next);
+      }
+    })
+    .onFinalize((e, success) => {
+      // If the gesture never activated (quick tap) handle as press
+      if (!success && !isActiveRef.current) {
+        const idx = slotIdxAt(e.absoluteX);
+        onSlotPressRef.current(idx, slotsRef.current[idx]);
+        return;
+      }
+      // Cancelled mid-drag (e.g. gesture stolen)
+      if (!success && isActiveRef.current) {
+        isActiveRef.current = false;
+        dragIdxRef.current  = -1;
+        hoverIdxRef.current = -1;
+        setDragState(null);
+      }
+    });
+
+  // Floating item style — transform runs via Reanimated, no layout pass
+  const floatingStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: floatX.value }, { scale: 1.08 }],
+  }));
 
   // Build display order during drag
   let displaySlots: (any | undefined)[];
@@ -747,62 +734,64 @@ function DraggableFavRow({
   const draggingItem = dragState?.draggingItem;
 
   return (
-    <View
-      ref={rowRef}
-      style={[s.favRow, { position: 'relative' }]}
-      onLayout={() => rowRef.current?.measure((_x, _y, _w, _h, px) => { rowPageXRef.current = px; })}
-      {...panResponder.panHandlers}
-    >
-      {displaySlots.map((item, i) => {
-        const isPlaceholder = i === placeholderIdx && !!dragState;
-        const displayItem   = isPlaceholder || !item
-          ? undefined
-          : { artworkUrl: item.artworkUrl, title: item.title || item.name || '' };
-        // pointerEvents="none" prevents child Pressables from consuming touches
-        return (
-          <View key={i} pointerEvents="none">
-            <FavSlot item={displayItem} editMode circular={circular} />
-          </View>
-        );
-      })}
-
-      {draggingItem && (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            width: FAV_SLOT_SIZE,
-            height: FAV_SLOT_SIZE,
-            borderRadius: radius,
-            overflow: 'hidden',
-            backgroundColor: CARD_BG,
-            position: 'absolute',
-            left: floatX,
-            top: -4,
-            zIndex: 20,
-            elevation: 20,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.5,
-            shadowRadius: 10,
-            transform: [{ scale: 1.08 }],
-          }}
-        >
-          {draggingItem.artworkUrl ? (
-            <Image
-              source={{ uri: draggingItem.artworkUrl }}
-              style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE }}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[s.favInitialBg]}>
-              <Text style={s.favInitial}>
-                {(draggingItem.title || draggingItem.name || '?').charAt(0)}
-              </Text>
+    <GestureDetector gesture={pan}>
+      <View
+        ref={rowRef}
+        style={[s.favRow, { position: 'relative' }]}
+        onLayout={() => rowRef.current?.measure((_x, _y, _w, _h, px) => { rowPageXRef.current = px; })}
+      >
+        {displaySlots.map((item, i) => {
+          const isPlaceholder = i === placeholderIdx && !!dragState;
+          const displayItem   = isPlaceholder || !item
+            ? undefined
+            : { artworkUrl: item.artworkUrl, title: item.title || item.name || '' };
+          return (
+            <View key={i} pointerEvents="none">
+              <FavSlot item={displayItem} editMode circular={circular} />
             </View>
-          )}
-        </Animated.View>
-      )}
-    </View>
+          );
+        })}
+
+        {draggingItem && (
+          <Reanimated.View
+            pointerEvents="none"
+            style={[
+              {
+                width: FAV_SLOT_SIZE,
+                height: FAV_SLOT_SIZE,
+                borderRadius: radius,
+                overflow: 'hidden',
+                backgroundColor: CARD_BG,
+                position: 'absolute',
+                left: 0,
+                top: -4,
+                zIndex: 20,
+                elevation: 20,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.5,
+                shadowRadius: 10,
+              },
+              floatingStyle,
+            ]}
+          >
+            {draggingItem.artworkUrl ? (
+              <Image
+                source={{ uri: draggingItem.artworkUrl }}
+                style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={s.favInitialBg}>
+                <Text style={s.favInitial}>
+                  {(draggingItem.title || draggingItem.name || '?').charAt(0)}
+                </Text>
+              </View>
+            )}
+          </Reanimated.View>
+        )}
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -858,7 +847,7 @@ export default function ListendScreen() {
 
   // Inject bell + hamburger into the tab header
   const openSettings = useCallback(() => setSettingsVisible(true), []);
-  const headerIconColor = isDark ? '#f5e6c8' : '#3D2B1A';
+  const headerIconColor = isDark ? '#f5e6c8' : '#1A0F0A';
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -874,7 +863,7 @@ export default function ListendScreen() {
                 position: 'absolute',
                 top: -4, right: -4,
                 width: 8, height: 8, borderRadius: 4,
-                backgroundColor: '#e8963a',
+                backgroundColor: '#D4A017',
               }} />
             )}
           </Pressable>
@@ -1094,7 +1083,7 @@ const s = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
-  editLabel: { color: '#e8963a', fontSize: 12 },
+  editLabel: { color: '#D4A017', fontSize: 12 },
 
   favRow: { flexDirection: 'row', gap: FAV_GAP },
   favSlot: {
@@ -1116,7 +1105,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  favInitial: { color: '#7a5535', fontSize: 16, fontWeight: '700' },
+  favInitial: { color: '#6B4C35', fontSize: 16, fontWeight: '700' },
   favPlus: { color: '#505050', fontSize: 20, fontWeight: '300' },
   favEmptyEdit: {
     justifyContent: 'center',
@@ -1141,7 +1130,7 @@ const s = StyleSheet.create({
   navGroup: {
     marginTop: 24,
     marginHorizontal: 20,
-    backgroundColor: '#1c1410',
+    backgroundColor: '#0F0A07',
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#2a1e14',
@@ -1207,7 +1196,7 @@ const rm = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
     marginBottom: 20,
   },
-  avgValue: { color: '#e8963a', fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
+  avgValue: { color: '#D4A017', fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
   avgLabel: { color: SUBTEXT, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
   distBlock: { gap: 10 },
   distRow: {
@@ -1230,7 +1219,7 @@ const rm = StyleSheet.create({
   },
   barFilled: {
     height: 6,
-    backgroundColor: '#e8963a',
+    backgroundColor: '#D4A017',
     borderRadius: 3,
   },
   distCount: {

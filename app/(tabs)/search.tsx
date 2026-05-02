@@ -112,12 +112,13 @@ function resultToRecentItem(item: ResultItem): RecentItem {
 // ─── Row components ───────────────────────────────────────────────────────────
 
 function AlbumRow({
-  item, isDark, colors, isBookmarked, onView, onLog, onBookmark, onSaveRecent,
+  item, isDark, colors, isBookmarked, isLogged, onView, onLog, onBookmark, onSaveRecent,
 }: {
   item: SpotifyAlbum & { kind: 'album' };
   isDark: boolean;
   colors: typeof Colors.light;
   isBookmarked: boolean;
+  isLogged: boolean;
   onView: () => void;
   onLog: () => void;
   onBookmark: () => void;
@@ -128,26 +129,29 @@ function AlbumRow({
       <Pressable
         style={({ pressed }) => [
           s.resultMain,
-          { backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' },
+          { backgroundColor: pressed ? (isDark ? '#2a1e14' : '#F2EBE0') : 'transparent' },
         ]}
         onPress={() => { onSaveRecent(); onView(); }}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
         ) : (
-          <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
+          <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#EDE8E0' }]} />
         )}
         <View style={s.resultText}>
           <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
           <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>
             {item.artist}{item.year ? ` · ${item.year}` : ''}
           </Text>
+          {isLogged && (
+            <Text style={s.loggedLabel}>Listend</Text>
+          )}
         </View>
       </Pressable>
       <Pressable onPress={onBookmark} hitSlop={12} style={s.actionBtn}>
         <FontAwesome
           name={isBookmarked ? 'bookmark' : 'bookmark-o'}
           size={17}
-          color={isBookmarked ? '#e8963a' : colors.subtext}
+          color={isBookmarked ? '#D4A017' : colors.subtext}
         />
       </Pressable>
       <Pressable onPress={() => { onSaveRecent(); onLog(); }} hitSlop={8} style={s.actionBtn}>
@@ -165,13 +169,13 @@ function SongRow({ item, isDark, colors, onSaveRecent }: {
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' }]}
+      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#F2EBE0') : 'transparent' }]}
       onPress={onSaveRecent}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
         ) : (
-          <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]}>
+          <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#EDE8E0' }]}>
             <FontAwesome name="music" size={18} color={colors.subtext} />
           </View>
         )}
@@ -193,13 +197,13 @@ function ArtistRow({ item, isDark, colors, onPress, onSaveRecent }: {
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' }]}
+      style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#F2EBE0') : 'transparent' }]}
       onPress={() => { onSaveRecent(); onPress(); }}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={[s.artwork, { borderRadius: 26 }]} />
         ) : (
-          <View style={[s.artwork, { borderRadius: 26, backgroundColor: isDark ? '#2a1e14' : '#e5e5e5', justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={[s.artwork, { borderRadius: 26, backgroundColor: isDark ? '#2a1e14' : '#DDD5C8', justifyContent: 'center', alignItems: 'center' }]}>
             <Text style={[s.artistInitial, { color: colors.subtext }]}>{item.name.charAt(0).toUpperCase()}</Text>
           </View>
         )}
@@ -233,11 +237,11 @@ function PlaylistRow({
       onPress={onPress}
       style={({ pressed }) => [
         s.resultRow,
-        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' },
+        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#F2EBE0') : 'transparent' },
       ]}>
       <View style={s.resultMain}>
         <View style={[s.playlistIcon, { backgroundColor: isDark ? '#2a1e14' : '#e8e8e8' }]}>
-          <FontAwesome name="list" size={18} color="#e8963a" />
+          <FontAwesome name="list" size={18} color="#D4A017" />
         </View>
         <View style={s.resultText}>
           <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
@@ -247,7 +251,7 @@ function PlaylistRow({
           </Text>
         </View>
       </View>
-      <FontAwesome name="chevron-right" size={13} color={isDark ? '#4a3020' : '#a07850'} />
+      <FontAwesome name="chevron-right" size={13} color={isDark ? '#6B4C35' : '#A08060'} />
     </Pressable>
   );
 }
@@ -277,7 +281,7 @@ function RecentRow({
         {item.artworkUrl ? (
           <Image source={{ uri: item.artworkUrl }} style={[s.recentArt, { borderRadius: imgRadius }]} />
         ) : (
-          <View style={[s.recentArt, { borderRadius: imgRadius, backgroundColor: isDark ? '#2a1e14' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={[s.recentArt, { borderRadius: imgRadius, backgroundColor: isDark ? '#2a1e14' : '#EDE8E0', justifyContent: 'center', alignItems: 'center' }]}>
             <Text style={[s.recentInitial, { color: colors.subtext }]}>{item.title.charAt(0).toUpperCase()}</Text>
           </View>
         )}
@@ -323,14 +327,14 @@ function UserRow({
       onPress={onPress}
       style={({ pressed }) => [
         s.resultRow,
-        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#f5e6c8') : 'transparent' },
+        { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#F2EBE0') : 'transparent' },
       ]}>
       <View style={s.resultMain}>
         {/* Avatar */}
         {item.avatar_url ? (
           <Image source={{ uri: item.avatar_url }} style={s.userAvatar} />
         ) : (
-          <View style={[s.userAvatar, s.userAvatarFallback, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]}>
+          <View style={[s.userAvatar, s.userAvatarFallback, { backgroundColor: isDark ? '#2a1e14' : '#EDE8E0' }]}>
             <Text style={[s.userAvatarInitial, { color: colors.subtext }]}>{initial}</Text>
           </View>
         )}
@@ -341,7 +345,7 @@ function UserRow({
             <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
           ) : null}
         </View>
-        <FontAwesome name="chevron-right" size={13} color={isDark ? '#4a3020' : '#a07850'} />
+        <FontAwesome name="chevron-right" size={13} color={isDark ? '#6B4C35' : '#A08060'} />
       </View>
     </Pressable>
   );
@@ -355,7 +359,7 @@ export default function SearchScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { user } = useAuth();
-  const { setPendingAlbum, wantToListen, addToWantToListen, removeFromWantToListen, playlists } = useAlbums();
+  const { setPendingAlbum, wantToListen, addToWantToListen, removeFromWantToListen, playlists, loggedAlbums } = useAlbums();
 
   const [activeTab, setActiveTab] = useState<SearchTab>('albums');
   const [query, setQuery] = useState('');
@@ -560,7 +564,7 @@ export default function SearchScreen() {
       </View>
 
       {/* Filter tabs */}
-      <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? '#2a1e14' : '#e5e5e5' }}>
+      <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -576,9 +580,11 @@ export default function SearchScreen() {
                   paddingHorizontal: 16,
                   paddingVertical: 8,
                   borderRadius: 20,
-                  backgroundColor: active ? '#e8963a' : (isDark ? '#3a2818' : '#f5e6c8'),
+                  backgroundColor: active ? '#D4A017' : 'transparent',
+                  borderWidth: active ? 0 : 1.5,
+                  borderColor: active ? undefined : '#6B4C35',
                 }}>
-                <Text style={{ color: active ? '#fff' : colors.subtext, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
+                <Text style={{ color: active ? '#fff' : '#A08060', fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
                   {label}
                 </Text>
               </Pressable>
@@ -626,7 +632,7 @@ export default function SearchScreen() {
           </View>
         )
       ) : loading ? (
-        <ActivityIndicator style={s.spinner} color="#e8963a" />
+        <ActivityIndicator style={s.spinner} color="#D4A017" />
       ) : searched && activeTab === 'users' && userResults.length === 0 ? (
         <View style={s.emptyState}>
           <FontAwesome name="user-o" size={36} color={isDark ? '#2a1e14' : '#ddd'} />
@@ -702,6 +708,7 @@ export default function SearchScreen() {
                   isDark={isDark}
                   colors={colors}
                   isBookmarked={!!wantToListen.find((a) => a.id === item.id)}
+                  isLogged={!!loggedAlbums.find((a) => a.id === item.id)}
                   onView={() => handleLogAlbum(item)}
                   onLog={() => handleLogDirect(item)}
                   onBookmark={() => handleToggleBookmark(item)}
@@ -766,7 +773,7 @@ const s = StyleSheet.create({
     paddingBottom: 10,
   },
   recentHeading: { fontSize: 17, fontWeight: '700' },
-  clearAll: { fontSize: 13, color: '#e8963a' },
+  clearAll: { fontSize: 13, color: '#D4A017' },
 
   recentRow: {
     flexDirection: 'row',
@@ -820,6 +827,7 @@ const s = StyleSheet.create({
   artwork: { width: 52, height: 52, borderRadius: 4, flexShrink: 0 },
   artPlaceholder: { justifyContent: 'center', alignItems: 'center' },
   artistInitial: { fontSize: 20, fontWeight: '700' },
+  loggedLabel: { fontSize: 11, fontWeight: '600', color: '#D4A017' },
   resultText: { flex: 1, marginLeft: 12, gap: 3 },
   resultTitle: { fontSize: 15, fontWeight: '600' },
   resultSub: { fontSize: 13 },

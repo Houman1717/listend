@@ -19,22 +19,19 @@ import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DARK_BG   = '#1c1410';
-const CARD_BG   = '#2e2018';
-const BORDER    = '#2a1e14';
-const TEXT      = '#f5e6c8';
-const SUBTEXT   = '#a07850';
-const ACCENT    = '#e8963a';
-const MY_BUBBLE = '#e8963a';
-const THEIR_BG  = '#2e2018';
+const ACCENT = '#D4A017';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const POLL_INTERVAL_MS = 5000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type ColorsType = typeof Colors.light;
 
 type MessageType = 'text' | 'album';
 
@@ -67,6 +64,9 @@ type AlbumResult = {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function DMConversationScreen() {
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'light'];
+
   const { userId: otherUserId } = useLocalSearchParams<{ userId: string }>();
   const { user }   = useAuth();
   const { loggedAlbums } = useAlbums();
@@ -144,9 +144,6 @@ export default function DMConversationScreen() {
     setLoadingMsgs(false);
   }
 
-  // ── Notification helper ──────────────────────────────────────────────────────
-  // Inserts a 'message' notification for the recipient only if they have no
-  // existing unread message notification from us — prevents spam.
   async function notifyRecipient() {
     if (!user || !otherUserId) return;
     const { count } = await supabase
@@ -183,7 +180,7 @@ export default function DMConversationScreen() {
 
     if (error) {
       console.error('[DMConversation] send error:', error);
-      setInputText(text); // restore on failure
+      setInputText(text);
     } else {
       fetchMessages();
       notifyRecipient();
@@ -198,7 +195,6 @@ export default function DMConversationScreen() {
     setAlbumQuery('');
     setAlbumResults([]);
 
-    // Attach sender's rating/review if they've logged this album
     const loggedEntry = loggedAlbums.find(a => a.id === album.id);
     const albumDataWithRating = {
       ...album,
@@ -258,7 +254,7 @@ export default function DMConversationScreen() {
 
   if (loadingMsgs) {
     return (
-      <View style={s.center}>
+      <View style={[s.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={ACCENT} size="large" />
       </View>
     );
@@ -266,7 +262,7 @@ export default function DMConversationScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={s.root}
+      style={[s.root, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={88}>
 
@@ -288,7 +284,7 @@ export default function DMConversationScreen() {
           return (
             <>
               {showDate && (
-                <Text style={s.dateSeparator}>
+                <Text style={[s.dateSeparator, { color: colors.subtext }]}>
                   {new Date(item.created_at).toLocaleDateString([], {
                     weekday: 'long', month: 'short', day: 'numeric',
                   })}
@@ -298,6 +294,7 @@ export default function DMConversationScreen() {
                 <AlbumCard
                   album={item.album_data}
                   isMe={isMe}
+                  colors={colors}
                   senderRating={item.album_data.sender_rating}
                   senderReview={item.album_data.sender_review}
                   onPress={() =>
@@ -314,7 +311,7 @@ export default function DMConversationScreen() {
                   }
                 />
               ) : (
-                <TextBubble text={item.content ?? ''} isMe={isMe} time={item.created_at} />
+                <TextBubble text={item.content ?? ''} isMe={isMe} time={item.created_at} colors={colors} />
               )}
             </>
           );
@@ -322,20 +319,28 @@ export default function DMConversationScreen() {
       />
 
       {/* ── Input bar ──────────────────────────────────────────────────────── */}
-      <View style={s.inputBar}>
+      <View style={[s.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         <Pressable
-          style={({ pressed }) => [s.albumBtn, { opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [s.albumBtn, {
+            backgroundColor: colors.elevated,
+            borderColor: colors.border,
+            opacity: pressed ? 0.7 : 1,
+          }]}
           onPress={() => setAlbumSheetVisible(true)}
           hitSlop={8}>
           <FontAwesome name="music" size={18} color={ACCENT} />
         </Pressable>
 
         <TextInput
-          style={s.textInput}
+          style={[s.textInput, {
+            backgroundColor: colors.background,
+            borderColor: colors.border,
+            color: colors.text,
+          }]}
           value={inputText}
           onChangeText={setInputText}
           placeholder="Message…"
-          placeholderTextColor={SUBTEXT}
+          placeholderTextColor={colors.subtext}
           multiline
           maxLength={1000}
           returnKeyType="default"
@@ -362,32 +367,32 @@ export default function DMConversationScreen() {
         onRequestClose={() => setAlbumSheetVisible(false)}>
         <View style={as.overlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setAlbumSheetVisible(false)} />
-          <SafeAreaView style={as.sheet}>
+          <SafeAreaView style={[as.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
             {/* Handle + header */}
-            <View style={as.handle} />
+            <View style={[as.handle, { backgroundColor: colors.border }]} />
             <View style={as.header}>
-              <Text style={as.title}>Send an Album</Text>
+              <Text style={[as.title, { color: colors.text }]}>Send an Album</Text>
               <Pressable onPress={() => setAlbumSheetVisible(false)} hitSlop={12}>
-                <FontAwesome name="times" size={18} color={SUBTEXT} />
+                <FontAwesome name="times" size={18} color={colors.subtext} />
               </Pressable>
             </View>
 
             {/* Search input */}
-            <View style={as.searchBar}>
-              <FontAwesome name="search" size={14} color={SUBTEXT} style={{ marginTop: 1 }} />
+            <View style={[as.searchBar, { backgroundColor: colors.background }]}>
+              <FontAwesome name="search" size={14} color={colors.subtext} style={{ marginTop: 1 }} />
               <TextInput
-                style={as.searchInput}
+                style={[as.searchInput, { color: colors.text }]}
                 value={albumQuery}
                 onChangeText={handleAlbumQueryChange}
                 placeholder="Search albums…"
-                placeholderTextColor={SUBTEXT}
+                placeholderTextColor={colors.subtext}
                 autoFocus
                 autoCorrect={false}
                 autoCapitalize="none"
               />
               {albumQuery.length > 0 && (
                 <Pressable onPress={() => { setAlbumQuery(''); setAlbumResults([]); }} hitSlop={8}>
-                  <FontAwesome name="times-circle" size={14} color={SUBTEXT} />
+                  <FontAwesome name="times-circle" size={14} color={colors.subtext} />
                 </Pressable>
               )}
             </View>
@@ -408,11 +413,11 @@ export default function DMConversationScreen() {
                     {item.artworkUrl ? (
                       <Image source={{ uri: item.artworkUrl }} style={as.artwork} />
                     ) : (
-                      <View style={[as.artwork, as.artworkFallback]} />
+                      <View style={[as.artwork, { backgroundColor: colors.border }]} />
                     )}
                     <View style={as.resultText}>
-                      <Text style={as.resultTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={as.resultSub} numberOfLines={1}>
+                      <Text style={[as.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                      <Text style={[as.resultSub, { color: colors.subtext }]} numberOfLines={1}>
                         {item.artist}{item.year ? ` · ${item.year}` : ''}
                       </Text>
                     </View>
@@ -431,12 +436,12 @@ export default function DMConversationScreen() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function TextBubble({ text, isMe, time }: { text: string; isMe: boolean; time: string }) {
+function TextBubble({ text, isMe, time, colors }: { text: string; isMe: boolean; time: string; colors: ColorsType }) {
   return (
     <View style={[b.row, isMe ? b.rowMe : b.rowThem]}>
-      <View style={[b.bubble, isMe ? b.bubbleMe : b.bubbleThem]}>
-        <Text style={[b.text, isMe ? b.textMe : b.textThem]}>{text}</Text>
-        <Text style={[b.time, isMe ? b.timeMe : b.timeThem]}>
+      <View style={[b.bubble, isMe ? b.bubbleMe : { ...b.bubbleThem, backgroundColor: colors.surface }]}>
+        <Text style={[b.text, isMe ? b.textMe : { color: colors.text }]}>{text}</Text>
+        <Text style={[b.time, isMe ? b.timeMe : { color: colors.subtext }]}>
           {new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </View>
@@ -447,17 +452,18 @@ function TextBubble({ text, isMe, time }: { text: string; isMe: boolean; time: s
 function AlbumCard({
   album,
   isMe,
+  colors,
   senderRating,
   senderReview,
   onPress,
 }: {
   album: { id: string; title: string; artist: string; artworkUrl: string; year?: number };
   isMe: boolean;
+  colors: ColorsType;
   senderRating?: number;
   senderReview?: string;
   onPress: () => void;
 }) {
-  // Fake recipient rating/review for UI display
   const recipientRating = 8;
   const recipientReview = 'Really solid project, a few tracks felt like filler but the highs carry it.';
 
@@ -467,7 +473,11 @@ function AlbumCard({
   return (
     <View style={[b.row, isMe ? b.rowMe : b.rowThem]}>
       <Pressable
-        style={({ pressed }) => [b.albumCard, { opacity: pressed ? 0.85 : 1 }]}
+        style={({ pressed }) => [b.albumCard, {
+          backgroundColor: colors.elevated,
+          borderColor: colors.border,
+          opacity: pressed ? 0.85 : 1,
+        }]}
         onPress={onPress}>
 
         {/* Top: artwork + album meta */}
@@ -475,25 +485,25 @@ function AlbumCard({
           {album.artworkUrl ? (
             <Image source={{ uri: album.artworkUrl }} style={b.albumArt} resizeMode="cover" />
           ) : (
-            <View style={[b.albumArt, b.albumArtFallback]}>
-              <FontAwesome name="music" size={20} color={SUBTEXT} />
+            <View style={[b.albumArt, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
+              <FontAwesome name="music" size={20} color={colors.subtext} />
             </View>
           )}
           <View style={b.albumMeta}>
-            <Text style={b.albumTitle} numberOfLines={2}>{album.title}</Text>
-            <Text style={b.albumArtist} numberOfLines={1}>{album.artist}</Text>
-            {album.year ? <Text style={b.albumYear}>{album.year}</Text> : null}
+            <Text style={[b.albumTitle, { color: colors.text }]} numberOfLines={2}>{album.title}</Text>
+            <Text style={[b.albumArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
+            {album.year ? <Text style={[b.albumYear, { color: colors.subtext }]}>{album.year}</Text> : null}
           </View>
-          <FontAwesome name="chevron-right" size={11} color={SUBTEXT} style={{ alignSelf: 'center', marginLeft: 4 }} />
+          <FontAwesome name="chevron-right" size={11} color={colors.subtext} style={{ alignSelf: 'center', marginLeft: 4 }} />
         </View>
 
         {/* Divider */}
-        <View style={b.reviewDivider} />
+        <View style={[b.reviewDivider, { backgroundColor: colors.border }]} />
 
         {/* Sender review */}
         <View style={b.reviewSection}>
           <View style={b.reviewSectionHeader}>
-            <Text style={b.reviewSectionLabel}>{senderLabel}</Text>
+            <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{senderLabel}</Text>
             {senderRating ? (
               <View style={b.ratingBadge}>
                 <FontAwesome name="volume-up" size={8} color="#fff" />
@@ -502,22 +512,22 @@ function AlbumCard({
             ) : null}
           </View>
           {senderReview ? (
-            <Text style={b.reviewText} numberOfLines={2}>"{senderReview}"</Text>
+            <Text style={[b.reviewText, { color: colors.subtext }]} numberOfLines={2}>"{senderReview}"</Text>
           ) : (
-            <Text style={b.reviewPlaceholder}>No review yet</Text>
+            <Text style={[b.reviewPlaceholder, { color: colors.textMuted }]}>No review yet</Text>
           )}
         </View>
 
         {/* Recipient review */}
         <View style={b.reviewSection}>
           <View style={b.reviewSectionHeader}>
-            <Text style={b.reviewSectionLabel}>{recipientLabel}</Text>
+            <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{recipientLabel}</Text>
             <View style={b.ratingBadge}>
               <FontAwesome name="volume-up" size={8} color="#fff" />
               <Text style={b.ratingBadgeText}>{recipientRating}</Text>
             </View>
           </View>
-          <Text style={b.reviewText} numberOfLines={2}>"{recipientReview}"</Text>
+          <Text style={[b.reviewText, { color: colors.subtext }]} numberOfLines={2}>"{recipientReview}"</Text>
         </View>
 
       </Pressable>
@@ -528,13 +538,13 @@ function AlbumCard({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: DARK_BG },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: DARK_BG },
+  root:   { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   listContent: { paddingHorizontal: 12, paddingTop: 16, paddingBottom: 12, gap: 2 },
 
   dateSeparator: {
-    color: SUBTEXT, fontSize: 12, textAlign: 'center',
+    fontSize: 12, textAlign: 'center',
     marginVertical: 12,
   },
 
@@ -547,14 +557,11 @@ const s = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 10 : 10,
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
-    backgroundColor: DARK_BG,
   },
   albumBtn: {
     width: 36, height: 36,
     borderRadius: 18,
-    backgroundColor: '#2e2018',
-    borderWidth: 1, borderColor: '#3a2818',
+    borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
     alignSelf: 'flex-end', marginBottom: 1,
   },
@@ -562,13 +569,10 @@ const s = StyleSheet.create({
     flex: 1,
     minHeight: 36,
     maxHeight: 120,
-    backgroundColor: '#2e2018',
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    color: TEXT,
     fontSize: 15,
   },
   sendBtn: {
@@ -578,7 +582,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     alignSelf: 'flex-end', marginBottom: 1,
   },
-  sendBtnDisabled: { backgroundColor: '#4a1a30', opacity: 0.5 },
+  sendBtnDisabled: { opacity: 0.4 },
 });
 
 // Chat bubble styles
@@ -594,16 +598,14 @@ const b = StyleSheet.create({
     paddingVertical: 9,
     gap: 4,
   },
-  bubbleMe:   { backgroundColor: MY_BUBBLE, borderBottomRightRadius: 4 },
-  bubbleThem: { backgroundColor: THEIR_BG,  borderBottomLeftRadius:  4 },
+  bubbleMe:   { backgroundColor: ACCENT, borderBottomRightRadius: 4 },
+  bubbleThem: { borderBottomLeftRadius: 4 },
 
   text:   { fontSize: 15, lineHeight: 21 },
-  textMe:   { color: '#fff' },
-  textThem: { color: TEXT },
+  textMe: { color: '#fff' },
 
-  time:     { fontSize: 10, alignSelf: 'flex-end' },
-  timeMe:   { color: 'rgba(255,255,255,0.6)' },
-  timeThem: { color: SUBTEXT },
+  time:   { fontSize: 10, alignSelf: 'flex-end' },
+  timeMe: { color: 'rgba(255,255,255,0.6)' },
 
   // Album card
   albumCard: {
@@ -612,9 +614,7 @@ const b = StyleSheet.create({
     overflow: 'hidden',
     padding: 12,
     gap: 10,
-    backgroundColor: '#2e2018',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#3a2818',
   },
 
   albumTop: {
@@ -627,19 +627,12 @@ const b = StyleSheet.create({
     borderRadius: 6,
     flexShrink: 0,
   },
-  albumArtFallback: {
-    backgroundColor: '#3a2818',
-    alignItems: 'center', justifyContent: 'center',
-  },
   albumMeta: { flex: 1, gap: 2, paddingTop: 1 },
-  albumTitle:  { color: TEXT,    fontSize: 13, fontWeight: '700', lineHeight: 17 },
-  albumArtist: { color: SUBTEXT, fontSize: 12 },
-  albumYear:   { color: SUBTEXT, fontSize: 11 },
+  albumTitle:  { fontSize: 13, fontWeight: '700', lineHeight: 17 },
+  albumArtist: { fontSize: 12 },
+  albumYear:   { fontSize: 11 },
 
-  reviewDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#2a1e14',
-  },
+  reviewDivider: { height: StyleSheet.hairlineWidth },
 
   reviewSection: { gap: 4 },
   reviewSectionHeader: {
@@ -647,21 +640,21 @@ const b = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  reviewSectionLabel: { color: SUBTEXT, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  reviewSectionLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
 
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#e8963a',
+    backgroundColor: ACCENT,
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   ratingBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
 
-  reviewText:        { color: 'rgba(240,240,240,0.65)', fontSize: 12, fontStyle: 'italic', lineHeight: 16 },
-  reviewPlaceholder: { color: '#4a3020', fontSize: 12, fontStyle: 'italic' },
+  reviewText:        { fontSize: 12, fontStyle: 'italic', lineHeight: 16 },
+  reviewPlaceholder: { fontSize: 12, fontStyle: 'italic' },
 });
 
 // Album search sheet styles
@@ -672,16 +665,13 @@ const as = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   sheet: {
-    backgroundColor: '#161616',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '75%',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
   },
   handle: {
     width: 36, height: 4, borderRadius: 2,
-    backgroundColor: '#4a3020',
     alignSelf: 'center',
     marginTop: 10, marginBottom: 6,
   },
@@ -692,20 +682,19 @@ const as = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
-  title: { color: TEXT, fontSize: 17, fontWeight: '700' },
+  title: { fontSize: 17, fontWeight: '700' },
 
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#2a1e14',
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 42,
     gap: 8,
   },
-  searchInput: { flex: 1, color: TEXT, fontSize: 15, height: '100%' },
+  searchInput: { flex: 1, fontSize: 15, height: '100%' },
 
   result: {
     flexDirection: 'row',
@@ -715,8 +704,7 @@ const as = StyleSheet.create({
     gap: 12,
   },
   artwork: { width: 48, height: 48, borderRadius: 4 },
-  artworkFallback: { backgroundColor: '#2a1e14' },
-  resultText:   { flex: 1, gap: 3 },
-  resultTitle:  { color: TEXT,    fontSize: 14, fontWeight: '600' },
-  resultSub:    { color: SUBTEXT, fontSize: 12 },
+  resultText:  { flex: 1, gap: 3 },
+  resultTitle: { fontSize: 14, fontWeight: '600' },
+  resultSub:   { fontSize: 12 },
 });

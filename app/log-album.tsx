@@ -46,7 +46,7 @@ function RatingBar({
   containerWidth: number;
   isDark: boolean;
 }) {
-  const activeColor   = '#e8963a';
+  const activeColor   = '#D4A017';
   const inactiveColor = isDark ? '#2a1e14' : '#e0e0e0';
 
   const tap = Gesture.Tap()
@@ -90,7 +90,7 @@ function RatingBar({
 
 function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
   const [barWidth, setBarWidth] = useState(0);
-  const activeColor   = '#e8963a';
+  const activeColor   = '#D4A017';
   const inactiveColor = isDark ? '#2a1e14' : '#e0e0e0';
 
   return (
@@ -187,7 +187,7 @@ export default function LogAlbumScreen() {
         )}
 
         <Pressable
-          style={[styles.logButton, { backgroundColor: '#e8963a' }]}
+          style={[styles.logButton, { backgroundColor: '#D4A017' }]}
           onPress={handleLog}>
           <Text style={[styles.logButtonText, { color: '#fff' }]}>
             Log Album

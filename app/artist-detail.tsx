@@ -375,7 +375,7 @@ export default function ArtistDetailScreen() {
           <FontAwesome
             name={liked ? 'heart' : 'heart-o'}
             size={24}
-            color={liked ? '#e8963a' : '#7a5535'}
+            color={liked ? '#D4A017' : '#7a5535'}
           />
         </Pressable>
         {artworkUrl ? (
@@ -389,14 +389,14 @@ export default function ArtistDetailScreen() {
         {listenedPct !== null && (
           <View style={sc.listenedWrap}>
             <View style={sc.listenedRow}>
-              <FontAwesome name="headphones" size={13} color="#e8963a" />
+              <FontAwesome name="headphones" size={13} color="#D4A017" />
               <Text style={sc.listenedPct}>{listenedPct}%</Text>
             </View>
             <Text style={sc.listenedSub}>{listenedCount} of {totalAlbums} albums listened</Text>
           </View>
         )}
         {lastfmLoading ? (
-          <ActivityIndicator size="small" color="#e8963a" style={{ marginTop: 8 }} />
+          <ActivityIndicator size="small" color="#D4A017" style={{ marginTop: 8 }} />
         ) : lastfm?.listeners ? (
           <Text style={[sc.listeners, { color: colors.subtext }]}>{formatListeners(lastfm.listeners)}</Text>
         ) : lastfmError ? (
@@ -423,7 +423,7 @@ export default function ArtistDetailScreen() {
       <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
         <SectionHeader label="Top Tracks" color={colors.subtext} />
         {tracksLoading ? (
-          <ActivityIndicator size="small" color="#e8963a" style={{ marginVertical: 16 }} />
+          <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
         ) : tracksError ? (
           <Text style={[sc.errorText, { color: '#f87171' }]}>{tracksError}</Text>
         ) : topTracks && topTracks.length > 0 ? (
@@ -446,7 +446,7 @@ export default function ArtistDetailScreen() {
       <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
         <SectionHeader label="Discography" color={colors.subtext} />
         {albumsLoading ? (
-          <ActivityIndicator size="small" color="#e8963a" style={{ marginVertical: 16 }} />
+          <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
         ) : albumsError ? (
           <Text style={[sc.errorText, { color: '#f87171' }]}>{albumsError}</Text>
         ) : (
@@ -542,11 +542,11 @@ const sc = StyleSheet.create({
 
   avatar: { width: 120, height: 120, borderRadius: 60, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 16 },
   avatarPlaceholder: { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' },
-  avatarInitial: { color: '#e8963a', fontSize: 44, fontWeight: '700' },
+  avatarInitial: { color: '#D4A017', fontSize: 44, fontWeight: '700' },
   name: { marginTop: 14, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
   listenedWrap: { alignItems: 'center', marginTop: 8, gap: 3 },
   listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  listenedPct: { color: '#e8963a', fontSize: 15, fontWeight: '700' },
+  listenedPct: { color: '#D4A017', fontSize: 15, fontWeight: '700' },
   listenedSub: { color: '#7a5535', fontSize: 12 },
   listeners: { marginTop: 4, fontSize: 13 },
 
@@ -570,7 +570,7 @@ const sc = StyleSheet.create({
   // Discography tabs
   discTabBar:       { flexDirection: 'row', gap: 6, paddingVertical: 2 },
   discTab:          { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#4a3020' },
-  discTabActive:    { backgroundColor: '#e8963a', borderColor: '#e8963a' },
+  discTabActive:    { backgroundColor: '#D4A017', borderColor: '#D4A017' },
   discTabText:      { fontSize: 12, fontWeight: '500', color: '#a07850' },
   discTabTextActive:{ color: '#fff', fontWeight: '700' },
 
@@ -584,7 +584,7 @@ const sc = StyleSheet.create({
 
   // Bio
   bioText: { fontSize: 14, lineHeight: 22 },
-  bioToggle: { color: '#e8963a', fontSize: 13, fontWeight: '500', marginTop: 8 },
+  bioToggle: { color: '#D4A017', fontSize: 13, fontWeight: '500', marginTop: 8 },
 
   // Similar artists
   similarScroll: { marginHorizontal: -4 },

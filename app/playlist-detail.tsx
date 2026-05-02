@@ -22,37 +22,20 @@ const PADDING = 16;
 const GAP     = 12;
 const COLS    = 3;
 
-const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
-
-function VolumeBadge({ rating }: { rating: number }) {
-  return (
-    <View style={s.badge}>
-      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#e8963a' : '#7a5535'} />
-      <View style={s.badgeBars}>
-        {BAR_HEIGHTS.map((h, i) => (
-          <View
-            key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#e8963a' : '#2a1e14' }]}
-          />
-        ))}
-      </View>
-      {rating > 0 && <Text style={s.badgeNum}>{rating}</Text>}
-    </View>
-  );
-}
-
 // ─── Album card — edit controls hidden when readOnly ─────────────────────────
 
 function AlbumCard({
   album,
   cardWidth,
   readOnly,
+  colors,
   onPress,
   onRemove,
 }: {
   album: LoggedAlbum;
   cardWidth: number;
   readOnly: boolean;
+  colors: any;
   onPress: () => void;
   onRemove: () => void;
 }) {
@@ -73,16 +56,9 @@ function AlbumCard({
             <Text style={[s.fallbackText, { fontSize: cardWidth * 0.32 }]}>{album.title.charAt(0)}</Text>
           </View>
         )}
-        <View style={s.ratingWrap}>
-          <VolumeBadge rating={album.rating} />
-        </View>
+        <Text style={[s.cardTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
+        <Text style={[s.cardArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
       </Pressable>
-      {/* Remove button — own user only */}
-      {!readOnly && (
-        <Pressable onPress={onRemove} style={s.removeBtn} hitSlop={4}>
-          <FontAwesome name="times-circle" size={16} color="#e8963a" />
-        </Pressable>
-      )}
     </View>
   );
 }
@@ -172,16 +148,55 @@ export default function PlaylistDetailScreen() {
   // ── Own-user data from context ────────────────────────────────────────────
   const ownPlaylist = !viewingOther ? playlists.find((p) => p.id === id) : null;
 
+  // Hooks MUST be declared before any conditional return (Rules of Hooks)
+  const [ownAlbums, setOwnAlbums] = useState<LoggedAlbum[]>([]);
+
+  useEffect(() => {
+    if (!ownPlaylist || viewingOther) return;
+
+    const resolved = ownPlaylist.albumIds
+      .map((aid) => loggedAlbums.find((a) => a.id === aid))
+      .filter((a): a is LoggedAlbum => a !== undefined);
+
+    const missingIds = ownPlaylist.albumIds.filter(
+      (aid) => !loggedAlbums.find((a) => a.id === aid)
+    );
+
+    if (missingIds.length === 0) {
+      setOwnAlbums(resolved);
+      return;
+    }
+
+    supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, artwork_url, year, rating')
+      .in('spotify_id', missingIds)
+      .eq('user_id', user!.id)
+      .then(({ data }) => {
+        const fetched: LoggedAlbum[] = (data ?? []).map((row: any, i: number) => ({
+          id:         row.spotify_id,
+          title:      row.title       ?? row.spotify_id,
+          artist:     row.artist      ?? '',
+          year:       row.year        ?? 0,
+          rating:     row.rating      ?? 0,
+          dateLogged: '',
+          artworkUrl: row.artwork_url ?? undefined,
+          coverColor: ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a'][i % 6],
+        }));
+        const allById = new Map<string, LoggedAlbum>();
+        [...resolved, ...fetched].forEach(a => allById.set(a.id, a));
+        setOwnAlbums(
+          ownPlaylist.albumIds
+            .map(aid => allById.get(aid))
+            .filter((a): a is LoggedAlbum => !!a)
+        );
+      });
+  }, [ownPlaylist?.id, ownPlaylist?.albumIds?.join(','), loggedAlbums, user?.id]);
+
   if (!viewingOther && !ownPlaylist) {
     router.back();
     return null;
   }
-
-  const ownAlbums = ownPlaylist
-    ? ownPlaylist.albumIds
-        .map((aid) => loggedAlbums.find((a) => a.id === aid))
-        .filter((a): a is LoggedAlbum => a !== undefined)
-    : [];
 
   const playlistName = viewingOther ? otherPlaylistName : (ownPlaylist?.name ?? '');
   const playlistDesc = viewingOther ? otherPlaylistDesc : (ownPlaylist?.description ?? null);
@@ -219,7 +234,7 @@ export default function PlaylistDetailScreen() {
   if (loading) {
     return (
       <View style={[s.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color="#e8963a" size="large" />
+        <ActivityIndicator color="#D4A017" size="large" />
       </View>
     );
   }
@@ -236,7 +251,7 @@ export default function PlaylistDetailScreen() {
                   }
                   hitSlop={12}
                   style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: '100%', paddingHorizontal: 4 }}>
-                  <FontAwesome name="plus" size={20} color="#e8963a" />
+                  <FontAwesome name="plus" size={20} color="#D4A017" />
                 </Pressable>
               )
             : undefined,
@@ -262,7 +277,7 @@ export default function PlaylistDetailScreen() {
           {/* Delete button — own user only */}
           {!viewingOther && (
             <Pressable onPress={confirmDeletePlaylist} hitSlop={8} style={s.deleteBtn}>
-              <FontAwesome name="trash-o" size={18} color="#e8963a" />
+              <FontAwesome name="trash-o" size={18} color="#D4A017" />
             </Pressable>
           )}
         </View>
@@ -286,6 +301,7 @@ export default function PlaylistDetailScreen() {
                 album={album}
                 cardWidth={cardWidth}
                 readOnly={!!viewingOther}
+                colors={colors}
                 onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
                 onRemove={() => confirmRemoveAlbum(album)}
               />
@@ -320,21 +336,8 @@ const s = StyleSheet.create({
   card: { gap: 0 },
   fallback: { borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   fallbackText: { color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
-  ratingWrap: { marginTop: 6, alignItems: 'center' },
-
-  badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
-  badgeBar:  { width: 2.5, borderRadius: 1 },
-  badgeNum:  { color: '#e8963a', fontSize: 9, fontWeight: '700', lineHeight: 14 },
-
-  removeBtn: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 10,
-    padding: 1,
-  },
+  cardTitle:  { marginTop: 5, fontSize: 11, fontWeight: '600', lineHeight: 14 },
+  cardArtist: { fontSize: 10, lineHeight: 13, marginTop: 1 },
 
   emptyWrap:  { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 17, fontWeight: '600', marginTop: 8 },
