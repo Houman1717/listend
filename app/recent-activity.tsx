@@ -20,9 +20,9 @@ import Colors from '@/constants/Colors';
 
 const TYPE_META = {
   reviewed:     { label: 'Reviewed',       color: '#D4A017', icon: 'pencil'     },
-  rated:        { label: 'Rated',           color: '#B8880F', icon: 'star'       },
+  rated:        { label: 'Rated',           color: '#D4A017', icon: 'star'       },
   listened:     { label: 'Listened',        color: '#D4A017', icon: 'headphones' },
-  wantToListen: { label: 'Want to Listen',  color: '#34d399', icon: 'bookmark'   },
+  wantToListen: { label: 'Want to Listen',  color: '#8B6914', icon: 'bookmark'   },
 } as const;
 
 const TOP5_CATEGORY_LABEL: Record<string, string> = {
@@ -251,7 +251,7 @@ function ActivityRow({ item, onPress, colors }: { item: ActivityItem; onPress: (
           {BAR_HEIGHTS.map((h, i) => (
             <View
               key={i}
-              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? '#B8880F' : colors.border }]}
+              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? '#D4A017' : colors.border }]}
             />
           ))}
         </View>
@@ -288,8 +288,6 @@ function FollowRow({ item, onPress, colors }: { item: FollowItem; onPress: () =>
   );
 }
 
-const TOP5_COLOR = '#f59e0b';
-
 function Top5Row({ item, onPress, colors }: { item: Top5ChangeItem; onPress: () => void; colors: ColorsType }) {
   const catLabel = TOP5_CATEGORY_LABEL[item.category] ?? 'Top 5';
   return (
@@ -313,9 +311,9 @@ function Top5Row({ item, onPress, colors }: { item: Top5ChangeItem; onPress: () 
           <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>{item.itemArtist}</Text>
         ) : null}
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: TOP5_COLOR }]}>
-            <FontAwesome name="list-ol" size={9} color={TOP5_COLOR} />
-            <Text style={[s.typeLabel, { color: TOP5_COLOR }]}>
+          <View style={[s.typePill, s.typePillFilled]}>
+            <FontAwesome name="list-ol" size={9} color="#1A0F0A" />
+            <Text style={[s.typeLabel, { color: '#1A0F0A' }]}>
               {`Updated ${catLabel} · #${item.position}`}
             </Text>
           </View>
@@ -545,6 +543,10 @@ const s = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
+  },
+  typePillFilled: {
+    backgroundColor: '#D4A017',
+    borderWidth: 0,
   },
   typeLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
   date:      { fontSize: 11 },
