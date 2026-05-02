@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -143,35 +144,24 @@ function HistoryThumb({
 
 // ─── Per-row artwork cache (module-level so it survives modal close/reopen) ───
 
+const POOL_ARTWORK_KEY = '@listend:poolArtworks';
 const poolArtworkCache: Record<string, string> = {};
 
 function PoolRow({
   item,
+  artworkUrl,
   status,
   borderCol,
   colors,
   onPress,
 }: {
   item: FlipAlbum;
+  artworkUrl: string;
   status: FlipStatus | null;
   borderCol: string;
   colors: (typeof Colors)['dark'];
   onPress: () => void;
 }) {
-  const [artworkUrl, setArtworkUrl] = useState<string>(poolArtworkCache[item.id] ?? '');
-
-  useEffect(() => {
-    if (poolArtworkCache[item.id]) { setArtworkUrl(poolArtworkCache[item.id]); return; }
-    let cancelled = false;
-    fetchAlbumData(item.title, item.artist).then(({ artworkUrl: url }) => {
-      if (!cancelled && url) {
-        poolArtworkCache[item.id] = url;
-        setArtworkUrl(url);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [item.id]);
-
   return (
     <TouchableOpacity
       style={[sfl.row, { borderBottomColor: borderCol }]}
@@ -224,6 +214,37 @@ function FullPoolModal({
   const colors      = Colors[colorScheme ?? 'light'];
   const isDark      = colorScheme === 'dark';
 
+  const [artworkMap, setArtworkMap] = useState<Record<string, string>>(poolArtworkCache);
+
+  // Load persisted artworks then fetch any still missing
+  useEffect(() => {
+    if (!visible) return;
+
+    AsyncStorage.getItem(POOL_ARTWORK_KEY).then(raw => {
+      if (raw) {
+        const stored: Record<string, string> = JSON.parse(raw);
+        Object.assign(poolArtworkCache, stored);
+        setArtworkMap({ ...poolArtworkCache });
+      }
+
+      const missing = FLIP_POOL.filter(a => !poolArtworkCache[a.id]);
+      if (missing.length === 0) return;
+
+      fetch(`${API_URL}/api/flip-pool-artworks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(missing.map(a => ({ id: a.id, title: a.title, artist: a.artist }))),
+      })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then((data: Record<string, string>) => {
+          Object.assign(poolArtworkCache, data);
+          setArtworkMap({ ...poolArtworkCache });
+          AsyncStorage.setItem(POOL_ARTWORK_KEY, JSON.stringify(poolArtworkCache)).catch(() => {});
+        })
+        .catch(() => {});
+    });
+  }, [visible]);
+
   const statusMap: Record<string, FlipStatus> = {};
   for (const r of history) statusMap[r.id] = r.status;
 
@@ -265,6 +286,7 @@ function FullPoolModal({
           renderItem={({ item }) => (
             <PoolRow
               item={item}
+              artworkUrl={artworkMap[item.id] ?? ''}
               status={statusMap[item.id] ?? null}
               borderCol={borderCol}
               colors={colors}

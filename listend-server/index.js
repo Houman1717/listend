@@ -1532,6 +1532,57 @@ app.get('/api/album-durations', async (req, res) => {
   res.json(result);
 });
 
+// ── POST /api/flip-pool-artworks ──────────────────────────────────────────────
+// Batch artwork lookup for the Flip a Record pool.
+// Body: [{id, title, artist}]  →  returns {[id]: artworkUrl}
+// Checks Supabase search cache first; only hits Apple Music for cache misses.
+
+app.post('/api/flip-pool-artworks', async (req, res) => {
+  const albums = req.body;
+  if (!Array.isArray(albums)) return res.status(400).json({ error: 'expected array' });
+
+  const result = {};
+  const uncached = [];
+
+  // First pass: serve from cache
+  for (const album of albums) {
+    const key = `search:album:${(album.title + ' ' + album.artist).trim().toLowerCase()}`;
+    const mem = cacheGet(key);
+    if (mem?.[0]?.artworkUrl) { result[album.id] = mem[0].artworkUrl; continue; }
+    const db = await getCached(key, TTL_24H);
+    if (db?.[0]?.artworkUrl) { cacheSet(key, db, TTL_10M); result[album.id] = db[0].artworkUrl; continue; }
+    uncached.push(album);
+  }
+
+  // Second pass: fetch uncached with concurrency limit of 5
+  const CONCURRENCY = 5;
+  for (let i = 0; i < uncached.length; i += CONCURRENCY) {
+    await Promise.all(uncached.slice(i, i + CONCURRENCY).map(async (album) => {
+      const key = `search:album:${(album.title + ' ' + album.artist).trim().toLowerCase()}`;
+      try {
+        const q    = encodeURIComponent(`${album.title} ${album.artist}`);
+        const url  = `https://api.music.apple.com/v1/catalog/us/search?term=${q}&types=albums&limit=5`;
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${generateAppleToken()}` } });
+        if (!resp.ok) return;
+        const data  = await resp.json();
+        const toUrl = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
+        const items = (data.results?.albums?.data ?? []).map(item => ({
+          id: item.id,
+          title: item.attributes?.name ?? '',
+          artist: item.attributes?.artistName ?? '',
+          year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+          artworkUrl: toUrl(item.attributes?.artwork),
+        }));
+        cacheSet(key, items, TTL_10M);
+        await setCache(key, items);
+        if (items[0]?.artworkUrl) result[album.id] = items[0].artworkUrl;
+      } catch { /* skip individual failures */ }
+    }));
+  }
+
+  res.json(result);
+});
+
 // ── GET /refresh ──────────────────────────────────────────────────────────────
 
 app.get('/refresh', async (req, res) => {
