@@ -142,49 +142,62 @@ function HistoryThumb({
   );
 }
 
-// ─── Pool artwork: cache + concurrency limiter ───────────────────────────────
+// ─── Pool artwork cache + loader ─────────────────────────────────────────────
+// Module-level so state survives modal close/reopen.
 
 const POOL_ARTWORK_KEY = '@listend:poolArtworks';
-const poolArtworkCache: Record<string, string> = {};
-let poolStorageLoaded = false;
+const poolCache: Record<string, string> = {};          // id → artworkUrl
+const poolInFlight = new Set<string>();                 // ids currently fetching
+const poolListeners: Record<string, Array<(u: string) => void>> = {}; // subscribers
+let poolCacheLoaded = false;
+let poolFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Max 3 Apple Music searches at once so we don't get rate-limited
-let activeSlots = 0;
-const MAX_SLOTS = 3;
-const slotQueue: Array<() => void> = [];
-
-function acquireSlot(): Promise<void> {
-  return new Promise(resolve => {
-    if (activeSlots < MAX_SLOTS) { activeSlots++; resolve(); }
-    else slotQueue.push(() => { activeSlots++; resolve(); });
-  });
-}
-function releaseSlot() {
-  activeSlots--;
-  slotQueue.shift()?.();
+function scheduleStorageFlush() {
+  if (poolFlushTimer) return;
+  poolFlushTimer = setTimeout(() => {
+    poolFlushTimer = null;
+    AsyncStorage.setItem(POOL_ARTWORK_KEY, JSON.stringify(poolCache)).catch(() => {});
+  }, 1500);
 }
 
-async function loadPoolStorageOnce() {
-  if (poolStorageLoaded) return;
-  poolStorageLoaded = true;
+async function ensurePoolCacheLoaded() {
+  if (poolCacheLoaded) return;
+  poolCacheLoaded = true;
   try {
     const raw = await AsyncStorage.getItem(POOL_ARTWORK_KEY);
-    if (raw) Object.assign(poolArtworkCache, JSON.parse(raw));
+    if (raw) Object.assign(poolCache, JSON.parse(raw));
   } catch {}
 }
 
-async function fetchPoolArtwork(id: string, title: string, artist: string): Promise<string> {
-  if (poolArtworkCache[id] != null) return poolArtworkCache[id];
-  await acquireSlot();
-  try {
-    if (poolArtworkCache[id] != null) return poolArtworkCache[id]; // re-check after wait
-    const { artworkUrl } = await fetchAlbumData(title, artist);
-    poolArtworkCache[id] = artworkUrl;
-    AsyncStorage.setItem(POOL_ARTWORK_KEY, JSON.stringify(poolArtworkCache)).catch(() => {});
-    return artworkUrl;
-  } finally {
-    releaseSlot();
+function requestPoolArtwork(id: string, title: string, artist: string, onReady: (url: string) => void) {
+  // Already cached
+  if (poolCache[id]) { onReady(poolCache[id]); return; }
+
+  // Subscribe to existing in-flight fetch
+  if (poolInFlight.has(id)) {
+    (poolListeners[id] ??= []).push(onReady);
+    return;
   }
+
+  // Start a new fetch
+  poolInFlight.add(id);
+  (poolListeners[id] ??= []).push(onReady);
+
+  fetchAlbumData(title, artist)
+    .then(({ artworkUrl }) => {
+      poolInFlight.delete(id);
+      if (artworkUrl) {
+        poolCache[id] = artworkUrl;
+        scheduleStorageFlush();
+      }
+      const url = artworkUrl || '';
+      (poolListeners[id] ?? []).forEach(fn => fn(url));
+      delete poolListeners[id];
+    })
+    .catch(() => {
+      poolInFlight.delete(id);
+      delete poolListeners[id];
+    });
 }
 
 // ─── Pool row ─────────────────────────────────────────────────────────────────
@@ -202,15 +215,15 @@ function PoolRow({
   colors: (typeof Colors)['dark'];
   onPress: () => void;
 }) {
-  const [artworkUrl, setArtworkUrl] = useState(poolArtworkCache[item.id] ?? '');
+  const [artworkUrl, setArtworkUrl] = useState(poolCache[item.id] ?? '');
 
   useEffect(() => {
-    if (poolArtworkCache[item.id]) { setArtworkUrl(poolArtworkCache[item.id]); return; }
-    let cancelled = false;
-    fetchPoolArtwork(item.id, item.title, item.artist).then(url => {
-      if (!cancelled && url) setArtworkUrl(url);
+    let live = true;
+    requestPoolArtwork(item.id, item.title, item.artist, (url) => {
+      if (live && url) setArtworkUrl(url);
     });
-    return () => { cancelled = true; };
+    return () => { live = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
   return (
@@ -265,11 +278,11 @@ function FullPoolModal({
   const colors      = Colors[colorScheme ?? 'light'];
   const isDark      = colorScheme === 'dark';
 
-  const [storageReady, setStorageReady] = useState(poolStorageLoaded);
+  const [storageReady, setStorageReady] = useState(poolCacheLoaded);
 
   useEffect(() => {
     if (!visible || storageReady) return;
-    loadPoolStorageOnce().then(() => setStorageReady(true));
+    ensurePoolCacheLoaded().then(() => setStorageReady(true));
   }, [visible]);
 
   const statusMap: Record<string, FlipStatus> = {};
