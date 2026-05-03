@@ -1253,8 +1253,8 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
 
     // Fetch top songs directly from Apple Music — artwork and duration included
     console.log(`[/spotify/artist/top-tracks] fetching AM top-songs for artist id="${id}"`);
-    const amData = await amFetch(`/catalog/us/artists/${id}/top-songs?limit=5`);
-    const rawSongs = amData.data ?? [];
+    const amData = await amFetch(`/catalog/us/artists/${id}/views/top-songs`);
+    const rawSongs = amData.data ?? amData.views?.['top-songs']?.data ?? [];
     console.log(`[/spotify/artist/top-tracks] AM returned ${rawSongs.length} songs`);
 
     const tracks = rawSongs.slice(0, 5).map((s, i) => {
