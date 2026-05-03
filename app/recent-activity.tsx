@@ -250,6 +250,7 @@ function ActivityRow({ item, onPress, colors }: { item: ActivityItem; onPress: (
 
       {item.type === 'rated' && item.rating > 0 && (
         <View style={s.bars}>
+          <FontAwesome name="volume-up" size={10} color="#D4A017" />
           {BAR_HEIGHTS.map((h, i) => (
             <View
               key={i}
@@ -557,7 +558,7 @@ const s = StyleSheet.create({
   typeLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
   date:      { fontSize: 11 },
 
-  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5, flexShrink: 0 },
+  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2.5, flexShrink: 0 },
   bar:  { width: 2.5, borderRadius: 1 },
 
   sep: { height: StyleSheet.hairlineWidth, marginLeft: 83 },
