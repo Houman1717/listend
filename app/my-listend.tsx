@@ -71,7 +71,7 @@ export default function MyListendScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { loggedAlbums, removeLoggedAlbum } = useAlbums();
+  const { loggedAlbums, removeLoggedAlbum, updateDuration } = useAlbums();
   const { user } = useAuth();
   const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
@@ -107,6 +107,26 @@ export default function MyListendScreen() {
   }, [viewingOther]);
 
   const sourceAlbums = viewingOther ? otherAlbums : loggedAlbums;
+
+  // Fetch durations for any album in the list that doesn't have one yet
+  useEffect(() => {
+    const missing = sourceAlbums.filter(a => !a.durationMs).map(a => a.id);
+    if (missing.length === 0) return;
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+    fetch(`${API_URL}/api/album-durations?ids=${missing.join(',')}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((data: Record<string, number>) => {
+        Object.entries(data).forEach(([id, ms]) => {
+          if (viewingOther) {
+            setOtherAlbums(prev => prev.map(a => a.id === id ? { ...a, durationMs: ms } : a));
+          } else {
+            updateDuration(id, ms);
+          }
+        });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceAlbums.length, viewingOther]);
 
   const displayAlbums = useMemo(() => {
     if (shuffled) return shuffled;

@@ -629,7 +629,7 @@ export default function AlbumDetailScreen() {
         // Cache total duration so the Duration sort filter works.
         // Called unconditionally — updateDuration is a no-op if this album
         // isn't in loggedAlbums, and skips Supabase if the user isn't signed in.
-        const totalMs = data.reduce((sum, t) => sum + t.durationMs, 0);
+        const totalMs = data.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
         if (totalMs > 0) updateDuration(albumId, totalMs);
       })
       .catch(err => { console.warn('[album-detail] tracklist error:', err); if (!cancelled) setTracks([]); })

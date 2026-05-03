@@ -1214,7 +1214,7 @@ app.get('/spotify/album/:id/tracks', async (req, res) => {
       number: t.attributes?.trackNumber ?? i + 1,
       id: t.id,
       title: t.attributes?.name ?? '',
-      durationMs: t.attributes?.durationInMillis ?? null,
+      durationMs: t.attributes?.durationInMillis ?? 0,
       featuredArtists: [],
     }));
     cacheSet(CACHE_KEY, tracks, TTL_6H);
@@ -1515,7 +1515,7 @@ app.get('/api/album-durations', async (req, res) => {
           number: t.attributes?.trackNumber ?? i + 1,
           id: t.id,
           title: t.attributes?.name ?? '',
-          durationMs: t.attributes?.durationInMillis ?? null,
+          durationMs: t.attributes?.durationInMillis ?? 0,
           featuredArtists: [],
         }));
         cacheSet(CACHE_KEY, tracks, TTL_6H);
