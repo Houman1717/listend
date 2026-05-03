@@ -1240,7 +1240,7 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
     return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
   }
 
-  const CACHE_KEY = `spotify_artist_top_tracks_${id}`;
+  const CACHE_KEY = `am_artist_top_tracks_${id}`;
 
   try {
     if (!bust) {
