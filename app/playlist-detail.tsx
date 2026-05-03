@@ -195,8 +195,13 @@ export default function PlaylistDetailScreen() {
       });
   }, [ownPlaylist?.id, ownPlaylist?.albumIds?.join(','), loggedAlbums, user?.id]);
 
+  useEffect(() => {
+    if (!viewingOther && !ownPlaylist) {
+      router.back();
+    }
+  }, [viewingOther, ownPlaylist, router]);
+
   if (!viewingOther && !ownPlaylist) {
-    router.back();
     return null;
   }
 
@@ -252,7 +257,7 @@ export default function PlaylistDetailScreen() {
                     router.push({ pathname: '/playlist-add-albums', params: { playlistId: ownPlaylist!.id } })
                   }
                   hitSlop={12}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: '100%', paddingHorizontal: 4 }}>
+                  style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
                   <FontAwesome name="plus" size={20} color="#D4A017" />
                 </Pressable>
               )
