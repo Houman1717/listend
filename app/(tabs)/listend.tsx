@@ -10,9 +10,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -400,27 +398,42 @@ const FAV_SLOT_SIZE = Math.floor(
 );
 const SLOT_STEP = FAV_SLOT_SIZE + FAV_GAP;
 
-// ─── Horizontal favourite slot ────────────────────────────────────────────────
+// ─── Favourite slot ───────────────────────────────────────────────────────────
 
 function FavSlot({
   item,
   editMode = false,
   onPress,
+  onRemove,
   circular = false,
 }: {
-  item?: { artworkUrl?: string; title: string };
+  item?: { artworkUrl?: string; title: string } | null;
   editMode?: boolean;
   onPress?: () => void;
+  onRemove?: () => void;
   circular?: boolean;
 }) {
   const radius = circular ? FAV_SLOT_SIZE / 2 : 3;
 
-  if (item) {
-    return (
+  if (!item) {
+    if (editMode) {
+      return (
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => [s.favSlot, s.favEmptyEdit, { borderRadius: radius, opacity: pressed ? 0.7 : 1 }]}>
+          <FontAwesome name="plus" size={16} color={ACCENT} />
+        </Pressable>
+      );
+    }
+    return <View style={[s.favSlot, s.favEmpty, { borderRadius: radius }]} />;
+  }
+
+  return (
+    <View style={[s.favSlot, { borderRadius: radius, overflow: 'hidden' }]}>
       <Pressable
-        onPress={onPress}
-        disabled={!onPress}
-        style={({ pressed }) => [s.favSlot, { borderRadius: radius, opacity: pressed ? 0.7 : 1 }]}>
+        onPress={editMode ? undefined : onPress}
+        disabled={editMode}
+        style={({ pressed }) => [{ borderRadius: radius, overflow: 'hidden' }, !editMode && pressed && { opacity: 0.7 }]}>
         {item.artworkUrl ? (
           <ExpoImage
             source={{ uri: item.artworkUrl }}
@@ -429,28 +442,21 @@ function FavSlot({
             cachePolicy="disk"
           />
         ) : (
-          <View style={[s.favInitialBg, { borderRadius: radius }]}>
+          <View style={[s.favInitialBg, { width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE, borderRadius: radius }]}>
             <Text style={s.favInitial}>{item.title.charAt(0)}</Text>
           </View>
         )}
-        {editMode && (
-          <View style={[s.favEditOverlay, { borderRadius: radius }]}>
-            <FontAwesome name="pencil" size={10} color="#fff" />
-          </View>
-        )}
       </Pressable>
-    );
-  }
-
-  if (editMode) {
-    return (
-      <Pressable onPress={onPress} style={[s.favSlot, s.favEmptyEdit, { borderRadius: radius }]}>
-        <FontAwesome name="plus" size={14} color="#6B4C35" />
-      </Pressable>
-    );
-  }
-
-  return <View style={[s.favSlot, s.favEmpty, { borderRadius: radius }]} />;
+      {editMode && (
+        <Pressable
+          onPress={onRemove}
+          hitSlop={8}
+          style={s.favRemoveBtn}>
+          <FontAwesome name="times" size={9} color="#fff" />
+        </Pressable>
+      )}
+    </View>
+  );
 }
 
 // ─── Navigation row ───────────────────────────────────────────────────────────
@@ -593,193 +599,6 @@ const ss = StyleSheet.create({
   signOutLabel: { color: '#FF4444' },
 });
 
-// ─── Draggable Top-5 row (edit mode only) ────────────────────────────────────
-
-function DraggableFavRow({
-  slots,
-  circular = false,
-  onSlotPress,
-  onReorder,
-}: {
-  slots: (any | undefined)[];
-  circular?: boolean;
-  onSlotPress: (index: number, item: any) => void;
-  onReorder: (newOrder: (any | undefined)[]) => void;
-}) {
-  const slotsRef        = useRef(slots);
-  slotsRef.current      = slots;
-  const onSlotPressRef  = useRef(onSlotPress);
-  onSlotPressRef.current = onSlotPress;
-  const onReorderRef    = useRef(onReorder);
-  onReorderRef.current  = onReorder;
-
-  // Reanimated shared values — updated on JS thread, applied on UI thread
-  const floatX   = useSharedValue(0);
-
-  // JS-side state & refs
-  const [dragState, setDragState] = useState<{
-    dragIdx: number;
-    hoverIdx: number;
-    draggingItem: any;
-  } | null>(null);
-
-  const isActiveRef   = useRef(false);
-  const dragIdxRef    = useRef(-1);
-  const hoverIdxRef   = useRef(-1);
-  const rowRef        = useRef<View>(null);
-  const rowPageXRef   = useRef(0);
-
-  function slotIdxAt(px: number) {
-    return Math.min(4, Math.max(0, Math.floor((px - rowPageXRef.current) / SLOT_STEP)));
-  }
-
-  // Gesture.Pan with activateAfterLongPress — runs callbacks on JS thread via .runOnJS(true)
-  const pan = Gesture.Pan()
-    .activateAfterLongPress(280)
-    .runOnJS(true)
-    .onBegin((e) => {
-      const idx = slotIdxAt(e.absoluteX);
-      dragIdxRef.current  = idx;
-      hoverIdxRef.current = idx;
-      floatX.value        = idx * SLOT_STEP;
-    })
-    .onStart((e) => {
-      const idx  = dragIdxRef.current;
-      const item = slotsRef.current[idx];
-      if (!item) return;
-      isActiveRef.current = true;
-      setDragState({ dragIdx: idx, hoverIdx: idx, draggingItem: item });
-    })
-    .onUpdate((e) => {
-      if (!isActiveRef.current) return;
-      const dx      = e.translationX;
-      const clamped = Math.max(0, Math.min(4 * SLOT_STEP, dragIdxRef.current * SLOT_STEP + dx));
-      floatX.value  = clamped;
-      const newHover = Math.min(4, Math.max(0, Math.round((clamped + FAV_SLOT_SIZE / 2) / SLOT_STEP)));
-      if (newHover !== hoverIdxRef.current) {
-        hoverIdxRef.current = newHover;
-        setDragState(prev => prev ? { ...prev, hoverIdx: newHover } : null);
-      }
-    })
-    .onEnd(() => {
-      if (!isActiveRef.current) return;
-      const from = dragIdxRef.current;
-      const to   = hoverIdxRef.current;
-      isActiveRef.current = false;
-      dragIdxRef.current  = -1;
-      hoverIdxRef.current = -1;
-      setDragState(null);
-      if (from !== to) {
-        const next = [...slotsRef.current];
-        const [moved] = next.splice(from, 1);
-        next.splice(to, 0, moved);
-        onReorderRef.current(next);
-      }
-    })
-    .onFinalize((e, success) => {
-      // If the gesture never activated (quick tap) handle as press
-      if (!success && !isActiveRef.current) {
-        const idx = slotIdxAt(e.absoluteX);
-        onSlotPressRef.current(idx, slotsRef.current[idx]);
-        return;
-      }
-      // Cancelled mid-drag (e.g. gesture stolen)
-      if (!success && isActiveRef.current) {
-        isActiveRef.current = false;
-        dragIdxRef.current  = -1;
-        hoverIdxRef.current = -1;
-        setDragState(null);
-      }
-    });
-
-  // Floating item style — transform runs via Reanimated, no layout pass
-  const floatingStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: floatX.value }, { scale: 1.08 }],
-  }));
-
-  // Build display order during drag
-  let displaySlots: (any | undefined)[];
-  let placeholderIdx = -1;
-  if (dragState) {
-    const { dragIdx, hoverIdx } = dragState;
-    if (dragIdx === hoverIdx) {
-      displaySlots   = slots.map((item, i) => (i === dragIdx ? undefined : item));
-      placeholderIdx = dragIdx;
-    } else {
-      const rest = slots.filter((_, i) => i !== dragIdx);
-      rest.splice(hoverIdx, 0, undefined);
-      displaySlots   = rest;
-      placeholderIdx = hoverIdx;
-    }
-  } else {
-    displaySlots = [...slots];
-  }
-
-  const radius       = circular ? FAV_SLOT_SIZE / 2 : 3;
-  const draggingItem = dragState?.draggingItem;
-
-  return (
-    <GestureDetector gesture={pan}>
-      <View
-        ref={rowRef}
-        style={[s.favRow, { position: 'relative' }]}
-        onLayout={() => rowRef.current?.measure((_x, _y, _w, _h, px) => { rowPageXRef.current = px; })}
-      >
-        {displaySlots.map((item, i) => {
-          const isPlaceholder = i === placeholderIdx && !!dragState;
-          const displayItem   = isPlaceholder || !item
-            ? undefined
-            : { artworkUrl: item.artworkUrl, title: item.title || item.name || '' };
-          return (
-            <View key={i} pointerEvents="none">
-              <FavSlot item={displayItem} editMode circular={circular} />
-            </View>
-          );
-        })}
-
-        {draggingItem && (
-          <Reanimated.View
-            pointerEvents="none"
-            style={[
-              {
-                width: FAV_SLOT_SIZE,
-                height: FAV_SLOT_SIZE,
-                borderRadius: radius,
-                overflow: 'hidden',
-                backgroundColor: CARD_BG,
-                position: 'absolute',
-                left: 0,
-                top: -4,
-                zIndex: 20,
-                elevation: 20,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: 0.5,
-                shadowRadius: 10,
-              },
-              floatingStyle,
-            ]}
-          >
-            {draggingItem.artworkUrl ? (
-              <ExpoImage
-                source={{ uri: draggingItem.artworkUrl }}
-                style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE }}
-                contentFit="cover"
-                cachePolicy="disk"
-              />
-            ) : (
-              <View style={s.favInitialBg}>
-                <Text style={s.favInitial}>
-                  {(draggingItem.title || draggingItem.name || '?').charAt(0)}
-                </Text>
-              </View>
-            )}
-          </Reanimated.View>
-        )}
-      </View>
-    </GestureDetector>
-  );
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -791,7 +610,7 @@ export default function ListendScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
-  const { topAlbums, topSongs, topArtists, reorderTopAlbums, reorderTopSongs, reorderTopArtists, loggedAlbums, wantToListen } = useAlbums();
+  const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, loggedAlbums, wantToListen } = useAlbums();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [top5EditMode, setTop5EditMode] = useState(false);
@@ -926,31 +745,23 @@ export default function ListendScreen() {
             <Text style={s.editLabel}>{top5EditMode ? 'Done' : 'Edit'}</Text>
           </Pressable>
         </View>
-        {top5EditMode ? (
-          <DraggableFavRow
-            slots={Array.from({ length: 5 }, (_, i) => topAlbums[i])}
-            circular={false}
-            onSlotPress={(_, item) => {
-              const a = item as TopAlbum | undefined;
-              router.push({ pathname: '/pick-item', params: { type: 'album', ...(a ? { replaceId: a.id } : {}) } });
-            }}
-            onReorder={(next) => reorderTopAlbums(next.filter(Boolean) as TopAlbum[])}
-          />
-        ) : (
-          <View style={s.favRow}>
-            {Array.from({ length: 5 }).map((_, i) => {
-              const a: TopAlbum | undefined = topAlbums[i];
-              return (
-                <FavSlot
-                  key={i}
-                  item={a}
-                  editMode={false}
-                  onPress={a ? () => router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl } }) : undefined}
-                />
-              );
-            })}
-          </View>
-        )}
+        <View style={s.favRow}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const a = topAlbums[i];
+            return (
+              <FavSlot
+                key={i}
+                item={a}
+                editMode={top5EditMode}
+                onPress={top5EditMode
+                  ? (a ? undefined : () => router.push({ pathname: '/pick-item', params: { type: 'album', slotIndex: String(i) } }))
+                  : (a ? () => router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl } }) : undefined)
+                }
+                onRemove={a ? () => removeTopAlbum(a.id) : undefined}
+              />
+            );
+          })}
+        </View>
       </View>
 
       <View style={[s.rule, { backgroundColor: colors.border }]} />
@@ -960,31 +771,23 @@ export default function ListendScreen() {
         <View style={s.sectionHeader}>
           <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 SONGS</Text>
         </View>
-        {top5EditMode ? (
-          <DraggableFavRow
-            slots={Array.from({ length: 5 }, (_, i) => topSongs[i])}
-            circular={false}
-            onSlotPress={(_, item) => {
-              const song = item as TopSong | undefined;
-              router.push({ pathname: '/pick-item', params: { type: 'song', ...(song ? { replaceId: song.id } : {}) } });
-            }}
-            onReorder={(next) => reorderTopSongs(next.filter(Boolean) as TopSong[])}
-          />
-        ) : (
-          <View style={s.favRow}>
-            {Array.from({ length: 5 }).map((_, i) => {
-              const song: TopSong | undefined = topSongs[i];
-              return (
-                <FavSlot
-                  key={i}
-                  item={song}
-                  editMode={false}
-                  onPress={song ? () => setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate }) : undefined}
-                />
-              );
-            })}
-          </View>
-        )}
+        <View style={s.favRow}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const song = topSongs[i];
+            return (
+              <FavSlot
+                key={i}
+                item={song}
+                editMode={top5EditMode}
+                onPress={top5EditMode
+                  ? (song ? undefined : () => router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: String(i) } }))
+                  : (song ? () => setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate }) : undefined)
+                }
+                onRemove={song ? () => removeTopSong(song.id) : undefined}
+              />
+            );
+          })}
+        </View>
       </View>
 
       <View style={[s.rule, { backgroundColor: colors.border }]} />
@@ -994,32 +797,24 @@ export default function ListendScreen() {
         <View style={s.sectionHeader}>
           <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 ARTISTS</Text>
         </View>
-        {top5EditMode ? (
-          <DraggableFavRow
-            slots={Array.from({ length: 5 }, (_, i) => topArtists[i])}
-            circular={true}
-            onSlotPress={(_, item) => {
-              const artist = item as TopArtist | undefined;
-              router.push({ pathname: '/pick-item', params: { type: 'artist', ...(artist ? { replaceId: artist.id } : {}) } });
-            }}
-            onReorder={(next) => reorderTopArtists(next.filter(Boolean) as TopArtist[])}
-          />
-        ) : (
-          <View style={s.favRow}>
-            {Array.from({ length: 5 }).map((_, i) => {
-              const artist: TopArtist | undefined = topArtists[i];
-              return (
-                <FavSlot
-                  key={i}
-                  circular
-                  item={artist ? { artworkUrl: artist.artworkUrl, title: artist.name } : undefined}
-                  editMode={false}
-                  onPress={artist ? () => router.push({ pathname: '/artist-detail', params: { id: artist.id, name: artist.name, artworkUrl: artist.artworkUrl } }) : undefined}
-                />
-              );
-            })}
-          </View>
-        )}
+        <View style={s.favRow}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const artist = topArtists[i];
+            return (
+              <FavSlot
+                key={i}
+                circular
+                item={artist ? { artworkUrl: artist.artworkUrl, title: artist.name } : null}
+                editMode={top5EditMode}
+                onPress={top5EditMode
+                  ? (artist ? undefined : () => router.push({ pathname: '/pick-item', params: { type: 'artist', slotIndex: String(i) } }))
+                  : (artist ? () => router.push({ pathname: '/artist-detail', params: { id: artist.id, name: artist.name, artworkUrl: artist.artworkUrl } }) : undefined)
+                }
+                onRemove={artist ? () => removeTopArtist(artist.id) : undefined}
+              />
+            );
+          })}
+        </View>
       </View>
 
       {/* ── Nav rows ─────────────────────────────────────────────────────────── */}
@@ -1083,13 +878,11 @@ const s = StyleSheet.create({
     borderColor: '#2a1e14',
   },
   favInitialBg: {
-    width: FAV_SLOT_SIZE,
-    height: FAV_SLOT_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: CARD_BG,
   },
   favInitial: { color: '#6B4C35', fontSize: 16, fontWeight: '700' },
-  favPlus: { color: '#505050', fontSize: 20, fontWeight: '300' },
   favEmptyEdit: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -1097,15 +890,17 @@ const s = StyleSheet.create({
     borderColor: '#3a2818',
     borderStyle: 'dashed',
   },
-  favEditOverlay: {
+  favRemoveBtn: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    top: 3,
+    right: 3,
     width: 20,
     height: 20,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 10,
   },
 
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 20 },

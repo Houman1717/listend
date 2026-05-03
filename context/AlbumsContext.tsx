@@ -82,18 +82,21 @@ type AlbumsContextType = {
   updateReview: (id: string, rating: number, review: string) => void;
   updateDuration: (id: string, durationMs: number) => void;
   removeLoggedAlbum: (id: string) => void;
-  topAlbums: TopAlbum[];
-  topSongs: TopSong[];
-  topArtists: TopArtist[];
+  topAlbums: (TopAlbum | null)[];
+  topSongs: (TopSong | null)[];
+  topArtists: (TopArtist | null)[];
   addTopAlbum: (album: TopAlbum) => void;
+  addTopAlbumAtSlot: (index: number, album: TopAlbum) => void;
   removeTopAlbum: (id: string) => void;
-  reorderTopAlbums: (albums: TopAlbum[]) => void;
+  reorderTopAlbums: (albums: (TopAlbum | null)[]) => void;
   addTopSong: (song: TopSong) => void;
+  addTopSongAtSlot: (index: number, song: TopSong) => void;
   removeTopSong: (id: string) => void;
-  reorderTopSongs: (songs: TopSong[]) => void;
+  reorderTopSongs: (songs: (TopSong | null)[]) => void;
   addTopArtist: (artist: TopArtist) => void;
+  addTopArtistAtSlot: (index: number, artist: TopArtist) => void;
   removeTopArtist: (id: string) => void;
-  reorderTopArtists: (artists: TopArtist[]) => void;
+  reorderTopArtists: (artists: (TopArtist | null)[]) => void;
   wantToListen: WantToListenAlbum[];
   addToWantToListen: (album: WantToListenAlbum) => void;
   removeFromWantToListen: (id: string) => void;
@@ -104,6 +107,14 @@ type AlbumsContextType = {
   removeAlbumFromPlaylist: (playlistId: string, albumId: string) => void;
   isLoaded: boolean;
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function padTo5<T>(arr: (T | null)[]): (T | null)[] {
+  const out = arr.slice(0, 5).map(x => x ?? null);
+  while (out.length < 5) out.push(null);
+  return out;
+}
 
 // ─── User-scoped storage keys ─────────────────────────────────────────────────
 // Each account gets its own cache so switching accounts never bleeds data.
@@ -135,9 +146,9 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   // Start empty — no INITIAL_ALBUMS seed (would show on every account)
   const [loggedAlbums, setLoggedAlbums] = useState<LoggedAlbum[]>([]);
-  const [topAlbums,    setTopAlbums]    = useState<TopAlbum[]>([]);
-  const [topSongs,     setTopSongs]     = useState<TopSong[]>([]);
-  const [topArtists,   setTopArtists]   = useState<TopArtist[]>([]);
+  const [topAlbums,    setTopAlbums]    = useState<(TopAlbum | null)[]>(Array(5).fill(null));
+  const [topSongs,     setTopSongs]     = useState<(TopSong | null)[]>(Array(5).fill(null));
+  const [topArtists,   setTopArtists]   = useState<(TopArtist | null)[]>(Array(5).fill(null));
   const [wantToListen, setWantToListen] = useState<WantToListenAlbum[]>([]);
   const [playlists,    setPlaylists]    = useState<Playlist[]>([]);
   const [pendingAlbum, setPendingAlbum] = useState<PendingAlbum | null>(null);
@@ -186,9 +197,9 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
 
         if (albumsStr  !== null) setLoggedAlbums(JSON.parse(albumsStr));
-        if (topAlbumsStr !== null) setTopAlbums(JSON.parse(topAlbumsStr));
-        if (topSongsStr  !== null) setTopSongs(JSON.parse(topSongsStr));
-        if (topArtistsStr !== null) setTopArtists(JSON.parse(topArtistsStr));
+        if (topAlbumsStr  !== null) setTopAlbums(padTo5(JSON.parse(topAlbumsStr)));
+        if (topSongsStr   !== null) setTopSongs(padTo5(JSON.parse(topSongsStr)));
+        if (topArtistsStr !== null) setTopArtists(padTo5(JSON.parse(topArtistsStr)));
         if (wantStr      !== null) setWantToListen(JSON.parse(wantStr));
         if (playlistsStr !== null) setPlaylists(JSON.parse(playlistsStr));
       } catch {
@@ -233,7 +244,12 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           const fetchedIds = new Set(albums.map(a => a.id));
           setLoggedAlbums(prev => {
             const prevMap = new Map(prev.map(a => [a.id, a]));
-            const localOnly = prev.filter(a => !fetchedIds.has(a.id));
+            // Only preserve local-only albums when the DB returned *some* rows.
+            // If DB returned 0 rows (e.g. account was cleared), trust the DB
+            // and don't resurrect stale local cache entries.
+            const localOnly = albums.length > 0
+              ? prev.filter(a => !fetchedIds.has(a.id))
+              : [];
             const merged = albums.map(a => {
               const local = prevMap.get(a.id);
               if (local && local.dateLogged > a.dateLogged) {
@@ -323,9 +339,9 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           console.error('[AlbumsContext] profiles top5 sync error:', profErr.message);
         } else if (profData) {
           console.log('[Top5] loading for user:', uid, profData);
-          if (Array.isArray(profData.top_albums))  setTopAlbums(profData.top_albums);
-          if (Array.isArray(profData.top_songs))   setTopSongs(profData.top_songs);
-          if (Array.isArray(profData.top_artists)) setTopArtists(profData.top_artists);
+          if (Array.isArray(profData.top_albums))  setTopAlbums(padTo5(profData.top_albums));
+          if (Array.isArray(profData.top_songs))   setTopSongs(padTo5(profData.top_songs));
+          if (Array.isArray(profData.top_artists)) setTopArtists(padTo5(profData.top_artists));
 
           AsyncStorage.setItem(sk(KEY.TOP_ALBUMS,  uid), JSON.stringify(profData.top_albums  ?? [])).catch(() => {});
           AsyncStorage.setItem(sk(KEY.TOP_SONGS,   uid), JSON.stringify(profData.top_songs   ?? [])).catch(() => {});
@@ -461,66 +477,117 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   function addTopAlbum(album: TopAlbum) {
     setTopAlbums((prev) => {
-      if (prev.find((a) => a.id === album.id)) return prev;
-      return [...prev, album].slice(0, 5);
+      if (prev.some(a => a?.id === album.id)) return prev;
+      const next = [...prev];
+      const slot = next.findIndex(a => a === null);
+      if (slot === -1) return prev;
+      next[slot] = album;
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_albums: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] addTopAlbum error:', error.message); });
+      return next;
+    });
+  }
+
+  function addTopAlbumAtSlot(index: number, album: TopAlbum) {
+    setTopAlbums((prev) => {
+      if (prev.some(a => a?.id === album.id)) return prev;
+      const next = [...prev];
+      next[index] = album;
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_albums: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] addTopAlbumAtSlot error:', error.message); });
+      return next;
     });
   }
 
   function removeTopAlbum(id: string) {
-    setTopAlbums((prev) => prev.filter((a) => a.id !== id));
+    setTopAlbums((prev) => {
+      const next = prev.map(a => (a?.id === id ? null : a));
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_albums: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] removeTopAlbum error:', error.message); });
+      return next;
+    });
   }
 
   function addTopSong(song: TopSong) {
     setTopSongs((prev) => {
-      if (prev.find((s) => s.id === song.id)) return prev;
-      return [...prev, song].slice(0, 5);
+      if (prev.some(s => s?.id === song.id)) return prev;
+      const next = [...prev];
+      const slot = next.findIndex(s => s === null);
+      if (slot === -1) return prev;
+      next[slot] = song;
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_songs: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] addTopSong error:', error.message); });
+      return next;
+    });
+  }
+
+  function addTopSongAtSlot(index: number, song: TopSong) {
+    setTopSongs((prev) => {
+      if (prev.some(s => s?.id === song.id)) return prev;
+      const next = [...prev];
+      next[index] = song;
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_songs: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] addTopSongAtSlot error:', error.message); });
+      return next;
     });
   }
 
   function removeTopSong(id: string) {
-    setTopSongs((prev) => prev.filter((s) => s.id !== id));
+    setTopSongs((prev) => {
+      const next = prev.map(s => (s?.id === id ? null : s));
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_songs: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] removeTopSong error:', error.message); });
+      return next;
+    });
   }
 
   function addTopArtist(artist: TopArtist) {
     setTopArtists((prev) => {
-      if (prev.find((a) => a.id === artist.id)) return prev;
-      return [...prev, artist].slice(0, 5);
+      if (prev.some(a => a?.id === artist.id)) return prev;
+      const next = [...prev];
+      const slot = next.findIndex(a => a === null);
+      if (slot === -1) return prev;
+      next[slot] = artist;
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_artists: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] addTopArtist error:', error.message); });
+      return next;
+    });
+  }
+
+  function addTopArtistAtSlot(index: number, artist: TopArtist) {
+    setTopArtists((prev) => {
+      if (prev.some(a => a?.id === artist.id)) return prev;
+      const next = [...prev];
+      next[index] = artist;
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_artists: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] addTopArtistAtSlot error:', error.message); });
+      return next;
     });
   }
 
   function removeTopArtist(id: string) {
-    setTopArtists((prev) => prev.filter((a) => a.id !== id));
+    setTopArtists((prev) => {
+      const next = prev.map(a => (a?.id === id ? null : a));
+      if (user) supabase.from('profiles').upsert({ id: user.id, top_artists: next }, { onConflict: 'id' }).then(({ error }) => { if (error) console.error('[AlbumsContext] removeTopArtist error:', error.message); });
+      return next;
+    });
   }
 
-  function reorderTopAlbums(albums: TopAlbum[]) {
-    const ordered = albums.filter(Boolean).slice(0, 5) as TopAlbum[];
+  function reorderTopAlbums(albums: (TopAlbum | null)[]) {
+    const ordered = padTo5(albums);
     setTopAlbums(ordered);
     if (user) {
-      supabase
-        .from('profiles')
-        .upsert({ id: user.id, top_albums: ordered }, { onConflict: 'id' })
+      supabase.from('profiles').upsert({ id: user.id, top_albums: ordered }, { onConflict: 'id' })
         .then(({ error }) => { if (error) console.error('[AlbumsContext] reorderTopAlbums error:', error.message); });
     }
   }
 
-  function reorderTopSongs(songs: TopSong[]) {
-    const ordered = songs.filter(Boolean).slice(0, 5) as TopSong[];
+  function reorderTopSongs(songs: (TopSong | null)[]) {
+    const ordered = padTo5(songs);
     setTopSongs(ordered);
     if (user) {
-      supabase
-        .from('profiles')
-        .upsert({ id: user.id, top_songs: ordered }, { onConflict: 'id' })
+      supabase.from('profiles').upsert({ id: user.id, top_songs: ordered }, { onConflict: 'id' })
         .then(({ error }) => { if (error) console.error('[AlbumsContext] reorderTopSongs error:', error.message); });
     }
   }
 
-  function reorderTopArtists(artists: TopArtist[]) {
-    const ordered = artists.filter(Boolean).slice(0, 5) as TopArtist[];
+  function reorderTopArtists(artists: (TopArtist | null)[]) {
+    const ordered = padTo5(artists);
     setTopArtists(ordered);
     if (user) {
-      supabase
-        .from('profiles')
-        .upsert({ id: user.id, top_artists: ordered }, { onConflict: 'id' })
+      supabase.from('profiles').upsert({ id: user.id, top_artists: ordered }, { onConflict: 'id' })
         .then(({ error }) => { if (error) console.error('[AlbumsContext] reorderTopArtists error:', error.message); });
     }
   }
@@ -670,9 +737,9 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     <AlbumsContext.Provider value={{
       loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, updateReview, updateDuration, removeLoggedAlbum,
       topAlbums, topSongs, topArtists,
-      addTopAlbum, removeTopAlbum, reorderTopAlbums,
-      addTopSong, removeTopSong, reorderTopSongs,
-      addTopArtist, removeTopArtist, reorderTopArtists,
+      addTopAlbum, addTopAlbumAtSlot, removeTopAlbum, reorderTopAlbums,
+      addTopSong, addTopSongAtSlot, removeTopSong, reorderTopSongs,
+      addTopArtist, addTopArtistAtSlot, removeTopArtist, reorderTopArtists,
       wantToListen, addToWantToListen, removeFromWantToListen,
       playlists, createPlaylist, deletePlaylist, addAlbumToPlaylist, removeAlbumFromPlaylist,
       isLoaded,

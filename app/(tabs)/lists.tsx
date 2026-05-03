@@ -139,11 +139,11 @@ export default function ListsScreen() {
           <AlbumSlot
             key={i}
             rank={i + 1}
-            album={topAlbums[i]}
+            album={topAlbums[i] ?? undefined}
             colors={colors}
             isDark={isDark}
-            onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'album' } })}
-            onRemove={() => topAlbums[i] && confirmRemoveAlbum(topAlbums[i].id, topAlbums[i].title)}
+            onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'album', slotIndex: String(i) } })}
+            onRemove={() => { const a = topAlbums[i]; if (a) confirmRemoveAlbum(a.id, a.title); }}
           />
         ))}
       </View>
@@ -156,11 +156,11 @@ export default function ListsScreen() {
           <SongSlot
             key={i}
             rank={i + 1}
-            song={topSongs[i]}
+            song={topSongs[i] ?? undefined}
             colors={colors}
             isDark={isDark}
-            onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'song' } })}
-            onRemove={() => topSongs[i] && confirmRemoveSong(topSongs[i].id, topSongs[i].title)}
+            onAdd={() => router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: String(i) } })}
+            onRemove={() => { const s = topSongs[i]; if (s) confirmRemoveSong(s.id, s.title); }}
           />
         ))}
       </View>

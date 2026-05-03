@@ -359,7 +359,7 @@ export default function ProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const a: TopAlbum | undefined = topAlbums[i];
+            const a = topAlbums[i] ?? undefined;
             return (
               <FavSlot
                 key={i}
@@ -384,7 +384,7 @@ export default function ProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const song: TopSong | undefined = topSongs[i];
+            const song = topSongs[i] ?? undefined;
             return (
               <FavSlot
                 key={i}
@@ -409,7 +409,7 @@ export default function ProfileScreen() {
         </View>
         <View style={s.favRow}>
           {Array.from({ length: 5 }).map((_, i) => {
-            const artist: TopArtist | undefined = topArtists[i];
+            const artist = topArtists[i] ?? undefined;
             return (
               <FavSlot
                 key={i}

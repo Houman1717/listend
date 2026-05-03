@@ -26,8 +26,8 @@ export default function PickItemScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { type, replaceId } = useLocalSearchParams<{ type: 'album' | 'song' | 'artist'; replaceId?: string }>();
-  const { addTopAlbum, addTopSong, addTopArtist, removeTopAlbum, removeTopSong, removeTopArtist } = useAlbums();
+  const { type, replaceId, slotIndex } = useLocalSearchParams<{ type: 'album' | 'song' | 'artist'; replaceId?: string; slotIndex?: string }>();
+  const { addTopAlbum, addTopAlbumAtSlot, addTopSong, addTopSongAtSlot, addTopArtist, addTopArtistAtSlot, removeTopAlbum, removeTopSong, removeTopArtist } = useAlbums();
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ResultItem[]>([]);
@@ -62,21 +62,22 @@ export default function PickItemScreen() {
   }
 
   function handleSelect(item: ResultItem) {
+    const slot = slotIndex !== undefined ? parseInt(slotIndex, 10) : -1;
     if (isAlbum) {
       const a = item as SpotifyAlbum;
       const album: TopAlbum = { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl };
       if (replaceId) removeTopAlbum(replaceId);
-      addTopAlbum(album);
+      if (slot >= 0) addTopAlbumAtSlot(slot, album); else addTopAlbum(album);
     } else if (isArtist) {
       const a = item as SpotifyArtist;
       const artist: TopArtist = { id: a.id, name: a.name, artworkUrl: a.artworkUrl };
       if (replaceId) removeTopArtist(replaceId);
-      addTopArtist(artist);
+      if (slot >= 0) addTopArtistAtSlot(slot, artist); else addTopArtist(artist);
     } else {
       const t = item as SpotifyTrack;
       const song: TopSong = { id: t.id, title: t.title, artist: t.artist, artworkUrl: t.artworkUrl, releaseDate: t.releaseDate };
       if (replaceId) removeTopSong(replaceId);
-      addTopSong(song);
+      if (slot >= 0) addTopSongAtSlot(slot, song); else addTopSong(song);
     }
     router.back();
   }
