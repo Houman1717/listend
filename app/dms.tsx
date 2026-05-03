@@ -2,11 +2,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   FlatList,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -159,7 +159,9 @@ export default function DMsScreen() {
               })
             }>
             {item.partnerAvatarUrl ? (
-              <Image source={{ uri: item.partnerAvatarUrl }} style={s.avatar} />
+              <ExpoImage source={{ uri: item.partnerAvatarUrl }} style={s.avatar} 
+            contentFit="cover" cachePolicy="disk"
+          />
             ) : (
               <View style={[s.avatar, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
                 <Text style={[s.avatarInitial, { color: colors.subtext }]}>{initial}</Text>

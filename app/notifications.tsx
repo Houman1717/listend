@@ -2,11 +2,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -61,7 +61,9 @@ function NotifRow({ item, onPress }: { item: NotificationItem; onPress: () => vo
       onPress={onPress}>
       <View style={n.avatarWrap}>
         {item.actorAvatarUrl ? (
-          <Image source={{ uri: item.actorAvatarUrl }} style={n.avatar} />
+          <ExpoImage source={{ uri: item.actorAvatarUrl }} style={n.avatar} 
+            contentFit="cover" cachePolicy="disk"
+          />
         ) : (
           <View style={[n.avatar, n.avatarFallback]}>
             <Text style={n.avatarInitial}>{initial}</Text>

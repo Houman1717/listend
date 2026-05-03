@@ -4,7 +4,6 @@ import {
   Animated,
   Dimensions,
   FlatList,
-  Image,
   Modal,
   Pressable,
   SafeAreaView,
@@ -14,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useNavigation, Stack } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -70,13 +70,11 @@ function AlbumArt({
   letter: string;
   size: number;
 }) {
-  const imgFade = useRef(new Animated.Value(0)).current;
   const [errored, setErrored] = useState(false);
 
-  useEffect(() => { setErrored(false); imgFade.setValue(0); }, [artworkUrl]);
+  useEffect(() => { setErrored(false); }, [artworkUrl]);
 
   function handleLoad() {
-    Animated.timing(imgFade, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   }
 
   return (
@@ -93,10 +91,12 @@ function AlbumArt({
 
       {/* Real cover fades in once loaded */}
       {!!artworkUrl && !errored && (
-        <Animated.Image
+        <ExpoImage
           source={{ uri: artworkUrl }}
-          style={[StyleSheet.absoluteFill, { opacity: imgFade }]}
-          resizeMode="cover"
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="disk"
+          transition={300}
           onLoad={handleLoad}
           onError={() => setErrored(true)}
         />
@@ -129,10 +129,11 @@ function HistoryThumb({
   return (
     <View style={[sm.thumb, { backgroundColor: coverColor }]}>
       {!!artworkUrl && !errored ? (
-        <Image
+        <ExpoImage
           source={{ uri: artworkUrl }}
           style={StyleSheet.absoluteFill}
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="disk"
           onError={() => setErrored(true)}
         />
       ) : (
@@ -233,7 +234,7 @@ function PoolRow({
       onPress={onPress}>
       <View style={[sfl.thumb, { backgroundColor: item.coverColor }]}>
         {artworkUrl ? (
-          <Image source={{ uri: artworkUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <ExpoImage source={{ uri: artworkUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
         ) : (
           <Text style={sfl.thumbLetter}>{item.title.charAt(0).toUpperCase()}</Text>
         )}
@@ -872,7 +873,7 @@ export default function FlipARecordScreen() {
                   } as any)}>
                   <View style={[sf.recentThumb, { backgroundColor: record.coverColor }]}>
                     {!!hit?.artworkUrl && (
-                      <Image source={{ uri: hit.artworkUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                      <ExpoImage source={{ uri: hit.artworkUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
                     )}
                     {!hit?.artworkUrl && (
                       <Text style={sf.recentThumbLetter}>{record.title.charAt(0).toUpperCase()}</Text>

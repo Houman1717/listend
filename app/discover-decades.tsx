@@ -3,11 +3,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -61,7 +61,9 @@ function AlbumCard({
   return (
     <Pressable style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]} onPress={onPress}>
       {album.artworkUrl ? (
-        <Image source={{ uri: album.artworkUrl }} style={s.cardImage} />
+        <ExpoImage source={{ uri: album.artworkUrl }} style={s.cardImage} 
+            contentFit="cover" cachePolicy="disk"
+          />
       ) : (
         <View style={[s.cardImage, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
       )}

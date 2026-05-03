@@ -2,7 +2,6 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   Alert,
@@ -10,6 +9,7 @@ import {
   Modal,
   SafeAreaView,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,10 +75,10 @@ function FavSlot({
     return (
       <Pressable onPress={onRemove} style={[s.favSlot, { borderRadius: radius }]}>
         {item.artworkUrl ? (
-          <Image
+          <ExpoImage
             source={{ uri: item.artworkUrl }}
             style={{ width: size, height: size, borderRadius: radius }}
-            resizeMode="cover"
+            contentFit="cover" cachePolicy="disk"
           />
         ) : (
           <View style={[s.favInitialBg, { borderRadius: radius }]}>
@@ -260,7 +260,7 @@ export default function ProfileScreen() {
       {/* Avatar + name */}
       <View style={s.profileRow}>
         {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={s.avatar} resizeMode="cover" />
+          <ExpoImage source={{ uri: avatarUrl }} style={s.avatar} contentFit="cover" cachePolicy="disk" />
         ) : (
           <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.avatar}>
             <Text style={s.avatarInitial}>
@@ -441,7 +441,7 @@ export default function ProfileScreen() {
                 onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
                 style={({ pressed }) => [s.gridItem, { opacity: pressed ? 0.7 : 1 }]}>
                 {album.artworkUrl ? (
-                  <Image source={{ uri: album.artworkUrl }} style={s.gridArt} resizeMode="cover" />
+                  <ExpoImage source={{ uri: album.artworkUrl }} style={s.gridArt} contentFit="cover" cachePolicy="disk" />
                 ) : (
                   <View style={[s.gridArt, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
                     <Text style={s.gridInitial}>{album.title.charAt(0)}</Text>
@@ -474,7 +474,9 @@ export default function ProfileScreen() {
             style={s.recentRow}
             onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}>
             {album.artworkUrl ? (
-              <Image source={{ uri: album.artworkUrl }} style={s.recentArt} />
+              <ExpoImage source={{ uri: album.artworkUrl }} style={s.recentArt} 
+            contentFit="cover" cachePolicy="disk"
+          />
             ) : (
               <View style={[s.recentArt, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
                 <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: '700' }}>

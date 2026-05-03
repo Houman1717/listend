@@ -2,12 +2,12 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   ActivityIndicator,
   Animated,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -106,7 +106,7 @@ function TrackRow({
     <View style={[sc.trackRow, { borderBottomColor: borderColor }]}>
       <Text style={[sc.trackNum, { color: subColor }]}>{index + 1}</Text>
       {track.artworkUrl ? (
-        <Image source={{ uri: track.artworkUrl }} style={sc.trackArt} />
+        <ExpoImage source={{ uri: track.artworkUrl }} style={sc.trackArt} contentFit="cover" cachePolicy="disk" />
       ) : (
         <View style={[sc.trackArt, { backgroundColor: '#2a1e14' }]} />
       )}
@@ -341,7 +341,7 @@ export default function ArtistDetailScreen() {
             style={({ pressed }) => [sc.albumCard, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => handleAlbumPress(album)}>
             {album.artworkUrl ? (
-              <Image source={{ uri: album.artworkUrl }} style={sc.albumArt} />
+              <ExpoImage source={{ uri: album.artworkUrl }} style={sc.albumArt} contentFit="cover" cachePolicy="disk" transition={200} />
             ) : (
               <View style={[sc.albumArt, { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' }]}>
                 <FontAwesome name="music" size={24} color="#4a3020" />
@@ -379,7 +379,7 @@ export default function ArtistDetailScreen() {
           />
         </Pressable>
         {artworkUrl ? (
-          <Image source={{ uri: artworkUrl }} style={sc.avatar} />
+          <ExpoImage source={{ uri: artworkUrl }} style={sc.avatar} contentFit="cover" cachePolicy="disk" transition={200} />
         ) : (
           <View style={[sc.avatar, sc.avatarPlaceholder]}>
             <Text style={sc.avatarInitial}>{(artistName || '?').charAt(0)}</Text>
@@ -496,7 +496,7 @@ export default function ArtistDetailScreen() {
                   style={({ pressed }) => [sc.similarChip, { opacity: pressed ? 0.6 : 1 }]}
                   onPress={() => handleSimilarArtistPress(sim.name)}>
                   {appleImageUrl ? (
-                    <Image source={{ uri: appleImageUrl }} style={sc.similarAvatar} />
+                    <ExpoImage source={{ uri: appleImageUrl }} style={sc.similarAvatar} contentFit="cover" cachePolicy="disk" transition={150} />
                   ) : (
                     <View style={[sc.similarAvatar, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
                       <Text style={[sc.similarInitial, { color: colors.subtext }]}>{sim.name.charAt(0)}</Text>

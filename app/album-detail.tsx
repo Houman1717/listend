@@ -2,7 +2,6 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   TextInput,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -641,9 +641,20 @@ export default function AlbumDetailScreen() {
         .then(r => r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`)))
         .then(data => {
           if (cancelled) return;
-          setLastfm({ listeners: data.listeners ?? 0, description: stripHtml(data.description ?? ''), tags: data.tags ?? [] });
+          let description = stripHtml(data.description ?? '');
+          // Generic fallback — always have something to show
+          if (!description) {
+            description = `${albumTitle} is an album by ${albumArtist}${albumYear > 0 ? `, released in ${albumYear}` : ''}.`;
+          }
+          setLastfm({ listeners: data.listeners ?? 0, description, tags: data.tags ?? [] });
         })
-        .catch(err => console.warn('[album-detail] Last.fm error:', err));
+        .catch(err => {
+          console.warn('[album-detail] Last.fm error:', err);
+          // Even on total failure, show a generic description
+          if (!cancelled) {
+            setLastfm({ listeners: 0, description: `${albumTitle} is an album by ${albumArtist}${albumYear > 0 ? `, released in ${albumYear}` : ''}.`, tags: [] });
+          }
+        });
     }
 
     return () => { cancelled = true; };
@@ -826,15 +837,14 @@ export default function AlbumDetailScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Stack.Screen
         options={{
-          headerRight: () =>
-            isLogged ? (
+          headerRight: () => (
               <Pressable
                 onPress={() => setShowPlaylists(true)}
                 hitSlop={12}
                 style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
                 <FontAwesome name="list-alt" size={19} color="#D4A017" />
               </Pressable>
-            ) : null,
+            ),
         }}
       />
       <ScrollView
@@ -845,7 +855,7 @@ export default function AlbumDetailScreen() {
 
         {/* ── 1. Header ─────────────────────────────────────────────────────── */}
         {albumArtwork ? (
-          <Image source={{ uri: albumArtwork }} style={s.artwork} />
+          <ExpoImage source={{ uri: albumArtwork }} style={s.artwork} contentFit="cover" cachePolicy="disk" transition={200} />
         ) : (
           <View style={[s.artwork, s.artworkPlaceholder, { backgroundColor: albumCoverColor }]}>
             <Text style={s.artworkInitial}>{albumTitle.charAt(0)}</Text>
@@ -860,18 +870,13 @@ export default function AlbumDetailScreen() {
           </Text>
         </Pressable>
 
-        {(lastfm?.tags?.length || lastfm?.listeners) ? (
+        {lastfm?.tags?.length ? (
           <View style={s.metaRow}>
-            {lastfm?.tags?.slice(0, 4).map(tag => (
+            {lastfm.tags.slice(0, 4).map(tag => (
               <View key={tag} style={[s.pill, { backgroundColor: isDark ? '#2a1e14' : '#ebebeb' }]}>
                 <Text style={[s.pillText, { color: colors.subtext }]}>{tag}</Text>
               </View>
             ))}
-            {lastfm?.listeners > 0 && (
-              <Text style={[s.listeners, { color: colors.subtext }]}>
-                {formatListeners(lastfm.listeners)}
-              </Text>
-            )}
           </View>
         ) : null}
 
@@ -884,9 +889,11 @@ export default function AlbumDetailScreen() {
               numberOfLines={bioExpanded ? undefined : 3}>
               {lastfm.description}
             </Text>
-            <Pressable onPress={() => setBioExpanded(v => !v)}>
-              <Text style={s.bioToggle}>{bioExpanded ? 'Show less' : 'Read more'}</Text>
-            </Pressable>
+            {lastfm.description.length > 120 && (
+              <Pressable onPress={() => setBioExpanded(v => !v)}>
+                <Text style={s.bioToggle}>{bioExpanded ? 'Show less' : 'Read more'}</Text>
+              </Pressable>
+            )}
           </View>
         ) : null}
 
@@ -1100,7 +1107,7 @@ export default function AlbumDetailScreen() {
                     params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },
                   })}>
                   {album.artworkUrl ? (
-                    <Image source={{ uri: album.artworkUrl }} style={s.similarArt} />
+                    <ExpoImage source={{ uri: album.artworkUrl }} style={s.similarArt} contentFit="cover" cachePolicy="disk" transition={200} />
                   ) : (
                     <View style={[s.similarArt, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
                       <FontAwesome name="music" size={20} color="#7a5535" />
@@ -1349,7 +1356,7 @@ const s = StyleSheet.create({
   similarArtist: { fontSize: 11 },
 
   // Header button
-  headerBtn: { paddingHorizontal: 4 },
+  headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
 
   // Playlist modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },

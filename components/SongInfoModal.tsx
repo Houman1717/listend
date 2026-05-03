@@ -2,11 +2,11 @@ import {
   Modal,
   View,
   Text,
-  Image,
   Pressable,
   StyleSheet,
   Platform,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -115,7 +115,7 @@ export function SongInfoModal({
         {/* Content */}
         <View style={s.content}>
           {song?.artworkUrl ? (
-            <Image source={{ uri: song.artworkUrl }} style={s.art} />
+            <ExpoImage source={{ uri: song.artworkUrl }} style={s.art} contentFit="cover" cachePolicy="disk" transition={200} />
           ) : (
             <View style={[s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#f5e6c8' }]}>
               <FontAwesome name="music" size={28} color="#D4A017" />

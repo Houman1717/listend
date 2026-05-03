@@ -5,10 +5,10 @@ import {
   TextInput,
   FlatList,
   ScrollView,
-  Image,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -133,7 +133,9 @@ function AlbumRow({
         ]}
         onPress={() => { onSaveRecent(); onView(); }}>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
+          <ExpoImage source={{ uri: item.artworkUrl }} style={s.artwork} 
+            contentFit="cover" cachePolicy="disk"
+          />
         ) : (
           <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#EDE8E0' }]} />
         )}
@@ -173,7 +175,9 @@ function SongRow({ item, isDark, colors, onSaveRecent }: {
       onPress={onSaveRecent}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
+          <ExpoImage source={{ uri: item.artworkUrl }} style={s.artwork} 
+            contentFit="cover" cachePolicy="disk"
+          />
         ) : (
           <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#EDE8E0' }]}>
             <FontAwesome name="music" size={18} color={colors.subtext} />
@@ -201,7 +205,9 @@ function ArtistRow({ item, isDark, colors, onPress, onSaveRecent }: {
       onPress={() => { onSaveRecent(); onPress(); }}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={[s.artwork, { borderRadius: 26 }]} />
+          <ExpoImage source={{ uri: item.artworkUrl }} style={[s.artwork, { borderRadius: 26 }]} 
+            contentFit="cover" cachePolicy="disk"
+          />
         ) : (
           <View style={[s.artwork, { borderRadius: 26, backgroundColor: isDark ? '#2a1e14' : '#DDD5C8', justifyContent: 'center', alignItems: 'center' }]}>
             <Text style={[s.artistInitial, { color: colors.subtext }]}>{item.name.charAt(0).toUpperCase()}</Text>
@@ -279,7 +285,9 @@ function RecentRow({
         onPress={onPress}>
         {/* artwork */}
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={[s.recentArt, { borderRadius: imgRadius }]} />
+          <ExpoImage source={{ uri: item.artworkUrl }} style={[s.recentArt, { borderRadius: imgRadius }]} 
+            contentFit="cover" cachePolicy="disk"
+          />
         ) : (
           <View style={[s.recentArt, { borderRadius: imgRadius, backgroundColor: isDark ? '#2a1e14' : '#EDE8E0', justifyContent: 'center', alignItems: 'center' }]}>
             <Text style={[s.recentInitial, { color: colors.subtext }]}>{item.title.charAt(0).toUpperCase()}</Text>
@@ -332,7 +340,9 @@ function UserRow({
       <View style={s.resultMain}>
         {/* Avatar */}
         {item.avatar_url ? (
-          <Image source={{ uri: item.avatar_url }} style={s.userAvatar} />
+          <ExpoImage source={{ uri: item.avatar_url }} style={s.userAvatar} 
+            contentFit="cover" cachePolicy="disk"
+          />
         ) : (
           <View style={[s.userAvatar, s.userAvatarFallback, { backgroundColor: isDark ? '#2a1e14' : '#EDE8E0' }]}>
             <Text style={[s.userAvatarInitial, { color: colors.subtext }]}>{initial}</Text>

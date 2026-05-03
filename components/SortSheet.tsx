@@ -159,6 +159,7 @@ export function SortSheet({
 
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
+      <View style={StyleSheet.absoluteFill}>
       <Pressable style={ss.overlay} onPress={onClose} />
       <View style={[ss.sheet, { backgroundColor: bg }]}>
         {/* Handle */}
@@ -212,6 +213,7 @@ export function SortSheet({
             </Text>
           </Pressable>
         </ScrollView>
+      </View>
       </View>
     </Modal>
   );

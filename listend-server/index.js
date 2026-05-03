@@ -948,9 +948,21 @@ app.get('/lastfm/album', async (req, res) => {
       name: al.name,
       artist: al.artist,
       listeners: parseInt(al.listeners ?? '0', 10),
-      description: al.wiki?.summary ?? '',
+      description: al.wiki?.summary ?? al.wiki?.content ?? '',
       tags: (al.tags?.tag ?? []).map(t => t.name),
     };
+
+    // Genius fallback — if Last.fm has no wiki, try Genius album description
+    if (!payload.description) {
+      console.log(`[/lastfm/album] no Last.fm wiki — trying Genius for "${artistName} - ${albumName}"`);
+      const geniusDesc = await fetchGeniusAlbumDescription(artistName, albumName);
+      if (geniusDesc) {
+        console.log(`[/lastfm/album] Genius description found (${geniusDesc.length} chars)`);
+        payload.description = geniusDesc;
+      } else {
+        console.log(`[/lastfm/album] Genius returned nothing — description will be empty`);
+      }
+    }
 
     console.log(`[/lastfm/album] success — ${payload.listeners} listeners, ${payload.tags.length} tags, desc length=${payload.description.length}`);
     cacheSet(CACHE_KEY, payload, TTL_6H);
@@ -1040,6 +1052,42 @@ async function fetchSongCredits(artistName, trackName) {
     // score = number of filtered roles; used to pick the richest result across tracks
     _score: credits.length,
   };
+}
+
+// ── Genius album description helper ──────────────────────────────────────────
+// Searches Genius for the album, then fetches the album description.
+// Returns a plain-text string or null on any failure / empty result.
+
+async function fetchGeniusAlbumDescription(artistName, albumName) {
+  try {
+    if (!process.env.GENIUS_ACCESS_TOKEN) return null;
+    const query = `${artistName} ${albumName}`;
+    const searchResp = await fetch(
+      `https://api.genius.com/search?q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` } }
+    );
+    if (!searchResp.ok) return null;
+    const searchJson = await searchResp.json();
+    const hits = searchJson.response?.hits ?? [];
+    if (!hits.length) return null;
+
+    // Prefer a hit that already has an album attached
+    const albumHit = hits.find(h => h.result?.album?.id) ?? hits[0];
+    const albumId = albumHit?.result?.album?.id;
+    if (!albumId) return null;
+
+    const albumResp = await fetch(
+      `https://api.genius.com/albums/${albumId}?text_format=plain`,
+      { headers: { Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}` } }
+    );
+    if (!albumResp.ok) return null;
+    const albumJson = await albumResp.json();
+    const desc = albumJson.response?.album?.description?.plain;
+    if (!desc || desc === '?' || desc.trim().length < 30) return null;
+    return desc.trim();
+  } catch {
+    return null;
+  }
 }
 
 // ── GET /genius/credits ───────────────────────────────────────────────────────

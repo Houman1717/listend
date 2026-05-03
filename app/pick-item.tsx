@@ -4,10 +4,10 @@ import {
   Text,
   TextInput,
   FlatList,
-  Image,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useCallback } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -146,7 +146,9 @@ export default function PickItemScreen() {
               ]}
               onPress={() => handleSelect(item)}>
               {item.artworkUrl ? (
-                <Image source={{ uri: item.artworkUrl }} style={[styles.artwork, { borderRadius: artworkRadius }]} />
+                <ExpoImage source={{ uri: item.artworkUrl }} style={[styles.artwork, { borderRadius: artworkRadius }]} 
+            contentFit="cover" cachePolicy="disk"
+          />
               ) : (
                 <View style={[styles.artwork, { borderRadius: artworkRadius, backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
               )}

@@ -2,12 +2,12 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   TextInput,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -45,7 +45,9 @@ function AlbumRow({
   return (
     <View style={[s.row, { borderBottomColor: isDark ? '#2e2018' : '#f5e6c8' }]}>
       {item.artworkUrl ? (
-        <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
+        <ExpoImage source={{ uri: item.artworkUrl }} style={s.artwork} 
+            contentFit="cover" cachePolicy="disk"
+          />
       ) : (
         <View style={[s.artwork, s.artPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
       )}

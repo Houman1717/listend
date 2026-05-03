@@ -5,8 +5,8 @@ import {
   Text,
   FlatList,
   Pressable,
-  Image,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -48,7 +48,9 @@ function ReviewRow({
       <Pressable
         onPress={onAlbumPress}
         style={({ pressed }) => [s.topRow, { opacity: pressed ? 0.7 : 1 }]}>
-        <Image source={{ uri: item.artworkUrl }} style={s.art} />
+        <ExpoImage source={{ uri: item.artworkUrl }} style={s.art} 
+            contentFit="cover" cachePolicy="disk"
+          />
         <View style={s.albumInfo}>
           <Text style={[s.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>
             {item.albumTitle}

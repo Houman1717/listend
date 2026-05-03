@@ -2,12 +2,12 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   Alert,
   useWindowDimensions,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useMemo, useEffect } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -44,10 +44,12 @@ function AlbumCard({
       onLongPress={onLongPress}
       style={({ pressed }) => [s.card, { width: cardWidth, opacity: pressed ? 0.7 : 1 }]}>
       {album.artworkUrl ? (
-        <Image
+        <ExpoImage
           source={{ uri: album.artworkUrl }}
           style={{ width: cardWidth, height: cardWidth, borderRadius: 8 }}
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="disk"
+          transition={200}
         />
       ) : (
         <View style={[s.fallback, { width: cardWidth, height: cardWidth, backgroundColor: album.coverColor }]}>

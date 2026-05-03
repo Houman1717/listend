@@ -2,7 +2,6 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   FlatList,
   TextInput,
   Pressable,
@@ -12,6 +11,7 @@ import {
   Modal,
   SafeAreaView,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -411,7 +411,9 @@ export default function DMConversationScreen() {
                     style={({ pressed }) => [as.result, { opacity: pressed ? 0.7 : 1 }]}
                     onPress={() => sendAlbum(item)}>
                     {item.artworkUrl ? (
-                      <Image source={{ uri: item.artworkUrl }} style={as.artwork} />
+                      <ExpoImage source={{ uri: item.artworkUrl }} style={as.artwork} 
+            contentFit="cover" cachePolicy="disk"
+          />
                     ) : (
                       <View style={[as.artwork, { backgroundColor: colors.border }]} />
                     )}
@@ -483,7 +485,7 @@ function AlbumCard({
         {/* Top: artwork + album meta */}
         <View style={b.albumTop}>
           {album.artworkUrl ? (
-            <Image source={{ uri: album.artworkUrl }} style={b.albumArt} resizeMode="cover" />
+            <ExpoImage source={{ uri: album.artworkUrl }} style={b.albumArt} contentFit="cover" cachePolicy="disk" />
           ) : (
             <View style={[b.albumArt, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
               <FontAwesome name="music" size={20} color={colors.subtext} />

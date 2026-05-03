@@ -2,11 +2,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -227,7 +227,9 @@ function ActivityRow({ item, onPress, colors }: { item: ActivityItem; onPress: (
       onPress={onPress}>
 
       {item.artworkUrl ? (
-        <Image source={{ uri: item.artworkUrl }} style={s.art} />
+        <ExpoImage source={{ uri: item.artworkUrl }} style={s.art} 
+            contentFit="cover" cachePolicy="disk"
+          />
       ) : (
         <View style={[s.art, { backgroundColor: item.coverColor ?? colors.border, justifyContent: 'center', alignItems: 'center' }]}>
           <Text style={s.artInitial}>{item.title.charAt(0)}</Text>
@@ -267,7 +269,9 @@ function FollowRow({ item, onPress, colors }: { item: FollowItem; onPress: () =>
       style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]}
       onPress={onPress}>
       {item.avatarUrl ? (
-        <Image source={{ uri: item.avatarUrl }} style={s.followAvatar} />
+        <ExpoImage source={{ uri: item.avatarUrl }} style={s.followAvatar} 
+            contentFit="cover" cachePolicy="disk"
+          />
       ) : (
         <View style={[s.followAvatar, { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }]}>
           <Text style={[s.followInitial, { color: colors.subtext }]}>{initial}</Text>
@@ -295,10 +299,12 @@ function Top5Row({ item, onPress, colors }: { item: Top5ChangeItem; onPress: () 
       style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]}
       onPress={onPress}>
       {item.itemImageUrl ? (
-        <Image
+        <ExpoImage
           source={{ uri: item.itemImageUrl }}
           style={[s.art, item.category === 'artists' ? s.artCircle : null]}
-        />
+        
+            contentFit="cover" cachePolicy="disk"
+          />
       ) : (
         <View style={[s.art, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
           item.category === 'artists' ? s.artCircle : null]}>

@@ -6,9 +6,9 @@ import {
   ScrollView,
   FlatList,
   Pressable,
-  Image,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -97,7 +97,9 @@ function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; is
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: CARD_SIZE, opacity: pressed ? 0.7 : 1 }]}>
       <View>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={{ width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 }} />
+          <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 }} 
+            contentFit="cover" cachePolicy="disk"
+          />
         ) : (
           <ArtFallback size={CARD_SIZE} radius={6} label={item.title} />
         )}
@@ -118,7 +120,9 @@ function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index:
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: CARD_SIZE, opacity: pressed ? 0.7 : 1 }]}>
       <View>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={{ width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 }} />
+          <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 }} 
+            contentFit="cover" cachePolicy="disk"
+          />
         ) : (
           <ArtFallback size={CARD_SIZE} radius={6} label={item.title} />
         )}
@@ -136,7 +140,9 @@ function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: bo
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ARTIST_SIZE, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
-        <Image source={{ uri: item.artworkUrl }} style={{ width: ARTIST_SIZE, height: ARTIST_SIZE, borderRadius: ARTIST_SIZE / 2 }} />
+        <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: ARTIST_SIZE, height: ARTIST_SIZE, borderRadius: ARTIST_SIZE / 2 }} 
+            contentFit="cover" cachePolicy="disk"
+          />
       ) : (
         <ArtFallback size={ARTIST_SIZE} radius={ARTIST_SIZE / 2} label={item.name} />
       )}

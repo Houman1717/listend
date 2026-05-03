@@ -2,10 +2,10 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   FlatList,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect, useMemo } from 'react';
@@ -67,7 +67,7 @@ function ReviewRow({
       style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]}>
       {/* Thumbnail */}
       {album.artworkUrl ? (
-        <Image source={{ uri: album.artworkUrl }} style={s.thumb} resizeMode="cover" />
+        <ExpoImage source={{ uri: album.artworkUrl }} style={s.thumb} contentFit="cover" cachePolicy="disk" />
       ) : (
         <View style={[s.thumb, s.thumbFallback, { backgroundColor: album.coverColor }]}>
           <Text style={s.thumbInitial}>{album.title.charAt(0)}</Text>

@@ -2,7 +2,6 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   Modal,
@@ -12,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect } from 'react';
@@ -48,7 +48,7 @@ function PlaylistMosaic({
         return (
           <View key={i} style={{ width: half, height: half }}>
             {url ? (
-              <Image source={{ uri: url }} style={{ width: half, height: half }} resizeMode="cover" />
+              <ExpoImage source={{ uri: url }} style={{ width: half, height: half }} contentFit="cover" cachePolicy="disk" />
             ) : (
               <View style={{ width: half, height: half, backgroundColor: fallbackColor }} />
             )}

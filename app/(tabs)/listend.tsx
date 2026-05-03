@@ -2,7 +2,6 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   Alert,
@@ -10,6 +9,7 @@ import {
   Modal,
   SafeAreaView,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -197,7 +197,7 @@ function ProfileHeader({
 
         <View style={[ph.avatarWrap, ph.avatarWrapNoCover]}>
           {avatarUrl
-            ? <Image source={{ uri: avatarUrl }} style={ph.avatarImg} resizeMode="cover" />
+            ? <ExpoImage source={{ uri: avatarUrl }} style={ph.avatarImg} contentFit="cover" cachePolicy="disk" />
             : <View style={ph.avatarFallback}>
                 <Text style={ph.avatarInitial}>{initial}</Text>
               </View>
@@ -422,10 +422,11 @@ function FavSlot({
         disabled={!onPress}
         style={({ pressed }) => [s.favSlot, { borderRadius: radius, opacity: pressed ? 0.7 : 1 }]}>
         {item.artworkUrl ? (
-          <Image
+          <ExpoImage
             source={{ uri: item.artworkUrl }}
             style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE, borderRadius: radius }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="disk"
           />
         ) : (
           <View style={[s.favInitialBg, { borderRadius: radius }]}>
@@ -760,10 +761,11 @@ function DraggableFavRow({
             ]}
           >
             {draggingItem.artworkUrl ? (
-              <Image
+              <ExpoImage
                 source={{ uri: draggingItem.artworkUrl }}
                 style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE }}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="disk"
               />
             ) : (
               <View style={s.favInitialBg}>

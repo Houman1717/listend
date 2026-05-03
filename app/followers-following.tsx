@@ -2,11 +2,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   FlatList,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -115,7 +115,9 @@ export default function FollowersFollowingScreen() {
               router.push({ pathname: '/user-profile', params: { userId: item.id } })
             }>
             {item.avatar_url ? (
-              <Image source={{ uri: item.avatar_url }} style={s.avatar} />
+              <ExpoImage source={{ uri: item.avatar_url }} style={s.avatar} 
+            contentFit="cover" cachePolicy="disk"
+          />
             ) : (
               <View style={[s.avatar, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
                 <Text style={[s.avatarInitial, { color: colors.subtext }]}>{initial}</Text>

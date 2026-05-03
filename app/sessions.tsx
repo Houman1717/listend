@@ -2,11 +2,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useMemo, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -244,7 +244,9 @@ export default function SessionsScreen() {
                 style={({ pressed }) => [s.monthCard, { opacity: pressed ? 0.7 : 1 }]}
                 onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}>
                 {album.artworkUrl ? (
-                  <Image source={{ uri: album.artworkUrl }} style={s.monthArt} />
+                  <ExpoImage source={{ uri: album.artworkUrl }} style={s.monthArt} 
+            contentFit="cover" cachePolicy="disk"
+          />
                 ) : (
                   <View style={[s.monthArt, { backgroundColor: album.coverColor ?? colors.border, justifyContent: 'center', alignItems: 'center' }]}>
                     <Text style={s.monthArtInitial}>{album.title.charAt(0)}</Text>
@@ -276,7 +278,9 @@ export default function SessionsScreen() {
                 style={({ pressed }) => [s.albumRow, { borderTopColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
                 onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}>
                 {album.artworkUrl ? (
-                  <Image source={{ uri: album.artworkUrl }} style={s.albumArt} />
+                  <ExpoImage source={{ uri: album.artworkUrl }} style={s.albumArt} 
+            contentFit="cover" cachePolicy="disk"
+          />
                 ) : (
                   <View style={[s.albumArt, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
                     <Text style={s.albumInitial}>{album.title.charAt(0)}</Text>

@@ -2,13 +2,13 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   TextInput,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -146,7 +146,9 @@ export default function LogAlbumScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled">
 
-        <Image source={{ uri: pendingAlbum.artworkUrl }} style={styles.artwork} />
+        <ExpoImage source={{ uri: pendingAlbum.artworkUrl }} style={styles.artwork} 
+            contentFit="cover" cachePolicy="disk"
+          />
 
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
           {pendingAlbum.title}

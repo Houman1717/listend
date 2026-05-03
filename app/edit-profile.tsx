@@ -9,10 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
   Animated,
   Dimensions,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useNavigation } from 'expo-router';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
@@ -288,7 +288,7 @@ export default function EditProfileScreen() {
           <View style={s.photoBlock}>
             <Pressable style={s.avatarWrap} onPress={onPickAvatar}>
               {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={s.avatarImg} resizeMode="cover" />
+                <ExpoImage source={{ uri: avatarUri }} style={s.avatarImg} contentFit="cover" cachePolicy="disk" />
               ) : (
                 <View style={s.avatarPlaceholder}>
                   <Text style={s.avatarInitial}>{avatarInitial}</Text>

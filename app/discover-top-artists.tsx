@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, Image, Pressable, ScrollView, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, Pressable, ScrollView, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -51,9 +52,12 @@ export default function DiscoverTopArtistsScreen() {
                 style={({ pressed }) => [{ width: cardSize, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}
                 onPress={() => router.push({ pathname: '/artist-detail', params: { id: artist.id, name: artist.name, artworkUrl: artist.artworkUrl } } as any)}>
                 {artist.artworkUrl ? (
-                  <Image
+                  <ExpoImage
                     source={{ uri: artist.artworkUrl }}
                     style={{ width: cardSize, height: cardSize, borderRadius: cardSize / 2 }}
+                    contentFit="cover"
+                    cachePolicy="disk"
+                    transition={200}
                   />
                 ) : (
                   <View style={[s.fallback, { width: cardSize, height: cardSize, borderRadius: cardSize / 2, backgroundColor: isDark ? '#2e2018' : '#e0e0e0' }]}>

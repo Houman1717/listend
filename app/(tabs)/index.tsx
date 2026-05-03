@@ -6,13 +6,13 @@ import {
   ScrollView,
   FlatList,
   Pressable,
-  Image,
   ActivityIndicator,
   Modal,
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -205,7 +205,7 @@ function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; is
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ALBUM_CARD, opacity: pressed ? 0.7 : 1 }]}>
       <View>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={{ width: ALBUM_CARD, height: ALBUM_CARD, borderRadius: 6 }} />
+          <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: ALBUM_CARD, height: ALBUM_CARD, borderRadius: 6 }} contentFit="cover" cachePolicy="disk" transition={200} />
         ) : (
           <ArtFallback size={ALBUM_CARD} radius={6} label={item.title} />
         )}
@@ -228,7 +228,7 @@ function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index:
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: SONG_CARD, opacity: pressed ? 0.7 : 1 }]}>
       <View>
         {item.artworkUrl ? (
-          <Image source={{ uri: item.artworkUrl }} style={{ width: SONG_CARD, height: SONG_CARD, borderRadius: 6 }} />
+          <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: SONG_CARD, height: SONG_CARD, borderRadius: 6 }} contentFit="cover" cachePolicy="disk" transition={200} />
         ) : (
           <ArtFallback size={SONG_CARD} radius={6} label={item.title} />
         )}
@@ -248,7 +248,7 @@ function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: bo
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ARTIST_CARD, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
-        <Image source={{ uri: item.artworkUrl }} style={{ width: ARTIST_CARD, height: ARTIST_CARD, borderRadius: ARTIST_CARD / 2 }} />
+        <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: ARTIST_CARD, height: ARTIST_CARD, borderRadius: ARTIST_CARD / 2 }} contentFit="cover" cachePolicy="disk" transition={200} />
       ) : (
         <ArtFallback size={ARTIST_CARD} radius={ARTIST_CARD / 2} label={item.name} />
       )}
@@ -298,7 +298,7 @@ function PopularReviewCard({
       <Pressable
         onPress={(e) => { e.stopPropagation?.(); onAlbumPress(); }}
         style={({ pressed }) => [pr.topRow, { opacity: pressed ? 0.7 : 1 }]}>
-        <Image source={{ uri: item.artworkUrl }} style={pr.art} />
+        <ExpoImage source={{ uri: item.artworkUrl }} style={pr.art} contentFit="cover" cachePolicy="disk" transition={200} />
         <View style={pr.albumInfo}>
           <Text style={[pr.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={2}>
             {item.albumTitle}
@@ -412,7 +412,7 @@ function PopularReviewModal({
             <Pressable
               onPress={onAlbumPress}
               style={({ pressed }) => [rm.albumRow, { opacity: pressed ? 0.7 : 1 }]}>
-              <Image source={{ uri: review.artworkUrl }} style={rm.art} />
+              <ExpoImage source={{ uri: review.artworkUrl }} style={rm.art} contentFit="cover" cachePolicy="disk" />
               <View style={{ flex: 1, gap: 3 }}>
                 <Text style={[rm.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>{review.albumTitle}</Text>
                 <Text style={[rm.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
@@ -507,7 +507,7 @@ function FriendCard({
         },
       ]}>
       {friend.artworkUrl ? (
-        <Image source={{ uri: friend.artworkUrl }} style={{ width: artSize, height: artSize, borderRadius: 6 }} />
+        <ExpoImage source={{ uri: friend.artworkUrl }} style={{ width: artSize, height: artSize, borderRadius: 6 }} contentFit="cover" cachePolicy="disk" transition={200} />
       ) : (
         <ArtFallback size={artSize} radius={6} label={friend.album} />
       )}
@@ -610,7 +610,8 @@ export default function HomeScreen() {
           setAlbums(data.albums);
           setSongs(data.songs);
           setArtists(data.artists);
-          data.albums.forEach(a => { if (a.artworkUrl) Image.prefetch(a.artworkUrl); });
+          const urls = data.albums.map(a => a.artworkUrl).filter(Boolean) as string[];
+          if (urls.length) ExpoImage.prefetch(urls);
         })
         .catch((err) => console.error('[Home] fetchHome failed:', err?.message ?? err))
         .finally(() => setLoading(false));

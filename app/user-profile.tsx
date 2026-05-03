@@ -2,7 +2,6 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   ActivityIndicator,
@@ -14,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -164,10 +164,11 @@ function FavSlotReadOnly({
   if (item?.artworkUrl) {
     inner = (
       <View style={[s.favSlot, { borderRadius: radius, backgroundColor: colors.surface }]}>
-        <Image
+        <ExpoImage
           source={{ uri: item.artworkUrl }}
           style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE, borderRadius: radius }}
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="disk"
         />
       </View>
     );
@@ -214,10 +215,11 @@ function FavSlotEdit({
       style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
       {item?.artworkUrl ? (
         <View style={[s.favSlot, { borderRadius: radius, backgroundColor: colors.surface }]}>
-          <Image
+          <ExpoImage
             source={{ uri: item.artworkUrl }}
             style={{ width: FAV_SLOT_SIZE, height: FAV_SLOT_SIZE, borderRadius: radius }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="disk"
           />
           <View style={[s.favEditOverlay, { borderRadius: radius }]}>
             <FontAwesome name="pencil" size={10} color="#fff" />
@@ -352,9 +354,11 @@ function SlotPickerModal({
                     style={({ pressed }) => [sp.resultRow, { opacity: pressed ? 0.6 : 1 }]}
                     onPress={() => handleSelect(item)}>
                     {artwork ? (
-                      <Image
+                      <ExpoImage
                         source={{ uri: artwork }}
                         style={[sp.resultArt, circular && { borderRadius: 22 }, { backgroundColor: colors.surface }]}
+                        contentFit="cover"
+                        cachePolicy="disk"
                       />
                     ) : (
                       <View style={[sp.resultArt, { backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }, circular && { borderRadius: 22 }]}>
@@ -679,7 +683,7 @@ export default function UserProfileScreen() {
           { borderColor: colors.border, backgroundColor: colors.border },
         ]}>
           {profile.avatar_url ? (
-            <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} resizeMode="cover" />
+            <ExpoImage source={{ uri: profile.avatar_url }} style={s.avatarImg} contentFit="cover" cachePolicy="disk" />
           ) : (
             <View style={[s.avatarFallback, { backgroundColor: colors.border }]}>
               <Text style={[s.avatarInitial, { color: colors.subtext }]}>{initial}</Text>

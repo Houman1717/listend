@@ -1,4 +1,5 @@
-import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -42,10 +43,12 @@ export function AlbumGridCard({
       style={({ pressed }) => [s.card, { width, opacity: pressed ? 0.7 : 1 }]}>
       <View>
         {album.artworkUrl ? (
-          <Image
+          <ExpoImage
             source={{ uri: album.artworkUrl }}
             style={{ width, height: width, borderRadius: 8 }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="disk"
+            transition={200}
           />
         ) : (
           <View style={[s.fallback, { width, height: width, backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]}>

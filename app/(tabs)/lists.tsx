@@ -2,11 +2,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   Alert,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -37,7 +37,9 @@ function AlbumSlot({
           style={[styles.filledSlot, { backgroundColor: colors.card }]}
           onLongPress={onRemove}
           onPress={onRemove}>
-          <Image source={{ uri: album.artworkUrl }} style={styles.slotArt} />
+          <ExpoImage source={{ uri: album.artworkUrl }} style={styles.slotArt} 
+            contentFit="cover" cachePolicy="disk"
+          />
           <View style={styles.slotText}>
             <Text style={[styles.slotTitle, { color: colors.text }]} numberOfLines={1}>
               {album.title}
@@ -81,7 +83,9 @@ function SongSlot({
         <Pressable
           style={[styles.filledSlot, { backgroundColor: colors.card }]}
           onPress={onRemove}>
-          <Image source={{ uri: song.artworkUrl }} style={styles.slotArt} />
+          <ExpoImage source={{ uri: song.artworkUrl }} style={styles.slotArt} 
+            contentFit="cover" cachePolicy="disk"
+          />
           <View style={styles.slotText}>
             <Text style={[styles.slotTitle, { color: colors.text }]} numberOfLines={1}>
               {song.title}

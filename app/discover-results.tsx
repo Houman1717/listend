@@ -2,11 +2,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -131,7 +131,9 @@ export default function DiscoverResultsScreen() {
                 )}
                 <View>
                   {item.artworkUrl ? (
-                    <Image source={{ uri: item.artworkUrl }} style={s.artwork} />
+                    <ExpoImage source={{ uri: item.artworkUrl }} style={s.artwork} 
+            contentFit="cover" cachePolicy="disk"
+          />
                   ) : (
                     <View style={[s.artwork, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
                   )}

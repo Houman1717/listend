@@ -2,11 +2,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Image,
   Pressable,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect } from 'react';
@@ -59,7 +59,9 @@ export default function LikedArtistsScreen() {
           style={({ pressed }) => [s.row, { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 }]}
           onPress={() => router.push({ pathname: '/artist-detail', params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl ?? '' } })}>
           {item.artworkUrl ? (
-            <Image source={{ uri: item.artworkUrl }} style={s.avatar} />
+            <ExpoImage source={{ uri: item.artworkUrl }} style={s.avatar} 
+            contentFit="cover" cachePolicy="disk"
+          />
           ) : (
             <View style={[s.avatar, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}>
               <Text style={[s.avatarInitial, { color: '#D4A017' }]}>{item.name.charAt(0)}</Text>
