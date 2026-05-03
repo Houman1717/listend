@@ -1251,70 +1251,29 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
       if (db) { console.log('[/spotify/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
     }
 
-    // Step 1: resolve artist name from Apple Music
-    console.log(`[/spotify/artist/top-tracks] resolving artist name for id="${id}"`);
-    const artistData = await amFetch(`/catalog/us/artists/${id}`);
-    const artistName = artistData.data?.[0]?.attributes?.name ?? '';
-    console.log(`[/spotify/artist/top-tracks] artist name="${artistName}"`);
+    // Fetch top songs directly from Apple Music — artwork and duration included
+    console.log(`[/spotify/artist/top-tracks] fetching AM top-songs for artist id="${id}"`);
+    const amData = await amFetch(`/catalog/us/artists/${id}/top-songs?limit=5`);
+    const rawSongs = amData.data ?? [];
+    console.log(`[/spotify/artist/top-tracks] AM returned ${rawSongs.length} songs`);
 
-    // Step 2: fetch top tracks from Last.fm
-    const lfmUrl =
-      `http://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks` +
-      `&artist=${encodeURIComponent(artistName)}` +
-      `&api_key=${process.env.LASTFM_API_KEY}` +
-      `&format=json&limit=5`;
-    console.log(`[/spotify/artist/top-tracks] calling Last.fm artist.gettoptracks for "${artistName}"`);
-    const lfmResp = await fetch(lfmUrl);
-    console.log(`[/spotify/artist/top-tracks] Last.fm HTTP status: ${lfmResp.status}`);
-    if (!lfmResp.ok) {
-      const body = await lfmResp.text().catch(() => '');
-      throw new Error(`Last.fm artist.gettoptracks → ${lfmResp.status}: ${body}`);
-    }
-    const lfmData = await lfmResp.json();
-    const rawTracks = (lfmData.toptracks?.track ?? []).slice(0, 5);
-
-    // Step 3: fetch artwork for each track via Apple Music search (two-pass fallback)
-    const results = await Promise.allSettled(
-      rawTracks.map(async (t, i) => {
-        let artworkUrl = null;
-        let albumTitle = null;
-        // Pass 1: precise — track + artist
-        try {
-          const q1 = encodeURIComponent(`${t.name} ${artistName}`);
-          const sr1 = await amFetch(`/catalog/us/search?term=${q1}&types=songs&limit=1`);
-          const hit1 = sr1.results?.songs?.data?.[0];
-          artworkUrl = amArtwork(hit1?.attributes?.artwork) || null;
-          albumTitle = hit1?.attributes?.albumName ?? null;
-        } catch (e) {
-          console.warn(`[/spotify/artist/top-tracks] pass-1 artwork lookup failed for "${t.name}":`, e.message);
-        }
-        // Pass 2: track name only fallback
-        if (!artworkUrl) {
-          try {
-            const q2 = encodeURIComponent(t.name);
-            const sr2 = await amFetch(`/catalog/us/search?term=${q2}&types=songs&limit=1`);
-            const hit2 = sr2.results?.songs?.data?.[0];
-            artworkUrl = amArtwork(hit2?.attributes?.artwork) || null;
-            albumTitle = albumTitle ?? hit2?.attributes?.albumName ?? null;
-          } catch (e) {
-            console.warn(`[/spotify/artist/top-tracks] pass-2 artwork lookup failed for "${t.name}":`, e.message);
-          }
-        }
-        return {
-          number:     i + 1,
-          id:         t.mbid || t.url || `${artistName}-${i}`,
-          title:      t.name ?? null,
-          artworkUrl,
-          albumTitle,
-          durationMs: t.duration ? parseInt(t.duration, 10) * 1000 : null,
-        };
-      })
-    );
-    const tracks = results.map((r, i) =>
-      r.status === 'fulfilled'
-        ? r.value
-        : { number: i + 1, id: `${artistName}-${i}`, title: rawTracks[i]?.name ?? null, artworkUrl: null, albumTitle: null, durationMs: null }
-    );
+    const tracks = rawSongs.slice(0, 5).map((s, i) => {
+      const attr = s.attributes ?? {};
+      const ms = attr.durationInMillis ?? 0;
+      const totalSec = Math.round(ms / 1000);
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      const duration = ms ? `${mins}:${String(secs).padStart(2, '0')}` : null;
+      return {
+        number:     i + 1,
+        id:         s.id ?? `${id}-${i}`,
+        title:      attr.name ?? null,
+        artworkUrl: amArtwork(attr.artwork) || null,
+        albumTitle: attr.albumName ?? null,
+        durationMs: ms || null,
+        duration,
+      };
+    });
 
     console.log(`[/spotify/artist/top-tracks] success — ${tracks.length} tracks`);
     cacheSet(CACHE_KEY, tracks, TTL_6H);
