@@ -927,44 +927,37 @@ app.get('/lastfm/album', async (req, res) => {
   if (db) { console.log(`[/lastfm/album] cache hit (db)`); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const url =
+    const lfmUrl =
       `http://ws.audioscrobbler.com/2.0/?method=album.getinfo` +
       `&artist=${encodeURIComponent(artistName)}` +
       `&album=${encodeURIComponent(albumName)}` +
       `&api_key=${process.env.LASTFM_API_KEY}` +
       `&format=json`;
 
-    console.log(`[/lastfm/album] fetching Last.fm for "${artistName} - ${albumName}"`);
-    const resp = await fetch(url);
-    console.log(`[/lastfm/album] Last.fm HTTP status: ${resp.status}`);
-    if (!resp.ok) throw new Error(`Last.fm album.getinfo → ${resp.status}`);
-    const json = await resp.json();
-    console.log(`[/lastfm/album] Last.fm response keys:`, Object.keys(json));
+    // Fire Last.fm and Genius in parallel — no need to wait for Last.fm to
+    // discover it has no wiki before starting the Genius request.
+    console.log(`[/lastfm/album] fetching Last.fm + Genius in parallel for "${artistName} - ${albumName}"`);
+    const [lfmResp, geniusDesc] = await Promise.all([
+      fetch(lfmUrl),
+      fetchGeniusAlbumDescription(artistName, albumName),
+    ]);
 
+    console.log(`[/lastfm/album] Last.fm HTTP status: ${lfmResp.status}`);
+    if (!lfmResp.ok) throw new Error(`Last.fm album.getinfo → ${lfmResp.status}`);
+    const json = await lfmResp.json();
     if (json.error) throw new Error(`Last.fm error ${json.error}: ${json.message}`);
 
     const al = json.album;
+    const lfmDesc = al.wiki?.summary ?? al.wiki?.content ?? '';
     const payload = {
       name: al.name,
       artist: al.artist,
       listeners: parseInt(al.listeners ?? '0', 10),
-      description: al.wiki?.summary ?? al.wiki?.content ?? '',
+      description: lfmDesc || geniusDesc || '',
       tags: (al.tags?.tag ?? []).map(t => t.name),
     };
 
-    // Genius fallback — if Last.fm has no wiki, try Genius album description
-    if (!payload.description) {
-      console.log(`[/lastfm/album] no Last.fm wiki — trying Genius for "${artistName} - ${albumName}"`);
-      const geniusDesc = await fetchGeniusAlbumDescription(artistName, albumName);
-      if (geniusDesc) {
-        console.log(`[/lastfm/album] Genius description found (${geniusDesc.length} chars)`);
-        payload.description = geniusDesc;
-      } else {
-        console.log(`[/lastfm/album] Genius returned nothing — description will be empty`);
-      }
-    }
-
-    console.log(`[/lastfm/album] success — ${payload.listeners} listeners, ${payload.tags.length} tags, desc length=${payload.description.length}`);
+    console.log(`[/lastfm/album] desc source=${lfmDesc ? 'lastfm' : geniusDesc ? 'genius' : 'none'} len=${payload.description.length} listeners=${payload.listeners} tags=${payload.tags.length}`);
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
     res.json(payload);
