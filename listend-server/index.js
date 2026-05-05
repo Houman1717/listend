@@ -4,6 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { query, param, body, validationResult } = require('express-validator');
 const cron = require('node-cron');
 const supabase = require('./db');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
@@ -109,6 +110,16 @@ function requireAdmin(req, res, next) {
   if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Forbidden' });
   }
+  next();
+}
+
+// ── Input sanitization helpers ────────────────────────────────────────────────
+
+const stripHtml = v => (typeof v === 'string' ? v.replace(/<[^>]*>/g, '') : v);
+
+function validate(req, res, next) {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
   next();
 }
 
@@ -258,7 +269,11 @@ app.get('/decades', async (req, res) => {
 
 // ── GET /search ───────────────────────────────────────────────────────────────
 
-app.get('/search', async (req, res) => {
+app.get('/search', [
+  query('q').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('q must be 200 characters or fewer'),
+  query('type').trim(),
+  validate,
+], async (req, res) => {
   const { q, type } = req.query;
   if (!q || !type) return res.status(400).json({ error: 'q and type are required' });
   if (!['album', 'track', 'artist'].includes(type)) {
@@ -882,7 +897,10 @@ app.get('/discover/top-songs', async (req, res) => {
 // ── GET /lastfm/artist — ?artist=<name> ───────────────────────────────────────
 // Switched from path params to query params to safely handle names with /&?# etc.
 
-app.get('/lastfm/artist', async (req, res) => {
+app.get('/lastfm/artist', [
+  query('artist').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('artist must be 200 characters or fewer'),
+  validate,
+], async (req, res) => {
   const artistName = (req.query.artist ?? '').trim();
   const bust = req.query.bust === '1';
   if (!artistName) return res.status(400).json({ error: 'artist query param required' });
@@ -958,7 +976,11 @@ app.get('/lastfm/artist', async (req, res) => {
 
 // ── GET /lastfm/album — ?artist=<name>&album=<name> ──────────────────────────
 
-app.get('/lastfm/album', async (req, res) => {
+app.get('/lastfm/album', [
+  query('artist').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('artist must be 200 characters or fewer'),
+  query('album').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('album must be 200 characters or fewer'),
+  validate,
+], async (req, res) => {
   const artistName = (req.query.artist ?? '').trim();
   const albumName  = (req.query.album  ?? '').trim();
   if (!artistName || !albumName) return res.status(400).json({ error: 'artist and album query params required' });
@@ -1136,7 +1158,14 @@ async function fetchGeniusAlbumDescription(artistName, albumName) {
 // data after filtering. Falls back to producer_artists/writer_artists if all
 // tracks return empty custom_performances.
 
-app.get('/genius/credits', async (req, res) => {
+app.get('/genius/credits', [
+  query('artist').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('artist must be 200 characters or fewer'),
+  query('tracks').optional().customSanitizer(v =>
+    Array.isArray(v) ? v.map(t => stripHtml(t.trim())) : stripHtml(String(v ?? '').trim())
+  ),
+  query('track').optional().trim().customSanitizer(stripHtml).isLength({ max: 200 }),
+  validate,
+], async (req, res) => {
   const artistName = (req.query.artist ?? '').trim();
 
   // Accept both ?track= (legacy single) and ?tracks[]= / ?tracks= (multi)
@@ -1211,7 +1240,10 @@ app.get('/genius/credits', async (req, res) => {
 // ── GET /spotify/track/:id ────────────────────────────────────────────────────
 // Returns a single track's release date and basic info.
 
-app.get('/spotify/track/:id', async (req, res) => {
+app.get('/spotify/track/:id', [
+  param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
   const { id } = req.params;
   if (!id || id === 'undefined') {
     return res.status(400).json({ error: 'track id is required' });
@@ -1245,7 +1277,10 @@ app.get('/spotify/track/:id', async (req, res) => {
   }
 });
 
-app.get('/spotify/album/:id/tracks', async (req, res) => {
+app.get('/spotify/album/:id/tracks', [
+  param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
   const { id } = req.params;
   const CACHE_KEY = `spotify_album_tracks_${id}`;
 
@@ -1278,7 +1313,10 @@ app.get('/spotify/album/:id/tracks', async (req, res) => {
 // 1. Resolve artist name via Spotify GET /artists/{id}
 // 2. Fetch top tracks from Last.fm artist.gettoptracks
 
-app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
+app.get('/spotify/artist/:id/top-tracks', [
+  param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
   const { id } = req.params;
   const bust = req.query.bust === '1';
   console.log(`[/spotify/artist/top-tracks] ── START id="${id}" bust=${bust}`);
@@ -1338,7 +1376,10 @@ app.get('/spotify/artist/:id/top-tracks', async (req, res) => {
 // Returns discography grouped by type: { albums, singles, compilations }.
 // Uses /artists/{id}/albums which is available in Spotify dev mode.
 
-app.get('/spotify/artist/:id/albums', async (req, res) => {
+app.get('/spotify/artist/:id/albums', [
+  param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
   const { id } = req.params;
   const bust = req.query.bust === '1';
   console.log(`[/spotify/artist/albums] ── START id="${id}" bust=${bust}`);
@@ -1486,7 +1527,13 @@ app.get('/spotify/artist/:id/albums', async (req, res) => {
 // Uses Apple Music search on each seed track ID to find related albums.
 // Returns [] silently on failure so the frontend simply hides the section.
 
-app.get('/spotify/recommendations', async (req, res) => {
+app.get('/spotify/recommendations', [
+  query('trackIds').optional().customSanitizer(v =>
+    (Array.isArray(v) ? v : [v]).map(s => String(s ?? '').trim()).filter(s => /^[a-zA-Z0-9_-]+$/.test(s)).slice(0, 2)
+  ),
+  query('excludeAlbumId').optional().trim().matches(/^[a-zA-Z0-9_-]*$/).isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
   const rawIds = req.query.trackIds ?? [];
   const trackIds = (Array.isArray(rawIds) ? rawIds : [rawIds]).filter(Boolean).slice(0, 2);
   const excludeAlbumId = (req.query.excludeAlbumId ?? '').trim();
@@ -1544,9 +1591,12 @@ app.get('/spotify/recommendations', async (req, res) => {
 // Batch endpoint: returns total duration in ms for each album ID.
 // Reuses the existing per-album tracks cache so repeated calls are cheap.
 
-app.get('/api/album-durations', async (req, res) => {
+app.get('/api/album-durations', [
+  query('ids').optional().trim().isLength({ max: 2000 }).withMessage('ids too long'),
+  validate,
+], async (req, res) => {
   const raw = req.query.ids ?? '';
-  const ids = String(raw).split(',').map(s => s.trim()).filter(Boolean);
+  const ids = String(raw).split(',').map(s => s.trim()).filter(s => /^[a-zA-Z0-9_-]+$/.test(s));
   if (ids.length === 0) return res.json({});
 
   const result = {};
@@ -1584,7 +1634,12 @@ app.get('/api/album-durations', async (req, res) => {
 // Body: [{id, title, artist}]  →  returns {[id]: artworkUrl}
 // Checks Supabase search cache first; only hits Apple Music for cache misses.
 
-app.post('/api/flip-pool-artworks', async (req, res) => {
+app.post('/api/flip-pool-artworks', [
+  body('*.title').optional().trim().customSanitizer(stripHtml).isLength({ max: 200 }),
+  body('*.artist').optional().trim().customSanitizer(stripHtml).isLength({ max: 200 }),
+  body('*.id').optional().trim().isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
   const albums = req.body;
   if (!Array.isArray(albums)) return res.status(400).json({ error: 'expected array' });
 
@@ -1901,7 +1956,10 @@ cron.schedule('0 6 * * 1', async () => {
 // Accepts { user_id, image_base64 }, uploads to the 'avatars' bucket using the
 // service-role key (bypasses RLS), returns { url }.
 
-app.post('/api/upload-avatar', requireAuth, async (req, res) => {
+app.post('/api/upload-avatar', requireAuth, [
+  body('user_id').trim().isUUID().withMessage('user_id must be a valid UUID'),
+  validate,
+], async (req, res) => {
   const { user_id, image_base64 } = req.body;
   if (!user_id || !image_base64) {
     return res.status(400).json({ error: 'Missing user_id or image_base64' });
@@ -1931,7 +1989,10 @@ app.post('/api/upload-avatar', requireAuth, async (req, res) => {
 // Accepts { user_id, image_base64 }, uploads to the 'cover photos' bucket using
 // the service-role key, returns { url }.
 
-app.post('/api/upload-cover', requireAuth, async (req, res) => {
+app.post('/api/upload-cover', requireAuth, [
+  body('user_id').trim().isUUID().withMessage('user_id must be a valid UUID'),
+  validate,
+], async (req, res) => {
   const { user_id, image_base64 } = req.body;
   if (!user_id || !image_base64) {
     return res.status(400).json({ error: 'Missing user_id or image_base64' });
@@ -1961,7 +2022,10 @@ app.post('/api/upload-cover', requireAuth, async (req, res) => {
 // Accepts { user_id }, removes the user's cover.jpg from the 'cover photos'
 // bucket using the service-role key (bypasses RLS).
 
-app.post('/api/delete-cover', requireAuth, async (req, res) => {
+app.post('/api/delete-cover', requireAuth, [
+  body('user_id').trim().isUUID().withMessage('user_id must be a valid UUID'),
+  validate,
+], async (req, res) => {
   const { user_id } = req.body;
   if (!user_id) {
     return res.status(400).json({ error: 'Missing user_id' });
