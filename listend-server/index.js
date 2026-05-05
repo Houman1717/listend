@@ -86,6 +86,32 @@ app.use((req, res, next) => {
 // Parse JSON bodies — limit raised to 10 MB to handle base64-encoded images
 app.use(express.json({ limit: '10mb' }));
 
+// ── Auth middleware ────────────────────────────────────────────────────────────
+// Verifies the Supabase JWT from the Authorization header and attaches req.user.
+
+async function requireAuth(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+  const { data: { user }, error } = await supabase.auth.getUser(auth.slice(7));
+  if (error || !user) return res.status(401).json({ error: 'Invalid or expired token' });
+  req.user = user;
+  next();
+}
+
+// ── Admin middleware ───────────────────────────────────────────────────────────
+// Guards ops/admin routes with a static secret sent as X-Admin-Secret header.
+// Set ADMIN_SECRET in Railway env vars.
+
+function requireAdmin(req, res, next) {
+  const secret = req.headers['x-admin-secret'];
+  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  next();
+}
+
 // ── GET /health ───────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => res.json({ ok: true }));
@@ -1606,7 +1632,7 @@ app.post('/api/flip-pool-artworks', async (req, res) => {
 
 // ── GET /refresh ──────────────────────────────────────────────────────────────
 
-app.get('/refresh', async (req, res) => {
+app.get('/refresh', requireAdmin, async (req, res) => {
   try {
     await runRefresh();
     cacheClear('home', 'genres', 'decades',
@@ -1622,7 +1648,7 @@ app.get('/refresh', async (req, res) => {
 
 // ── GET /api/admin/refresh-home-artists ───────────────────────────────────────
 
-app.get('/api/admin/refresh-home-artists', async (req, res) => {
+app.get('/api/admin/refresh-home-artists', requireAdmin, async (req, res) => {
   try {
     const artists = await refreshHomeArtists();
     cacheClear('home');
@@ -1637,7 +1663,7 @@ app.get('/api/admin/refresh-home-artists', async (req, res) => {
 
 // ── GET /api/admin/purge-home-cache ──────────────────────────────────────────
 
-app.get('/api/admin/purge-home-cache', async (req, res) => {
+app.get('/api/admin/purge-home-cache', requireAdmin, async (req, res) => {
   try {
     cacheClear('home');
     await deleteCache('home');
@@ -1651,7 +1677,7 @@ app.get('/api/admin/purge-home-cache', async (req, res) => {
 
 // ── GET /api/admin/purge-artist-album-cache ───────────────────────────────────
 
-app.get('/api/admin/purge-artist-album-cache', async (req, res) => {
+app.get('/api/admin/purge-artist-album-cache', requireAdmin, async (req, res) => {
   try {
     for (const key of memCache.keys()) {
       if (key.startsWith('spotify_artist_albums_')) memCache.delete(key);
@@ -1667,7 +1693,7 @@ app.get('/api/admin/purge-artist-album-cache', async (req, res) => {
 
 // ── GET /api/admin/purge-discover-cache ──────────────────────────────────────
 
-app.get('/api/admin/purge-discover-cache', async (req, res) => {
+app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
   try {
     const keys = ['discover:new-releases', 'discover:popular', 'discover:coming-soon',
                   'discover:classics', 'discover:top-rated', 'discover:recommended'];
@@ -1683,7 +1709,7 @@ app.get('/api/admin/purge-discover-cache', async (req, res) => {
 
 // ── GET /api/admin/purge-lastfm-cache ─────────────────────────────────────────
 
-app.get('/api/admin/purge-lastfm-cache', async (req, res) => {
+app.get('/api/admin/purge-lastfm-cache', requireAdmin, async (req, res) => {
   try {
     // Clear all lastfm_artist_* keys from in-memory cache
     for (const key of memCache.keys()) {
@@ -1703,7 +1729,7 @@ app.get('/api/admin/purge-lastfm-cache', async (req, res) => {
 // Searches AM for every album in GENRE_ALBUMS, then replaces genre_albums rows.
 // Run once after deploying a new genre list. Takes ~60–90 s for 576 albums.
 
-app.get('/api/admin/populate-genres', async (req, res) => {
+app.get('/api/admin/populate-genres', requireAdmin, async (req, res) => {
   const BATCH = 4;   // smaller batches to stay under AM rate limit
   const DELAY = 500; // ms between batches
 
@@ -1781,7 +1807,7 @@ app.get('/api/admin/populate-genres', async (req, res) => {
 // Searches AM for every album in DECADE_ALBUMS, then replaces decade_albums rows.
 // Run once after deploying a new decade list. Takes ~90–120 s for 384 albums.
 
-app.get('/api/admin/populate-decades', async (req, res) => {
+app.get('/api/admin/populate-decades', requireAdmin, async (req, res) => {
   const BATCH = 4;
   const DELAY = 500;
 
@@ -1875,11 +1901,12 @@ cron.schedule('0 6 * * 1', async () => {
 // Accepts { user_id, image_base64 }, uploads to the 'avatars' bucket using the
 // service-role key (bypasses RLS), returns { url }.
 
-app.post('/api/upload-avatar', async (req, res) => {
+app.post('/api/upload-avatar', requireAuth, async (req, res) => {
   const { user_id, image_base64 } = req.body;
   if (!user_id || !image_base64) {
     return res.status(400).json({ error: 'Missing user_id or image_base64' });
   }
+  if (req.user.id !== user_id) return res.status(403).json({ error: 'Forbidden' });
 
   const path   = `${user_id}/avatar.jpg`;
   const buffer = Buffer.from(image_base64, 'base64');
@@ -1904,11 +1931,12 @@ app.post('/api/upload-avatar', async (req, res) => {
 // Accepts { user_id, image_base64 }, uploads to the 'cover photos' bucket using
 // the service-role key, returns { url }.
 
-app.post('/api/upload-cover', async (req, res) => {
+app.post('/api/upload-cover', requireAuth, async (req, res) => {
   const { user_id, image_base64 } = req.body;
   if (!user_id || !image_base64) {
     return res.status(400).json({ error: 'Missing user_id or image_base64' });
   }
+  if (req.user.id !== user_id) return res.status(403).json({ error: 'Forbidden' });
 
   const path   = `${user_id}/cover.jpg`;
   const buffer = Buffer.from(image_base64, 'base64');
@@ -1933,11 +1961,12 @@ app.post('/api/upload-cover', async (req, res) => {
 // Accepts { user_id }, removes the user's cover.jpg from the 'cover photos'
 // bucket using the service-role key (bypasses RLS).
 
-app.post('/api/delete-cover', async (req, res) => {
+app.post('/api/delete-cover', requireAuth, async (req, res) => {
   const { user_id } = req.body;
   if (!user_id) {
     return res.status(400).json({ error: 'Missing user_id' });
   }
+  if (req.user.id !== user_id) return res.status(403).json({ error: 'Forbidden' });
 
   const path = `${user_id}/cover.jpg`;
   console.log(`[delete-cover] user_id=${user_id} path=${path}`);
@@ -1957,7 +1986,7 @@ app.post('/api/delete-cover', async (req, res) => {
 
 // ── GET /apple-token ──────────────────────────────────────────────────────────
 
-app.get('/apple-token', (req, res) => {
+app.get('/apple-token', requireAuth, (req, res) => {
   res.json({ token: generateAppleToken() });
 });
 
