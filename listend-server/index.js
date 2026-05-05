@@ -2,6 +2,8 @@
 // listend backend server
 require('dotenv').config();
 const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
 const supabase = require('./db');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
@@ -22,6 +24,17 @@ const amArtwork = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+// ── Security headers ───────────────────────────────────────────────────────────
+app.use(helmet());
+
+// ── Rate limiting — 100 req / 15 min per IP ───────────────────────────────────
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // ── Startup env check ─────────────────────────────────────────────────────────
 const REQUIRED_VARS = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'LASTFM_API_KEY', 'GENIUS_ACCESS_TOKEN'];
@@ -53,9 +66,17 @@ function cacheClear(...keys) {
   for (const k of keys) memCache.delete(k);
 }
 
-// Allow any origin — the client is a mobile app, not a browser page
+// ── CORS ───────────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  'https://listend-production.up.railway.app',
+  'http://localhost:8081',
+  'http://localhost:3000',
+];
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
