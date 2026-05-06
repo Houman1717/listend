@@ -2088,6 +2088,16 @@ function dedupeAlbums(albums) {
   });
 }
 
+// Fetch with limited concurrency to avoid Apple Music rate limiting.
+async function fetchConcurrent(items, fn, limit = 12) {
+  const results = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit);
+    results.push(...await Promise.all(batch.map(fn)));
+  }
+  return results;
+}
+
 // Fetch the first 4 artwork URLs for a playlist (used for the mosaic thumbnail).
 async function getPlaylistArtwork(id) {
   if (id === 'all-time-classics') {
@@ -2105,7 +2115,7 @@ async function getPlaylistArtwork(id) {
 
 // GET /api/featured-playlists — returns all 8 playlists with metadata + 4 artwork URLs each
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta';
+  const CACHE_KEY = 'featured-playlists:meta:v3';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -2137,7 +2147,7 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:${id}`;
+  const CACHE_KEY = `featured-playlist:v3:${id}`;
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -2161,7 +2171,7 @@ app.get('/api/featured-playlists/:id', [
     } else {
       const list = PLAYLIST_ALBUMS[id];
       if (!list) return res.status(404).json({ error: 'Playlist not found' });
-      albums = dedupeAlbums(await Promise.all(list.map(({ artist, title }) => searchAMAlbum(artist, title))));
+      albums = dedupeAlbums(await fetchConcurrent(list, ({ artist, title }) => searchAMAlbum(artist, title), 12));
     }
 
     cacheSet(CACHE_KEY, albums, TTL_6H);

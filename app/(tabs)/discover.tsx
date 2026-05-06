@@ -114,14 +114,9 @@ function FeaturedPlaylistCard({ playlist, isDark, onPress }: { playlist: Feature
         <Text style={[fp.desc, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={2}>
           {playlist.description}
         </Text>
-        <View style={fp.metaRow}>
-          <Text style={[fp.albumCount, { color: isDark ? '#6B4C35' : '#A08060' }]}>
-            {playlist.albumCount} albums
-          </Text>
-          <View style={fp.badge}>
-            <Text style={fp.badgeText}>✦ Listend Official</Text>
-          </View>
-        </View>
+        <Text style={[fp.albumCount, { color: isDark ? '#6B4C35' : '#A08060' }]}>
+          {playlist.albumCount} albums
+        </Text>
       </View>
     </Pressable>
   );
@@ -496,7 +491,11 @@ export default function DiscoverScreen() {
       </Section>
 
       {/* ── Featured Playlists ── */}
-      <Section title="Featured Playlists">
+      <View style={s.section}>
+        <View style={fp.sectionHeader}>
+          <Text style={[s.sectionLabel, { color: colors.text, paddingHorizontal: 0 }]}>Featured Playlists</Text>
+          <View style={fp.badge}><Text style={fp.badgeText}>✦ Listend Official</Text></View>
+        </View>
         {featuredLoading && featuredPlaylists.length === 0 ? (
           <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
         ) : (
@@ -520,7 +519,7 @@ export default function DiscoverScreen() {
             )}
           />
         )}
-      </Section>
+      </View>
 
       {/* ── New Releases ── */}
       <Section title="New Releases">
@@ -628,6 +627,12 @@ const s = StyleSheet.create({
 // ─── Featured Playlist card styles ───────────────────────────────────────────
 
 const fp = StyleSheet.create({
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
   scrollContent: { paddingHorizontal: 16, gap: 10 },
   card: {
     flexDirection: 'row',
@@ -639,8 +644,7 @@ const fp = StyleSheet.create({
   },
   info:       { flex: 1 },
   name:       { fontSize: 16, fontWeight: '700', marginBottom: 3 },
-  desc:       { fontSize: 13, lineHeight: 18, marginBottom: 8 },
-  metaRow:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  desc:       { fontSize: 13, lineHeight: 18, marginBottom: 6 },
   albumCount: { fontSize: 12 },
   badge: {
     backgroundColor: 'rgba(212,160,23,0.12)',
