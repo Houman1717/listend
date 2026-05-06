@@ -18,6 +18,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme, ThemePreference } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
@@ -494,17 +495,64 @@ function NavRow({
 
 function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const { preference, setPreference } = useTheme();
+
+  const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
+    { label: 'On',     value: 'dark'   },
+    { label: 'Off',    value: 'light'  },
+    { label: 'System', value: 'system' },
+  ];
 
   async function handleSignOut() {
     onClose();
-    // Small delay so sheet has time to close before alert appears
     setTimeout(() => {
       Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
       ]);
     }, 300);
+  }
+
+  function handleDeleteAccount() {
+    onClose();
+    setTimeout(() => {
+      Alert.alert(
+        'Delete Account',
+        'This is permanent and cannot be undone. All your listens, reviews, playlists, and profile data will be deleted immediately.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete My Account',
+            style: 'destructive',
+            onPress: confirmDeleteAccount,
+          },
+        ],
+      );
+    }, 300);
+  }
+
+  async function confirmDeleteAccount() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+      const res = await fetch(`${API_URL}/api/user/delete-account`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Server error ${res.status}`);
+      }
+
+      await signOut();
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Something went wrong. Please try again.');
+    }
   }
 
   return (
@@ -548,6 +596,28 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
           </Pressable>
 
+          <View style={ss.separator} />
+
+          {/* Dark Mode */}
+          <View style={ss.row}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="moon-o" size={16} color="#D4A017" />
+            </View>
+            <Text style={ss.rowLabel}>Dark Mode</Text>
+            <View style={ss.segmented}>
+              {THEME_OPTIONS.map(opt => (
+                <Pressable
+                  key={opt.value}
+                  style={[ss.segment, preference === opt.value && ss.segmentActive]}
+                  onPress={() => setPreference(opt.value)}>
+                  <Text style={[ss.segmentText, preference === opt.value && ss.segmentTextActive]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
           <View style={ss.divider} />
 
           {/* Sign Out */}
@@ -559,6 +629,28 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             </View>
             <Text style={[ss.rowLabel, ss.signOutLabel]}>Sign Out</Text>
           </Pressable>
+
+          <View style={ss.separator} />
+
+          {/* Delete Account */}
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={handleDeleteAccount}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="trash-o" size={16} color="#FF4444" />
+            </View>
+            <Text style={[ss.rowLabel, ss.signOutLabel]}>Delete Account</Text>
+          </Pressable>
+
+          {/* About */}
+          <View style={ss.about}>
+            <ExpoImage
+              source={require('../../assets/images/apple-music-logo.png')}
+              style={ss.amLogo}
+              contentFit="contain"
+            />
+            <Text style={ss.aboutText}>Music data provided by Apple Music</Text>
+          </View>
         </SafeAreaView>
       </View>
     </Modal>
@@ -597,6 +689,40 @@ const ss = StyleSheet.create({
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#2a1e14', marginLeft: 58 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#3a2818', marginVertical: 8, marginHorizontal: 20 },
   signOutLabel: { color: '#FF4444' },
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: '#2a1e14',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  segment: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  segmentActive: {
+    backgroundColor: '#D4A017',
+    borderRadius: 7,
+  },
+  segmentText: {
+    fontSize: 13,
+    color: '#6B4C35',
+    fontWeight: '500',
+  },
+  segmentTextActive: {
+    color: '#0F0A07',
+    fontWeight: '600',
+  },
+  about: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 18,
+    marginBottom: 4,
+    paddingHorizontal: 20,
+  },
+  amLogo: { width: 18, height: 18, borderRadius: 4 },
+  aboutText: { color: '#5a4535', fontSize: 12 },
 });
 
 

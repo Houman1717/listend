@@ -23,6 +23,17 @@ import { useAlbums } from '@/context/AlbumsContext';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface FeaturedPlaylist {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  albumCount: number;
+  artworkUrls: string[];
+}
+
 // ─── Static lists ─────────────────────────────────────────────────────────────
 
 const DECADES = ['2020s', '2010s', '2000s', '1990s', '1980s', '1970s', '1960s', '1950s'];
@@ -44,10 +55,9 @@ async function fetchSections(): Promise<void> {
   const fetchTyped = <T,>(path: string): Promise<T[]> =>
     fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
 
-  const [newReleases, popular, classics, topRated, topArtists, topSongs] = await Promise.all([
+  const [newReleases, popular, topRated, topArtists, topSongs] = await Promise.all([
     safe(fetchJson('/discover/new-releases')),
     safe(fetchJson('/discover/popular')),
-    safe(fetchJson('/discover/classics')),
     safe(fetchJson('/discover/top-rated')),
     fetchTyped<SpotifyArtist>('/discover/top-artists').catch(() => [] as SpotifyArtist[]),
     fetchTyped<SpotifyTrack>('/discover/top-songs').catch(() => [] as SpotifyTrack[]),
@@ -55,7 +65,6 @@ async function fetchSections(): Promise<void> {
 
   discoverSections.newReleases  = newReleases;
   discoverSections.popular      = popular;
-  discoverSections.classics     = classics;
   discoverSections.topRated     = topRated;
   discoverSections.topArtists   = topArtists;
   discoverSections.topSongs     = topSongs;
@@ -68,6 +77,55 @@ const ARTIST_SIZE = 90;
 const FALLBACK_BG = '#2e2018';
 
 const PLACEHOLDER_COLORS = ['#2e2018', '#3a2818', '#2a1e14', '#1c1410', '#241808', '#1e1610', '#2c2015', '#2a1c12', '#321e14', '#281a10'];
+
+// ─── Featured Playlist card ───────────────────────────────────────────────────
+
+function FeaturedPlaylistMosaic({ urls, size }: { urls: string[]; size: number }) {
+  const half = size / 2;
+  const slots = Array.from({ length: 4 }, (_, i) => urls[i] ?? null);
+  return (
+    <View style={{ width: size, height: size, borderRadius: 10, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
+      {slots.map((url, i) => (
+        <View key={i} style={{ width: half, height: half }}>
+          {url ? (
+            <ExpoImage source={{ uri: url }} style={{ width: half, height: half }} contentFit="cover" cachePolicy="disk" />
+          ) : (
+            <View style={{ width: half, height: half, backgroundColor: FALLBACK_BG }} />
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function FeaturedPlaylistCard({ playlist, isDark, onPress }: { playlist: FeaturedPlaylist; isDark: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        fp.card,
+        { backgroundColor: isDark ? '#1e1610' : '#F5EFE7', opacity: pressed ? 0.85 : 1 },
+      ]}>
+      <FeaturedPlaylistMosaic urls={playlist.artworkUrls} size={88} />
+      <View style={fp.info}>
+        <Text style={[fp.name, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
+          {playlist.emoji} {playlist.name}
+        </Text>
+        <Text style={[fp.desc, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={2}>
+          {playlist.description}
+        </Text>
+        <View style={fp.metaRow}>
+          <Text style={[fp.albumCount, { color: isDark ? '#6B4C35' : '#A08060' }]}>
+            {playlist.albumCount} albums
+          </Text>
+          <View style={fp.badge}>
+            <Text style={fp.badgeText}>✦ Listend Official</Text>
+          </View>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -322,10 +380,11 @@ export default function DiscoverScreen() {
 
   const [newReleases,  setNewReleases]  = useState<SpotifyAlbum[]>(discoverSections.newReleases);
   const [popular,      setPopular]      = useState<SpotifyAlbum[]>(discoverSections.popular);
-  const [classics,     setClassics]     = useState<SpotifyAlbum[]>(discoverSections.classics);
   const [topRated,     setTopRated]     = useState<SpotifyAlbum[]>(discoverSections.topRated);
   const [topArtists,   setTopArtists]   = useState<SpotifyArtist[]>(discoverSections.topArtists);
   const [topSongs,     setTopSongs]     = useState<SpotifyTrack[]>(discoverSections.topSongs);
+  const [featuredPlaylists, setFeaturedPlaylists] = useState<FeaturedPlaylist[]>([]);
+  const [featuredLoading,   setFeaturedLoading]   = useState(true);
 
   const [sectionsLoading,  setSectionsLoading]  = useState(discoverSections.newReleases.length === 0);
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
@@ -337,13 +396,19 @@ export default function DiscoverScreen() {
           .then(() => {
             setNewReleases([...discoverSections.newReleases]);
             setPopular([...discoverSections.popular]);
-            setClassics([...discoverSections.classics]);
             setTopRated([...discoverSections.topRated]);
             setTopArtists([...discoverSections.topArtists]);
             setTopSongs([...discoverSections.topSongs]);
           })
           .catch((err) => console.error('[Discover] fetchSections failed:', err?.message ?? err))
           .finally(() => setSectionsLoading(false));
+      }
+      if (featuredPlaylists.length === 0) {
+        fetch(`${API_URL}/api/featured-playlists`)
+          .then(r => r.json())
+          .then((data: FeaturedPlaylist[]) => setFeaturedPlaylists(data))
+          .catch((err) => console.error('[Discover] featured-playlists failed:', err?.message ?? err))
+          .finally(() => setFeaturedLoading(false));
       }
     }, [])
   );
@@ -430,18 +495,26 @@ export default function DiscoverScreen() {
         />
       </Section>
 
-      {/* ── All-Time Classics ── */}
-      <Section title="All-Time Classics">
-        {sectionsLoading && classics.length === 0 ? (
-          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-all-time-classics' as any)} />
+      {/* ── Featured Playlists ── */}
+      <Section title="Featured Playlists">
+        {featuredLoading && featuredPlaylists.length === 0 ? (
+          <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
         ) : (
-          <AlbumRow
-            data={classics}
-            isDark={isDark}
-            loggedIds={loggedIds}
-            onAlbumPress={goToAlbum}
-            onSeeMore={() => router.push('/discover-all-time-classics' as any)}
-          />
+          <View style={fp.list}>
+            {featuredPlaylists.map(pl => (
+              <FeaturedPlaylistCard
+                key={pl.id}
+                playlist={pl}
+                isDark={isDark}
+                onPress={() =>
+                  router.push({
+                    pathname: '/discover-featured-playlist',
+                    params: { id: pl.id, name: pl.name, emoji: pl.emoji },
+                  } as any)
+                }
+              />
+            ))}
+          </View>
         )}
       </Section>
 
@@ -546,6 +619,33 @@ const s = StyleSheet.create({
 
   chip:     { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth },
   chipText: { fontSize: 15, fontWeight: '600' },
+});
+
+// ─── Featured Playlist card styles ───────────────────────────────────────────
+
+const fp = StyleSheet.create({
+  list: { gap: 10, paddingHorizontal: 16 },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    gap: 14,
+  },
+  info:       { flex: 1 },
+  name:       { fontSize: 16, fontWeight: '700', marginBottom: 3 },
+  desc:       { fontSize: 13, lineHeight: 18, marginBottom: 8 },
+  metaRow:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  albumCount: { fontSize: 12 },
+  badge: {
+    backgroundColor: 'rgba(212,160,23,0.12)',
+    borderWidth: 0.5,
+    borderColor: '#D4A017',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  badgeText: { color: '#D4A017', fontSize: 10, fontWeight: '700' },
 });
 
 // ─── Flip entry card styles ───────────────────────────────────────────────────

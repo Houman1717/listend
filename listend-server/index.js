@@ -12,6 +12,7 @@ const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } =
 const generateAppleToken = require('./utils/appleToken');
 const { GENRE_ALBUMS } = require('./genreData');
 const { DECADE_ALBUMS } = require('./decadeData');
+const { FEATURED_PLAYLIST_META, PLAYLIST_ALBUMS } = require('./featuredPlaylistsData');
 
 async function amFetch(path) {
   const resp = await fetch(`https://api.music.apple.com/v1${path}`, {
@@ -36,6 +37,14 @@ app.use(rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 }));
+
+// ── Kill switch ───────────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (process.env.KILL_SWITCH === 'true') {
+    return res.status(503).json({ error: 'The app is temporarily unavailable for maintenance.' });
+  }
+  next();
+});
 
 // ── Startup env check ─────────────────────────────────────────────────────────
 const REQUIRED_VARS = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'LASTFM_API_KEY', 'GENIUS_ACCESS_TOKEN'];
@@ -2048,10 +2057,175 @@ app.post('/api/delete-cover', requireAuth, [
   return res.json({ success: true });
 });
 
+// ── Featured Playlists ────────────────────────────────────────────────────────
+
+// Search Apple Music for a single album by artist + title. Returns a SpotifyAlbum-compatible object.
+async function searchAMAlbum(artist, title) {
+  const term = encodeURIComponent(`${title} ${artist}`);
+  try {
+    const data = await amFetch(`/catalog/us/search?types=albums&term=${term}&limit=1`);
+    const item = data?.results?.albums?.data?.[0];
+    if (!item) return { id: `fp-${artist}-${title}`.replace(/\s+/g, '-').toLowerCase(), title, artist, year: 0, artworkUrl: '' };
+    return {
+      id: item.id,
+      title: item.attributes?.name ?? title,
+      artist: item.attributes?.artistName ?? artist,
+      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+      artworkUrl: amArtwork(item.attributes?.artwork),
+    };
+  } catch {
+    return { id: `fp-${artist}-${title}`.replace(/\s+/g, '-').toLowerCase(), title, artist, year: 0, artworkUrl: '' };
+  }
+}
+
+// Run async tasks in batches to avoid rate-limiting Apple Music.
+async function fetchWithConcurrency(items, fn, limit = 8) {
+  const results = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit);
+    const batchResults = await Promise.all(batch.map(fn));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
+// Fetch the first 4 artwork URLs for a playlist (used for the mosaic thumbnail).
+async function getPlaylistArtwork(id) {
+  if (id === 'all-time-classics') {
+    const first4 = CLASSIC_IDS.split(',').slice(0, 4).join(',');
+    const data = await amFetch(`/catalog/us/albums?ids=${first4}`);
+    return (data.data ?? []).map(item => amArtwork(item.attributes?.artwork));
+  }
+  const albums = PLAYLIST_ALBUMS[id] ?? [];
+  return Promise.all(
+    albums.slice(0, 4).map(({ artist, title }) =>
+      searchAMAlbum(artist, title).then(r => r?.artworkUrl ?? '').catch(() => ''),
+    ),
+  );
+}
+
+// GET /api/featured-playlists — returns all 8 playlists with metadata + 4 artwork URLs each
+app.get('/api/featured-playlists', async (req, res) => {
+  const CACHE_KEY = 'featured-playlists:meta';
+  try {
+    const mem = cacheGet(CACHE_KEY);
+    if (mem) return res.json(mem);
+    const db = await getCached(CACHE_KEY, TTL_24H);
+    if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+    const result = await Promise.all(
+      FEATURED_PLAYLIST_META.map(async meta => {
+        const artworkUrls = await getPlaylistArtwork(meta.id);
+        const albumCount = meta.id === 'all-time-classics'
+          ? 48
+          : (PLAYLIST_ALBUMS[meta.id]?.length ?? 0);
+        return { ...meta, albumCount, artworkUrls };
+      }),
+    );
+
+    cacheSet(CACHE_KEY, result, TTL_6H);
+    await setCache(CACHE_KEY, result);
+    res.json(result);
+  } catch (err) {
+    console.error('[/api/featured-playlists] error:', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Internal server error' });
+  }
+});
+
+// GET /api/featured-playlists/:id — returns full album list for one playlist
+app.get('/api/featured-playlists/:id', [
+  param('id').matches(/^[a-z0-9-]+$/).withMessage('Invalid playlist id'),
+  validate,
+], async (req, res) => {
+  const { id } = req.params;
+  const CACHE_KEY = `featured-playlist:${id}`;
+  try {
+    const mem = cacheGet(CACHE_KEY);
+    if (mem) return res.json(mem);
+    const db = await getCached(CACHE_KEY, TTL_24H);
+    if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+    let albums;
+    if (id === 'all-time-classics') {
+      const resp = await fetch(`https://api.music.apple.com/v1/catalog/us/albums?ids=${CLASSIC_IDS}`, {
+        headers: { Authorization: `Bearer ${generateAppleToken()}` },
+      });
+      if (!resp.ok) throw new Error(`AM albums → ${resp.status}`);
+      const data = await resp.json();
+      albums = (data.data ?? []).map(item => ({
+        id: item.id,
+        title: item.attributes?.name ?? '',
+        artist: item.attributes?.artistName ?? '',
+        year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+        artworkUrl: amArtwork(item.attributes?.artwork),
+      }));
+    } else {
+      const list = PLAYLIST_ALBUMS[id];
+      if (!list) return res.status(404).json({ error: 'Playlist not found' });
+      albums = await fetchWithConcurrency(list, ({ artist, title }) => searchAMAlbum(artist, title), 8);
+    }
+
+    cacheSet(CACHE_KEY, albums, TTL_6H);
+    await setCache(CACHE_KEY, albums);
+    res.json(albums);
+  } catch (err) {
+    console.error(`[/api/featured-playlists/${req.params.id}] error:`, err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Internal server error' });
+  }
+});
+
 // ── GET /apple-token ──────────────────────────────────────────────────────────
 
 app.get('/apple-token', requireAuth, (req, res) => {
   res.json({ token: generateAppleToken() });
+});
+
+// ── DELETE /api/user/delete-account ───────────────────────────────────────────
+// Deletes all user data then removes the auth user.
+// Requires a valid Supabase JWT (requireAuth sets req.user).
+
+app.delete('/api/user/delete-account', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+
+  const tables = [
+    'top5_changes',
+    'want_to_listen',
+    'notifications',
+    'messages',
+    'follows',
+    'likes',
+    'playlist_albums',
+    'playlists',
+    'user_albums',
+    'profiles',
+  ];
+
+  for (const table of tables) {
+    const col = table === 'messages' ? 'sender_id' : 'user_id';
+    const { error } = await supabase.from(table).delete().eq(col, userId);
+    if (error) {
+      console.error(`[delete-account] failed on ${table}:`, error.message);
+      return res.status(500).json({ error: `Failed to delete data from ${table}` });
+    }
+  }
+
+  // messages also has a receiver_id side — clean that up too
+  const { error: rcvErr } = await supabase.from('messages').delete().eq('receiver_id', userId);
+  if (rcvErr) console.warn('[delete-account] receiver_id cleanup warning:', rcvErr.message);
+
+  // follows also has a follower_id side
+  const { error: followerErr } = await supabase.from('follows').delete().eq('follower_id', userId);
+  if (followerErr) console.warn('[delete-account] follower_id cleanup warning:', followerErr.message);
+
+  // Delete the auth user — requires service role key
+  const { error: authErr } = await supabase.auth.admin.deleteUser(userId);
+  if (authErr) {
+    console.error('[delete-account] auth.admin.deleteUser failed:', authErr.message);
+    return res.status(500).json({ error: 'Failed to delete auth user' });
+  }
+
+  console.log(`[delete-account] user ${userId} fully deleted`);
+  return res.json({ success: true });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
