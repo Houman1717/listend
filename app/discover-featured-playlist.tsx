@@ -35,7 +35,7 @@ export default function FeaturedPlaylistScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: emoji ? `${emoji} ${name}` : (name ?? 'Playlist') }} />
+      <Stack.Screen options={{ title: name ?? 'Playlist' }} />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}

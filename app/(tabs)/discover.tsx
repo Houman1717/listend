@@ -109,7 +109,7 @@ function FeaturedPlaylistCard({ playlist, isDark, onPress }: { playlist: Feature
       <FeaturedPlaylistMosaic urls={playlist.artworkUrls} size={88} />
       <View style={fp.info}>
         <Text style={[fp.name, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
-          {playlist.emoji} {playlist.name}
+          {playlist.name}
         </Text>
         <Text style={[fp.desc, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={2}>
           {playlist.description}
@@ -500,10 +500,14 @@ export default function DiscoverScreen() {
         {featuredLoading && featuredPlaylists.length === 0 ? (
           <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
         ) : (
-          <View style={fp.list}>
-            {featuredPlaylists.map(pl => (
+          <FlatList
+            horizontal
+            data={featuredPlaylists}
+            keyExtractor={pl => pl.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={fp.scrollContent}
+            renderItem={({ item: pl }) => (
               <FeaturedPlaylistCard
-                key={pl.id}
                 playlist={pl}
                 isDark={isDark}
                 onPress={() =>
@@ -513,8 +517,8 @@ export default function DiscoverScreen() {
                   } as any)
                 }
               />
-            ))}
-          </View>
+            )}
+          />
         )}
       </Section>
 
@@ -624,13 +628,14 @@ const s = StyleSheet.create({
 // ─── Featured Playlist card styles ───────────────────────────────────────────
 
 const fp = StyleSheet.create({
-  list: { gap: 10, paddingHorizontal: 16 },
+  scrollContent: { paddingHorizontal: 16, gap: 10 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
     borderRadius: 14,
     gap: 14,
+    width: 272,
   },
   info:       { flex: 1 },
   name:       { fontSize: 16, fontWeight: '700', marginBottom: 3 },

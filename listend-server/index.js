@@ -2078,15 +2078,14 @@ async function searchAMAlbum(artist, title) {
   }
 }
 
-// Run async tasks in batches to avoid rate-limiting Apple Music.
-async function fetchWithConcurrency(items, fn, limit = 8) {
-  const results = [];
-  for (let i = 0; i < items.length; i += limit) {
-    const batch = items.slice(i, i + limit);
-    const batchResults = await Promise.all(batch.map(fn));
-    results.push(...batchResults);
-  }
-  return results;
+// Deduplicate an album array by Apple Music ID, keeping first occurrence.
+function dedupeAlbums(albums) {
+  const seen = new Set();
+  return albums.filter(a => {
+    if (!a || seen.has(a.id)) return false;
+    seen.add(a.id);
+    return true;
+  });
 }
 
 // Fetch the first 4 artwork URLs for a playlist (used for the mosaic thumbnail).
@@ -2152,17 +2151,17 @@ app.get('/api/featured-playlists/:id', [
       });
       if (!resp.ok) throw new Error(`AM albums → ${resp.status}`);
       const data = await resp.json();
-      albums = (data.data ?? []).map(item => ({
+      albums = dedupeAlbums((data.data ?? []).map(item => ({
         id: item.id,
         title: item.attributes?.name ?? '',
         artist: item.attributes?.artistName ?? '',
         year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
         artworkUrl: amArtwork(item.attributes?.artwork),
-      }));
+      })));
     } else {
       const list = PLAYLIST_ALBUMS[id];
       if (!list) return res.status(404).json({ error: 'Playlist not found' });
-      albums = await fetchWithConcurrency(list, ({ artist, title }) => searchAMAlbum(artist, title), 8);
+      albums = dedupeAlbums(await Promise.all(list.map(({ artist, title }) => searchAMAlbum(artist, title))));
     }
 
     cacheSet(CACHE_KEY, albums, TTL_6H);
