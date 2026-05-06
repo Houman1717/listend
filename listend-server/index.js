@@ -2115,7 +2115,7 @@ async function getPlaylistArtwork(id) {
 
 // GET /api/featured-playlists — returns all 8 playlists with metadata + 4 artwork URLs each
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta:v4';
+  const CACHE_KEY = 'featured-playlists:meta:v5';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -2147,7 +2147,7 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:v4:${id}`;
+  const CACHE_KEY = `featured-playlist:v5:${id}`;
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
