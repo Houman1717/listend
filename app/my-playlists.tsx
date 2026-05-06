@@ -70,6 +70,7 @@ function PlaylistCard({
   likeCount,
   isLiked,
   onLike,
+  byUsername,
 }: {
   playlist: Playlist;
   albumMap: Map<string, string | undefined>;
@@ -81,6 +82,7 @@ function PlaylistCard({
   isLiked?: boolean;
   /** Defined when the viewer can toggle the like (i.e. other user's playlist). */
   onLike?: () => void;
+  byUsername?: string;
 }) {
   const count    = playlist.albumIds.length;
   const showLike = onLike !== undefined || (likeCount ?? 0) > 0;
@@ -106,6 +108,11 @@ function PlaylistCard({
         <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>
           {playlist.name}
         </Text>
+        {byUsername ? (
+          <Text style={[s.playlistMeta, { color: '#D4A017' }]} numberOfLines={1}>
+            by @{byUsername}
+          </Text>
+        ) : null}
         <Text style={[s.playlistMeta, { color: colors.subtext }]}>
           {count === 1 ? '1 album' : `${count} albums`}
         </Text>
@@ -247,6 +254,7 @@ export default function MyPlaylistsScreen() {
   const [likedAlbumMap,         setLikedAlbumMap]         = useState<Map<string, string | undefined>>(new Map());
   const [likedPlaylistOwners,   setLikedPlaylistOwners]   = useState<Map<string, string>>(new Map());
   const [likedFeaturedPlaylists, setLikedFeaturedPlaylists] = useState<any[]>([]);
+  const [likedPlaylistUsernames, setLikedPlaylistUsernames] = useState<Map<string, string>>(new Map()); // playlist.id → username
   const [likedLoading,          setLikedLoading]          = useState(false);
 
   // ── Other user's playlists fetched from Supabase ──────────────────────────
@@ -405,6 +413,20 @@ export default function MyPlaylistsScreen() {
 
       // Build owner map (playlist.id → owner user_id) for navigation
       const ownersById = new Map<string, string>(pls.map((p: any) => [p.id, p.user_id]));
+
+      // Fetch usernames for all playlist owners
+      const ownerIds = [...new Set(pls.map((p: any) => p.user_id as string))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', ownerIds);
+      const usernameByUserId = new Map<string, string>(
+        (profiles ?? []).map((p: any) => [p.id, p.username ?? ''])
+      );
+      const usernameByPlaylistId = new Map<string, string>(
+        pls.map((p: any) => [p.id, usernameByUserId.get(p.user_id) ?? ''])
+      );
+      setLikedPlaylistUsernames(usernameByPlaylistId);
 
       const built: Playlist[] = pls.map((p: any) => ({
         id:          p.id,
@@ -735,6 +757,7 @@ export default function MyPlaylistsScreen() {
                     colors={colors}
                     isLiked={true}
                     onLike={() => handleUnlikeLikedPlaylist(playlist)}
+                    byUsername={likedPlaylistUsernames.get(playlist.id)}
                   />
                 ))}
               </>
