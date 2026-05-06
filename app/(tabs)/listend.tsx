@@ -22,6 +22,7 @@ import { useTheme, ThemePreference } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
 
 const DARK_BG   = '#0F0A07';
 const CARD_BG   = '#2E2018';
@@ -737,6 +738,7 @@ export default function ListendScreen() {
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
   const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, loggedAlbums, wantToListen } = useAlbums();
+  const { likedPlaylists } = useLikedFeaturedPlaylists();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [top5EditMode, setTop5EditMode] = useState(false);
@@ -958,6 +960,8 @@ export default function ListendScreen() {
         <NavRow colors={colors} icon="list"       label="My Playlists"    sub="Your album lists"                 onPress={() => router.push('/my-playlists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="heart"      label="Liked Artists"   sub="Your favourites"                  onPress={() => router.push('/liked-artists')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="heart"      label="Liked Playlists" sub={likedPlaylists.length > 0 ? `${likedPlaylists.length} saved` : 'Your saved playlists'} onPress={() => router.push('/liked-featured-playlists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                         onPress={() => router.push('/dms')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />

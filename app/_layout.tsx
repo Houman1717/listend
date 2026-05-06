@@ -14,6 +14,7 @@ import { FlipProvider } from '@/context/FlipContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { NotificationsProvider } from '@/context/NotificationsContext';
 import { LikedArtistsProvider } from '@/context/LikedArtistsContext';
+import { LikedFeaturedPlaylistsProvider } from '@/context/LikedFeaturedPlaylistsContext';
 import { FavoritesSyncer } from '@/components/FavoritesSyncer';
 
 export {
@@ -91,6 +92,7 @@ function ThemedApp() {
     <NotificationsProvider>
     <AlbumsProvider>
     <LikedArtistsProvider>
+    <LikedFeaturedPlaylistsProvider>
     <FlipProvider>
       <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AuthGate />
@@ -137,9 +139,11 @@ function ThemedApp() {
           <Stack.Screen name="popular-reviews" options={{ title: 'Popular Reviews This Week', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="liked-artists" options={{ title: 'Liked Artists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-featured-playlist" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="liked-featured-playlists" options={{ title: 'Liked Playlists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
         </Stack>
       </NavThemeProvider>
     </FlipProvider>
+    </LikedFeaturedPlaylistsProvider>
     </LikedArtistsProvider>
     </AlbumsProvider>
     </NotificationsProvider>

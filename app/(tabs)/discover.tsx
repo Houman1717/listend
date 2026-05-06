@@ -512,7 +512,7 @@ export default function DiscoverScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/discover-featured-playlist',
-                    params: { id: pl.id, name: pl.name, emoji: pl.emoji },
+                    params: { id: pl.id, name: pl.name, emoji: pl.emoji, description: pl.description, artworkUrlsJson: JSON.stringify(pl.artworkUrls) },
                   } as any)
                 }
               />

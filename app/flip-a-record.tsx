@@ -309,11 +309,14 @@ function FullPoolModal({
         <View style={[sfl.summary, { borderBottomColor: borderCol }]}>
           <View style={sfl.summaryRow}>
             <Text style={[sfl.summaryCount, { color: colors.subtext }]}>{total} Albums</Text>
-            <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
-              <Text style={{ color: '#4ade80', fontWeight: '700' }}>{listenedPct}%</Text> listened
-              {'  ·  '}
-              <Text style={{ color: '#D4A017', fontWeight: '700' }}>{loggedCount}</Text> logged
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <FontAwesome name="headphones" size={13} color="#D4A017" />
+              <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
+                <Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text> listened
+                {'  ·  '}
+                <Text style={{ color: '#D4A017', fontWeight: '700' }}>{loggedCount}</Text> logged
+              </Text>
+            </View>
           </View>
           <View style={[sfl.track, { backgroundColor: colors.border }]}>
             <View style={[sfl.fill, { width: `${Math.max(listenedPct, listenedPct > 0 ? 2 : 0)}%` as any }]} />
@@ -349,7 +352,7 @@ const sfl = StyleSheet.create({
   summaryRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   summaryCount:{ fontSize: 13 },
   track:       { height: 5, borderRadius: 3, overflow: 'hidden' },
-  fill:        { height: 5, borderRadius: 3, backgroundColor: '#4ade80' },
+  fill:        { height: 5, borderRadius: 3, backgroundColor: '#D4A017' },
   row:         { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
   thumb:       { width: 46, height: 46, borderRadius: 7, overflow: 'hidden', flexShrink: 0, justifyContent: 'center', alignItems: 'center' },
   thumbLetter: { color: 'rgba(255,255,255,0.75)', fontSize: 18, fontWeight: '700' },
@@ -839,10 +842,11 @@ export default function FlipARecordScreen() {
                   {total} Albums
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <FontAwesome name="headphones" size={13} color="#D4A017" />
                   <Text style={[sf.statsLabel, { color: colors.subtext }]}>
                     <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipped}</Text> flipped
                     {'  ·  '}
-                    <Text style={{ color: '#4ade80', fontWeight: '700' }}>{listenedPct}%</Text> listened
+                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text> listened
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={colors.subtext} />
                 </View>
