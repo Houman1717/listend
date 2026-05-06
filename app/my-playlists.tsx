@@ -704,7 +704,7 @@ export default function MyPlaylistsScreen() {
                 <FontAwesome name="heart-o" size={36} color={isDark ? '#3a2818' : '#ddd'} />
                 <Text style={[s.emptyTitle, { color: colors.text }]}>No liked playlists</Text>
                 <Text style={[s.emptySub, { color: colors.subtext }]}>
-                  Like playlists from other users or Listend Official playlists to find them here.
+                  Like playlists from other users or by Listend playlists to find them here.
                 </Text>
               </View>
             ) : (
@@ -728,7 +728,7 @@ export default function MyPlaylistsScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>{pl.name}</Text>
                           <View style={{ backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                            <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>OFFICIAL</Text>
+                            <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>by Listend</Text>
                           </View>
                         </View>
                         {pl.description ? <Text style={[s.playlistDesc, { color: colors.subtext }]} numberOfLines={2}>{pl.description}</Text> : null}

@@ -494,7 +494,7 @@ export default function DiscoverScreen() {
       <View style={s.section}>
         <View style={fp.sectionHeader}>
           <Text style={[s.sectionLabel, { color: colors.text, paddingHorizontal: 0 }]}>Featured Playlists</Text>
-          <View style={fp.badge}><Text style={fp.badgeText}>✦ Listend Official</Text></View>
+          <View style={fp.badge}><Text style={fp.badgeText}>✦ by Listend</Text></View>
         </View>
         {featuredLoading && featuredPlaylists.length === 0 ? (
           <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
