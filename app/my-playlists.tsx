@@ -224,6 +224,8 @@ function NewPlaylistModal({
   );
 }
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MyPlaylistsScreen() {
@@ -241,10 +243,11 @@ export default function MyPlaylistsScreen() {
   const [activeTab, setActiveTab] = useState<'mine' | 'liked'>('mine');
 
   // ── Liked playlists (own user, liked tab) ─────────────────────────────────
-  const [likedPlaylists,      setLikedPlaylists]      = useState<Playlist[]>([]);
-  const [likedAlbumMap,       setLikedAlbumMap]       = useState<Map<string, string | undefined>>(new Map());
-  const [likedPlaylistOwners, setLikedPlaylistOwners] = useState<Map<string, string>>(new Map()); // playlist.id → owner user_id
-  const [likedLoading,        setLikedLoading]        = useState(false);
+  const [likedPlaylists,        setLikedPlaylists]        = useState<Playlist[]>([]);
+  const [likedAlbumMap,         setLikedAlbumMap]         = useState<Map<string, string | undefined>>(new Map());
+  const [likedPlaylistOwners,   setLikedPlaylistOwners]   = useState<Map<string, string>>(new Map());
+  const [likedFeaturedPlaylists, setLikedFeaturedPlaylists] = useState<any[]>([]);
+  const [likedLoading,          setLikedLoading]          = useState(false);
 
   // ── Other user's playlists fetched from Supabase ──────────────────────────
   const [otherPlaylists, setOtherPlaylists] = useState<Playlist[]>([]);
@@ -332,6 +335,24 @@ export default function MyPlaylistsScreen() {
     setLikedLoading(true);
 
     (async () => {
+      // Featured playlist likes — fetched in parallel
+      const { data: featuredRows } = await supabase
+        .from('likes')
+        .select('target_id')
+        .eq('user_id', user.id)
+        .eq('target_type', 'featured_playlist');
+
+      if (featuredRows && featuredRows.length > 0) {
+        const ids = new Set(featuredRows.map((r: any) => r.target_id));
+        try {
+          const resp = await fetch(`${API_URL}/api/featured-playlists`);
+          const all: any[] = await resp.json();
+          setLikedFeaturedPlaylists(all.filter(p => ids.has(p.id)));
+        } catch {}
+      } else {
+        setLikedFeaturedPlaylists([]);
+      }
+
       // 1. Get liked playlist IDs + their owners from likes table
       const { data: likedRows } = await supabase
         .from('likes')
@@ -453,6 +474,18 @@ export default function MyPlaylistsScreen() {
         });
       }
     }
+  }
+
+  // ── Unlike a featured playlist from the liked tab ─────────────────────────
+  async function handleUnlikeFeaturedPlaylist(id: string) {
+    if (!user) return;
+    setLikedFeaturedPlaylists(prev => prev.filter(p => p.id !== id));
+    await supabase
+      .from('likes')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('target_type', 'featured_playlist')
+      .eq('target_id', id);
   }
 
   // ── Unlike a playlist from the liked tab (removes it from the list) ───────
@@ -644,35 +677,67 @@ export default function MyPlaylistsScreen() {
           </View>
         ) : (
           <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
-            {likedPlaylists.length === 0 ? (
+            {likedPlaylists.length === 0 && likedFeaturedPlaylists.length === 0 ? (
               <View style={s.emptyWrap}>
                 <FontAwesome name="heart-o" size={36} color={isDark ? '#3a2818' : '#ddd'} />
                 <Text style={[s.emptyTitle, { color: colors.text }]}>No liked playlists</Text>
                 <Text style={[s.emptySub, { color: colors.subtext }]}>
-                  Like playlists from other users to find them here.
+                  Like playlists from other users or Listend Official playlists to find them here.
                 </Text>
               </View>
             ) : (
-              likedPlaylists.map((playlist) => (
-                <PlaylistCard
-                  key={playlist.id}
-                  playlist={playlist}
-                  albumMap={likedAlbumMap}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/playlist-detail',
-                      params: {
-                        id:     playlist.id,
-                        userId: likedPlaylistOwners.get(playlist.id) ?? '',
-                      },
-                    })
-                  }
-                  isDark={isDark}
-                  colors={colors}
-                  isLiked={true}
-                  onLike={() => handleUnlikeLikedPlaylist(playlist)}
-                />
-              ))
+              <>
+                {likedFeaturedPlaylists.map(pl => {
+                  const half = 32;
+                  const filled = [...(pl.artworkUrls ?? []), '', '', '', ''].slice(0, 4);
+                  return (
+                    <Pressable
+                      key={pl.id}
+                      onPress={() => router.push({ pathname: '/discover-featured-playlist', params: { id: pl.id, name: pl.name, emoji: pl.emoji, description: pl.description, artworkUrlsJson: JSON.stringify(pl.artworkUrls ?? []) } } as any)}
+                      style={({ pressed }) => [s.playlistCard, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+                      <View style={{ width: 64, height: 64, borderRadius: 8, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
+                        {filled.map((url: string, i: number) =>
+                          url
+                            ? <ExpoImage key={i} source={{ uri: url }} style={{ width: half, height: half }} contentFit="cover" cachePolicy="disk" />
+                            : <View key={i} style={{ width: half, height: half, backgroundColor: isDark ? '#2e2018' : '#d4c4a8' }} />
+                        )}
+                      </View>
+                      <View style={s.playlistInfo}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>{pl.name}</Text>
+                          <View style={{ backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                            <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>OFFICIAL</Text>
+                          </View>
+                        </View>
+                        {pl.description ? <Text style={[s.playlistDesc, { color: colors.subtext }]} numberOfLines={2}>{pl.description}</Text> : null}
+                      </View>
+                      <Pressable onPress={() => handleUnlikeFeaturedPlaylist(pl.id)} hitSlop={12} style={{ padding: 4 }}>
+                        <FontAwesome name="heart" size={18} color="#D4A017" />
+                      </Pressable>
+                    </Pressable>
+                  );
+                })}
+                {likedPlaylists.map((playlist) => (
+                  <PlaylistCard
+                    key={playlist.id}
+                    playlist={playlist}
+                    albumMap={likedAlbumMap}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/playlist-detail',
+                        params: {
+                          id:     playlist.id,
+                          userId: likedPlaylistOwners.get(playlist.id) ?? '',
+                        },
+                      })
+                    }
+                    isDark={isDark}
+                    colors={colors}
+                    isLiked={true}
+                    onLike={() => handleUnlikeLikedPlaylist(playlist)}
+                  />
+                ))}
+              </>
             )}
           </ScrollView>
         )

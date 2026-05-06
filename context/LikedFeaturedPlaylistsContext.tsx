@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 export type LikedFeaturedPlaylist = {
   id: string;
@@ -17,7 +19,6 @@ type ContextType = {
 };
 
 const Ctx = createContext<ContextType | null>(null);
-const STORAGE_KEY = '@listend_liked_featured_playlists';
 
 export function LikedFeaturedPlaylistsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -25,24 +26,61 @@ export function LikedFeaturedPlaylistsProvider({ children }: { children: ReactNo
 
   useEffect(() => {
     if (!user) { setLikedPlaylists([]); return; }
-    AsyncStorage.getItem(`${STORAGE_KEY}:${user.id}`)
-      .then(raw => { if (raw) setLikedPlaylists(JSON.parse(raw)); })
+
+    supabase
+      .from('likes')
+      .select('target_id')
+      .eq('user_id', user.id)
+      .eq('target_type', 'featured_playlist')
+      .then(({ data: rows }) => {
+        if (!rows || rows.length === 0) { setLikedPlaylists([]); return; }
+        const ids = new Set(rows.map((r: any) => r.target_id));
+        fetch(`${API_URL}/api/featured-playlists`)
+          .then(r => r.json())
+          .then((all: LikedFeaturedPlaylist[]) => setLikedPlaylists(all.filter(p => ids.has(p.id))))
+          .catch(() => {});
+      })
       .catch(() => {});
   }, [user?.id]);
-
-  async function save(list: LikedFeaturedPlaylist[]) {
-    if (!user) return;
-    setLikedPlaylists(list);
-    await AsyncStorage.setItem(`${STORAGE_KEY}:${user.id}`, JSON.stringify(list));
-  }
 
   function isLiked(id: string) {
     return likedPlaylists.some(p => p.id === id);
   }
 
-  function toggleLike(playlist: LikedFeaturedPlaylist) {
+  async function toggleLike(playlist: LikedFeaturedPlaylist) {
+    if (!user) return;
     const already = isLiked(playlist.id);
-    save(already ? likedPlaylists.filter(p => p.id !== playlist.id) : [playlist, ...likedPlaylists]);
+
+    // Optimistic
+    setLikedPlaylists(prev =>
+      already ? prev.filter(p => p.id !== playlist.id) : [playlist, ...prev]
+    );
+
+    if (already) {
+      const { error } = await supabase
+        .from('likes')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('target_type', 'featured_playlist')
+        .eq('target_id', playlist.id);
+      if (error) {
+        console.error('[LikedFeaturedPlaylists] unlike error:', error.message);
+        setLikedPlaylists(prev => [playlist, ...prev]);
+      }
+    } else {
+      const { error } = await supabase
+        .from('likes')
+        .insert({
+          user_id:         user.id,
+          target_type:     'featured_playlist',
+          target_id:       playlist.id,
+          target_owner_id: user.id,
+        });
+      if (error) {
+        console.error('[LikedFeaturedPlaylists] like error:', error.message);
+        setLikedPlaylists(prev => prev.filter(p => p.id !== playlist.id));
+      }
+    }
   }
 
   return (
