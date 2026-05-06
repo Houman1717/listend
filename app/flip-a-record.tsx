@@ -528,7 +528,7 @@ export default function FlipARecordScreen() {
     navigation.setOptions({
       headerRight: history.length > 0
         ? () => (
-            <Pressable onPress={() => setHistoryModal(true)} style={{ marginRight: 16 }} hitSlop={12}>
+            <Pressable onPress={() => setHistoryModal(true)} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }} hitSlop={12}>
               <Ionicons name="time-outline" size={22} color="#D4A017" />
             </Pressable>
           )
@@ -841,12 +841,13 @@ export default function FlipARecordScreen() {
                 <Text style={[sf.statsLabel, { color: colors.subtext }]}>
                   {total} Albums
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={[sf.statsLabel, { color: colors.subtext }]}>
+                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipped}</Text>{' flipped  ·  '}
+                  </Text>
                   <FontAwesome name="headphones" size={13} color="#D4A017" />
                   <Text style={[sf.statsLabel, { color: colors.subtext }]}>
-                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipped}</Text> flipped
-                    {'  ·  '}
-                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text> listened
+                    {' '}<Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text>{' listened'}
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={colors.subtext} />
                 </View>

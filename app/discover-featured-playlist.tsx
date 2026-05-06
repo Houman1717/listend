@@ -56,7 +56,7 @@ export default function FeaturedPlaylistScreen() {
         options={{
           title: name ?? 'Playlist',
           headerRight: () => (
-            <TouchableOpacity onPress={handleHeart} hitSlop={12} style={{ marginRight: 4 }}>
+            <TouchableOpacity onPress={handleHeart} hitSlop={12} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
               <FontAwesome
                 name={liked ? 'heart' : 'heart-o'}
                 size={22}
@@ -71,19 +71,16 @@ export default function FeaturedPlaylistScreen() {
         contentContainerStyle={s.gridWrap}
         showsVerticalScrollIndicator={false}>
 
-        {/* Listened progress banner */}
+        {/* Listened stats — matches artist-detail style */}
         {!loading && albums.length > 0 && (
-          <View style={[s.banner, { backgroundColor: isDark ? '#1a110a' : '#f0e6d3' }]}>
-            <View style={s.bannerRow}>
-              <FontAwesome name="headphones" size={14} color="#D4A017" />
-              <Text style={s.bannerPct}>{listenedPct}%</Text>
-              <Text style={[s.bannerSub, { color: isDark ? '#a07850' : '#7a5535' }]}>
-                {loggedInPlaylist} of {albums.length} albums listened
-              </Text>
+          <View style={s.listenedWrap}>
+            <View style={s.listenedRow}>
+              <FontAwesome name="headphones" size={13} color="#D4A017" />
+              <Text style={s.listenedPct}>{listenedPct}%</Text>
             </View>
-            <View style={[s.track, { backgroundColor: isDark ? '#2e2018' : '#d4c4a8' }]}>
-              <View style={[s.fill, { width: `${Math.max(listenedPct, listenedPct > 0 ? 2 : 0)}%` as any }]} />
-            </View>
+            <Text style={[s.listenedSub, { color: isDark ? '#a07850' : '#7a5535' }]}>
+              {loggedInPlaylist} of {albums.length} albums listened
+            </Text>
           </View>
         )}
 
@@ -117,12 +114,10 @@ export default function FeaturedPlaylistScreen() {
 }
 
 const s = StyleSheet.create({
-  gridWrap:  { padding: PADDING, paddingBottom: 48 },
-  grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-  banner:    { borderRadius: 10, padding: 12, marginBottom: 16 },
-  bannerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  bannerPct: { color: '#D4A017', fontWeight: '700', fontSize: 15 },
-  bannerSub: { fontSize: 13 },
-  track:     { height: 4, borderRadius: 2, overflow: 'hidden' },
-  fill:      { height: 4, borderRadius: 2, backgroundColor: '#D4A017' },
+  gridWrap:    { padding: PADDING, paddingBottom: 48 },
+  grid:        { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  listenedWrap:{ alignItems: 'center', marginBottom: 16, gap: 4 },
+  listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  listenedPct: { color: '#D4A017', fontSize: 15, fontWeight: '700' },
+  listenedSub: { fontSize: 13 },
 });
