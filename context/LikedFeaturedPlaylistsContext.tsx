@@ -31,10 +31,11 @@ export function LikedFeaturedPlaylistsProvider({ children }: { children: ReactNo
       .from('likes')
       .select('target_id')
       .eq('user_id', user.id)
-      .eq('target_type', 'featured_playlist')
+      .eq('target_type', 'playlist')
+      .ilike('target_id', 'featured:%')
       .then(({ data: rows }) => {
         if (!rows || rows.length === 0) { setLikedPlaylists([]); return; }
-        const ids = new Set(rows.map((r: any) => r.target_id));
+        const ids = new Set(rows.map((r: any) => (r.target_id as string).replace('featured:', '')));
         fetch(`${API_URL}/api/featured-playlists`)
           .then(r => r.json())
           .then((all: LikedFeaturedPlaylist[]) => setLikedPlaylists(all.filter(p => ids.has(p.id))))
@@ -56,13 +57,15 @@ export function LikedFeaturedPlaylistsProvider({ children }: { children: ReactNo
       already ? prev.filter(p => p.id !== playlist.id) : [playlist, ...prev]
     );
 
+    const storedId = `featured:${playlist.id}`;
+
     if (already) {
       const { error } = await supabase
         .from('likes')
         .delete()
         .eq('user_id', user.id)
-        .eq('target_type', 'featured_playlist')
-        .eq('target_id', playlist.id);
+        .eq('target_type', 'playlist')
+        .eq('target_id', storedId);
       if (error) {
         console.error('[LikedFeaturedPlaylists] unlike error:', error.message);
         setLikedPlaylists(prev => [playlist, ...prev]);
@@ -72,8 +75,8 @@ export function LikedFeaturedPlaylistsProvider({ children }: { children: ReactNo
         .from('likes')
         .insert({
           user_id:         user.id,
-          target_type:     'featured_playlist',
-          target_id:       playlist.id,
+          target_type:     'playlist',
+          target_id:       storedId,
           target_owner_id: user.id,
         });
       if (error) {

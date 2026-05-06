@@ -335,24 +335,6 @@ export default function MyPlaylistsScreen() {
     setLikedLoading(true);
 
     (async () => {
-      // Featured playlist likes — fetched in parallel
-      const { data: featuredRows } = await supabase
-        .from('likes')
-        .select('target_id')
-        .eq('user_id', user.id)
-        .eq('target_type', 'featured_playlist');
-
-      if (featuredRows && featuredRows.length > 0) {
-        const ids = new Set(featuredRows.map((r: any) => r.target_id));
-        try {
-          const resp = await fetch(`${API_URL}/api/featured-playlists`);
-          const all: any[] = await resp.json();
-          setLikedFeaturedPlaylists(all.filter(p => ids.has(p.id)));
-        } catch {}
-      } else {
-        setLikedFeaturedPlaylists([]);
-      }
-
       // 1. Get liked playlist IDs + their owners from likes table
       const { data: likedRows } = await supabase
         .from('likes')
@@ -360,13 +342,31 @@ export default function MyPlaylistsScreen() {
         .eq('user_id', user.id)
         .eq('target_type', 'playlist');
 
-      if (!likedRows || likedRows.length === 0) {
+      // Split featured (target_id starts with 'featured:') from user playlists
+      const featuredLikedIds = (likedRows ?? [])
+        .filter((r: any) => (r.target_id as string).startsWith('featured:'))
+        .map((r: any) => (r.target_id as string).replace('featured:', ''));
+
+      if (featuredLikedIds.length > 0) {
+        try {
+          const resp = await fetch(`${API_URL}/api/featured-playlists`);
+          const all: any[] = await resp.json();
+          setLikedFeaturedPlaylists(all.filter(p => featuredLikedIds.includes(p.id)));
+        } catch { setLikedFeaturedPlaylists([]); }
+      } else {
+        setLikedFeaturedPlaylists([]);
+      }
+
+      // Filter to only real user playlist IDs (not featured ones)
+      const userLikedRows = (likedRows ?? []).filter((r: any) => !(r.target_id as string).startsWith('featured:'));
+
+      if (userLikedRows.length === 0) {
         setLikedPlaylists([]);
         setLikedLoading(false);
         return;
       }
 
-      const playlistIds = likedRows.map((r: any) => r.target_id);
+      const playlistIds = userLikedRows.map((r: any) => r.target_id);
 
       // 2. Fetch the actual playlists
       const { data: pls } = await supabase
@@ -484,8 +484,8 @@ export default function MyPlaylistsScreen() {
       .from('likes')
       .delete()
       .eq('user_id', user.id)
-      .eq('target_type', 'featured_playlist')
-      .eq('target_id', id);
+      .eq('target_type', 'playlist')
+      .eq('target_id', `featured:${id}`);
   }
 
   // ── Unlike a playlist from the liked tab (removes it from the list) ───────
