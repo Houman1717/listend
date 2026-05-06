@@ -30,15 +30,47 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 // ─── Placeholder friends ──────────────────────────────────────────────────────
 
 const PLACEHOLDER_FRIENDS = [
-  { id: '1', user: 'alex_m',  album: 'After Hours',            artist: 'The Weeknd',     year: '2020', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/500x500bb.jpg' },
-  { id: '2', user: 'sara_k',  album: 'folklore',               artist: 'Taylor Swift',   year: '2020', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/80/dc/b580dca0-349d-036b-e09b-bd849f6affd8/20UMGIM64216.rgb.jpg/500x500bb.jpg' },
-  { id: '3', user: 'jvines',  album: 'DAMN.',                  artist: 'Kendrick Lamar', year: '2017', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/86/c9/bb/86c9bb30-fe3d-442e-33c1-c106c4d23705/17UMGIM88776.rgb.jpg/500x500bb.jpg' },
-  { id: '4', user: 'priya_r', album: 'SOS',                    artist: 'SZA',            year: '2022', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/3b/a9/bd3ba9fb-9609-144f-bcfe-ead67b5f6ab3/196589564931.jpg/500x500bb.jpg' },
-  { id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk',      year: '2013', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/500x500bb.jpg' },
-  { id: '6', user: 'nadia_w', album: 'Currents',               artist: 'Tame Impala',    year: '2015', artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/500x500bb.jpg' },
+  {
+    id: '1', user: 'alex_m', album: 'After Hours', artist: 'The Weeknd', year: '2020',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/500x500bb.jpg',
+    rating: 9, loggedDate: 'May 4, 2025',
+    review: 'Blinding Lights alone makes this a classic, but the whole album is a cinematic fever dream. The production is immaculate — every synth line feels intentional. Abel at his darkest and most theatrical.',
+  },
+  {
+    id: '2', user: 'sara_k', album: 'folklore', artist: 'Taylor Swift', year: '2020',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/80/dc/b580dca0-349d-036b-e09b-bd849f6affd8/20UMGIM64216.rgb.jpg/500x500bb.jpg',
+    rating: 10, loggedDate: 'May 4, 2025',
+    review: 'This album made me feel things I didn\'t know I needed to feel. The cottagecore aesthetic works perfectly with the stripped-back production. "august" is a masterpiece.',
+  },
+  {
+    id: '3', user: 'jvines', album: 'DAMN.', artist: 'Kendrick Lamar', year: '2017',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/86/c9/bb/86c9bb30-fe3d-442e-33c1-c106c4d23705/17UMGIM88776.rgb.jpg/500x500bb.jpg',
+    rating: 10, loggedDate: 'May 3, 2025',
+    review: null,
+  },
+  {
+    id: '4', user: 'priya_r', album: 'SOS', artist: 'SZA', year: '2022',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/3b/a9/bd3ba9fb-9609-144f-bcfe-ead67b5f6ab3/196589564931.jpg/500x500bb.jpg',
+    rating: 8, loggedDate: 'May 3, 2025',
+    review: 'Long but never boring. SZA somehow makes 23 tracks feel cohesive. Her voice is doing everything.',
+  },
+  {
+    id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk', year: '2013',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/500x500bb.jpg',
+    rating: null, loggedDate: 'May 2, 2025',
+    review: null,
+  },
+  {
+    id: '6', user: 'nadia_w', album: 'Currents', artist: 'Tame Impala', year: '2015',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/500x500bb.jpg',
+    rating: 9, loggedDate: 'May 2, 2025',
+    review: 'Kevin Parker locked himself in a studio and came out with the most immersive headphone album of the decade. "Eventually" breaks my heart every single time.',
+  },
 ];
 
 const AGO = ['2m ago', '14m ago', '1h ago', '2h ago', '3h ago', '5h ago'];
+
+type FriendEntry = typeof PLACEHOLDER_FRIENDS[number];
 
 // ─── Module-level cache — persists across navigations ─────────────────────────
 
@@ -487,7 +519,7 @@ function FriendCard({
   colors,
   onPress,
 }: {
-  friend: typeof PLACEHOLDER_FRIENDS[number];
+  friend: FriendEntry;
   ago: string;
   isDark: boolean;
   colors: any;
@@ -514,8 +546,104 @@ function FriendCard({
       <Text style={[s.friendUser, { color: '#D4A017' }]} numberOfLines={1}>@{friend.user}</Text>
       <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{friend.album}</Text>
       <Text style={[s.cardSub,    { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{friend.artist}</Text>
-      <Text style={[s.friendAgo,  { color: colors.subtext }]}>{ago}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+        <Text style={[s.friendAgo, { color: colors.subtext }]}>{ago}</Text>
+        {friend.rating != null && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <FontAwesome name="volume-up" size={9} color="#D4A017" />
+            <View style={s.friendRatingBadge}>
+              <Text style={s.friendRatingNum}>{friend.rating}</Text>
+            </View>
+          </View>
+        )}
+      </View>
+      {friend.review ? (
+        <Text style={[s.friendReviewSnippet, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={2}>
+          "{friend.review}"
+        </Text>
+      ) : null}
     </Pressable>
+  );
+}
+
+// ─── Friend review modal ───────────────────────────────────────────────────────
+
+function FriendReviewModal({
+  friend,
+  isDark,
+  onClose,
+  onAlbumPress,
+}: {
+  friend: FriendEntry;
+  isDark: boolean;
+  onClose: () => void;
+  onAlbumPress: () => void;
+}) {
+  const bg     = isDark ? '#0F0A07' : '#FAF7F2';
+  const border = isDark ? '#2a1e14' : '#E8E0D4';
+  const text   = isDark ? '#f5e6c8' : '#1A0F0A';
+  const sub    = isDark ? '#A08060' : '#6B4C35';
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
+        {/* Header */}
+        <View style={[frm.header, { borderBottomColor: border }]}>
+          <Pressable onPress={onClose} hitSlop={12}>
+            <FontAwesome name="chevron-down" size={16} color={sub} />
+          </Pressable>
+          <Text style={[frm.headerTitle, { color: text }]}>Listen</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={frm.body} showsVerticalScrollIndicator={false}>
+          {/* Album row */}
+          <Pressable
+            onPress={onAlbumPress}
+            style={({ pressed }) => [frm.albumRow, { opacity: pressed ? 0.7 : 1 }]}>
+            <ExpoImage source={{ uri: friend.artworkUrl }} style={frm.art} contentFit="cover" cachePolicy="disk" />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[frm.albumTitle, { color: text }]} numberOfLines={2}>{friend.album}</Text>
+              <Text style={[frm.albumArtist, { color: sub }]}>{friend.artist} · {friend.year}</Text>
+              {friend.rating != null && (
+                <View style={frm.ratingRow}>
+                  <FontAwesome name="volume-up" size={10} color="#D4A017" />
+                  <View style={frm.ratingBadge}>
+                    <Text style={frm.ratingNum}>{friend.rating}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </Pressable>
+
+          {/* Who + when */}
+          <View style={[frm.metaRow, { borderColor: border }]}>
+            <View style={[frm.avatar, { backgroundColor: avatarColor(friend.user) }]}>
+              <Text style={frm.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+            </View>
+            <View style={{ gap: 2 }}>
+              <Text style={[frm.username, { color: '#D4A017' }]}>@{friend.user}</Text>
+              <Text style={[frm.date, { color: sub }]}>Logged {friend.loggedDate}</Text>
+            </View>
+          </View>
+
+          {/* Review */}
+          {friend.review ? (
+            <Text style={[frm.reviewText, { color: sub }]}>"{friend.review}"</Text>
+          ) : (
+            <Text style={[frm.noReview, { color: isDark ? '#4a3020' : '#C8B89A' }]}>No written review.</Text>
+          )}
+
+          {/* View album button */}
+          <Pressable
+            onPress={onAlbumPress}
+            style={({ pressed }) => [frm.viewAlbumBtn, { opacity: pressed ? 0.75 : 1 }]}>
+            <Text style={frm.viewAlbumText}>View Album</Text>
+            <FontAwesome name="chevron-right" size={12} color="#0F0A07" />
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
   );
 }
 
@@ -537,6 +665,9 @@ export default function HomeScreen() {
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
 
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
+
+  // Friend review modal state
+  const [expandedFriend, setExpandedFriend] = useState<FriendEntry | null>(null);
 
   // Comments state for popular reviews
   const [expandedReview,     setExpandedReview]     = useState<PopularReview | null>(null);
@@ -670,7 +801,7 @@ export default function HomeScreen() {
               ago={AGO[index] ?? ''}
               isDark={isDark}
               colors={colors}
-              onPress={() => navigateToAlbum(item.album, item.artist, item.artworkUrl, item.year)}
+              onPress={() => setExpandedFriend(item)}
             />
           )}
         />
@@ -716,6 +847,19 @@ export default function HomeScreen() {
           }
         />
       </Section>
+
+      {/* Friend review modal */}
+      {expandedFriend && (
+        <FriendReviewModal
+          friend={expandedFriend}
+          isDark={isDark}
+          onClose={() => setExpandedFriend(null)}
+          onAlbumPress={() => {
+            setExpandedFriend(null);
+            navigateToAlbum(expandedFriend.album, expandedFriend.artist, expandedFriend.artworkUrl, expandedFriend.year);
+          }}
+        />
+      )}
 
       {/* Song info modal */}
       <SongInfoModal
@@ -821,8 +965,11 @@ const s = StyleSheet.create({
     padding: 12,
     gap: 5,
   },
-  friendUser: { fontSize: 11, fontWeight: '600', marginTop: 4 },
-  friendAgo:  { fontSize: 10, marginTop: 2 },
+  friendUser:          { fontSize: 11, fontWeight: '600', marginTop: 4 },
+  friendAgo:           { fontSize: 10 },
+  friendRatingBadge:   { backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  friendRatingNum:     { color: '#fff', fontSize: 10, fontWeight: '700' },
+  friendReviewSnippet: { fontSize: 11, lineHeight: 15, fontStyle: 'italic', marginTop: 2 },
 });
 
 // ─── Popular review card styles ───────────────────────────────────────────────
@@ -966,4 +1113,28 @@ const rm = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   commentsToggleText: { fontSize: 13, fontWeight: '600', flex: 1 },
+});
+
+// ─── Friend review modal styles ───────────────────────────────────────────────
+
+const frm = StyleSheet.create({
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTitle: { fontSize: 16, fontWeight: '700' },
+  body:        { padding: 20, gap: 20, paddingBottom: 48 },
+  albumRow:    { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
+  art:         { width: 80, height: 80, borderRadius: 8 },
+  albumTitle:  { fontSize: 16, fontWeight: '700', lineHeight: 22 },
+  albumArtist: { fontSize: 13 },
+  ratingRow:   { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  ratingBadge: { backgroundColor: '#D4A017', borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2 },
+  ratingNum:   { color: '#fff', fontSize: 12, fontWeight: '700' },
+  metaRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
+  avatar:      { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  avatarLetter:{ color: '#fff', fontSize: 15, fontWeight: '700' },
+  username:    { fontSize: 14, fontWeight: '600' },
+  date:        { fontSize: 12 },
+  reviewText:  { fontSize: 14, lineHeight: 22, fontStyle: 'italic' },
+  noReview:    { fontSize: 13, fontStyle: 'italic' },
+  viewAlbumBtn:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#D4A017', borderRadius: 12, paddingVertical: 13 },
+  viewAlbumText:{ color: '#0F0A07', fontSize: 14, fontWeight: '700' },
 });
