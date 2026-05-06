@@ -33,37 +33,37 @@ const PLACEHOLDER_FRIENDS = [
   {
     id: '1', user: 'alex_m', album: 'After Hours', artist: 'The Weeknd', year: '2020',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/500x500bb.jpg',
-    rating: 9, loggedDate: 'May 4, 2025',
+    rating: 9, likeCount: 14, loggedDate: 'May 4, 2025',
     review: 'Blinding Lights alone makes this a classic, but the whole album is a cinematic fever dream. The production is immaculate — every synth line feels intentional. Abel at his darkest and most theatrical.',
   },
   {
     id: '2', user: 'sara_k', album: 'folklore', artist: 'Taylor Swift', year: '2020',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/80/dc/b580dca0-349d-036b-e09b-bd849f6affd8/20UMGIM64216.rgb.jpg/500x500bb.jpg',
-    rating: 10, loggedDate: 'May 4, 2025',
+    rating: 10, likeCount: 31, loggedDate: 'May 4, 2025',
     review: 'This album made me feel things I didn\'t know I needed to feel. The cottagecore aesthetic works perfectly with the stripped-back production. "august" is a masterpiece.',
   },
   {
     id: '3', user: 'jvines', album: 'DAMN.', artist: 'Kendrick Lamar', year: '2017',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/86/c9/bb/86c9bb30-fe3d-442e-33c1-c106c4d23705/17UMGIM88776.rgb.jpg/500x500bb.jpg',
-    rating: 10, loggedDate: 'May 3, 2025',
+    rating: 10, likeCount: 47, loggedDate: 'May 3, 2025',
     review: null,
   },
   {
     id: '4', user: 'priya_r', album: 'SOS', artist: 'SZA', year: '2022',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/3b/a9/bd3ba9fb-9609-144f-bcfe-ead67b5f6ab3/196589564931.jpg/500x500bb.jpg',
-    rating: 8, loggedDate: 'May 3, 2025',
+    rating: 8, likeCount: 9, loggedDate: 'May 3, 2025',
     review: 'Long but never boring. SZA somehow makes 23 tracks feel cohesive. Her voice is doing everything.',
   },
   {
     id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk', year: '2013',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/500x500bb.jpg',
-    rating: null, loggedDate: 'May 2, 2025',
+    rating: null, likeCount: 5, loggedDate: 'May 2, 2025',
     review: null,
   },
   {
     id: '6', user: 'nadia_w', album: 'Currents', artist: 'Tame Impala', year: '2015',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/500x500bb.jpg',
-    rating: 9, loggedDate: 'May 2, 2025',
+    rating: 9, likeCount: 22, loggedDate: 'May 2, 2025',
     review: 'Kevin Parker locked himself in a studio and came out with the most immersive headphone album of the decade. "Eventually" breaks my heart every single time.',
   },
 ];
@@ -71,6 +71,19 @@ const PLACEHOLDER_FRIENDS = [
 const AGO = ['2m ago', '14m ago', '1h ago', '2h ago', '3h ago', '5h ago'];
 
 type FriendEntry = typeof PLACEHOLDER_FRIENDS[number];
+
+const FRIEND_COMMENTS: ReviewComment[] = [
+  { id: 'fc1',  reviewId: '1', userId: 'u1', username: 'vinyl_ghost',   body: 'Save Your Tears (Remix) was everywhere but the OG hits different.',       createdAt: '1h ago'    },
+  { id: 'fc2',  reviewId: '1', userId: 'u2', username: 'deepcut_dave',  body: 'Faith as the closer is genuinely haunting. Great listen.',                 createdAt: '30m ago'   },
+  { id: 'fc3',  reviewId: '2', userId: 'u3', username: 'tape_hiss',     body: 'seven is so underrated on this album. Perfect little track.',              createdAt: '2h ago'    },
+  { id: 'fc4',  reviewId: '2', parentCommentId: 'fc3', userId: 'u4', username: 'sara_k', body: 'Agreed! It feels like a secret you weren\'t supposed to hear.', createdAt: '1h ago' },
+  { id: 'fc5',  reviewId: '3', userId: 'u5', username: 'freq_check',    body: 'DUCKWORTH closing this out is one of the greatest album endings ever.',    createdAt: '3h ago'    },
+  { id: 'fc6',  reviewId: '3', userId: 'u6', username: 'bass_drop_bb',  body: 'Humble is peak but XXX is the real highlight for me.',                     createdAt: '2h ago'    },
+  { id: 'fc7',  reviewId: '4', userId: 'u7', username: 'moonrise_mix',  body: 'Kill Bill is a top 5 song of the decade no debate.',                       createdAt: '4h ago'    },
+  { id: 'fc8',  reviewId: '5', userId: 'u8', username: 'analog_kid',    body: 'Giorgio by Moroder is 9 minutes of absolute perfection.',                  createdAt: '5h ago'    },
+  { id: 'fc9',  reviewId: '5', parentCommentId: 'fc8', userId: 'u9', username: 'tomfitz', body: 'Giorgio knew what he was doing — legend.',              createdAt: '4h ago'    },
+  { id: 'fc10', reviewId: '6', userId: 'u10', username: 'lo_freq',      body: 'The Less I Know The Better never gets old. True indie-pop masterpiece.',   createdAt: '6h ago'    },
+];
 
 // ─── Module-level cache — persists across navigations ─────────────────────────
 
@@ -570,79 +583,158 @@ function FriendCard({
 
 function FriendReviewModal({
   friend,
+  comments,
   isDark,
+  colors,
   onClose,
   onAlbumPress,
 }: {
   friend: FriendEntry;
+  comments: ReviewComment[];
   isDark: boolean;
+  colors: any;
   onClose: () => void;
   onAlbumPress: () => void;
 }) {
-  const bg     = isDark ? '#0F0A07' : '#FAF7F2';
-  const border = isDark ? '#2a1e14' : '#E8E0D4';
-  const text   = isDark ? '#f5e6c8' : '#1A0F0A';
-  const sub    = isDark ? '#A08060' : '#6B4C35';
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(friend.likeCount);
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
+  const [localComments, setLocalComments] = useState<ReviewComment[]>(comments);
+
+  const bg     = isDark ? colors.background : colors.background;
+  const border = isDark ? '#2a1e14' : '#e5e5e5';
+
+  function handleLike() {
+    setLiked(prev => !prev);
+    setLikeCount(prev => liked ? prev - 1 : prev + 1);
+  }
+
+  function handleAddComment(body: string, parentId?: string | null) {
+    const newComment: ReviewComment = {
+      id:              `fc_new_${Date.now()}`,
+      reviewId:        friend.id,
+      userId:          'me',
+      username:        'you',
+      body,
+      parentCommentId: parentId ?? undefined,
+      createdAt:       'just now',
+    };
+    setLocalComments(prev => [...prev, newComment]);
+  }
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
-        {/* Header */}
-        <View style={[frm.header, { borderBottomColor: border }]}>
-          <Pressable onPress={onClose} hitSlop={12}>
-            <FontAwesome name="chevron-down" size={16} color={sub} />
-          </Pressable>
-          <Text style={[frm.headerTitle, { color: text }]}>Listen</Text>
-          <View style={{ width: 24 }} />
-        </View>
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: bg }}>
+        <SafeAreaView style={{ flex: 1 }}>
 
-        <ScrollView contentContainerStyle={frm.body} showsVerticalScrollIndicator={false}>
-          {/* Album row */}
-          <Pressable
-            onPress={onAlbumPress}
-            style={({ pressed }) => [frm.albumRow, { opacity: pressed ? 0.7 : 1 }]}>
-            <ExpoImage source={{ uri: friend.artworkUrl }} style={frm.art} contentFit="cover" cachePolicy="disk" />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={[frm.albumTitle, { color: text }]} numberOfLines={2}>{friend.album}</Text>
-              <Text style={[frm.albumArtist, { color: sub }]}>{friend.artist} · {friend.year}</Text>
-              {friend.rating != null && (
-                <View style={frm.ratingRow}>
-                  <FontAwesome name="volume-up" size={10} color="#D4A017" />
-                  <View style={frm.ratingBadge}>
-                    <Text style={frm.ratingNum}>{friend.rating}</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          </Pressable>
-
-          {/* Who + when */}
-          <View style={[frm.metaRow, { borderColor: border }]}>
-            <View style={[frm.avatar, { backgroundColor: avatarColor(friend.user) }]}>
-              <Text style={frm.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
-            </View>
-            <View style={{ gap: 2 }}>
-              <Text style={[frm.username, { color: '#D4A017' }]}>@{friend.user}</Text>
-              <Text style={[frm.date, { color: sub }]}>Logged {friend.loggedDate}</Text>
-            </View>
+          {/* Header */}
+          <View style={[rm.header, { borderBottomColor: border }]}>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
+            </Pressable>
+            <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Listen</Text>
+            <View style={{ width: 24 }} />
           </View>
 
-          {/* Review */}
-          {friend.review ? (
-            <Text style={[frm.reviewText, { color: sub }]}>"{friend.review}"</Text>
-          ) : (
-            <Text style={[frm.noReview, { color: isDark ? '#4a3020' : '#C8B89A' }]}>No written review.</Text>
-          )}
+          <ScrollView
+            contentContainerStyle={[rm.body, { paddingBottom: 40 }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
 
-          {/* View album button */}
-          <Pressable
-            onPress={onAlbumPress}
-            style={({ pressed }) => [frm.viewAlbumBtn, { opacity: pressed ? 0.75 : 1 }]}>
-            <Text style={frm.viewAlbumText}>View Album</Text>
-            <FontAwesome name="chevron-right" size={12} color="#0F0A07" />
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+            {/* Album row — tappable */}
+            <Pressable
+              onPress={onAlbumPress}
+              style={({ pressed }) => [rm.albumRow, { opacity: pressed ? 0.7 : 1 }]}>
+              <ExpoImage source={{ uri: friend.artworkUrl }} style={rm.art} contentFit="cover" cachePolicy="disk" />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={[rm.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>{friend.album}</Text>
+                <Text style={[rm.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                  {friend.artist} · {friend.year}
+                </Text>
+                {friend.rating != null && (
+                  <View style={rm.ratingRow}>
+                    <FontAwesome name="volume-up" size={10} color="#D4A017" />
+                    <View style={rm.ratingBadge}>
+                      <Text style={rm.ratingNum}>{friend.rating}</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+
+            {/* Author + date */}
+            <View style={rm.authorRow}>
+              <View style={[rm.avatar, { backgroundColor: avatarColor(friend.user) }]}>
+                <Text style={rm.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+              </View>
+              <View style={{ gap: 1 }}>
+                <Text style={rm.username}>@{friend.user}</Text>
+                <Text style={[rm.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                  Listend {friend.loggedDate}
+                </Text>
+              </View>
+            </View>
+
+            {/* Review text */}
+            {friend.review ? (
+              <Text style={[rm.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                "{friend.review}"
+              </Text>
+            ) : (
+              <Text style={[rm.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
+                No written review.
+              </Text>
+            )}
+
+            {/* Like + comment toggle row */}
+            <View style={[frm.likeCommentRow, { borderColor: border }]}>
+              <Pressable onPress={handleLike} hitSlop={8} style={frm.likeBtn}>
+                <FontAwesome
+                  name={liked ? 'heart' : 'heart-o'}
+                  size={15}
+                  color={liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35')}
+                />
+                <Text style={[frm.likeCount, { color: liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35') }]}>
+                  {likeCount}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setCommentsExpanded(prev => !prev)}
+                hitSlop={8}
+                style={[rm.commentsToggle, { borderColor: border, flex: 1, marginBottom: 0 }]}>
+                <FontAwesome
+                  name="comment-o"
+                  size={13}
+                  color={commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060')}
+                />
+                <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060') }]}>
+                  {localComments.length === 0
+                    ? 'No comments yet'
+                    : `${localComments.length} comment${localComments.length !== 1 ? 's' : ''}`}
+                </Text>
+                <FontAwesome
+                  name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={10}
+                  color={isDark ? '#6B4C35' : '#A08060'}
+                  style={{ marginLeft: 'auto' }}
+                />
+              </Pressable>
+            </View>
+
+            {commentsExpanded && (
+              <CommentsSection
+                comments={localComments}
+                isDark={isDark}
+                colors={colors}
+                onAddComment={handleAddComment}
+              />
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -852,7 +944,9 @@ export default function HomeScreen() {
       {expandedFriend && (
         <FriendReviewModal
           friend={expandedFriend}
+          comments={FRIEND_COMMENTS.filter(c => c.reviewId === expandedFriend.id)}
           isDark={isDark}
+          colors={colors}
           onClose={() => setExpandedFriend(null)}
           onAlbumPress={() => {
             setExpandedFriend(null);
@@ -1099,7 +1193,8 @@ const rm = StyleSheet.create({
     alignItems: 'center',
   },
   avatarLetter: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  username: { color: '#D4A017', fontSize: 13, fontWeight: '600' },
+  username:     { color: '#D4A017', fontSize: 13, fontWeight: '600' },
+  listenedDate: { fontSize: 11 },
 
   reviewText: { fontSize: 14, lineHeight: 22, fontStyle: 'italic' },
 
@@ -1118,23 +1213,7 @@ const rm = StyleSheet.create({
 // ─── Friend review modal styles ───────────────────────────────────────────────
 
 const frm = StyleSheet.create({
-  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 16, fontWeight: '700' },
-  body:        { padding: 20, gap: 20, paddingBottom: 48 },
-  albumRow:    { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
-  art:         { width: 80, height: 80, borderRadius: 8 },
-  albumTitle:  { fontSize: 16, fontWeight: '700', lineHeight: 22 },
-  albumArtist: { fontSize: 13 },
-  ratingRow:   { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  ratingBadge: { backgroundColor: '#D4A017', borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2 },
-  ratingNum:   { color: '#fff', fontSize: 12, fontWeight: '700' },
-  metaRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
-  avatar:      { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  avatarLetter:{ color: '#fff', fontSize: 15, fontWeight: '700' },
-  username:    { fontSize: 14, fontWeight: '600' },
-  date:        { fontSize: 12 },
-  reviewText:  { fontSize: 14, lineHeight: 22, fontStyle: 'italic' },
-  noReview:    { fontSize: 13, fontStyle: 'italic' },
-  viewAlbumBtn:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#D4A017', borderRadius: 12, paddingVertical: 13 },
-  viewAlbumText:{ color: '#0F0A07', fontSize: 14, fontWeight: '700' },
+  likeCommentRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  likeBtn:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 10, paddingHorizontal: 4 },
+  likeCount:      { fontSize: 13, fontWeight: '600' },
 });
