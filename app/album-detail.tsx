@@ -13,6 +13,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -151,26 +152,45 @@ const RATING_LABELS: Record<number, string> = {
 const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
 
 function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
-  const barsWidth = useRef(0);
-  const activeColor = '#D4A017';
+  const [trackWidth, setTrackWidth] = useState(0);
+  const activeColor   = '#D4A017';
   const inactiveColor = isDark ? '#2a1e14' : '#e0e0e0';
-  function ratingFromX(x: number) {
-    return Math.max(1, Math.min(10, Math.ceil((x / barsWidth.current) * 10)));
-  }
+
+  const tap = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd(e => {
+      const val = Math.ceil((e.x / trackWidth) * 10);
+      onChange(Math.max(1, Math.min(10, val)));
+    });
+
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .onUpdate(e => {
+      const val = Math.ceil((e.x / trackWidth) * 10);
+      onChange(Math.max(1, Math.min(10, val)));
+    });
+
+  const gesture = Gesture.Simultaneous(tap, pan);
+
   return (
     <View style={s.ratingContainer}>
       <View style={s.ratingRow}>
         <FontAwesome name="volume-up" size={22} color={rating > 0 ? activeColor : inactiveColor} />
-        <View
-          style={s.barsTrack}
-          onLayout={e => { barsWidth.current = e.nativeEvent.layout.width; }}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderGrant={e => onChange(ratingFromX(e.nativeEvent.locationX))}
-          onResponderMove={e => onChange(ratingFromX(e.nativeEvent.locationX))}>
-          {BAR_HEIGHTS.map((h, i) => (
-            <View key={i} style={[s.bar, { height: h, backgroundColor: i + 1 <= rating ? activeColor : inactiveColor }]} />
-          ))}
+        <View style={{ flex: 1 }} onLayout={e => setTrackWidth(e.nativeEvent.layout.width)}>
+          {trackWidth > 0 && (
+            <GestureDetector gesture={gesture}>
+              <View style={s.barsTrack}>
+                {BAR_HEIGHTS.map((h, i) => (
+                  <View key={i} style={[s.bar, { height: h, backgroundColor: i + 1 <= rating ? activeColor : inactiveColor }]} />
+                ))}
+              </View>
+            </GestureDetector>
+          )}
+        </View>
+        <View style={s.ratingNumBox}>
+          <Text style={[s.ratingNumLarge, { color: rating > 0 ? activeColor : inactiveColor }]}>
+            {rating > 0 ? rating : '–'}
+          </Text>
         </View>
       </View>
       <Text style={[s.ratingHint, { color: isDark ? '#a07850' : '#a07850' }]}>
@@ -1505,9 +1525,11 @@ const s = StyleSheet.create({
   // Rating picker
   ratingContainer: { width: '100%', marginTop: 10 },
   ratingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
-  barsTrack: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4, paddingBottom: 2 },
+  barsTrack: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, paddingBottom: 2, height: 44 },
   bar: { flex: 1, borderRadius: 2 },
   ratingHint: { marginTop: 10, fontSize: 13, textAlign: 'center', height: 18 },
+  ratingNumBox: { width: 30, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 },
+  ratingNumLarge: { fontSize: 20, fontWeight: '700' },
 
   // Review input
   reviewInput: { width: '100%', minHeight: 90, marginTop: 10, borderRadius: 10, borderWidth: 1, padding: 12, fontSize: 15, lineHeight: 22 },

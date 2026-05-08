@@ -1508,10 +1508,16 @@ app.get('/spotify/artist/:id/albums', [
     const COLLECTION_RE = /\b(greatest\s+hits?|highlights?|collection|deluxe)\b|best\s+of\b/i;
     const EP_MIX_RE     = /\b(ep|mixtape|acoustic|acapella|a\s+cappella|remixes?|instrumental|karaoke)\b/i;
 
+    // Titles that match LIVE_RE by accident (word is part of the title, not a descriptor)
+    const LIVE_FALSE_POSITIVES = [
+      'live.love.a$ap',
+    ];
+    const isLiveFalsePositive = title => LIVE_FALSE_POSITIVES.some(t => title.toLowerCase().includes(t));
+
     // Returns which tab bucket an item belongs to
     const categorize = item => {
       const t = item.title;
-      if (LIVE_RE.test(t)) return 'live';
+      if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
       if (inAllowlist(t)) return 'epsAndMixtapes';
       if (item.isCompilation === true || COLLECTION_RE.test(t)) return 'collections';
       if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
