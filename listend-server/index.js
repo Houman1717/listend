@@ -1511,6 +1511,7 @@ app.get('/spotify/artist/:id/albums', [
     // Titles that match LIVE_RE by accident (word is part of the title, not a descriptor)
     const LIVE_FALSE_POSITIVES = [
       'live.love.a$ap',
+      'long.live.a$ap',
     ];
     const isLiveFalsePositive = title => LIVE_FALSE_POSITIVES.some(t => title.toLowerCase().includes(t));
 
