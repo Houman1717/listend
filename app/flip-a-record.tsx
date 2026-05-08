@@ -213,7 +213,7 @@ function PoolRow({
   item: FlipAlbum;
   status: FlipStatus | null;
   borderCol: string;
-  colors: (typeof Colors)['dark'];
+  colors: (typeof Colors)['light'] | (typeof Colors)['dark'];
   onPress: () => void;
 }) {
   const [artworkUrl, setArtworkUrl] = useState(poolCache[item.id] ?? '');
