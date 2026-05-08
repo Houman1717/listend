@@ -332,13 +332,13 @@ function TurntableIcon() {
 // ─── Flip entry card ─────────────────────────────────────────────────────────
 
 function FlipEntryCard({ onPress, isDark }: { onPress: () => void; isDark: boolean }) {
+  const cardBg    = isDark ? '#2E2018'           : '#EDE4D4';
+  const titleCol  = isDark ? '#f5e6c8'           : '#1A0F0A';
+  const subtitleCol = isDark ? 'rgba(245,230,200,0.55)' : 'rgba(26,15,10,0.55)';
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [se.card, {
-        backgroundColor: isDark ? '#2E2018' : 'rgba(74,48,32,0.88)',
-        opacity: pressed ? 0.88 : 1,
-      }]}>
+      style={({ pressed }) => [se.card, { backgroundColor: cardBg, opacity: pressed ? 0.88 : 1 }]}>
 
       <View style={se.accentBar} />
 
@@ -352,8 +352,8 @@ function FlipEntryCard({ onPress, isDark }: { onPress: () => void; isDark: boole
       </View>
 
       <View style={se.textBlock}>
-        <Text style={se.title}>Flip a Record</Text>
-        <Text style={se.subtitle}>Discover a random album from the 1001 list</Text>
+        <Text style={[se.title, { color: titleCol }]}>Flip a Record</Text>
+        <Text style={[se.subtitle, { color: subtitleCol }]}>Discover a random album from the 1001 list</Text>
       </View>
 
       <View style={se.bottomRow}>
