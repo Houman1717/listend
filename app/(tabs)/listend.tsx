@@ -10,7 +10,9 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useState, useEffect, useCallback } from 'react';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, SharedValue } from 'react-native-reanimated';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -460,6 +462,183 @@ function FavSlot({
   );
 }
 
+// ─── Draggable Top-5 row ─────────────────────────────────────────────────────
+
+type FavItem = { artworkUrl?: string; title: string } | null;
+
+// Per-slot component so useAnimatedStyle is called at the top level of a component (not inside .map())
+function DraggableSlot({
+  index,
+  item,
+  editMode,
+  circular,
+  draggingIdx,
+  hoverIdx,
+  dragX,
+  dragY,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onSlotPress,
+  onRemove,
+}: {
+  index: number;
+  item: FavItem;
+  editMode: boolean;
+  circular: boolean;
+  draggingIdx: number;   // -1 = none
+  hoverIdx: number;
+  dragX: SharedValue<number>;
+  dragY: SharedValue<number>;
+  onDragStart: (idx: number) => void;
+  onDragMove:  (x: number)   => void;
+  onDragEnd:   (x: number)   => void;
+  onSlotPress: () => void;
+  onRemove:    () => void;
+}) {
+  const isDragging = draggingIdx === index;
+  const isHover    = hoverIdx === index && draggingIdx !== -1 && !isDragging;
+
+  const animStyle = useAnimatedStyle(() => {
+    if (isDragging) {
+      return {
+        transform: [
+          { translateX: dragX.value },
+          { translateY: dragY.value },
+          { scale: withSpring(1.1) },
+        ],
+        zIndex: 10,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+      };
+    }
+    return { opacity: withSpring(isHover ? 0.35 : 1), zIndex: 0 };
+  });
+
+  const canDrag = editMode && !!item;
+
+  const longPress = Gesture.LongPress()
+    .minDuration(280)
+    .runOnJS(true)
+    .onStart(() => { if (canDrag) onDragStart(index); });
+
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .onUpdate(e => {
+      if (draggingIdx !== index) return;
+      dragX.value = e.translationX;
+      dragY.value = e.translationY;
+      onDragMove(e.translationX);
+    })
+    .onEnd(e => {
+      if (draggingIdx !== index) return;
+      onDragEnd(e.translationX);
+    });
+
+  const gesture = Gesture.Simultaneous(longPress, pan);
+
+  const slot = (
+    <FavSlot
+      item={item}
+      editMode={editMode}
+      onPress={onSlotPress}
+      onRemove={onRemove}
+      circular={circular}
+    />
+  );
+
+  if (!canDrag) return slot;
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={animStyle}>{slot}</Animated.View>
+    </GestureDetector>
+  );
+}
+
+function DraggableFavRow({
+  items,
+  editMode,
+  circular = false,
+  onReorder,
+  onRemove,
+  onSlotPress,
+}: {
+  items: FavItem[];
+  editMode: boolean;
+  circular?: boolean;
+  onReorder: (from: number, to: number) => void;
+  onRemove:    (index: number) => void;
+  onSlotPress: (index: number) => void;
+}) {
+  const [order, setOrder]             = useState<FavItem[]>(items);
+  const [draggingIdx, setDraggingIdx] = useState(-1);
+  const [hoverIdx,    setHoverIdx]    = useState(-1);
+  const dragX     = useSharedValue(0);
+  const dragY     = useSharedValue(0);
+  const startSlot = useRef(0);
+
+  useEffect(() => { setOrder(items); }, [JSON.stringify(items)]);
+
+  function calcTarget(x: number) {
+    return Math.max(0, Math.min(4, Math.round(startSlot.current + x / SLOT_STEP)));
+  }
+
+  function handleDragStart(idx: number) {
+    startSlot.current = idx;
+    setDraggingIdx(idx);
+    setHoverIdx(idx);
+  }
+
+  function handleDragMove(x: number) {
+    setHoverIdx(calcTarget(x));
+  }
+
+  function handleDragEnd(x: number) {
+    const from = startSlot.current;
+    const to   = calcTarget(x);
+    dragX.value = 0;
+    dragY.value = 0;
+    setDraggingIdx(-1);
+    setHoverIdx(-1);
+    if (from === to) return;
+    // Reorder local display immediately
+    setOrder(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    onReorder(from, to);
+  }
+
+  return (
+    <View style={s.favRow}>
+      {order.map((item, i) => (
+        <DraggableSlot
+          key={i}
+          index={i}
+          item={item}
+          editMode={editMode}
+          circular={circular}
+          draggingIdx={draggingIdx}
+          hoverIdx={hoverIdx}
+          dragX={dragX}
+          dragY={dragY}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onSlotPress={() => onSlotPress(i)}
+          onRemove={() => onRemove(i)}
+        />
+      ))}
+    </View>
+  );
+}
+
 // ─── Navigation row ───────────────────────────────────────────────────────────
 
 function NavRow({
@@ -736,7 +915,7 @@ export default function ListendScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
-  const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, loggedAlbums, wantToListen } = useAlbums();
+  const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, reorderTopAlbums, reorderTopSongs, reorderTopArtists, loggedAlbums, wantToListen } = useAlbums();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [top5EditMode, setTop5EditMode] = useState(false);
@@ -871,23 +1050,25 @@ export default function ListendScreen() {
             <Text style={s.editLabel}>{top5EditMode ? 'Done' : 'Edit'}</Text>
           </Pressable>
         </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
+        <DraggableFavRow
+          items={topAlbums.map(a => a ? { artworkUrl: a.artworkUrl, title: a.title } : null)}
+          editMode={top5EditMode}
+          onReorder={(from, to) => {
+            const next = [...topAlbums];
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            reorderTopAlbums(next);
+          }}
+          onRemove={i => { const a = topAlbums[i]; if (a) removeTopAlbum(a.id); }}
+          onSlotPress={i => {
             const a = topAlbums[i];
-            return (
-              <FavSlot
-                key={i}
-                item={a}
-                editMode={top5EditMode}
-                onPress={top5EditMode
-                  ? (a ? undefined : () => router.push({ pathname: '/pick-item', params: { type: 'album', slotIndex: String(i) } }))
-                  : (a ? () => router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl } }) : undefined)
-                }
-                onRemove={a ? () => removeTopAlbum(a.id) : undefined}
-              />
-            );
-          })}
-        </View>
+            if (top5EditMode) {
+              if (!a) router.push({ pathname: '/pick-item', params: { type: 'album', slotIndex: String(i) } });
+            } else {
+              if (a) router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl } });
+            }
+          }}
+        />
       </View>
 
       <View style={[s.rule, { backgroundColor: colors.border }]} />
@@ -897,23 +1078,25 @@ export default function ListendScreen() {
         <View style={s.sectionHeader}>
           <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 SONGS</Text>
         </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
+        <DraggableFavRow
+          items={topSongs.map(s => s ? { artworkUrl: s.artworkUrl, title: s.title } : null)}
+          editMode={top5EditMode}
+          onReorder={(from, to) => {
+            const next = [...topSongs];
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            reorderTopSongs(next);
+          }}
+          onRemove={i => { const s = topSongs[i]; if (s) removeTopSong(s.id); }}
+          onSlotPress={i => {
             const song = topSongs[i];
-            return (
-              <FavSlot
-                key={i}
-                item={song}
-                editMode={top5EditMode}
-                onPress={top5EditMode
-                  ? (song ? undefined : () => router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: String(i) } }))
-                  : (song ? () => setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate }) : undefined)
-                }
-                onRemove={song ? () => removeTopSong(song.id) : undefined}
-              />
-            );
-          })}
-        </View>
+            if (top5EditMode) {
+              if (!song) router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: String(i) } });
+            } else {
+              if (song) setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+            }
+          }}
+        />
       </View>
 
       <View style={[s.rule, { backgroundColor: colors.border }]} />
@@ -923,24 +1106,26 @@ export default function ListendScreen() {
         <View style={s.sectionHeader}>
           <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 ARTISTS</Text>
         </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
+        <DraggableFavRow
+          circular
+          items={topArtists.map(a => a ? { artworkUrl: a.artworkUrl, title: a.name } : null)}
+          editMode={top5EditMode}
+          onReorder={(from, to) => {
+            const next = [...topArtists];
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            reorderTopArtists(next);
+          }}
+          onRemove={i => { const a = topArtists[i]; if (a) removeTopArtist(a.id); }}
+          onSlotPress={i => {
             const artist = topArtists[i];
-            return (
-              <FavSlot
-                key={i}
-                circular
-                item={artist ? { artworkUrl: artist.artworkUrl, title: artist.name } : null}
-                editMode={top5EditMode}
-                onPress={top5EditMode
-                  ? (artist ? undefined : () => router.push({ pathname: '/pick-item', params: { type: 'artist', slotIndex: String(i) } }))
-                  : (artist ? () => router.push({ pathname: '/artist-detail', params: { id: artist.id, name: artist.name, artworkUrl: artist.artworkUrl } }) : undefined)
-                }
-                onRemove={artist ? () => removeTopArtist(artist.id) : undefined}
-              />
-            );
-          })}
-        </View>
+            if (top5EditMode) {
+              if (!artist) router.push({ pathname: '/pick-item', params: { type: 'artist', slotIndex: String(i) } });
+            } else {
+              if (artist) router.push({ pathname: '/artist-detail', params: { id: artist.id, name: artist.name, artworkUrl: artist.artworkUrl } });
+            }
+          }}
+        />
       </View>
 
       {/* ── Nav rows ─────────────────────────────────────────────────────────── */}
