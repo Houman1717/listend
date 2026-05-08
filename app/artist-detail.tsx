@@ -15,6 +15,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useLikedArtists } from '@/context/LikedArtistsContext';
 import { useAlbums } from '@/context/AlbumsContext';
+import { supabase } from '@/lib/supabase';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -158,6 +159,17 @@ export default function ArtistDetailScreen() {
   const toastOpacity                    = useRef(new Animated.Value(0)).current;
   const { isLiked, toggleLike }         = useLikedArtists();
   const liked                           = isLiked(resolvedId || artistName);
+  const [artistLikeCount, setArtistLikeCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const id = resolvedId || artistName;
+    if (!id) return;
+    supabase
+      .from('liked_artists')
+      .select('*', { count: 'exact', head: true })
+      .eq('artist_id', id)
+      .then(({ count }) => { if (count !== null) setArtistLikeCount(count); });
+  }, [resolvedId, artistName]);
   const { loggedAlbums }               = useAlbums();
 
   // Prevent double-firing if effect runs twice (Strict Mode / nav back)
@@ -318,6 +330,7 @@ export default function ArtistDetailScreen() {
   function handleToggleLike() {
     const artistId = resolvedId || artistName;
     toggleLike({ id: artistId, name: artistName, artworkUrl: artworkUrl || null });
+    setArtistLikeCount(prev => prev === null ? null : liked ? Math.max(0, prev - 1) : prev + 1);
     showToast(!liked ? 'Artist liked' : 'Artist removed');
   }
 
@@ -377,6 +390,11 @@ export default function ArtistDetailScreen() {
             size={24}
             color={liked ? '#D4A017' : '#7a5535'}
           />
+          {artistLikeCount !== null && (
+            <Text style={[sc.heartCount, { color: liked ? '#D4A017' : '#7a5535' }]}>
+              {artistLikeCount}
+            </Text>
+          )}
         </Pressable>
         {artworkUrl ? (
           <ExpoImage source={{ uri: artworkUrl }} style={sc.avatar} contentFit="cover" cachePolicy="disk" transition={200} />
@@ -397,8 +415,6 @@ export default function ArtistDetailScreen() {
         )}
         {lastfmLoading ? (
           <ActivityIndicator size="small" color="#D4A017" style={{ marginTop: 8 }} />
-        ) : lastfm?.listeners ? (
-          <Text style={[sc.listeners, { color: colors.subtext }]}>{formatListeners(lastfm.listeners)}</Text>
         ) : lastfmError ? (
           <Text style={[sc.errorText, { color: '#f87171' }]} numberOfLines={2}>{lastfmError}</Text>
         ) : null}
@@ -524,7 +540,8 @@ const sc = StyleSheet.create({
 
   // Header
   header: { alignItems: 'center', paddingTop: 28, paddingBottom: 20 },
-  heartBtn: { position: 'absolute', top: 20, right: 0, zIndex: 10, padding: 4 },
+  heartBtn: { position: 'absolute', top: 20, right: 0, zIndex: 10, padding: 4, alignItems: 'center', gap: 2 },
+  heartCount: { fontSize: 11, fontWeight: '700' },
 
   // Toast
   toast: {

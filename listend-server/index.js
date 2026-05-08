@@ -1045,6 +1045,75 @@ app.get('/lastfm/album', [
   }
 });
 
+// ── GET /album-tags — Apple Music + MusicBrainz genres ───────────────────────
+
+async function fetchAppleMusicGenres(amId) {
+  if (!amId) return [];
+  try {
+    const data = await amFetch(`/catalog/us/albums/${amId}`);
+    return (data?.data?.[0]?.attributes?.genreNames ?? []).filter(g => g !== 'Music');
+  } catch { return []; }
+}
+
+async function fetchMusicBrainzGenres(artist, album) {
+  if (!artist || !album) return [];
+  try {
+    const searchResp = await fetch(
+      `https://musicbrainz.org/ws/2/release-group?query=artist:%22${encodeURIComponent(artist)}%22%20AND%20release:%22${encodeURIComponent(album)}%22&limit=1&fmt=json`,
+      { headers: { 'User-Agent': 'Listend/1.0 (contact@listend.app)' } }
+    );
+    if (!searchResp.ok) return [];
+    const rgId = (await searchResp.json())['release-groups']?.[0]?.id;
+    if (!rgId) return [];
+    const detailResp = await fetch(
+      `https://musicbrainz.org/ws/2/release-group/${rgId}?inc=genres&fmt=json`,
+      { headers: { 'User-Agent': 'Listend/1.0 (contact@listend.app)' } }
+    );
+    if (!detailResp.ok) return [];
+    return ((await detailResp.json()).genres ?? []).map(g => g.name);
+  } catch { return []; }
+}
+
+app.get('/album-tags', [
+  query('artist').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('artist required'),
+  query('album').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('album required'),
+  query('amId').optional().trim().customSanitizer(stripHtml).isLength({ max: 100 }),
+  validate,
+], async (req, res) => {
+  const artistName = (req.query.artist ?? '').trim();
+  const albumName  = (req.query.album  ?? '').trim();
+  const amId       = (req.query.amId   ?? '').trim();
+  if (!artistName || !albumName) return res.status(400).json({ error: 'artist and album required' });
+
+  const CACHE_KEY = `album_tags_${artistName.toLowerCase()}_${albumName.toLowerCase()}`;
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const [amGenres, mbGenres] = await Promise.all([
+      fetchAppleMusicGenres(amId),
+      fetchMusicBrainzGenres(artistName, albumName),
+    ]);
+    // Merge, deduplicate (case-insensitive), keep AM first
+    const seen = new Set();
+    const tags = [...amGenres, ...mbGenres].filter(g => {
+      const key = g.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const payload = { tags };
+    cacheSet(CACHE_KEY, payload, TTL_6H);
+    await setCache(CACHE_KEY, payload);
+    res.json(payload);
+  } catch (err) {
+    console.error('[/album-tags] ERROR:', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Internal server error' });
+  }
+});
+
 // ── Genius credits helper ─────────────────────────────────────────────────────
 // Fetches and parses Genius credits for one track. Returns null on any failure.
 // All raw fields are logged so Railway deploy logs show exactly what Genius returns.

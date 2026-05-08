@@ -25,6 +25,10 @@ import { supabase } from '@/lib/supabase';
 
 type LikeState = { liked: boolean; count: number };
 
+type LikedEntry =
+  | { kind: 'featured'; likedAt: string; pl: any }
+  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
+
 // ─── Playlist artwork mosaic (2×2 grid of first 4 covers) ────────────────────
 
 function PlaylistMosaic({
@@ -71,18 +75,18 @@ function PlaylistCard({
   isLiked,
   onLike,
   byUsername,
+  hideChevron,
 }: {
   playlist: Playlist;
   albumMap: Map<string, string | undefined>;
   onPress: () => void;
   isDark: boolean;
   colors: any;
-  /** Total like count to display. Pass undefined to hide the like area. */
   likeCount?: number;
   isLiked?: boolean;
-  /** Defined when the viewer can toggle the like (i.e. other user's playlist). */
   onLike?: () => void;
   byUsername?: string;
+  hideChevron?: boolean;
 }) {
   const count    = playlist.albumIds.length;
   const showLike = onLike !== undefined || (likeCount ?? 0) > 0;
@@ -122,31 +126,30 @@ function PlaylistCard({
           </Text>
         ) : null}
       </View>
-      {/* Like button (other user's playlists) or count display */}
       {showLike && (
         onLike ? (
-          <Pressable onPress={onLike} hitSlop={8} style={s.likeBtn}>
+          <Pressable onPress={onLike} hitSlop={12} style={hideChevron ? { padding: 4 } : s.likeBtn}>
             <FontAwesome
               name={isLiked ? 'heart' : 'heart-o'}
-              size={16}
+              size={hideChevron ? 18 : 16}
               color={isLiked ? '#D4A017' : '#7a5535'}
             />
-            {(likeCount ?? 0) > 0 && (
+            {!hideChevron && (likeCount ?? 0) > 0 && (
               <Text style={[s.likeCount, { color: isLiked ? '#D4A017' : '#7a5535' }]}>
                 {likeCount}
               </Text>
             )}
           </Pressable>
         ) : (
-          <View style={s.likeBtn}>
-            <FontAwesome name="heart" size={16} color="#D4A017" />
-            {(likeCount ?? 0) > 0 && (
+          <View style={hideChevron ? { padding: 4 } : s.likeBtn}>
+            <FontAwesome name="heart" size={hideChevron ? 18 : 16} color="#D4A017" />
+            {!hideChevron && (likeCount ?? 0) > 0 && (
               <Text style={[s.likeCount, { color: '#D4A017' }]}>{likeCount}</Text>
             )}
           </View>
         )
       )}
-      <FontAwesome name="chevron-right" size={13} color={isDark ? '#4a3020' : '#a07850'} />
+      {!hideChevron && <FontAwesome name="chevron-right" size={13} color={isDark ? '#4a3020' : '#a07850'} />}
     </Pressable>
   );
 }
@@ -233,6 +236,104 @@ function NewPlaylistModal({
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
+// ─── Build a chronologically-sorted liked-playlist list for any user ──────────
+
+async function buildLikedEntries(
+  userId: string,
+): Promise<{ entries: LikedEntry[]; artMap: Map<string, string | undefined> }> {
+  const { data: likedRows } = await supabase
+    .from('likes')
+    .select('target_id, target_owner_id, created_at')
+    .eq('user_id', userId)
+    .eq('target_type', 'playlist')
+    .order('created_at', { ascending: false });
+
+  const rows: any[] = likedRows ?? [];
+  const featuredRows = rows.filter(r => (r.target_id as string).startsWith('featured:'));
+  const userRows     = rows.filter(r => !(r.target_id as string).startsWith('featured:'));
+
+  const entries: LikedEntry[] = [];
+
+  if (featuredRows.length > 0) {
+    try {
+      const resp = await fetch(`${API_URL}/api/featured-playlists`);
+      const all: any[] = await resp.json();
+      const likedAtByFeaturedId = new Map<string, string>(
+        featuredRows.map((r: any) => [r.target_id.replace('featured:', ''), r.created_at as string])
+      );
+      for (const pl of all) {
+        if (likedAtByFeaturedId.has(pl.id)) {
+          entries.push({ kind: 'featured', likedAt: likedAtByFeaturedId.get(pl.id)!, pl });
+        }
+      }
+    } catch {}
+  }
+
+  const artMap = new Map<string, string | undefined>();
+
+  if (userRows.length > 0) {
+    const playlistIds = userRows.map((r: any) => r.target_id as string);
+    const likedAtById = new Map<string, string>(
+      userRows.map((r: any) => [r.target_id as string, r.created_at as string])
+    );
+
+    const { data: pls } = await supabase
+      .from('playlists')
+      .select('id, name, description, created_at, user_id')
+      .in('id', playlistIds);
+
+    if (pls && pls.length > 0) {
+      const { data: pas } = await supabase
+        .from('playlist_albums')
+        .select('playlist_id, spotify_id, position')
+        .in('playlist_id', playlistIds)
+        .order('position', { ascending: true });
+
+      const allSpotifyIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id as string))];
+      if (allSpotifyIds.length > 0) {
+        const { data: uas } = await supabase
+          .from('user_albums')
+          .select('spotify_id, artwork_url')
+          .in('spotify_id', allSpotifyIds);
+        for (const a of (uas ?? []) as any[]) {
+          if (!artMap.has(a.spotify_id)) artMap.set(a.spotify_id, a.artwork_url ?? undefined);
+        }
+      }
+
+      const ownerIds = [...new Set(pls.map((p: any) => p.user_id as string))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', ownerIds);
+      const usernameByUserId = new Map<string, string>(
+        (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
+      );
+
+      for (const p of pls as any[]) {
+        const playlist: Playlist = {
+          id:          p.id,
+          name:        p.name,
+          description: p.description ?? undefined,
+          albumIds:    (pas ?? [])
+            .filter((a: any) => a.playlist_id === p.id)
+            .map((a: any) => a.spotify_id as string),
+          createdAt:   p.created_at,
+        };
+        entries.push({
+          kind:     'user',
+          likedAt:  likedAtById.get(p.id) ?? '',
+          playlist,
+          ownerId:  p.user_id,
+          username: usernameByUserId.get(p.user_id) ?? '',
+        });
+      }
+    }
+  }
+
+  entries.sort((a, b) => b.likedAt.localeCompare(a.likedAt));
+  return { entries, artMap };
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MyPlaylistsScreen() {
@@ -249,13 +350,15 @@ export default function MyPlaylistsScreen() {
   // ── Own user — tab state ──────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'mine' | 'liked'>('mine');
 
-  // ── Liked playlists (own user, liked tab) ─────────────────────────────────
-  const [likedPlaylists,        setLikedPlaylists]        = useState<Playlist[]>([]);
-  const [likedAlbumMap,         setLikedAlbumMap]         = useState<Map<string, string | undefined>>(new Map());
-  const [likedPlaylistOwners,   setLikedPlaylistOwners]   = useState<Map<string, string>>(new Map());
-  const [likedFeaturedPlaylists, setLikedFeaturedPlaylists] = useState<any[]>([]);
-  const [likedPlaylistUsernames, setLikedPlaylistUsernames] = useState<Map<string, string>>(new Map()); // playlist.id → username
-  const [likedLoading,          setLikedLoading]          = useState(false);
+  // ── Liked playlists ───────────────────────────────────────────────────────
+  const [likedEntries,    setLikedEntries]    = useState<LikedEntry[]>([]);
+  const [likedAlbumMap,   setLikedAlbumMap]   = useState<Map<string, string | undefined>>(new Map());
+  const [likedLoading,    setLikedLoading]    = useState(false);
+
+  // ── Other user's liked playlists ──────────────────────────────────────────
+  const [otherLikedEntries,  setOtherLikedEntries]  = useState<LikedEntry[]>([]);
+  const [otherLikedAlbumMap, setOtherLikedAlbumMap] = useState<Map<string, string | undefined>>(new Map());
+  const [otherLikedLoading,  setOtherLikedLoading]  = useState(false);
 
   // ── Other user's playlists fetched from Supabase ──────────────────────────
   const [otherPlaylists, setOtherPlaylists] = useState<Playlist[]>([]);
@@ -341,109 +444,23 @@ export default function MyPlaylistsScreen() {
   useEffect(() => {
     if (viewingOther || !user || activeTab !== 'liked') return;
     setLikedLoading(true);
-
-    (async () => {
-      // 1. Get liked playlist IDs + their owners from likes table
-      const { data: likedRows } = await supabase
-        .from('likes')
-        .select('target_id, target_owner_id')
-        .eq('user_id', user.id)
-        .eq('target_type', 'playlist');
-
-      // Split featured (target_id starts with 'featured:') from user playlists
-      const featuredLikedIds = (likedRows ?? [])
-        .filter((r: any) => (r.target_id as string).startsWith('featured:'))
-        .map((r: any) => (r.target_id as string).replace('featured:', ''));
-
-      if (featuredLikedIds.length > 0) {
-        try {
-          const resp = await fetch(`${API_URL}/api/featured-playlists`);
-          const all: any[] = await resp.json();
-          setLikedFeaturedPlaylists(all.filter(p => featuredLikedIds.includes(p.id)));
-        } catch { setLikedFeaturedPlaylists([]); }
-      } else {
-        setLikedFeaturedPlaylists([]);
-      }
-
-      // Filter to only real user playlist IDs (not featured ones)
-      const userLikedRows = (likedRows ?? []).filter((r: any) => !(r.target_id as string).startsWith('featured:'));
-
-      if (userLikedRows.length === 0) {
-        setLikedPlaylists([]);
-        setLikedLoading(false);
-        return;
-      }
-
-      const playlistIds = userLikedRows.map((r: any) => r.target_id);
-
-      // 2. Fetch the actual playlists
-      const { data: pls } = await supabase
-        .from('playlists')
-        .select('id, name, description, created_at, user_id')
-        .in('id', playlistIds);
-
-      if (!pls || pls.length === 0) {
-        setLikedPlaylists([]);
-        setLikedLoading(false);
-        return;
-      }
-
-      // 3. Fetch album membership
-      const { data: pas } = await supabase
-        .from('playlist_albums')
-        .select('playlist_id, spotify_id, position')
-        .in('playlist_id', playlistIds)
-        .order('position', { ascending: true });
-
-      // 4. Collect all spotify IDs and fetch artwork (one cross-owner query,
-      //    artwork for the same track is identical regardless of who logged it)
-      const allSpotifyIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id))];
-      const artMap = new Map<string, string | undefined>();
-      if (allSpotifyIds.length > 0) {
-        const { data: uas } = await supabase
-          .from('user_albums')
-          .select('spotify_id, artwork_url')
-          .in('spotify_id', allSpotifyIds);
-        for (const a of (uas ?? []) as any[]) {
-          if (!artMap.has(a.spotify_id)) {
-            artMap.set(a.spotify_id, a.artwork_url ?? undefined);
-          }
-        }
-      }
-
-      // Build owner map (playlist.id → owner user_id) for navigation
-      const ownersById = new Map<string, string>(pls.map((p: any) => [p.id, p.user_id]));
-
-      // Fetch usernames for all playlist owners
-      const ownerIds = [...new Set(pls.map((p: any) => p.user_id as string))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', ownerIds);
-      const usernameByUserId = new Map<string, string>(
-        (profiles ?? []).map((p: any) => [p.id, p.username ?? ''])
-      );
-      const usernameByPlaylistId = new Map<string, string>(
-        pls.map((p: any) => [p.id, usernameByUserId.get(p.user_id) ?? ''])
-      );
-      setLikedPlaylistUsernames(usernameByPlaylistId);
-
-      const built: Playlist[] = pls.map((p: any) => ({
-        id:          p.id,
-        name:        p.name,
-        description: p.description ?? undefined,
-        albumIds:    (pas ?? [])
-          .filter((a: any) => a.playlist_id === p.id)
-          .map((a: any) => a.spotify_id),
-        createdAt:   p.created_at,
-      }));
-
-      setLikedPlaylists(built);
+    buildLikedEntries(user.id).then(({ entries, artMap }) => {
+      setLikedEntries(entries);
       setLikedAlbumMap(artMap);
-      setLikedPlaylistOwners(ownersById);
       setLikedLoading(false);
-    })();
+    });
   }, [viewingOther, user?.id, activeTab]);
+
+  // ── Fetch liked playlists (other user, liked tab) ─────────────────────────
+  useEffect(() => {
+    if (!viewingOther || activeTab !== 'liked') return;
+    setOtherLikedLoading(true);
+    buildLikedEntries(viewingOther).then(({ entries, artMap }) => {
+      setOtherLikedEntries(entries);
+      setOtherLikedAlbumMap(artMap);
+      setOtherLikedLoading(false);
+    });
+  }, [viewingOther, activeTab]);
 
   // ── Toggle like on another user's playlist ────────────────────────────────
   async function handleTogglePlaylistLike(playlist: Playlist) {
@@ -501,7 +518,7 @@ export default function MyPlaylistsScreen() {
   // ── Unlike a featured playlist from the liked tab ─────────────────────────
   async function handleUnlikeFeaturedPlaylist(id: string) {
     if (!user) return;
-    setLikedFeaturedPlaylists(prev => prev.filter(p => p.id !== id));
+    setLikedEntries(prev => prev.filter(e => !(e.kind === 'featured' && e.pl.id === id)));
     await supabase
       .from('likes')
       .delete()
@@ -513,21 +530,14 @@ export default function MyPlaylistsScreen() {
   // ── Unlike a playlist from the liked tab (removes it from the list) ───────
   async function handleUnlikeLikedPlaylist(playlist: Playlist) {
     if (!user) return;
-    // Optimistic removal
-    setLikedPlaylists(prev => prev.filter(p => p.id !== playlist.id));
-
+    setLikedEntries(prev => prev.filter(e => !(e.kind === 'user' && e.playlist.id === playlist.id)));
     const { error } = await supabase
       .from('likes')
       .delete()
       .eq('user_id',     user.id)
       .eq('target_type', 'playlist')
       .eq('target_id',   playlist.id);
-
-    if (error) {
-      console.error('[Playlists] unlike (liked tab) error:', error.message);
-      // Revert — put the playlist back
-      setLikedPlaylists(prev => [playlist, ...prev]);
-    }
+    if (error) console.error('[Playlists] unlike error:', error.message);
   }
 
   // ── Own user album artwork map ────────────────────────────────────────────
@@ -595,25 +605,23 @@ export default function MyPlaylistsScreen() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
 
-      {/* Tab bar — own user only */}
-      {!viewingOther && (
-        <View style={[s.tabRow, { borderBottomColor: isDark ? '#2e2018' : '#e8e8e8' }]}>
-          <Pressable
-            onPress={() => setActiveTab('mine')}
-            style={[s.tab, activeTab === 'mine' && s.tabActive]}>
-            <Text style={[s.tabText, { color: activeTab === 'mine' ? '#D4A017' : '#a07850' }]}>
-              My Playlists
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setActiveTab('liked')}
-            style={[s.tab, activeTab === 'liked' && s.tabActive]}>
-            <Text style={[s.tabText, { color: activeTab === 'liked' ? '#D4A017' : '#a07850' }]}>
-              Liked Playlists
-            </Text>
-          </Pressable>
-        </View>
-      )}
+      {/* Tab bar — always shown */}
+      <View style={[s.tabRow, { borderBottomColor: isDark ? '#2e2018' : '#e8e8e8' }]}>
+        <Pressable
+          onPress={() => setActiveTab('mine')}
+          style={[s.tab, activeTab === 'mine' && s.tabActive]}>
+          <Text style={[s.tabText, { color: activeTab === 'mine' ? '#D4A017' : '#a07850' }]}>
+            {viewingOther ? 'Playlists' : 'My Playlists'}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setActiveTab('liked')}
+          style={[s.tab, activeTab === 'liked' && s.tabActive]}>
+          <Text style={[s.tabText, { color: activeTab === 'liked' ? '#D4A017' : '#a07850' }]}>
+            Liked Playlists
+          </Text>
+        </Pressable>
+      </View>
 
       {/* New Playlist button — own user, My Playlists tab only */}
       {!viewingOther && activeTab === 'mine' && (
@@ -625,8 +633,36 @@ export default function MyPlaylistsScreen() {
         </Pressable>
       )}
 
-      {/* ── Other user's playlists ──────────────────────────────────────── */}
-      {viewingOther ? (
+      {/* ── Own user's playlists tab ────────────────────────────────────── */}
+      {activeTab === 'mine' && !viewingOther && (
+        <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
+          {playlists.length === 0 ? (
+            <View style={s.emptyWrap}>
+              <FontAwesome name="list" size={36} color={isDark ? '#3a2818' : '#ddd'} />
+              <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
+              <Text style={[s.emptySub, { color: colors.subtext }]}>
+                Create one to start organising your albums.
+              </Text>
+            </View>
+          ) : (
+            playlists.map((playlist) => (
+              <PlaylistCard
+                key={playlist.id}
+                playlist={playlist}
+                albumMap={ownAlbumMap}
+                onPress={() =>
+                  router.push({ pathname: '/playlist-detail', params: { id: playlist.id } })
+                }
+                isDark={isDark}
+                colors={colors}
+              />
+            ))
+          )}
+        </ScrollView>
+      )}
+
+      {/* ── Other user's playlists tab ──────────────────────────────────── */}
+      {activeTab === 'mine' && !!viewingOther && (
         <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
           {otherPlaylists.length === 0 ? (
             <View style={s.emptyWrap}>
@@ -660,107 +696,75 @@ export default function MyPlaylistsScreen() {
             })
           )}
         </ScrollView>
+      )}
 
-      ) : activeTab === 'mine' ? (
-        /* ── Own playlists ─────────────────────────────────────────────── */
-        <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
-          {playlists.length === 0 ? (
-            <View style={s.emptyWrap}>
-              <FontAwesome name="list" size={36} color={isDark ? '#3a2818' : '#ddd'} />
-              <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
-              <Text style={[s.emptySub, { color: colors.subtext }]}>
-                Create one to start organising your albums.
-              </Text>
-            </View>
-          ) : (
-            playlists.map((playlist) => (
-              <PlaylistCard
-                key={playlist.id}
-                playlist={playlist}
-                albumMap={ownAlbumMap}
-                onPress={() =>
-                  router.push({
-                    pathname: '/playlist-detail',
-                    params: { id: playlist.id },
-                  })
-                }
-                isDark={isDark}
-                colors={colors}
-              />
-            ))
-          )}
-        </ScrollView>
-
-      ) : (
-        /* ── Liked playlists ───────────────────────────────────────────── */
-        likedLoading ? (
+      {/* ── Liked playlists tab (own + other user) ──────────────────────── */}
+      {activeTab === 'liked' && (
+        (viewingOther ? otherLikedLoading : likedLoading) ? (
           <View style={s.likedLoadingWrap}>
             <ActivityIndicator color="#D4A017" size="large" />
           </View>
         ) : (
           <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
-            {likedPlaylists.length === 0 && likedFeaturedPlaylists.length === 0 ? (
+            {(viewingOther ? otherLikedEntries : likedEntries).length === 0 ? (
               <View style={s.emptyWrap}>
                 <FontAwesome name="heart-o" size={36} color={isDark ? '#3a2818' : '#ddd'} />
                 <Text style={[s.emptyTitle, { color: colors.text }]}>No liked playlists</Text>
                 <Text style={[s.emptySub, { color: colors.subtext }]}>
-                  Like playlists from other users or by Listend playlists to find them here.
+                  {viewingOther
+                    ? 'This user has no liked playlists.'
+                    : 'Like playlists from other users or by Listend playlists to find them here.'}
                 </Text>
               </View>
             ) : (
-              <>
-                {likedFeaturedPlaylists.map(pl => {
-                  const half = 32;
-                  const filled = [...(pl.artworkUrls ?? []), '', '', '', ''].slice(0, 4);
-                  return (
-                    <Pressable
-                      key={pl.id}
-                      onPress={() => router.push({ pathname: '/discover-featured-playlist', params: { id: pl.id, name: pl.name, emoji: pl.emoji, description: pl.description, artworkUrlsJson: JSON.stringify(pl.artworkUrls ?? []) } } as any)}
-                      style={({ pressed }) => [s.playlistCard, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
-                      <View style={{ width: 64, height: 64, borderRadius: 8, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
-                        {filled.map((url: string, i: number) =>
-                          url
-                            ? <ExpoImage key={i} source={{ uri: url }} style={{ width: half, height: half }} contentFit="cover" cachePolicy="disk" />
-                            : <View key={i} style={{ width: half, height: half, backgroundColor: isDark ? '#2e2018' : '#d4c4a8' }} />
-                        )}
-                      </View>
-                      <View style={s.playlistInfo}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>{pl.name}</Text>
-                          <View style={{ backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                            <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>by Listend</Text>
-                          </View>
+              (viewingOther ? otherLikedEntries : likedEntries).map(entry =>
+                entry.kind === 'featured' ? (
+                  <Pressable
+                    key={`featured-${entry.pl.id}`}
+                    onPress={() => router.push({ pathname: '/discover-featured-playlist', params: { id: entry.pl.id, name: entry.pl.name, emoji: entry.pl.emoji, description: entry.pl.description, artworkUrlsJson: JSON.stringify(entry.pl.artworkUrls ?? []) } } as any)}
+                    style={({ pressed }) => [s.playlistCard, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+                    <View style={{ width: 64, height: 64, borderRadius: 8, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {[...(entry.pl.artworkUrls ?? []), '', '', '', ''].slice(0, 4).map((url: string, i: number) =>
+                        url
+                          ? <ExpoImage key={i} source={{ uri: url }} style={{ width: 32, height: 32 }} contentFit="cover" cachePolicy="disk" />
+                          : <View key={i} style={{ width: 32, height: 32, backgroundColor: isDark ? '#2e2018' : '#d4c4a8' }} />
+                      )}
+                    </View>
+                    <View style={s.playlistInfo}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>{entry.pl.name}</Text>
+                        <View style={{ backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                          <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>by Listend</Text>
                         </View>
-                        {pl.description ? <Text style={[s.playlistDesc, { color: colors.subtext }]} numberOfLines={2}>{pl.description}</Text> : null}
                       </View>
-                      <Pressable onPress={() => handleUnlikeFeaturedPlaylist(pl.id)} hitSlop={12} style={{ padding: 4 }}>
+                      {entry.pl.description ? <Text style={[s.playlistDesc, { color: colors.subtext }]} numberOfLines={2}>{entry.pl.description}</Text> : null}
+                    </View>
+                    {!viewingOther && (
+                      <Pressable onPress={() => handleUnlikeFeaturedPlaylist(entry.pl.id)} hitSlop={12} style={{ padding: 4 }}>
                         <FontAwesome name="heart" size={18} color="#D4A017" />
                       </Pressable>
-                    </Pressable>
-                  );
-                })}
-                {likedPlaylists.map((playlist) => (
+                    )}
+                  </Pressable>
+                ) : (
                   <PlaylistCard
-                    key={playlist.id}
-                    playlist={playlist}
-                    albumMap={likedAlbumMap}
+                    key={entry.playlist.id}
+                    playlist={entry.playlist}
+                    albumMap={viewingOther ? otherLikedAlbumMap : likedAlbumMap}
                     onPress={() =>
                       router.push({
                         pathname: '/playlist-detail',
-                        params: {
-                          id:     playlist.id,
-                          userId: likedPlaylistOwners.get(playlist.id) ?? '',
-                        },
+                        params: { id: entry.playlist.id, userId: entry.ownerId },
                       })
                     }
                     isDark={isDark}
                     colors={colors}
-                    isLiked={true}
-                    onLike={() => handleUnlikeLikedPlaylist(playlist)}
-                    byUsername={likedPlaylistUsernames.get(playlist.id)}
+                    isLiked={!viewingOther}
+                    onLike={!viewingOther ? () => handleUnlikeLikedPlaylist(entry.playlist) : undefined}
+                    byUsername={entry.username}
+                    hideChevron
                   />
-                ))}
-              </>
+                )
+              )
             )}
           </ScrollView>
         )

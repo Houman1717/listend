@@ -215,18 +215,18 @@ function ProfileHeader({
         {/* Following / Followers */}
         <View style={ph.socialRow}>
           <Pressable
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: profileUserId, type: 'following' } })}>
             <Text style={[ph.socialCount, { color: colors.text }]}>{followingCount}</Text>
+            <Text style={[ph.socialLabel, { color: colors.subtext }]}> Following</Text>
           </Pressable>
-          <Text style={[ph.socialLabel, { color: colors.subtext }]}> Following</Text>
           <Text style={[ph.socialDot, { color: colors.subtext }]}> · </Text>
           <Pressable
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: profileUserId, type: 'followers' } })}>
             <Text style={[ph.socialCount, { color: colors.text }]}>{followersCount}</Text>
+            <Text style={[ph.socialLabel, { color: colors.subtext }]}> Followers</Text>
           </Pressable>
-          <Text style={[ph.socialLabel, { color: colors.subtext }]}> Followers</Text>
         </View>
 
         {/* Follow button — only shown when viewing another user's profile */}

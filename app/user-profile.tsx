@@ -58,7 +58,7 @@ type Profile = {
 
 function normaliseTopAlbums(raw: any): FavAlbum[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((item: any) => ({
+  return raw.filter(Boolean).map((item: any) => ({
     id:         String(item.id         ?? ''),
     title:      String(item.title      ?? ''),
     artist:     String(item.artist     ?? ''),
@@ -68,7 +68,7 @@ function normaliseTopAlbums(raw: any): FavAlbum[] {
 
 function normaliseTopSongs(raw: any): FavSong[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((item: any) => ({
+  return raw.filter(Boolean).map((item: any) => ({
     id:         String(item.id         ?? ''),
     title:      String(item.title      ?? ''),
     artist:     String(item.artist     ?? ''),
@@ -78,7 +78,7 @@ function normaliseTopSongs(raw: any): FavSong[] {
 
 function normaliseTopArtists(raw: any): FavArtist[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((item: any) => ({
+  return raw.filter(Boolean).map((item: any) => ({
     id:         String(item.id         ?? ''),
     name:       String(item.name ?? item.title ?? ''),
     artworkUrl: item.artworkUrl || item.artwork_url || '',
@@ -515,6 +515,7 @@ export default function UserProfileScreen() {
           .from('user_albums')
           .select('spotify_id, title, artist, artwork_url, rating, review, year, listened_at')
           .eq('user_id', viewedUserId)
+          .not('listened_at', 'is', null)
           .order('listened_at', { ascending: false });
 
         if (userAlbums) {
@@ -703,18 +704,18 @@ export default function UserProfileScreen() {
         {/* Following / Followers */}
         <View style={s.socialRow}>
           <Pressable
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'following' } })}>
             <Text style={[s.socialCount, { color: colors.text }]}>{followingCount}</Text>
+            <Text style={[s.socialLabel, { color: colors.subtext }]}> Following</Text>
           </Pressable>
-          <Text style={[s.socialLabel, { color: colors.subtext }]}> Following</Text>
           <Text style={[s.socialDot, { color: colors.subtext }]}> · </Text>
           <Pressable
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'followers' } })}>
             <Text style={[s.socialCount, { color: colors.text }]}>{followersCount}</Text>
+            <Text style={[s.socialLabel, { color: colors.subtext }]}> Followers</Text>
           </Pressable>
-          <Text style={[s.socialLabel, { color: colors.subtext }]}> Followers</Text>
         </View>
 
         {/* Follow + Message buttons */}
@@ -746,7 +747,7 @@ export default function UserProfileScreen() {
         <View style={[s.statsRow, { backgroundColor: colors.surface }]}>
           <Pressable
             style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId } })}>
+            onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId, username: profile?.username ?? '' } })}>
             <Text style={[s.statValue, { color: colors.text }]}>{albumCount}</Text>
             <Text style={[s.statLabel, { color: colors.subtext }]}>Albums</Text>
           </Pressable>
@@ -883,7 +884,7 @@ export default function UserProfileScreen() {
 
       {/* ── Nav rows ──────────────────────────────────────────────────────── */}
       <View style={[s.navGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <NavRow icon="music"      label="Listend"        sub={`${albumCount} albums`}        onPress={() => router.push({ pathname: '/my-listend',      params: { userId: viewedUserId } })} colors={colors} />
+        <NavRow icon="music"      label="Listend"        sub={`${albumCount} albums`}        onPress={() => router.push({ pathname: '/my-listend',      params: { userId: viewedUserId, username: profile?.username ?? '' } })} colors={colors} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow icon="calendar"   label="Sessions"       sub="Listening diary"               onPress={() => router.push({ pathname: '/sessions',         params: { userId: viewedUserId } })} colors={colors} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />

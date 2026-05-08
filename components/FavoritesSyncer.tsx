@@ -85,7 +85,8 @@ export function FavoritesSyncer() {
 
       // New albums
       topAlbums.forEach((a, i) => {
-        if (!prev.albums.find(p => p.id === a.id)) {
+        if (!a) return;
+        if (!prev.albums.find(p => p && p.id === a.id)) {
           changes.push({
             user_id:        user.id,
             category:       'albums',
@@ -99,7 +100,8 @@ export function FavoritesSyncer() {
 
       // New songs
       topSongs.forEach((s, i) => {
-        if (!prev.songs.find(p => p.id === s.id)) {
+        if (!s) return;
+        if (!prev.songs.find(p => p && p.id === s.id)) {
           changes.push({
             user_id:        user.id,
             category:       'songs',
@@ -113,7 +115,8 @@ export function FavoritesSyncer() {
 
       // New artists
       topArtists.forEach((a, i) => {
-        if (!prev.artists.find(p => p.id === a.id)) {
+        if (!a) return;
+        if (!prev.artists.find(p => p && p.id === a.id)) {
           changes.push({
             user_id:        user.id,
             category:       'artists',

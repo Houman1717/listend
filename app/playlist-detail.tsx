@@ -80,6 +80,36 @@ export default function PlaylistDetailScreen() {
 
   const viewingOther = paramUserId || null;
 
+  // ── Like state ────────────────────────────────────────────────────────────
+  const [liked,     setLiked]     = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([
+      supabase.from('likes').select('*', { count: 'exact', head: true })
+        .eq('target_type', 'playlist').eq('target_id', id),
+      user ? supabase.from('likes').select('id')
+        .eq('target_type', 'playlist').eq('target_id', id).eq('user_id', user.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]).then(([countRes, myRes]) => {
+      setLikeCount(countRes.count ?? 0);
+      setLiked(!!myRes.data);
+    });
+  }, [id, user?.id]);
+
+  async function handleHeart() {
+    if (!user) return;
+    const wasLiked = liked;
+    setLiked(!wasLiked);
+    setLikeCount(c => wasLiked ? Math.max(0, c - 1) : c + 1);
+    if (wasLiked) {
+      await supabase.from('likes').delete().match({ user_id: user.id, target_type: 'playlist', target_id: id });
+    } else {
+      await supabase.from('likes').upsert({ user_id: user.id, target_type: 'playlist', target_id: id });
+    }
+  }
+
   // ── Other-user state ──────────────────────────────────────────────────────
   const [otherPlaylistName, setOtherPlaylistName] = useState('');
   const [otherPlaylistDesc, setOtherPlaylistDesc] = useState<string | null>(null);
@@ -281,12 +311,24 @@ export default function PlaylistDetailScreen() {
             ) : null}
           </View>
 
-          {/* Delete button — own user only */}
-          {!viewingOther && (
-            <Pressable onPress={confirmDeletePlaylist} hitSlop={8} style={s.deleteBtn}>
-              <FontAwesome name="trash-o" size={18} color="#D4A017" />
+          {/* Right-side actions */}
+          <View style={s.headerActions}>
+            <Pressable onPress={handleHeart} hitSlop={12} style={s.heartBtn}>
+              <FontAwesome
+                name={liked ? 'heart' : 'heart-o'}
+                size={24}
+                color={liked ? '#D4A017' : '#7a5535'}
+              />
+              {likeCount > 0 && (
+                <Text style={[s.heartCount, { color: liked ? '#D4A017' : '#7a5535' }]}>{likeCount}</Text>
+              )}
             </Pressable>
-          )}
+            {!viewingOther && (
+              <Pressable onPress={confirmDeletePlaylist} hitSlop={8} style={s.deleteBtn}>
+                <FontAwesome name="trash-o" size={18} color="#D4A017" />
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <View style={[s.divider, { backgroundColor: isDark ? '#2a1e14' : '#e8e8e8' }]} />
@@ -330,7 +372,10 @@ const s = StyleSheet.create({
     gap: 12,
     paddingBottom: 16,
   },
-  headerText: { flex: 1, gap: 4 },
+  headerText:    { flex: 1, gap: 4 },
+  headerActions: { alignItems: 'center', gap: 14 },
+  heartBtn:      { alignItems: 'center', gap: 2 },
+  heartCount:    { fontSize: 11, fontWeight: '700' },
   playlistName: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
   albumCount:   { fontSize: 13 },
   description:  { fontSize: 14, lineHeight: 20, marginTop: 2 },

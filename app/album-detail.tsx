@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -20,7 +21,8 @@ import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { ReviewComment, CommentBubble, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { navigateToProfile } from '@/lib/navigateToProfile';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -174,6 +176,25 @@ function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: 
       <Text style={[s.ratingHint, { color: isDark ? '#a07850' : '#a07850' }]}>
         {rating > 0 ? RATING_LABELS[rating] : ' '}
       </Text>
+    </View>
+  );
+}
+
+// ─── Volume badge (speaker + bars + number) ──────────────────────────────────
+
+function VolumeBadge({ rating }: { rating: number }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <FontAwesome name="volume-up" size={10} color="#D4A017" />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+        {Array.from({ length: 10 }, (_, i) => {
+          const h = Math.round(3 + i * 1);
+          return (
+            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : '#3a2818' }} />
+          );
+        })}
+      </View>
+      <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
     </View>
   );
 }
@@ -357,6 +378,7 @@ function AlbumReviewCard({
   liked,
   onLike,
   onPress,
+  onUsernamePress,
   isDark,
   colors,
   borderColor,
@@ -374,6 +396,7 @@ function AlbumReviewCard({
   liked: boolean;
   onLike: () => void;
   onPress?: () => void;
+  onUsernamePress?: (username: string) => void;
   isDark: boolean;
   colors: { text: string; subtext: string; background: string };
   borderColor: string;
@@ -385,7 +408,7 @@ function AlbumReviewCard({
   onCommentCountPress?: () => void;
   comments?: ReviewComment[];
   commentsExpanded?: boolean;
-  onAddComment?: (body: string, parentId?: string | null) => void;
+  onAddComment?: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
 }) {
   const displayCount = review.likeCount + (liked ? 1 : 0);
   const cardStyle = [
@@ -399,22 +422,22 @@ function AlbumReviewCard({
 
   const cardContent = (
     <>
-      {/* Header: avatar + username | rating badge */}
+      {/* Header: avatar + username + rating under username */}
       <View style={s.reviewCardHeader}>
-        <View style={arc.userRow}>
+        <Pressable
+          style={[arc.userRow, { alignItems: 'flex-start' }]}
+          onPress={isOwn ? undefined : () => onUsernamePress?.(review.username)}
+          hitSlop={6}>
           <View style={[arc.avatar, { backgroundColor: isOwn ? '#D4A017' : avatarColor(review.username) }]}>
             <Text style={arc.avatarLetter}>{review.username[0].toUpperCase()}</Text>
           </View>
-          <Text style={[arc.username, { color: '#D4A017' }]} numberOfLines={1}>
-            @{review.username}
-          </Text>
-        </View>
-        {review.rating >= 1 && (
-          <View style={[s.ratingBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-            <FontAwesome name="volume-up" size={9} color="#fff" />
-            <Text style={s.ratingBadgeText}>{review.rating}</Text>
+          <View style={{ gap: 3 }}>
+            <Text style={[arc.username, { color: '#D4A017' }]} numberOfLines={1}>
+              @{review.username}
+            </Text>
+            {review.rating >= 1 && <VolumeBadge rating={review.rating} />}
           </View>
-        )}
+        </Pressable>
       </View>
 
       {/* Review text */}
@@ -459,6 +482,7 @@ function AlbumReviewCard({
           isDark={isDark}
           colors={colors}
           onAddComment={onAddComment}
+          onUsernamePress={onUsernamePress}
         />
       )}
     </>
@@ -481,6 +505,193 @@ function AlbumReviewCard({
   );
 }
 
+// ─── Single review modal (home-page style) ────────────────────────────────────
+
+function AlbumSingleReviewModal({
+  review,
+  albumTitle,
+  albumArtist,
+  albumYear,
+  albumArtwork,
+  liked,
+  onLike,
+  comments,
+  commentsExpanded,
+  onToggleComments,
+  onAddComment,
+  onClose,
+  onUsernamePress,
+  isDark,
+  colors,
+}: {
+  review: FakeReview;
+  albumTitle: string;
+  albumArtist: string;
+  albumYear: number;
+  albumArtwork: string;
+  liked: boolean;
+  onLike: () => void;
+  comments: ReviewComment[];
+  commentsExpanded: boolean;
+  onToggleComments: () => void;
+  onAddComment: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
+  onClose: () => void;
+  onUsernamePress?: (username: string) => void;
+  isDark: boolean;
+  colors: { text: string; subtext: string; background: string };
+}) {
+  const [localLiked, setLocalLiked] = useState(liked);
+  const [localLikeCount, setLocalLikeCount] = useState(review.likeCount);
+  const border = isDark ? '#2a1e14' : '#e5e5e5';
+
+  function handleLike() {
+    setLocalLiked(prev => {
+      setLocalLikeCount(c => prev ? c - 1 : c + 1);
+      return !prev;
+    });
+    onLike();
+  }
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1 }}>
+
+          {/* Header */}
+          <View style={[arm.header, { borderBottomColor: border }]}>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
+            </Pressable>
+            <Text style={[arm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={[arm.body, { paddingBottom: 40 }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+
+            {/* Album row */}
+            <View style={arm.albumRow}>
+              {albumArtwork ? (
+                <ExpoImage source={{ uri: albumArtwork }} style={arm.art} contentFit="cover" cachePolicy="disk" />
+              ) : (
+                <View style={[arm.art, { backgroundColor: isDark ? '#2e2018' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                  <FontAwesome name="music" size={20} color="#7a5535" />
+                </View>
+              )}
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={[arm.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>{albumTitle}</Text>
+                <Text style={[arm.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                  {albumArtist}{albumYear > 0 ? ` · ${albumYear}` : ''}
+                </Text>
+              </View>
+            </View>
+
+            {/* Author + date + rating */}
+            <Pressable
+              style={arm.authorRow}
+              onPress={() => { onClose(); onUsernamePress?.(review.username); }}
+              disabled={!onUsernamePress}>
+              <View style={[arm.avatar, { backgroundColor: avatarColor(review.username) }]}>
+                <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+              </View>
+              <View style={{ gap: 3 }}>
+                <Text style={arm.username}>@{review.username}</Text>
+                {review.rating >= 1 && <VolumeBadge rating={review.rating} />}
+                <Text style={[arm.dateText, { color: isDark ? '#A08060' : '#6B4C35' }]}>{review.dateStr}</Text>
+              </View>
+            </Pressable>
+
+            {/* Review text */}
+            {review.text ? (
+              <Text style={[arm.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                "{review.text}"
+              </Text>
+            ) : (
+              <Text style={[arm.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
+                No written review.
+              </Text>
+            )}
+
+            {/* Like + comments row */}
+            <View style={[arm.likeCommentRow, { borderColor: border }]}>
+              <Pressable onPress={handleLike} hitSlop={8} style={arm.likeBtn}>
+                <FontAwesome
+                  name={localLiked ? 'heart' : 'heart-o'}
+                  size={15}
+                  color={localLiked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35')}
+                />
+                <Text style={[arm.likeCount, { color: localLiked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35') }]}>
+                  {localLikeCount}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={onToggleComments}
+                hitSlop={8}
+                style={[arm.commentsToggle, { borderColor: border, flex: 1, marginBottom: 0 }]}>
+                <FontAwesome
+                  name="comment-o"
+                  size={13}
+                  color={commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060')}
+                />
+                <Text style={[arm.commentsToggleText, { color: commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060') }]}>
+                  {comments.length === 0
+                    ? 'No comments yet'
+                    : `${comments.length} comment${comments.length !== 1 ? 's' : ''}`}
+                </Text>
+                <FontAwesome
+                  name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={10}
+                  color={isDark ? '#6B4C35' : '#A08060'}
+                  style={{ marginLeft: 'auto' }}
+                />
+              </Pressable>
+            </View>
+
+            {commentsExpanded && (
+              <CommentsSection
+                comments={comments}
+                isDark={isDark}
+                colors={colors}
+                onAddComment={onAddComment}
+                onUsernamePress={(username) => { onClose(); onUsernamePress?.(username); }}
+              />
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const arm = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTitle: { fontSize: 15, fontWeight: '700' },
+  body: { paddingHorizontal: 20, paddingTop: 20, gap: 14 },
+  albumRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  art: { width: 64, height: 64, borderRadius: 8 },
+  albumTitle: { fontSize: 15, fontWeight: '700', lineHeight: 20 },
+  albumArtist: { fontSize: 13 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  ratingBadge: { backgroundColor: '#D4A017', borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2 },
+  ratingNum: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  avatarLetter: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  username: { fontSize: 13, fontWeight: '700', color: '#D4A017' },
+  dateText: { fontSize: 11 },
+  reviewText: { fontSize: 15, lineHeight: 24, fontStyle: 'italic' },
+  likeCommentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
+  likeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingRight: 4 },
+  likeCount: { fontSize: 14, fontWeight: '600' },
+  commentsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, marginBottom: 4 },
+  commentsToggleText: { fontSize: 13, fontWeight: '500' },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AlbumDetailScreen() {
@@ -494,6 +705,12 @@ export default function AlbumDetailScreen() {
   }>();
 
   const { user } = useAuth();
+  const [myUsername, setMyUsername] = useState('');
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from('profiles').select('username').eq('id', user.id).single()
+      .then(({ data }) => { if (data?.username) setMyUsername(data.username); });
+  }, [user?.id]);
 
   const {
     loggedAlbums, updateReview, updateDuration, playlists, addAlbumToPlaylist, removeAlbumFromPlaylist,
@@ -521,6 +738,8 @@ export default function AlbumDetailScreen() {
   const reviewYPositions = useRef<Map<string, number>>(new Map());
   const [likedAlbumReviews, setLikedAlbumReviews] = useState<Set<string>>(new Set());
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
+  const [expandedAlbumReview, setExpandedAlbumReview] = useState<FakeReview | null>(null);
+  const [singleReviewCommentsOpen, setSingleReviewCommentsOpen] = useState(false);
   const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(() => {
     const m = new Map<string, ReviewComment[]>();
     for (const c of MOCK_COMMENTS) {
@@ -533,13 +752,15 @@ export default function AlbumDetailScreen() {
     setExpandedCommentsId(prev => prev === reviewId ? null : reviewId);
   }
 
-  function handleAddComment(reviewId: string, body: string, parentId?: string | null) {
+  function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
     const newComment: ReviewComment = {
       id:              `local_${Date.now()}`,
       reviewId,
       parentCommentId: parentId ?? null,
+      replyToUsername: replyToUsername ?? null,
       userId:          user?.id ?? 'local',
-      username:        'you',
+      username:        commenterUsername ?? 'me',
+      avatarUrl:       avatarUrl ?? null,
       body,
       createdAt:       'just now',
     };
@@ -550,29 +771,16 @@ export default function AlbumDetailScreen() {
     });
   }
 
-  function handleReviewCardPress(id: string) {
-    setHighlightedReviewId(id);
-    setExpandedCommentsId(null);
-    setShowAllReviews(true);
+  function handleReviewCardPress(review: FakeReview) {
+    setExpandedAlbumReview(review);
+    setSingleReviewCommentsOpen(false);
   }
 
-  function handleReviewCommentCountPress(id: string) {
-    setHighlightedReviewId(id);
-    setExpandedCommentsId(id);
-    setShowAllReviews(true);
+  function handleReviewCommentCountPress(review: FakeReview) {
+    setExpandedAlbumReview(review);
+    setSingleReviewCommentsOpen(true);
   }
 
-  useEffect(() => {
-    if (!showAllReviews || !highlightedReviewId) return;
-    const scrollToReview = () => {
-      const y = reviewYPositions.current.get(highlightedReviewId);
-      if (y != null) {
-        modalScrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
-      }
-    };
-    const t = setTimeout(scrollToReview, 150);
-    return () => clearTimeout(t);
-  }, [showAllReviews, highlightedReviewId]);
 
   function handleLikeAlbumReview(id: string) {
     setLikedAlbumReviews(prev => {
@@ -587,7 +795,7 @@ export default function AlbumDetailScreen() {
     isLogged && loggedAlbum!.review
       ? {
           id: 'own',
-          username: 'you',
+          username: myUsername || 'me',
           rating: loggedAlbum!.rating,
           text: loggedAlbum!.review!,
           dateStr: formatLoggedDate(loggedAlbum!.dateLogged),
@@ -603,6 +811,7 @@ export default function AlbumDetailScreen() {
   const [tracks, setTracks]               = useState<Track[] | null>(null);
   const [tracksLoading, setTracksLoading] = useState(true);
   const [lastfm, setLastfm]               = useState<LastfmAlbum | null>(null);
+  const [albumTags, setAlbumTags]         = useState<string[]>([]);
   const [genius, setGenius]               = useState<GeniusCredits | null>(null);
   const [similar, setSimilar]             = useState<SimilarAlbum[] | null>(null);
   const [bioExpanded, setBioExpanded]     = useState(false);
@@ -636,25 +845,30 @@ export default function AlbumDetailScreen() {
       .finally(() => { if (!cancelled) setTracksLoading(false); });
 
     if (albumArtist && albumTitle) {
-      const url = `${API_URL}/lastfm/album?artist=${encodeURIComponent(albumArtist)}&album=${encodeURIComponent(albumTitle)}`;
-      fetch(url)
+      const lfmUrl = `${API_URL}/lastfm/album?artist=${encodeURIComponent(albumArtist)}&album=${encodeURIComponent(albumTitle)}`;
+      const tagsUrl = `${API_URL}/album-tags?artist=${encodeURIComponent(albumArtist)}&album=${encodeURIComponent(albumTitle)}${albumId ? `&amId=${encodeURIComponent(albumId)}` : ''}`;
+
+      fetch(lfmUrl)
         .then(r => r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`)))
         .then(data => {
           if (cancelled) return;
           let description = stripHtml(data.description ?? '');
-          // Generic fallback — always have something to show
           if (!description) {
             description = `${albumTitle} is an album by ${albumArtist}${albumYear > 0 ? `, released in ${albumYear}` : ''}.`;
           }
-          setLastfm({ listeners: data.listeners ?? 0, description, tags: data.tags ?? [] });
+          setLastfm({ listeners: data.listeners ?? 0, description, tags: [] });
         })
         .catch(err => {
           console.warn('[album-detail] Last.fm error:', err);
-          // Even on total failure, show a generic description
           if (!cancelled) {
             setLastfm({ listeners: 0, description: `${albumTitle} is an album by ${albumArtist}${albumYear > 0 ? `, released in ${albumYear}` : ''}.`, tags: [] });
           }
         });
+
+      fetch(tagsUrl)
+        .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+        .then(data => { if (!cancelled) setAlbumTags(data.tags ?? []); })
+        .catch(err => console.warn('[album-detail] album-tags error:', err));
     }
 
     return () => { cancelled = true; };
@@ -870,9 +1084,9 @@ export default function AlbumDetailScreen() {
           </Text>
         </Pressable>
 
-        {lastfm?.tags?.length ? (
+        {albumTags.length > 0 ? (
           <View style={s.metaRow}>
-            {lastfm.tags.slice(0, 4).map(tag => (
+            {albumTags.slice(0, 4).map(tag => (
               <View key={tag} style={[s.pill, { backgroundColor: isDark ? '#2a1e14' : '#ebebeb' }]}>
                 <Text style={[s.pillText, { color: colors.subtext }]}>{tag}</Text>
               </View>
@@ -987,15 +1201,16 @@ export default function AlbumDetailScreen() {
             data={displayReviews}
             keyExtractor={item => item.id}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.reviewsScroll}
+            contentContainerStyle={[s.reviewsScroll, { alignItems: 'stretch' }]}
             style={s.reviewsScrollView}
             renderItem={({ item }) => (
               <AlbumReviewCard
                 review={item}
                 liked={likedAlbumReviews.has(item.id)}
                 onLike={() => handleLikeAlbumReview(item.id)}
-                onPress={() => handleReviewCardPress(item.id)}
-                onCommentCountPress={() => handleReviewCommentCountPress(item.id)}
+                onPress={() => handleReviewCardPress(item)}
+                onUsernamePress={(username) => navigateToProfile(username, router)}
+                onCommentCountPress={() => handleReviewCommentCountPress(item)}
                 commentCount={commentsMap.get(item.id)?.length ?? 0}
                 isDark={isDark}
                 colors={colors}
@@ -1012,7 +1227,7 @@ export default function AlbumDetailScreen() {
                 ]}
                 onPress={() => setShowAllReviews(true)}>
                 <FontAwesome name="comments" size={22} color={isDark ? '#7a5535' : '#a07850'} />
-                <Text style={[s.showMoreText, { color: colors.subtext }]}>Show{'\n'}More</Text>
+                <Text style={[s.showMoreText, { color: colors.subtext }]}>See{'\n'}More</Text>
               </Pressable>
             }
           />
@@ -1123,6 +1338,27 @@ export default function AlbumDetailScreen() {
 
       </ScrollView>
 
+      {/* ── Single review modal (focused, home-page style) ───────────────────── */}
+      {expandedAlbumReview && (
+        <AlbumSingleReviewModal
+          review={expandedAlbumReview}
+          albumTitle={albumTitle}
+          albumArtist={albumArtist}
+          albumYear={albumYear}
+          albumArtwork={albumArtwork}
+          liked={likedAlbumReviews.has(expandedAlbumReview.id)}
+          onLike={() => handleLikeAlbumReview(expandedAlbumReview.id)}
+          comments={commentsMap.get(expandedAlbumReview.id) ?? []}
+          commentsExpanded={singleReviewCommentsOpen}
+          onToggleComments={() => setSingleReviewCommentsOpen(prev => !prev)}
+          onAddComment={(body, parentId, u, rtu, av) => handleAddComment(expandedAlbumReview.id, body, parentId, u, rtu, av)}
+          onClose={() => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); }}
+          onUsernamePress={(username) => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); navigateToProfile(username, router); }}
+          isDark={isDark}
+          colors={colors}
+        />
+      )}
+
       {/* ── All Reviews modal ────────────────────────────────────────────────── */}
       <Modal
         visible={showAllReviews}
@@ -1149,11 +1385,12 @@ export default function AlbumDetailScreen() {
                 review={{ ...r }}
                 liked={likedAlbumReviews.has(r.id)}
                 onLike={() => handleLikeAlbumReview(r.id)}
+                onUsernamePress={() => navigateToProfile(r.username, router)}
                 onCommentCountPress={() => handleToggleComments(r.id)}
                 commentCount={commentsMap.get(r.id)?.length ?? 0}
                 comments={commentsMap.get(r.id) ?? []}
                 commentsExpanded={expandedCommentsId === r.id}
-                onAddComment={(body, parentId) => handleAddComment(r.id, body, parentId)}
+                onAddComment={(body, parentId, u, rtu, av) => handleAddComment(r.id, body, parentId, u, rtu, av)}
                 isDark={isDark}
                 colors={colors}
                 borderColor={borderColor}
@@ -1314,7 +1551,7 @@ const s = StyleSheet.create({
   reviewCardLikeCount: { fontSize: 11, fontWeight: '600' },
 
   // Show More card
-  showMoreCard: { justifyContent: 'center', alignItems: 'center', gap: 8 },
+  showMoreCard: { justifyContent: 'center', alignItems: 'center', gap: 8, alignSelf: 'stretch' },
   showMoreText: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 17 },
 
   // All Reviews modal

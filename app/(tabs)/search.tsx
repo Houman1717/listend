@@ -15,10 +15,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useAlbums, PendingAlbum, WantToListenAlbum, Playlist } from '@/context/AlbumsContext';
+import { useAlbums, PendingAlbum, WantToListenAlbum } from '@/context/AlbumsContext';
 import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -35,6 +36,19 @@ type UserProfile = {
   avatar_url: string | null;
 };
 
+type PlaylistSearchResult = {
+  id: string;
+  name: string;
+  description?: string;
+  albumCount: number;
+  artworkUrls: string[];
+  ownerId?: string;
+  ownerUsername?: string;
+  isFeatured: boolean;
+  featuredEmoji?: string;
+  rawFeaturedId?: string;
+};
+
 type ResultItem =
   | (SpotifyAlbum  & { kind: 'album'  })
   | (SpotifyTrack  & { kind: 'song'   })
@@ -42,12 +56,26 @@ type ResultItem =
 
 // A recent-search entry stores the full item so we can show artwork + subtitle.
 type RecentItem = {
-  kind: 'album' | 'song' | 'artist';
+  kind: 'album' | 'song' | 'artist' | 'playlist' | 'user';
   id: string;
-  title: string;   // album/song title, or artist name
-  subtitle: string; // artist · year  /  artist  /  genre
+  title: string;
+  subtitle: string;
   artworkUrl: string;
-  circular: boolean; // true for artists
+  circular: boolean;
+  // album/song extras for direct navigation
+  albumArtist?: string;
+  albumYear?: string;
+  // artist extras
+  artistName?: string;
+  // playlist extras
+  artworkUrls?: string[];
+  isFeatured?: boolean;
+  rawFeaturedId?: string;
+  featuredEmoji?: string;
+  playlistDescription?: string;
+  playlistOwnerId?: string;
+  // user extras
+  userId?: string;
 };
 
 const TABS: { key: SearchTab; label: string }[] = [
@@ -77,6 +105,93 @@ async function searchBackend(tab: SearchTab, query: string): Promise<ResultItem[
   return                        (data as SpotifyArtist[]).map(a => ({ kind: 'artist' as const, ...a }));
 }
 
+async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
+  const q = query.trim().toLowerCase();
+  const results: PlaylistSearchResult[] = [];
+
+  // Featured playlists
+  try {
+    const resp = await fetch(`${API_URL}/api/featured-playlists`);
+    if (resp.ok) {
+      const featured: any[] = await resp.json();
+      for (const p of featured) {
+        if (
+          (p.name ?? '').toLowerCase().includes(q) ||
+          (p.description ?? '').toLowerCase().includes(q)
+        ) {
+          results.push({
+            id: `featured:${p.id}`,
+            rawFeaturedId: p.id,
+            name: p.name,
+            description: p.description ?? undefined,
+            albumCount: (p.artworkUrls ?? []).length,
+            artworkUrls: (p.artworkUrls ?? []).slice(0, 4),
+            isFeatured: true,
+            featuredEmoji: p.emoji,
+          });
+        }
+      }
+    }
+  } catch {}
+
+  // User playlists from Supabase
+  const pattern = `%${query.trim()}%`;
+  const { data: pls } = await supabase
+    .from('playlists')
+    .select('id, name, description, user_id, created_at')
+    .or(`name.ilike.${pattern},description.ilike.${pattern}`)
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if (pls && pls.length > 0) {
+    const playlistIds = (pls as any[]).map(p => p.id as string);
+    const ownerIds    = [...new Set((pls as any[]).map(p => p.user_id as string))];
+
+    const [pasResult, profilesResult] = await Promise.all([
+      supabase
+        .from('playlist_albums')
+        .select('playlist_id, spotify_id, position')
+        .in('playlist_id', playlistIds)
+        .order('position', { ascending: true }),
+      supabase.from('profiles').select('id, username').in('id', ownerIds),
+    ]);
+
+    const pas: any[] = pasResult.data ?? [];
+    const allSpotifyIds = [...new Set(pas.map((a: any) => a.spotify_id as string))];
+    const artworkMap = new Map<string, string>();
+    if (allSpotifyIds.length > 0) {
+      const { data: uas } = await supabase
+        .from('user_albums')
+        .select('spotify_id, artwork_url')
+        .in('spotify_id', allSpotifyIds);
+      for (const a of (uas ?? []) as any[]) {
+        if (!artworkMap.has(a.spotify_id)) artworkMap.set(a.spotify_id, a.artwork_url ?? '');
+      }
+    }
+
+    const usernameById = new Map<string, string>(
+      (profilesResult.data ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
+    );
+
+    for (const p of pls as any[]) {
+      const albumIds    = pas.filter((a: any) => a.playlist_id === p.id).map((a: any) => a.spotify_id as string);
+      const artworkUrls = albumIds.map(id => artworkMap.get(id) ?? '').filter(Boolean).slice(0, 4);
+      results.push({
+        id:            p.id,
+        name:          p.name,
+        description:   p.description ?? undefined,
+        albumCount:    albumIds.length,
+        artworkUrls,
+        ownerId:       p.user_id,
+        ownerUsername: usernameById.get(p.user_id) ?? '',
+        isFeatured:    false,
+      });
+    }
+  }
+
+  return results;
+}
+
 function resultToRecentItem(item: ResultItem): RecentItem {
   if (item.kind === 'album') {
     return {
@@ -86,6 +201,8 @@ function resultToRecentItem(item: ResultItem): RecentItem {
       subtitle: item.artist + (item.year ? ` · ${item.year}` : ''),
       artworkUrl: item.artworkUrl,
       circular: false,
+      albumArtist: item.artist,
+      albumYear: String(item.year ?? ''),
     };
   }
   if (item.kind === 'song') {
@@ -96,6 +213,7 @@ function resultToRecentItem(item: ResultItem): RecentItem {
       subtitle: item.artist,
       artworkUrl: item.artworkUrl,
       circular: false,
+      albumArtist: item.artist,
     };
   }
   // artist
@@ -163,16 +281,17 @@ function AlbumRow({
   );
 }
 
-function SongRow({ item, isDark, colors, onSaveRecent }: {
+function SongRow({ item, isDark, colors, onSaveRecent, onPress }: {
   item: SpotifyTrack & { kind: 'song' };
   isDark: boolean;
   colors: typeof Colors.light;
   onSaveRecent: () => void;
+  onPress: () => void;
 }) {
   return (
     <Pressable
       style={({ pressed }) => [s.resultRow, { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#F2EBE0') : 'transparent' }]}
-      onPress={onSaveRecent}>
+      onPress={() => { onSaveRecent(); onPress(); }}>
       <View style={s.resultMain}>
         {item.artworkUrl ? (
           <ExpoImage source={{ uri: item.artworkUrl }} style={s.artwork} 
@@ -231,29 +350,50 @@ function PlaylistRow({
   isDark,
   colors,
   onPress,
+  onSaveRecent,
 }: {
-  item: Playlist;
+  item: PlaylistSearchResult;
   isDark: boolean;
   colors: typeof Colors.light;
   onPress: () => void;
+  onSaveRecent: () => void;
 }) {
-  const count = item.albumIds.length;
+  const half       = 26;
+  const emptyColor = isDark ? '#2e2018' : '#d4c4a8';
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { onSaveRecent(); onPress(); }}
       style={({ pressed }) => [
         s.resultRow,
         { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#F2EBE0') : 'transparent' },
       ]}>
       <View style={s.resultMain}>
-        <View style={[s.playlistIcon, { backgroundColor: isDark ? '#2a1e14' : '#e8e8e8' }]}>
-          <FontAwesome name="list" size={18} color="#D4A017" />
+        {/* 2×2 mosaic */}
+        <View style={{ width: 52, height: 52, borderRadius: 4, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap', flexShrink: 0 }}>
+          {[0, 1, 2, 3].map(i => {
+            const url = item.artworkUrls[i];
+            return url ? (
+              <ExpoImage key={i} source={{ uri: url }} style={{ width: half, height: half }} contentFit="cover" cachePolicy="disk" />
+            ) : (
+              <View key={i} style={{ width: half, height: half, backgroundColor: emptyColor }} />
+            );
+          })}
         </View>
         <View style={s.resultText}>
-          <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+            {item.isFeatured && (
+              <View style={{ backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>by Listend</Text>
+              </View>
+            )}
+          </View>
           <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>
-            {count === 1 ? '1 album' : `${count} albums`}
-            {item.description ? `  ·  ${item.description}` : ''}
+            {item.isFeatured
+              ? (item.description ?? '')
+              : `${item.albumCount === 1 ? '1 album' : `${item.albumCount} albums`}${item.ownerUsername ? `  ·  @${item.ownerUsername}` : ''}`
+            }
           </Text>
         </View>
       </View>
@@ -277,15 +417,33 @@ function RecentRow({
   onPress: () => void;
   onRemove: () => void;
 }) {
-  const imgRadius = item.circular ? 26 : 4;
+  const imgRadius   = item.circular ? 26 : 4;
+  const emptyColor  = isDark ? '#2e2018' : '#d4c4a8';
+  const pillLabel   = item.kind === 'album' ? 'Album'
+    : item.kind === 'song'     ? 'Song'
+    : item.kind === 'artist'   ? 'Artist'
+    : item.kind === 'playlist' ? 'Playlist'
+    : 'Member';
+
   return (
     <View style={[s.recentRow, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
       <Pressable
         style={({ pressed }) => [s.recentMain, { backgroundColor: pressed ? (isDark ? '#2e2018' : '#f5f5f5') : 'transparent' }]}
         onPress={onPress}>
-        {/* artwork */}
-        {item.artworkUrl ? (
-          <ExpoImage source={{ uri: item.artworkUrl }} style={[s.recentArt, { borderRadius: imgRadius }]} 
+        {/* artwork — mosaic for playlists, circular for users, square otherwise */}
+        {item.kind === 'playlist' ? (
+          <View style={[s.recentArt, { borderRadius: 4, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }]}>
+            {[0, 1, 2, 3].map(i => {
+              const url = (item.artworkUrls ?? [])[i];
+              return url ? (
+                <ExpoImage key={i} source={{ uri: url }} style={{ width: 24, height: 24 }} contentFit="cover" cachePolicy="disk" />
+              ) : (
+                <View key={i} style={{ width: 24, height: 24, backgroundColor: emptyColor }} />
+              );
+            })}
+          </View>
+        ) : item.artworkUrl ? (
+          <ExpoImage source={{ uri: item.artworkUrl }} style={[s.recentArt, { borderRadius: imgRadius }]}
             contentFit="cover" cachePolicy="disk"
           />
         ) : (
@@ -295,16 +453,21 @@ function RecentRow({
         )}
         {/* text */}
         <View style={s.recentText}>
-          <Text style={[s.recentTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text style={[s.recentTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+            {item.kind === 'playlist' && item.isFeatured && (
+              <View style={{ backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>by Listend</Text>
+              </View>
+            )}
+          </View>
           {item.subtitle ? (
             <Text style={[s.recentSub, { color: colors.subtext }]} numberOfLines={1}>{item.subtitle}</Text>
           ) : null}
         </View>
         {/* kind pill */}
         <View style={[s.kindPill, { backgroundColor: isDark ? '#2a1e14' : '#e8e8e8' }]}>
-          <Text style={[s.kindLabel, { color: colors.subtext }]}>
-            {item.kind === 'album' ? 'Album' : item.kind === 'song' ? 'Song' : 'Artist'}
-          </Text>
+          <Text style={[s.kindLabel, { color: colors.subtext }]}>{pillLabel}</Text>
         </View>
       </Pressable>
       <Pressable onPress={onRemove} hitSlop={12} style={s.recentRemove}>
@@ -321,18 +484,20 @@ function UserRow({
   isDark,
   colors,
   onPress,
+  onSaveRecent,
 }: {
   item: UserProfile;
   isDark: boolean;
   colors: typeof Colors.light;
   onPress: () => void;
+  onSaveRecent: () => void;
 }) {
   const name    = item.display_name || item.username || 'Unknown';
   const initial = name.charAt(0).toUpperCase();
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { onSaveRecent(); onPress(); }}
       style={({ pressed }) => [
         s.resultRow,
         { paddingRight: 16, backgroundColor: pressed ? (isDark ? '#2a1e14' : '#F2EBE0') : 'transparent' },
@@ -369,16 +534,17 @@ export default function SearchScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { user } = useAuth();
-  const { setPendingAlbum, wantToListen, addToWantToListen, removeFromWantToListen, playlists, loggedAlbums } = useAlbums();
+  const { setPendingAlbum, wantToListen, addToWantToListen, removeFromWantToListen, loggedAlbums } = useAlbums();
 
   const [activeTab, setActiveTab] = useState<SearchTab>('albums');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ResultItem[]>([]);
-  const [playlistResults, setPlaylistResults] = useState<Playlist[]>([]);
+  const [playlistResults, setPlaylistResults] = useState<PlaylistSearchResult[]>([]);
   const [userResults, setUserResults] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
+  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -391,6 +557,46 @@ export default function SearchScreen() {
     const entry = resultToRecentItem(item);
     setRecentItems((prev) => {
       const next = [entry, ...prev.filter((r) => !(r.kind === entry.kind && r.id === entry.id))].slice(0, MAX_RECENT);
+      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }
+
+  function savePlaylistRecent(item: PlaylistSearchResult) {
+    const entry: RecentItem = {
+      kind:               'playlist',
+      id:                 item.id,
+      title:              item.name,
+      subtitle:           item.isFeatured ? (item.description ?? '') : (item.ownerUsername ? `@${item.ownerUsername}` : ''),
+      artworkUrl:         item.artworkUrls[0] ?? '',
+      circular:           false,
+      artworkUrls:        item.artworkUrls,
+      isFeatured:         item.isFeatured,
+      rawFeaturedId:      item.rawFeaturedId,
+      featuredEmoji:      item.featuredEmoji,
+      playlistDescription: item.description,
+      playlistOwnerId:    item.ownerId,
+    };
+    setRecentItems((prev) => {
+      const next = [entry, ...prev.filter((r) => !(r.kind === 'playlist' && r.id === entry.id))].slice(0, MAX_RECENT);
+      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }
+
+  function saveUserRecent(item: UserProfile) {
+    const name = item.display_name || item.username || 'Unknown';
+    const entry: RecentItem = {
+      kind:      'user',
+      id:        item.id,
+      userId:    item.id,
+      title:     name,
+      subtitle:  item.username ? `@${item.username}` : '',
+      artworkUrl: item.avatar_url ?? '',
+      circular:  true,
+    };
+    setRecentItems((prev) => {
+      const next = [entry, ...prev.filter((r) => !(r.kind === 'user' && r.id === entry.id))].slice(0, MAX_RECENT);
       AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
@@ -420,14 +626,16 @@ export default function SearchScreen() {
     setSearched(true);
 
     if (tab === 'playlists') {
-      const q = text.trim().toLowerCase();
-      setPlaylistResults(
-        playlists.filter(
-          (p) =>
-            p.name.toLowerCase().includes(q) ||
-            (p.description ?? '').toLowerCase().includes(q)
-        )
-      );
+      setLoading(true);
+      try {
+        const items = await searchPlaylists(text.trim());
+        setPlaylistResults(items);
+      } catch (e) {
+        console.error('[Search] Playlist search error:', e);
+        setPlaylistResults([]);
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -471,7 +679,7 @@ export default function SearchScreen() {
     } finally {
       setLoading(false);
     }
-  }, [playlists, user?.id]);
+  }, [user?.id]);
 
   function handleChangeText(text: string) {
     setQuery(text);
@@ -498,11 +706,42 @@ export default function SearchScreen() {
   }
 
   function handleRecentTap(item: RecentItem) {
-    setQuery(item.title);
-    // Switch tab to match the kind
-    const tab: SearchTab = item.kind === 'album' ? 'albums' : item.kind === 'song' ? 'songs' : 'artists';
-    setActiveTab(tab);
-    search(item.title, tab);
+    if (item.kind === 'album') {
+      router.push({
+        pathname: '/album-detail',
+        params: { id: item.id, title: item.title, artist: item.albumArtist ?? '', year: item.albumYear ?? '', artworkUrl: item.artworkUrl },
+      });
+      return;
+    }
+    if (item.kind === 'song') {
+      setActiveSong({ id: item.id, title: item.title, artist: item.albumArtist ?? '', artworkUrl: item.artworkUrl });
+      return;
+    }
+    if (item.kind === 'artist') {
+      router.push({ pathname: '/artist-detail', params: { name: item.title, artworkUrl: item.artworkUrl } });
+      return;
+    }
+    if (item.kind === 'user') {
+      if (item.userId) router.push({ pathname: '/user-profile', params: { userId: item.userId } });
+      return;
+    }
+    if (item.kind === 'playlist') {
+      if (item.isFeatured) {
+        router.push({
+          pathname: '/discover-featured-playlist',
+          params: {
+            id:              item.rawFeaturedId,
+            name:            item.title,
+            emoji:           item.featuredEmoji ?? '',
+            description:     item.playlistDescription ?? '',
+            artworkUrlsJson: JSON.stringify(item.artworkUrls ?? []),
+          },
+        } as any);
+      } else {
+        router.push({ pathname: '/playlist-detail', params: { id: item.id, userId: item.playlistOwnerId ?? '' } });
+      }
+      return;
+    }
   }
 
   function handleLogAlbum(item: SpotifyAlbum) {
@@ -543,6 +782,12 @@ export default function SearchScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
+      <SongInfoModal
+        song={activeSong}
+        onClose={() => setActiveSong(null)}
+        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
+        onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
+      />
 
       {/* Search bar */}
       <View style={[s.searchBar, {
@@ -554,9 +799,10 @@ export default function SearchScreen() {
         <TextInput
           style={[s.input, { color: colors.text }]}
           placeholder={
-            activeTab === 'albums'  ? 'Search albums…'  :
-            activeTab === 'songs'   ? 'Search songs…'   :
-            activeTab === 'artists' ? 'Search artists…' : 'Search users…'
+            activeTab === 'albums'    ? 'Search albums…'    :
+            activeTab === 'songs'     ? 'Search songs…'     :
+            activeTab === 'artists'   ? 'Search artists…'   :
+            activeTab === 'playlists' ? 'Search playlists…' : 'Search users…'
           }
           placeholderTextColor={colors.textMuted}
           value={query}
@@ -636,7 +882,7 @@ export default function SearchScreen() {
               {activeTab === 'albums'    ? 'Find albums to log or save for later.'
                : activeTab === 'songs'   ? 'Discover songs and explore music.'
                : activeTab === 'artists' ? 'Look up artists and their work.'
-               : activeTab === 'playlists' ? 'Search your playlists by name or description.'
+               : activeTab === 'playlists' ? 'Search playlists by name — yours, other members’, and Listend curated lists.'
                : 'Search for Listend members by name or username.'}
             </Text>
           </View>
@@ -666,6 +912,7 @@ export default function SearchScreen() {
               isDark={isDark}
               colors={colors}
               onPress={() => router.push({ pathname: '/user-profile', params: { userId: item.id } })}
+              onSaveRecent={() => saveUserRecent(item)}
             />
           )}
         />
@@ -697,7 +944,26 @@ export default function SearchScreen() {
               item={item}
               isDark={isDark}
               colors={colors}
-              onPress={() => router.push({ pathname: '/playlist-detail', params: { id: item.id } })}
+              onSaveRecent={() => savePlaylistRecent(item)}
+              onPress={() => {
+                if (item.isFeatured) {
+                  router.push({
+                    pathname: '/discover-featured-playlist',
+                    params: {
+                      id:              item.rawFeaturedId,
+                      name:            item.name,
+                      emoji:           item.featuredEmoji ?? '',
+                      description:     item.description ?? '',
+                      artworkUrlsJson: JSON.stringify(item.artworkUrls),
+                    },
+                  } as any);
+                } else {
+                  router.push({
+                    pathname: '/playlist-detail',
+                    params: { id: item.id, userId: item.ownerId },
+                  });
+                }
+              }}
             />
           )}
         />
@@ -733,6 +999,7 @@ export default function SearchScreen() {
                   isDark={isDark}
                   colors={colors}
                   onSaveRecent={() => saveRecentItem(item)}
+                  onPress={() => setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl })}
                 />
               );
             }

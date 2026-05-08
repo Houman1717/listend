@@ -5,17 +5,39 @@ import {
   Text,
   FlatList,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { POPULAR_REVIEWS_DATA, PopularReview } from './(tabs)/index';
-import { avatarColor } from '@/components/ReviewComments';
+import { POPULAR_REVIEWS_DATA, POPULAR_REVIEW_COMMENTS, PopularReview } from './(tabs)/index';
+import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { SpotifyAlbum } from '@/context/SpotifyService';
+import { navigateToProfile } from '@/lib/navigateToProfile';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+
+// ─── Volume badge ─────────────────────────────────────────────────────────────
+
+function VolumeBadge({ rating }: { rating: number }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <FontAwesome name="volume-up" size={10} color="#D4A017" />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+        {Array.from({ length: 10 }, (_, i) => {
+          const h = Math.round(3 + i * 1);
+          return (
+            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : '#3a2818' }} />
+          );
+        })}
+      </View>
+      <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
+    </View>
+  );
+}
 
 // ─── Full review row ──────────────────────────────────────────────────────────
 
@@ -24,6 +46,9 @@ function ReviewRow({
   liked,
   onLike,
   onAlbumPress,
+  onUsernamePress,
+  comments,
+  onAddComment,
   isDark,
   colors,
 }: {
@@ -31,26 +56,33 @@ function ReviewRow({
   liked: boolean;
   onLike: () => void;
   onAlbumPress: () => void;
+  onUsernamePress?: () => void;
+  comments: ReviewComment[];
+  onAddComment: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
   isDark: boolean;
   colors: any;
 }) {
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
   const displayCount = item.likeCount + (liked ? 1 : 0);
+  const border = isDark ? '#2a1e14' : '#e8e8e8';
+  const subtext = isDark ? '#7a5535' : '#a07850';
+
   return (
     <View
       style={[
         s.row,
         {
           backgroundColor: isDark ? '#2e2018' : '#fff',
-          borderColor: isDark ? '#2a1e14' : '#e8e8e8',
+          borderColor: border,
         },
       ]}>
       {/* Top: art + album meta — tappable to open album profile */}
       <Pressable
         onPress={onAlbumPress}
         style={({ pressed }) => [s.topRow, { opacity: pressed ? 0.7 : 1 }]}>
-        <ExpoImage source={{ uri: item.artworkUrl }} style={s.art} 
-            contentFit="cover" cachePolicy="disk"
-          />
+        <ExpoImage source={{ uri: item.artworkUrl }} style={s.art}
+          contentFit="cover" cachePolicy="disk"
+        />
         <View style={s.albumInfo}>
           <Text style={[s.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]}>
             {item.albumTitle}
@@ -59,10 +91,7 @@ function ReviewRow({
             {item.albumArtist} · {item.albumYear}
           </Text>
           <View style={s.ratingRow}>
-            <FontAwesome name="volume-up" size={11} color="#D4A017" />
-            <View style={s.ratingBadge}>
-              <Text style={s.ratingNum}>{item.rating}</Text>
-            </View>
+            <VolumeBadge rating={item.rating} />
           </View>
         </View>
       </Pressable>
@@ -72,25 +101,52 @@ function ReviewRow({
         "{item.review}"
       </Text>
 
-      {/* Footer */}
+      {/* Footer: avatar + username | comments + like */}
       <View style={s.footer}>
-        <View style={s.userRow}>
+        <Pressable style={s.userRow} onPress={onUsernamePress} hitSlop={6}>
           <View style={[s.avatar, { backgroundColor: avatarColor(item.username) }]}>
             <Text style={s.avatarLetter}>{item.username[0].toUpperCase()}</Text>
           </View>
           <Text style={[s.username, { color: '#D4A017' }]}>@{item.username}</Text>
-        </View>
-        <Pressable onPress={onLike} hitSlop={10} style={s.likeBtn}>
-          <FontAwesome
-            name={liked ? 'heart' : 'heart-o'}
-            size={14}
-            color={liked ? '#D4A017' : (isDark ? '#7a5535' : '#a07850')}
-          />
-          <Text style={[s.likeCount, { color: isDark ? '#7a5535' : '#a07850' }]}>
-            {displayCount}
-          </Text>
         </Pressable>
+        <View style={s.footerActions}>
+          <Pressable
+            onPress={() => setCommentsExpanded(prev => !prev)}
+            hitSlop={8}
+            style={s.actionBtn}>
+            <FontAwesome
+              name="comment-o"
+              size={16}
+              color={commentsExpanded ? '#D4A017' : subtext}
+            />
+            <Text style={[s.actionCount, { color: commentsExpanded ? '#D4A017' : subtext }]}>
+              {comments.length}
+            </Text>
+          </Pressable>
+          <Pressable onPress={onLike} hitSlop={10} style={s.actionBtn}>
+            <FontAwesome
+              name={liked ? 'heart' : 'heart-o'}
+              size={16}
+              color={liked ? '#D4A017' : subtext}
+            />
+            <Text style={[s.actionCount, { color: liked ? '#D4A017' : subtext }]}>
+              {displayCount}
+            </Text>
+          </Pressable>
+        </View>
       </View>
+
+      {/* Comments section */}
+      {commentsExpanded && (
+        <CommentsSection
+          comments={comments}
+          isDark={isDark}
+          colors={colors}
+          onAddComment={onAddComment}
+          onUsernamePress={onUsernamePress}
+          large
+        />
+      )}
     </View>
   );
 }
@@ -104,12 +160,38 @@ export default function PopularReviewsScreen() {
   const router = useRouter();
 
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
+  const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(() => {
+    const m = new Map<string, ReviewComment[]>();
+    for (const c of POPULAR_REVIEW_COMMENTS) {
+      m.set(c.reviewId, [...(m.get(c.reviewId) ?? []), c]);
+    }
+    return m;
+  });
 
   function handleLike(id: string) {
     setLikedReviews(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
+    });
+  }
+
+  function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+    const newComment: ReviewComment = {
+      id:              `pr_local_${Date.now()}`,
+      reviewId,
+      parentCommentId: parentId ?? null,
+      replyToUsername: replyToUsername ?? null,
+      userId:          'me',
+      username:        commenterUsername ?? 'me',
+      avatarUrl:       avatarUrl ?? null,
+      body,
+      createdAt:       'just now',
+    };
+    setCommentsMap(prev => {
+      const m = new Map(prev);
+      m.set(reviewId, [...(m.get(reviewId) ?? []), newComment]);
+      return m;
     });
   }
 
@@ -130,23 +212,31 @@ export default function PopularReviewsScreen() {
   }
 
   return (
-    <FlatList
-      data={POPULAR_REVIEWS_DATA}
-      keyExtractor={item => item.id}
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[s.list, { paddingBottom: 40 }]}
-      showsVerticalScrollIndicator={false}
-      renderItem={({ item }) => (
-        <ReviewRow
-          item={item}
-          liked={likedReviews.has(item.id)}
-          onLike={() => handleLike(item.id)}
-          onAlbumPress={() => navigateToAlbum(item.albumTitle, item.albumArtist, item.artworkUrl, item.albumYear)}
-          isDark={isDark}
-          colors={colors}
-        />
-      )}
-    />
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <FlatList
+        data={POPULAR_REVIEWS_DATA}
+        keyExtractor={item => item.id}
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={[s.list, { paddingBottom: 40 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        renderItem={({ item }) => (
+          <ReviewRow
+            item={item}
+            liked={likedReviews.has(item.id)}
+            onLike={() => handleLike(item.id)}
+            onAlbumPress={() => navigateToAlbum(item.albumTitle, item.albumArtist, item.artworkUrl, item.albumYear)}
+            onUsernamePress={() => navigateToProfile(item.username, router)}
+            comments={commentsMap.get(item.id) ?? []}
+            onAddComment={(body, parentId, u, rtu, av) => handleAddComment(item.id, body, parentId, u, rtu, av)}
+            isDark={isDark}
+            colors={colors}
+          />
+        )}
+      />
+    </KeyboardAvoidingView>
   );
 }
 
@@ -218,10 +308,7 @@ const s = StyleSheet.create({
   },
   avatarLetter: { color: '#fff', fontSize: 11, fontWeight: '700' },
   username:     { fontSize: 13, fontWeight: '600' },
-  likeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  likeCount: { fontSize: 13 },
+  footerActions: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  actionCount: { fontSize: 14 },
 });
