@@ -332,7 +332,7 @@ function TurntableIcon() {
 // ─── Flip entry card ─────────────────────────────────────────────────────────
 
 function FlipEntryCard({ onPress, isDark }: { onPress: () => void; isDark: boolean }) {
-  const cardBg    = isDark ? '#2E2018'           : '#EDE4D4';
+  const cardBg    = isDark ? '#2E2018' : '#FFFFFF';
   const titleCol  = isDark ? '#f5e6c8'           : '#1A0F0A';
   const subtitleCol = isDark ? 'rgba(245,230,200,0.55)' : 'rgba(26,15,10,0.55)';
   return (
