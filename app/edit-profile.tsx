@@ -18,7 +18,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase'; // still used for profile read/upsert
+import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/context/ThemeContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -81,7 +82,6 @@ const t = StyleSheet.create({
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-/** Pick an avatar from the library (free crop). */
 async function pickImage(): Promise<{ uri: string; base64: string } | null> {
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== 'granted') {
@@ -98,31 +98,19 @@ async function pickImage(): Promise<{ uri: string; base64: string } | null> {
   return { uri: result.assets[0].uri, base64: result.assets[0].base64 };
 }
 
-
-/**
- * Upload an image via the Railway backend (which uses the Supabase service-role
- * key to bypass Storage RLS). Returns the public URL.
- */
 async function uploadViaBackend(
   endpoint: 'upload-avatar' | 'upload-cover',
   userId: string,
   base64: string,
 ): Promise<string> {
   const url = `${API_URL}/api/${endpoint}`;
-  console.log(`[EditProfile] POST ${url} user_id=${userId} base64_len=${base64.length}`);
-
   const res = await fetch(url, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ user_id: userId, image_base64: base64 }),
   });
-
   const json = await res.json();
-  if (!res.ok) {
-    console.log('FULL ERROR:', JSON.stringify(json));
-    throw new Error(json.error ?? `Upload failed (${res.status})`);
-  }
-  console.log(`[EditProfile] upload success → ${json.url}`);
+  if (!res.ok) throw new Error(json.error ?? `Upload failed (${res.status})`);
   return json.url;
 }
 
@@ -132,6 +120,15 @@ export default function EditProfileScreen() {
   const router     = useRouter();
   const navigation = useNavigation();
   const { user }   = useAuth();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  // Dynamic colors
+  const bg      = isDark ? DARK_BG   : '#FAF7F4';
+  const cardBg  = isDark ? CARD_BG   : '#FFFFFF';
+  const border  = isDark ? BORDER    : '#e8ddd0';
+  const text    = isDark ? TEXT      : '#1A0F0A';
+  const subtext = isDark ? SUBTEXT   : '#7a5c3a';
 
   // Form state
   const [displayName, setDisplayName] = useState('');
@@ -178,12 +175,8 @@ export default function EditProfileScreen() {
     setSaving(true);
 
     try {
-      // ── 1. Confirm the session is live before writing ──────────────────────
       let { data: { session } } = await supabase.auth.getSession();
 
-      console.log('[EditProfile] session token:', session?.access_token ?? 'NULL — not authenticated');
-
-      // If the cached session has expired or wasn't loaded yet, force a refresh
       if (!session) {
         const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
         if (refreshError || !refreshed.session) {
@@ -192,17 +185,13 @@ export default function EditProfileScreen() {
           return;
         }
         session = refreshed.session;
-        console.log('[EditProfile] session refreshed, token:', session.access_token);
       }
 
-      // ── 2. Upload images via backend if the user picked new ones ──────────
       let finalAvatarUrl = avatarUri;
       if (avatarBase64) {
         finalAvatarUrl = await uploadViaBackend('upload-avatar', user.id, avatarBase64);
       }
 
-      // ── 3. Upsert — inserts if the row doesn't exist, updates if it does ───
-      //    onConflict:'id' means: if a row with this id already exists, update it.
       const { error } = await supabase
         .from('profiles')
         .upsert(
@@ -222,7 +211,6 @@ export default function EditProfileScreen() {
 
       if (error) throw error;
 
-      // Update preview URIs to the returned public URLs and clear base64 buffers
       if (finalAvatarUrl) setAvatarUri(finalAvatarUrl);
       setAvatarBase64(null);
 
@@ -232,7 +220,6 @@ export default function EditProfileScreen() {
         router.back();
       }, 2400);
     } catch (err: any) {
-      console.log('FULL ERROR:', JSON.stringify(err));
       Alert.alert('Error saving profile', err?.message ?? 'Something went wrong.');
     } finally {
       setSaving(false);
@@ -246,7 +233,11 @@ export default function EditProfileScreen() {
         saving ? (
           <ActivityIndicator color={ACCENT} style={{ marginRight: 16 }} />
         ) : (
-          <Pressable onPress={handleSave} style={{ marginRight: 16 }} hitSlop={10}>
+          <Pressable
+            onPress={handleSave}
+            hitSlop={10}
+            style={{ paddingHorizontal: 16 }}
+          >
             <Text style={{ color: ACCENT, fontSize: 16, fontWeight: '700' }}>Save</Text>
           </Pressable>
         ),
@@ -259,11 +250,10 @@ export default function EditProfileScreen() {
     if (picked) { setAvatarUri(picked.uri); setAvatarBase64(picked.base64); }
   }
 
-
   // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={s.center}>
+      <View style={[s.center, { backgroundColor: bg }]}>
         <ActivityIndicator color={ACCENT} size="large" />
       </View>
     );
@@ -273,7 +263,7 @@ export default function EditProfileScreen() {
     .charAt(0).toUpperCase();
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { backgroundColor: bg }]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -286,11 +276,14 @@ export default function EditProfileScreen() {
 
           {/* ── Avatar ─────────────────────────────────────────────────── */}
           <View style={s.photoBlock}>
-            <Pressable style={s.avatarWrap} onPress={onPickAvatar}>
+            <Pressable
+              style={[s.avatarWrap, { borderColor: bg, backgroundColor: isDark ? '#2a1e14' : '#e8ddd0' }]}
+              onPress={onPickAvatar}
+            >
               {avatarUri ? (
                 <ExpoImage source={{ uri: avatarUri }} style={s.avatarImg} contentFit="cover" cachePolicy="disk" />
               ) : (
-                <View style={s.avatarPlaceholder}>
+                <View style={[s.avatarPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#e8ddd0' }]}>
                   <Text style={s.avatarInitial}>{avatarInitial}</Text>
                 </View>
               )}
@@ -305,26 +298,26 @@ export default function EditProfileScreen() {
 
             {/* Display name */}
             <View style={s.fieldGroup}>
-              <Text style={s.label}>DISPLAY NAME</Text>
+              <Text style={[s.label, { color: subtext }]}>DISPLAY NAME</Text>
               <TextInput
-                style={s.input}
+                style={[s.input, { backgroundColor: cardBg, borderColor: border, color: text }]}
                 value={displayName}
                 onChangeText={setDisplayName}
                 placeholder="Your name"
-                placeholderTextColor={SUBTEXT}
+                placeholderTextColor={subtext}
                 autoCapitalize="words"
               />
             </View>
 
             {/* Username */}
             <View style={s.fieldGroup}>
-              <Text style={s.label}>USERNAME</Text>
+              <Text style={[s.label, { color: subtext }]}>USERNAME</Text>
               <TextInput
-                style={s.input}
+                style={[s.input, { backgroundColor: cardBg, borderColor: border, color: text }]}
                 value={username}
                 onChangeText={setUsername}
                 placeholder="username"
-                placeholderTextColor={SUBTEXT}
+                placeholderTextColor={subtext}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -333,17 +326,17 @@ export default function EditProfileScreen() {
             {/* Bio */}
             <View style={s.fieldGroup}>
               <View style={s.labelRow}>
-                <Text style={s.label}>BIO</Text>
-                <Text style={[s.charCount, bio.length > 140 && s.charCountWarn]}>
+                <Text style={[s.label, { color: subtext }]}>BIO</Text>
+                <Text style={[s.charCount, { color: subtext }, bio.length > 140 && s.charCountWarn]}>
                   {bio.length}/150
                 </Text>
               </View>
               <TextInput
-                style={[s.input, s.inputMulti]}
+                style={[s.input, s.inputMulti, { backgroundColor: cardBg, borderColor: border, color: text }]}
                 value={bio}
-                onChangeText={t => t.length <= 150 && setBio(t)}
+                onChangeText={v => v.length <= 150 && setBio(v)}
                 placeholder="Tell people about yourself…"
-                placeholderTextColor={SUBTEXT}
+                placeholderTextColor={subtext}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
@@ -351,35 +344,43 @@ export default function EditProfileScreen() {
             </View>
 
             {/* Links section */}
-            <Text style={[s.label, { marginTop: 8, marginBottom: 12 }]}>LINKS</Text>
+            <Text style={[s.label, { color: subtext, marginTop: 8, marginBottom: 12 }]}>LINKS</Text>
 
-            <View style={s.linkGroup}>
+            <View style={[s.linkGroup, { backgroundColor: cardBg, borderColor: border }]}>
               <LinkInput
                 icon="globe"
                 placeholder="Website URL"
                 value={website}
                 onChangeText={setWebsite}
+                textColor={text}
+                iconColor={subtext}
               />
-              <View style={s.linkSep} />
+              <View style={[s.linkSep, { backgroundColor: border }]} />
               <LinkInput
                 icon="instagram"
                 placeholder="Instagram URL"
                 value={instagram}
                 onChangeText={setInstagram}
+                textColor={text}
+                iconColor={subtext}
               />
-              <View style={s.linkSep} />
+              <View style={[s.linkSep, { backgroundColor: border }]} />
               <LinkInput
                 icon="music"
                 placeholder="TikTok URL"
                 value={tiktok}
                 onChangeText={setTiktok}
+                textColor={text}
+                iconColor={subtext}
               />
-              <View style={s.linkSep} />
+              <View style={[s.linkSep, { backgroundColor: border }]} />
               <LinkInput
                 icon="twitter"
                 placeholder="Twitter / X URL"
                 value={twitter}
                 onChangeText={setTwitter}
+                textColor={text}
+                iconColor={subtext}
               />
             </View>
 
@@ -401,21 +402,25 @@ function LinkInput({
   placeholder,
   value,
   onChangeText,
+  textColor,
+  iconColor,
 }: {
   icon: React.ComponentProps<typeof FontAwesome>['name'];
   placeholder: string;
   value: string;
   onChangeText: (v: string) => void;
+  textColor: string;
+  iconColor: string;
 }) {
   return (
     <View style={li.row}>
-      <FontAwesome name={icon} size={16} color={SUBTEXT} style={li.icon} />
+      <FontAwesome name={icon} size={16} color={iconColor} style={li.icon} />
       <TextInput
-        style={li.input}
+        style={[li.input, { color: textColor }]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={SUBTEXT}
+        placeholderTextColor={iconColor}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"
@@ -434,7 +439,6 @@ const li = StyleSheet.create({
   icon: { width: 22, textAlign: 'center', marginRight: 12 },
   input: {
     flex: 1,
-    color: TEXT,
     fontSize: 15,
     paddingVertical: 12,
   },
@@ -443,8 +447,8 @@ const li = StyleSheet.create({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: DARK_BG },
-  center: { flex: 1, backgroundColor: DARK_BG, alignItems: 'center', justifyContent: 'center' },
+  root:   { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingBottom: 16 },
 
   // ── Photo block ──────────────────────────────────────────────────────────
@@ -460,14 +464,11 @@ const s = StyleSheet.create({
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 3,
-    borderColor: DARK_BG,
     overflow: 'hidden',
-    backgroundColor: '#2a1e14',
   },
   avatarImg: { width: '100%', height: '100%' },
   avatarPlaceholder: {
     flex: 1,
-    backgroundColor: '#2a1e14',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -489,22 +490,18 @@ const s = StyleSheet.create({
   fieldGroup: { gap: 6 },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   label: {
-    color: SUBTEXT,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
-  charCount: { color: SUBTEXT, fontSize: 12 },
+  charCount: { fontSize: 12 },
   charCountWarn: { color: '#FF6B6B' },
   input: {
-    backgroundColor: CARD_BG,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 13,
-    color: TEXT,
     fontSize: 15,
   },
   inputMulti: {
@@ -512,15 +509,12 @@ const s = StyleSheet.create({
     paddingTop: 13,
   },
   linkGroup: {
-    backgroundColor: CARD_BG,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
     borderRadius: 12,
     overflow: 'hidden',
   },
   linkSep: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: BORDER,
     marginLeft: 48,
   },
 });
