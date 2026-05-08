@@ -246,7 +246,8 @@ function ArtFallback({ size, radius, label }: { size: number; radius: number; la
 
 // ─── Volume + bars badge ──────────────────────────────────────────────────────
 
-function VolumeBadge({ rating, showNumber }: { rating: number; showNumber?: boolean }) {
+function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumber?: boolean; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={10} color="#D4A017" />
@@ -254,7 +255,7 @@ function VolumeBadge({ rating, showNumber }: { rating: number; showNumber?: bool
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
           return (
-            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : '#3a2818' }} />
+            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }} />
           );
         })}
       </View>
@@ -379,7 +380,7 @@ function PopularReviewCard({
             {item.albumYear}
           </Text>
           <View style={pr.ratingRow}>
-            <VolumeBadge rating={item.rating} showNumber />
+            <VolumeBadge rating={item.rating} showNumber isDark={isDark} />
           </View>
         </View>
       </Pressable>
@@ -494,7 +495,7 @@ function PopularReviewModal({
                   {review.albumArtist} · {review.albumYear}
                 </Text>
                 <View style={rm.ratingRow}>
-                  <VolumeBadge rating={review.rating} showNumber />
+                  <VolumeBadge rating={review.rating} showNumber isDark={isDark} />
                 </View>
               </View>
             </Pressable>
@@ -613,7 +614,7 @@ function FriendFullRow({
           <Text style={[flr.albumArtist, { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={1}>{friend.artist} · {friend.year}</Text>
           {friend.rating != null && (
             <View style={flr.ratingRow}>
-              <VolumeBadge rating={friend.rating} showNumber />
+              <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />
             </View>
           )}
         </View>
@@ -713,7 +714,7 @@ function FriendCard({
       <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{friend.album}</Text>
       <Text style={[s.cardSub,    { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{friend.artist}</Text>
       <Text style={[s.friendAgo, { color: colors.subtext, marginTop: 2 }]}>Listend {friend.loggedDate}</Text>
-      {friend.rating != null && <VolumeBadge rating={friend.rating} showNumber />}
+      {friend.rating != null && <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />}
       {friend.review ? (
         <Text style={[s.friendReviewSnippet, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={2}>
           "{friend.review}"
@@ -803,7 +804,7 @@ function FriendReviewModal({
                 </Text>
                 {friend.rating != null && (
                   <View style={rm.ratingRow}>
-                    <VolumeBadge rating={friend.rating} showNumber />
+                    <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />
                   </View>
                 )}
               </View>

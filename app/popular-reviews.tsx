@@ -22,7 +22,8 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Volume badge ─────────────────────────────────────────────────────────────
 
-function VolumeBadge({ rating }: { rating: number }) {
+function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={10} color="#D4A017" />
@@ -30,7 +31,7 @@ function VolumeBadge({ rating }: { rating: number }) {
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
           return (
-            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : '#3a2818' }} />
+            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }} />
           );
         })}
       </View>
@@ -91,7 +92,7 @@ function ReviewRow({
             {item.albumArtist} · {item.albumYear}
           </Text>
           <View style={s.ratingRow}>
-            <VolumeBadge rating={item.rating} />
+            <VolumeBadge rating={item.rating} isDark={isDark} />
           </View>
         </View>
       </Pressable>

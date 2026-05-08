@@ -202,7 +202,8 @@ function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: 
 
 // ─── Volume badge (speaker + bars + number) ──────────────────────────────────
 
-function VolumeBadge({ rating }: { rating: number }) {
+function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={10} color="#D4A017" />
@@ -210,7 +211,7 @@ function VolumeBadge({ rating }: { rating: number }) {
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
           return (
-            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : '#3a2818' }} />
+            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }} />
           );
         })}
       </View>
@@ -455,7 +456,7 @@ function AlbumReviewCard({
             <Text style={[arc.username, { color: '#D4A017' }]} numberOfLines={1}>
               @{review.username}
             </Text>
-            {review.rating >= 1 && <VolumeBadge rating={review.rating} />}
+            {review.rating >= 1 && <VolumeBadge rating={review.rating} isDark={isDark} />}
           </View>
         </Pressable>
       </View>
@@ -620,7 +621,7 @@ function AlbumSingleReviewModal({
               </View>
               <View style={{ gap: 3 }}>
                 <Text style={arm.username}>@{review.username}</Text>
-                {review.rating >= 1 && <VolumeBadge rating={review.rating} />}
+                {review.rating >= 1 && <VolumeBadge rating={review.rating} isDark={isDark} />}
                 <Text style={[arm.dateText, { color: isDark ? '#A08060' : '#6B4C35' }]}>{review.dateStr}</Text>
               </View>
             </Pressable>

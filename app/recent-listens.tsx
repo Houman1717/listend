@@ -19,15 +19,16 @@ const COLS    = 3;
 
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
-function VolumeBadge({ rating }: { rating: number }) {
+function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#D4A017' : '#3a2818'} />
+      <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#D4A017' : inactive} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#D4A017' : '#2a1e14' }]}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }]}
           />
         ))}
       </View>
@@ -36,7 +37,7 @@ function VolumeBadge({ rating }: { rating: number }) {
   );
 }
 
-function AlbumCard({ album, cardWidth, onPress }: { album: LoggedAlbum; cardWidth: number; onPress: () => void }) {
+function AlbumCard({ album, cardWidth, isDark, onPress }: { album: LoggedAlbum; cardWidth: number; isDark: boolean; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
@@ -53,7 +54,7 @@ function AlbumCard({ album, cardWidth, onPress }: { album: LoggedAlbum; cardWidt
         </View>
       )}
       <View style={s.ratingWrap}>
-        <VolumeBadge rating={album.rating} />
+        <VolumeBadge rating={album.rating} isDark={isDark} />
       </View>
     </Pressable>
   );
@@ -85,6 +86,7 @@ export default function RecentListensScreen() {
               key={album.id}
               album={album}
               cardWidth={cardWidth}
+              isDark={colorScheme === 'dark'}
               onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
             />
           ))}

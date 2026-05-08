@@ -32,7 +32,8 @@ const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a
 
 // ─── Volume + bars badge ──────────────────────────────────────────────────────
 
-function VolumeBadge({ rating, showNumber }: { rating: number; showNumber?: boolean }) {
+function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumber?: boolean; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={9} color="#D4A017" />
@@ -42,7 +43,7 @@ function VolumeBadge({ rating, showNumber }: { rating: number; showNumber?: bool
           return (
             <View
               key={i}
-              style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : '#3a2818' }}
+              style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }}
             />
           );
         })}
@@ -142,7 +143,7 @@ function AlbumReviewModal({
                 </Text>
                 {album.rating > 0 && (
                   <View style={ml.ratingRow}>
-                    <VolumeBadge rating={album.rating} />
+                    <VolumeBadge rating={album.rating} isDark={isDark} />
                   </View>
                 )}
               </View>
@@ -262,7 +263,7 @@ function AlbumCard({
       <Text style={[s.cardArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
       {album.rating > 0 && (
         <View style={{ marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <VolumeBadge rating={album.rating} showNumber />
+          <VolumeBadge rating={album.rating} showNumber isDark={isDark} />
           {!!album.review && (
             <FontAwesome name="pencil" size={8} color="#D4A017" />
           )}

@@ -676,6 +676,13 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   const router = useRouter();
   const { signOut, user } = useAuth();
   const { preference, setPreference } = useTheme();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const sheetBg   = isDark ? '#161616' : '#ffffff';
+  const labelColor = isDark ? '#f5e6c8' : '#1A0F0A';
+  const sepColor   = isDark ? '#2a1e14' : '#e8e8e8';
+  const segBg      = isDark ? '#2a1e14' : '#e8e8e8';
+  const segTextColor = isDark ? '#6B4C35' : '#7a5535';
 
   const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
     { label: 'On',     value: 'dark'   },
@@ -738,9 +745,9 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={ss.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <SafeAreaView style={ss.sheet}>
+        <SafeAreaView style={[ss.sheet, { backgroundColor: sheetBg, borderTopColor: sepColor }]}>
           {/* Drag handle */}
-          <View style={ss.handle} />
+          <View style={[ss.handle, { backgroundColor: isDark ? '#4a3020' : '#d0d0d0' }]} />
 
           {/* Edit Profile */}
           <Pressable
@@ -749,47 +756,47 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             <View style={ss.iconWrap}>
               <FontAwesome name="user-o" size={16} color="#D4A017" />
             </View>
-            <Text style={ss.rowLabel}>Edit Profile</Text>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>Edit Profile</Text>
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
           </Pressable>
 
-          <View style={ss.separator} />
+          <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
           {/* Subscription */}
           <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
             <View style={ss.iconWrap}>
               <FontAwesome name="star-o" size={16} color="#D4A017" />
             </View>
-            <Text style={ss.rowLabel}>Subscription</Text>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>Subscription</Text>
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
           </Pressable>
 
-          <View style={ss.separator} />
+          <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
           {/* Help & Feedback */}
           <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
             <View style={ss.iconWrap}>
               <FontAwesome name="question-circle-o" size={16} color="#D4A017" />
             </View>
-            <Text style={ss.rowLabel}>Help &amp; Feedback</Text>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>Help &amp; Feedback</Text>
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
           </Pressable>
 
-          <View style={ss.separator} />
+          <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
           {/* Dark Mode */}
           <View style={ss.row}>
             <View style={ss.iconWrap}>
               <FontAwesome name="moon-o" size={16} color="#D4A017" />
             </View>
-            <Text style={ss.rowLabel}>Dark Mode</Text>
-            <View style={ss.segmented}>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>Dark Mode</Text>
+            <View style={[ss.segmented, { backgroundColor: segBg }]}>
               {THEME_OPTIONS.map(opt => (
                 <Pressable
                   key={opt.value}
                   style={[ss.segment, preference === opt.value && ss.segmentActive]}
                   onPress={() => setPreference(opt.value)}>
-                  <Text style={[ss.segmentText, preference === opt.value && ss.segmentTextActive]}>
+                  <Text style={[ss.segmentText, { color: segTextColor }, preference === opt.value && ss.segmentTextActive]}>
                     {opt.label}
                   </Text>
                 </Pressable>
@@ -797,7 +804,7 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             </View>
           </View>
 
-          <View style={ss.divider} />
+          <View style={[ss.divider, { backgroundColor: sepColor }]} />
 
           {/* Sign Out */}
           <Pressable
@@ -809,7 +816,7 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             <Text style={[ss.rowLabel, ss.signOutLabel]}>Sign Out</Text>
           </Pressable>
 
-          <View style={ss.separator} />
+          <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
           {/* Delete Account */}
           <Pressable

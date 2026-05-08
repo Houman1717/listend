@@ -28,15 +28,16 @@ import { navigateToProfile } from '@/lib/navigateToProfile';
 
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
-function VolumeBadge({ rating }: { rating: number }) {
+function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : '#3a2818'} />
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : inactive} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#D4A017' : '#2a1e14' }]}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }]}
           />
         ))}
       </View>
@@ -95,7 +96,7 @@ function ReviewRow({
         {byUsername ? (
           <Text style={[s.byUser, { color: '#D4A017' }]} numberOfLines={1}>by @{byUsername}</Text>
         ) : null}
-        <VolumeBadge rating={album.rating} />
+        <VolumeBadge rating={album.rating} isDark={isDark} />
         {album.dateLogged ? (
           <Text style={[s.dateListend, { color: colors.subtext }]}>
             Listend {new Date(album.dateLogged).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -219,7 +220,7 @@ function ReviewDetailModal({
                   {album.artist} · {album.year}
                 </Text>
                 <View style={mrd.ratingRow}>
-                  <VolumeBadge rating={album.rating} />
+                  <VolumeBadge rating={album.rating} isDark={isDark} />
                 </View>
               </View>
             </Pressable>
