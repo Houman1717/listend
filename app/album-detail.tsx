@@ -843,18 +843,27 @@ export default function AlbumDetailScreen() {
   const [creditsExpanded, setCreditsExpanded] = useState(false);
 
   // Streaming links
-  type StreamingLinks = { appleMusic: string; spotify: string; youtubeMusic: string; amazonMusic: string | null };
   const [showStreamSheet, setShowStreamSheet] = useState(false);
-  const [streamLoading, setStreamLoading]     = useState(false);
   const [amazonMusicUrl, setAmazonMusicUrl]   = useState<string | null>(null);
+  const [amazonFetching, setAmazonFetching]   = useState(false);
   const [amazonFetched, setAmazonFetched]     = useState(false);
+  const [amazonTapped, setAmazonTapped]       = useState(false);
 
-  const streamLinks: StreamingLinks = {
+  const streamLinks = {
     appleMusic:   `https://music.apple.com/us/album/${albumId}`,
     spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
     youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
     amazonMusic:  amazonMusicUrl,
   };
+
+  // Auto-open Amazon Music once it resolves if the user already tapped it
+  useEffect(() => {
+    if (amazonTapped && !amazonFetching && amazonMusicUrl) {
+      Linking.openURL(amazonMusicUrl);
+      setShowStreamSheet(false);
+      setAmazonTapped(false);
+    }
+  }, [amazonTapped, amazonFetching, amazonMusicUrl]);
 
   // Community reviews + likes
   const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
@@ -1080,13 +1089,18 @@ export default function AlbumDetailScreen() {
 
   function handleStream() {
     setShowStreamSheet(true);
-    if (amazonFetched) return;
-    setStreamLoading(true);
+    if (amazonFetched || amazonFetching) return;
+    setAmazonFetching(true);
     fetch(`${API_URL}/api/albums/streaming-links?appleId=${encodeURIComponent(albumId)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.amazonMusic) setAmazonMusicUrl(data.amazonMusic); })
       .catch(err => console.warn('[album-detail] amazon music link error:', err))
-      .finally(() => { setAmazonFetched(true); setStreamLoading(false); });
+      .finally(() => { setAmazonFetched(true); setAmazonFetching(false); });
+  }
+
+  function handleAmazonPress() {
+    if (amazonMusicUrl) { Linking.openURL(amazonMusicUrl); setShowStreamSheet(false); }
+    else if (amazonFetching) { setAmazonTapped(true); }
   }
 
   function handleArtistPress() {
@@ -1242,7 +1256,7 @@ export default function AlbumDetailScreen() {
           style={({ pressed }) => [s.streamBtn, { borderColor: isDark ? '#3a2818' : '#ddd', opacity: pressed ? 0.7 : 1 }]}
           onPress={handleStream}>
           <FontAwesome name="music" size={15} color="#D4A017" />
-          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Stream</Text>
+          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Listen on</Text>
         </Pressable>
 
         {/* ── 4. Community Rating ───────────────────────────────────────────── */}
@@ -1469,22 +1483,31 @@ export default function AlbumDetailScreen() {
         <Pressable style={s.modalOverlay} onPress={() => setShowStreamSheet(false)}>
           <Pressable style={[s.modalSheet, { backgroundColor: isDark ? '#141414' : '#fff' }]} onPress={() => {}}>
             <View style={s.modalHandle} />
-            <Text style={[s.modalTitle, { color: colors.text }]}>Stream on…</Text>
-            {streamLinks && ([
-              { key: 'appleMusic',   label: 'Apple Music',   icon: 'apple'         as const, color: '#FC3C44' },
-              { key: 'spotify',      label: 'Spotify',       icon: 'spotify'       as const, color: '#1DB954' },
-              { key: 'youtubeMusic', label: 'YouTube Music', icon: 'youtube-play'  as const, color: '#FF0000' },
-              { key: 'amazonMusic',  label: 'Amazon Music',  icon: 'amazon'        as const, color: '#00A8E1' },
-            ] as const).filter(p => streamLinks[p.key]).map(platform => (
-              <Pressable
-                key={platform.key}
-                style={({ pressed }) => [s.streamPlatformRow, { borderBottomColor: isDark ? '#2a1e14' : '#f0f0f0', opacity: pressed ? 0.6 : 1 }]}
-                onPress={() => { Linking.openURL(streamLinks[platform.key]!); setShowStreamSheet(false); }}>
-                <FontAwesome name={platform.icon} size={20} color={platform.color} />
-                <Text style={[s.streamPlatformLabel, { color: colors.text }]}>{platform.label}</Text>
-                <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
-              </Pressable>
-            ))}
+            <Text style={[s.modalTitle, { color: colors.text }]}>Listen on…</Text>
+            {([
+              { key: 'appleMusic'   as const, label: 'Apple Music',   icon: 'apple'        as const, color: '#FC3C44' },
+              { key: 'spotify'      as const, label: 'Spotify',       icon: 'spotify'      as const, color: '#1DB954' },
+              { key: 'youtubeMusic' as const, label: 'YouTube Music', icon: 'youtube-play' as const, color: '#FF0000' },
+              { key: 'amazonMusic'  as const, label: 'Amazon Music',  icon: 'amazon'       as const, color: '#00A8E1' },
+            ]).filter(p => p.key !== 'amazonMusic' || !amazonFetched || amazonMusicUrl).map(platform => {
+              const isAmazon  = platform.key === 'amazonMusic';
+              const loading   = isAmazon && (amazonFetching || amazonTapped);
+              const onPress   = isAmazon
+                ? handleAmazonPress
+                : () => { Linking.openURL(streamLinks[platform.key]!); setShowStreamSheet(false); };
+              return (
+                <Pressable
+                  key={platform.key}
+                  style={({ pressed }) => [s.streamPlatformRow, { borderBottomColor: isDark ? '#2a1e14' : '#f0f0f0', opacity: pressed ? 0.6 : 1 }]}
+                  onPress={onPress}>
+                  <FontAwesome name={platform.icon} size={20} color={platform.color} />
+                  <Text style={[s.streamPlatformLabel, { color: colors.text }]}>{platform.label}</Text>
+                  {loading
+                    ? <ActivityIndicator size="small" color={platform.color} />
+                    : <FontAwesome name="chevron-right" size={13} color={colors.subtext} />}
+                </Pressable>
+              );
+            })}
           </Pressable>
         </Pressable>
       </Modal>

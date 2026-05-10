@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
@@ -521,7 +522,9 @@ export default function FlipARecordScreen() {
   // Streaming sheet
   const [showStreamSheet, setShowStreamSheet] = useState(false);
   const [amazonMusicUrl, setAmazonMusicUrl]   = useState<string | null>(null);
+  const [amazonFetching, setAmazonFetching]   = useState(false);
   const [amazonFetched, setAmazonFetched]     = useState(false);
+  const [amazonTapped, setAmazonTapped]       = useState(false);
 
   // ── Countdown ticker ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -634,13 +637,28 @@ export default function FlipARecordScreen() {
 
   function handleStream() {
     setShowStreamSheet(true);
-    if (amazonFetched || !detailId) return;
-    setAmazonFetched(true);
+    if (amazonFetched || amazonFetching || !detailId) return;
+    setAmazonFetching(true);
     fetch(`${API_URL}/api/albums/streaming-links?appleId=${encodeURIComponent(detailId)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.amazonMusic) setAmazonMusicUrl(data.amazonMusic); })
-      .catch(err => console.warn('[flip-a-record] amazon music link error:', err));
+      .catch(err => console.warn('[flip-a-record] amazon music link error:', err))
+      .finally(() => { setAmazonFetched(true); setAmazonFetching(false); });
   }
+
+  function handleAmazonPressFlip() {
+    if (amazonMusicUrl) { Linking.openURL(amazonMusicUrl); setShowStreamSheet(false); }
+    else if (amazonFetching) { setAmazonTapped(true); }
+  }
+
+  // Auto-open Amazon Music once resolved if user already tapped
+  useEffect(() => {
+    if (amazonTapped && !amazonFetching && amazonMusicUrl) {
+      Linking.openURL(amazonMusicUrl);
+      setShowStreamSheet(false);
+      setAmazonTapped(false);
+    }
+  }, [amazonTapped, amazonFetching, amazonMusicUrl]);
 
   const borderCol = colors.border;
   const cardBg    = colors.background;
@@ -656,22 +674,28 @@ export default function FlipARecordScreen() {
         <Pressable style={sf.streamOverlay} onPress={() => setShowStreamSheet(false)}>
           <Pressable style={[sf.streamSheet, { backgroundColor: isDark ? '#141414' : '#fff' }]} onPress={() => {}}>
             <View style={sf.streamHandle} />
-            <Text style={[sf.streamTitle, { color: colors.text }]}>Stream on…</Text>
+            <Text style={[sf.streamTitle, { color: colors.text }]}>Listen on…</Text>
             {flipStreamLinks && ([
               { key: 'appleMusic'   as const, label: 'Apple Music',   icon: 'apple'        as const, color: '#FC3C44' },
               { key: 'spotify'      as const, label: 'Spotify',       icon: 'spotify'      as const, color: '#1DB954' },
               { key: 'youtubeMusic' as const, label: 'YouTube Music', icon: 'youtube-play' as const, color: '#FF0000' },
               { key: 'amazonMusic'  as const, label: 'Amazon Music',  icon: 'amazon'       as const, color: '#00A8E1' },
-            ]).filter(p => flipStreamLinks[p.key]).map(platform => (
-              <Pressable
-                key={platform.key}
-                style={({ pressed }) => [sf.streamRow, { borderBottomColor: isDark ? '#2a1e14' : '#f0f0f0', opacity: pressed ? 0.6 : 1 }]}
-                onPress={() => { Linking.openURL(flipStreamLinks[platform.key]!); setShowStreamSheet(false); }}>
-                <FontAwesome name={platform.icon} size={20} color={platform.color} />
-                <Text style={[sf.streamLabel, { color: colors.text }]}>{platform.label}</Text>
-                <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
-              </Pressable>
-            ))}
+            ]).filter(p => p.key !== 'amazonMusic' || !amazonFetched || amazonMusicUrl).map(platform => {
+              const isAmazon = platform.key === 'amazonMusic';
+              const loading  = isAmazon && (amazonFetching || amazonTapped);
+              return (
+                <Pressable
+                  key={platform.key}
+                  style={({ pressed }) => [sf.streamRow, { borderBottomColor: isDark ? '#2a1e14' : '#f0f0f0', opacity: pressed ? 0.6 : 1 }]}
+                  onPress={isAmazon ? handleAmazonPressFlip : () => { Linking.openURL(flipStreamLinks[platform.key]!); setShowStreamSheet(false); }}>
+                  <FontAwesome name={platform.icon} size={20} color={platform.color} />
+                  <Text style={[sf.streamLabel, { color: colors.text }]}>{platform.label}</Text>
+                  {loading
+                    ? <ActivityIndicator size="small" color={platform.color} />
+                    : <FontAwesome name="chevron-right" size={13} color={colors.subtext} />}
+                </Pressable>
+              );
+            })}
           </Pressable>
         </Pressable>
       </Modal>
@@ -836,7 +860,7 @@ export default function FlipARecordScreen() {
                     style={({ pressed }) => [sf.actionSecondary, { borderColor: borderCol, opacity: pressed ? 0.8 : 1 }]}
                     onPress={handleStream}>
                     <FontAwesome name="music" size={14} color={colors.subtext} />
-                    <Text style={[sf.actionSecondaryText, { color: colors.subtext }]}>Stream</Text>
+                    <Text style={[sf.actionSecondaryText, { color: colors.subtext }]}>Listen on</Text>
                   </Pressable>
                 </View>
               )}
