@@ -2313,6 +2313,47 @@ app.delete('/api/user/delete-account', requireAuth, async (req, res) => {
   return res.json({ success: true });
 });
 
+// ── GET /api/albums/streaming-links ──────────────────────────────────────────
+// Calls Odesli to get streaming platform links for an Apple Music album URL.
+// Results cached in api_cache for 7 days — Odesli rate limits are strict.
+
+app.get('/api/albums/streaming-links', [
+  query('appleUrl').trim().isURL({ require_protocol: true }).withMessage('appleUrl must be a valid URL').isLength({ max: 500 }),
+  validate,
+], async (req, res) => {
+  const { appleUrl } = req.query;
+  const CACHE_KEY = `streaming_links:${appleUrl}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const odesliResp = await fetch(
+      `https://api.song.link/v1-alpha.1/links?url=${encodeURIComponent(appleUrl)}`
+    );
+    if (!odesliResp.ok) throw new Error(`Odesli ${odesliResp.status}`);
+    const odesli = await odesliResp.json();
+
+    const byPlatform = odesli.linksByPlatform ?? {};
+    const payload = {
+      appleMusic:   byPlatform.appleMusic?.url   ?? null,
+      spotify:      byPlatform.spotify?.url      ?? null,
+      youtubeMusic: byPlatform.youtubeMusic?.url ?? null,
+      amazonMusic:  byPlatform.amazonMusic?.url  ?? null,
+    };
+
+    cacheSet(CACHE_KEY, payload, TTL_6H);
+    await setCache(CACHE_KEY, payload);
+    res.json(payload);
+  } catch (err) {
+    console.error('[/api/albums/streaming-links]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

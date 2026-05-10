@@ -11,10 +11,12 @@ import {
   Platform,
   ActivityIndicator,
   SafeAreaView,
+  Linking,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -716,10 +718,11 @@ const arm = StyleSheet.create({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AlbumDetailScreen() {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-  const isDark = colorScheme === 'dark';
-  const router = useRouter();
+  const colorScheme  = useColorScheme();
+  const colors       = Colors[colorScheme ?? 'light'];
+  const isDark       = colorScheme === 'dark';
+  const router       = useRouter();
+  const headerHeight = useHeaderHeight();
 
   const params = useLocalSearchParams<{
     id: string; title?: string; artist?: string; year?: string; artworkUrl?: string;
@@ -755,6 +758,7 @@ export default function AlbumDetailScreen() {
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const modalScrollRef = useRef<ScrollView>(null);
   const reviewYPositions = useRef<Map<string, number>>(new Map());
   const [likedAlbumReviews, setLikedAlbumReviews] = useState<Set<string>>(new Set());
@@ -837,6 +841,12 @@ export default function AlbumDetailScreen() {
   const [similar, setSimilar]             = useState<SimilarAlbum[] | null>(null);
   const [bioExpanded, setBioExpanded]     = useState(false);
   const [creditsExpanded, setCreditsExpanded] = useState(false);
+
+  // Streaming links
+  type StreamingLinks = { appleMusic: string | null; spotify: string | null; youtubeMusic: string | null; amazonMusic: string | null };
+  const [streamLinks, setStreamLinks]         = useState<StreamingLinks | null>(null);
+  const [streamLoading, setStreamLoading]     = useState(false);
+  const [showStreamSheet, setShowStreamSheet] = useState(false);
 
   // Community reviews + likes
   const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
@@ -1060,6 +1070,23 @@ export default function AlbumDetailScreen() {
     }
   }
 
+  async function handleStream() {
+    if (streamLinks) { setShowStreamSheet(true); return; }
+    setStreamLoading(true);
+    try {
+      const appleUrl = `https://music.apple.com/us/album/${albumId}`;
+      const resp = await fetch(`${API_URL}/api/albums/streaming-links?appleUrl=${encodeURIComponent(appleUrl)}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data: StreamingLinks = await resp.json();
+      setStreamLinks(data);
+      setShowStreamSheet(true);
+    } catch (err) {
+      console.warn('[album-detail] streaming-links error:', err);
+    } finally {
+      setStreamLoading(false);
+    }
+  }
+
   function handleArtistPress() {
     router.push({ pathname: '/artist-detail', params: { name: albumArtist } });
   }
@@ -1069,7 +1096,7 @@ export default function AlbumDetailScreen() {
   const mutedText  = isDark ? '#7a5535' : '#a07850';
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}>
       <Stack.Screen
         options={{
           headerRight: () => (
@@ -1083,6 +1110,7 @@ export default function AlbumDetailScreen() {
         }}
       />
       <ScrollView
+        ref={scrollRef}
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={s.container}
         keyboardShouldPersistTaps="handled"
@@ -1150,6 +1178,7 @@ export default function AlbumDetailScreen() {
                 multiline
                 textAlignVertical="top"
                 maxLength={500}
+                onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
               />
               {review.length > 0 && (
                 <Text style={[s.charCount, { color: colors.subtext }]}>{review.length}/500</Text>
@@ -1205,6 +1234,19 @@ export default function AlbumDetailScreen() {
             </Pressable>
           </View>
         )}
+
+        {/* ── 3b. Stream button ─────────────────────────────────────────────── */}
+        <Pressable
+          style={({ pressed }) => [s.streamBtn, { borderColor: isDark ? '#3a2818' : '#ddd', opacity: pressed ? 0.7 : 1 }]}
+          onPress={handleStream}
+          disabled={streamLoading}>
+          {streamLoading
+            ? <ActivityIndicator size="small" color="#D4A017" />
+            : <FontAwesome name="music" size={15} color="#D4A017" />}
+          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>
+            {streamLoading ? 'Loading…' : 'Stream'}
+          </Text>
+        </Pressable>
 
         {/* ── 4. Community Rating ───────────────────────────────────────────── */}
         <CommunityRatingSection
@@ -1425,6 +1467,31 @@ export default function AlbumDetailScreen() {
         </View>
       </Modal>
 
+      {/* ── Streaming links sheet ────────────────────────────────────────────── */}
+      <Modal visible={showStreamSheet} transparent animationType="slide" onRequestClose={() => setShowStreamSheet(false)}>
+        <Pressable style={s.modalOverlay} onPress={() => setShowStreamSheet(false)}>
+          <Pressable style={[s.modalSheet, { backgroundColor: isDark ? '#141414' : '#fff' }]} onPress={() => {}}>
+            <View style={s.modalHandle} />
+            <Text style={[s.modalTitle, { color: colors.text }]}>Stream on…</Text>
+            {streamLinks && ([
+              { key: 'appleMusic',   label: 'Apple Music',   icon: 'apple'         as const, color: '#FC3C44' },
+              { key: 'spotify',      label: 'Spotify',       icon: 'spotify'       as const, color: '#1DB954' },
+              { key: 'youtubeMusic', label: 'YouTube Music', icon: 'youtube-play'  as const, color: '#FF0000' },
+              { key: 'amazonMusic',  label: 'Amazon Music',  icon: 'amazon'        as const, color: '#00A8E1' },
+            ] as const).filter(p => streamLinks[p.key]).map(platform => (
+              <Pressable
+                key={platform.key}
+                style={({ pressed }) => [s.streamPlatformRow, { borderBottomColor: isDark ? '#2a1e14' : '#f0f0f0', opacity: pressed ? 0.6 : 1 }]}
+                onPress={() => { Linking.openURL(streamLinks[platform.key]!); setShowStreamSheet(false); }}>
+                <FontAwesome name={platform.icon} size={20} color={platform.color} />
+                <Text style={[s.streamPlatformLabel, { color: colors.text }]}>{platform.label}</Text>
+                <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* ── Playlist picker modal ─────────────────────────────────────────────── */}
       <Modal visible={showPlaylists} transparent animationType="slide" onRequestClose={() => setShowPlaylists(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.modalOverlay}>
@@ -1614,6 +1681,14 @@ const s = StyleSheet.create({
   similarArt:    { width: 110, height: 110, borderRadius: 8 },
   similarTitle:  { fontSize: 12, fontWeight: '600' },
   similarArtist: { fontSize: 11 },
+
+  // Stream button
+  streamBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 44, borderRadius: 12, borderWidth: 1, marginTop: 10 },
+  streamBtnText: { fontSize: 15, fontWeight: '600' },
+
+  // Streaming sheet
+  streamPlatformRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  streamPlatformLabel: { flex: 1, fontSize: 16, fontWeight: '500' },
 
   // Header button
   headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
