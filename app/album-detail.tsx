@@ -842,15 +842,18 @@ export default function AlbumDetailScreen() {
   const [bioExpanded, setBioExpanded]     = useState(false);
   const [creditsExpanded, setCreditsExpanded] = useState(false);
 
-  // Streaming links — constructed client-side; Odesli doesn't index Spotify/YTM for albums
-  type StreamingLinks = { appleMusic: string | null; spotify: string | null; youtubeMusic: string | null; amazonMusic: string | null };
+  // Streaming links
+  type StreamingLinks = { appleMusic: string; spotify: string; youtubeMusic: string; amazonMusic: string | null };
   const [showStreamSheet, setShowStreamSheet] = useState(false);
+  const [streamLoading, setStreamLoading]     = useState(false);
+  const [amazonMusicUrl, setAmazonMusicUrl]   = useState<string | null>(null);
+  const [amazonFetched, setAmazonFetched]     = useState(false);
 
   const streamLinks: StreamingLinks = {
     appleMusic:   `https://music.apple.com/us/album/${albumId}`,
     spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
     youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
-    amazonMusic:  `https://music.amazon.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
+    amazonMusic:  amazonMusicUrl,
   };
 
   // Community reviews + likes
@@ -1075,8 +1078,22 @@ export default function AlbumDetailScreen() {
     }
   }
 
-  function handleStream() {
-    setShowStreamSheet(true);
+  async function handleStream() {
+    if (amazonFetched) { setShowStreamSheet(true); return; }
+    setStreamLoading(true);
+    try {
+      const resp = await fetch(`${API_URL}/api/albums/streaming-links?appleId=${encodeURIComponent(albumId)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setAmazonMusicUrl(data.amazonMusic ?? null);
+      }
+    } catch (err) {
+      console.warn('[album-detail] amazon music link error:', err);
+    } finally {
+      setAmazonFetched(true);
+      setStreamLoading(false);
+      setShowStreamSheet(true);
+    }
   }
 
   function handleArtistPress() {
@@ -1230,9 +1247,12 @@ export default function AlbumDetailScreen() {
         {/* ── 3b. Stream button ─────────────────────────────────────────────── */}
         <Pressable
           style={({ pressed }) => [s.streamBtn, { borderColor: isDark ? '#3a2818' : '#ddd', opacity: pressed ? 0.7 : 1 }]}
-          onPress={handleStream}>
-          <FontAwesome name="music" size={15} color="#D4A017" />
-          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Stream</Text>
+          onPress={handleStream}
+          disabled={streamLoading}>
+          {streamLoading
+            ? <ActivityIndicator size="small" color="#D4A017" />
+            : <FontAwesome name="music" size={15} color="#D4A017" />}
+          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>{streamLoading ? 'Loading…' : 'Stream'}</Text>
         </Pressable>
 
         {/* ── 4. Community Rating ───────────────────────────────────────────── */}
