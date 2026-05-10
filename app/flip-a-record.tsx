@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  Linking,
   Modal,
   Pressable,
   SafeAreaView,
@@ -517,6 +518,11 @@ export default function FlipARecordScreen() {
   // Cache for the "Recently Flipped" mini-list thumbnails + Spotify IDs
   const [recentCache, setRecentCache]          = useState<Record<string, AlbumData>>({});
 
+  // Streaming sheet
+  const [showStreamSheet, setShowStreamSheet] = useState(false);
+  const [amazonMusicUrl, setAmazonMusicUrl]   = useState<string | null>(null);
+  const [amazonFetched, setAmazonFetched]     = useState(false);
+
   // ── Countdown ticker ──────────────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -541,6 +547,8 @@ export default function FlipARecordScreen() {
     if (!currentFlip) { setArtworkUrl(''); setSpotifyId(''); return; }
     setArtworkUrl('');
     setSpotifyId('');
+    setAmazonMusicUrl(null);
+    setAmazonFetched(false);
     fetchAlbumData(currentFlip.title, currentFlip.artist).then(({ artworkUrl: url, spotifyId: sid }) => {
       setArtworkUrl(url);
       setSpotifyId(sid);
@@ -617,6 +625,23 @@ export default function FlipARecordScreen() {
     ? loggedAlbums.some(a => a.id === detailId || a.id === currentFlip.id)
     : false;
 
+  const flipStreamLinks = currentFlip ? {
+    appleMusic:   detailId ? `https://music.apple.com/us/album/${detailId}` : null,
+    spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${currentFlip.title} ${currentFlip.artist}`)}`,
+    youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${currentFlip.title} ${currentFlip.artist}`)}`,
+    amazonMusic:  amazonMusicUrl,
+  } : null;
+
+  function handleStream() {
+    setShowStreamSheet(true);
+    if (amazonFetched || !detailId) return;
+    setAmazonFetched(true);
+    fetch(`${API_URL}/api/albums/streaming-links?appleId=${encodeURIComponent(detailId)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.amazonMusic) setAmazonMusicUrl(data.amazonMusic); })
+      .catch(err => console.warn('[flip-a-record] amazon music link error:', err));
+  }
+
   const borderCol = colors.border;
   const cardBg    = colors.background;
 
@@ -625,6 +650,32 @@ export default function FlipARecordScreen() {
       <Stack.Screen options={{ title: 'Flip a Record' }} />
 
       <FlipHistoryModal visible={historyModalVisible} onClose={() => setHistoryModal(false)} />
+
+      {/* ── Streaming sheet ────────────────────────────────────────────────── */}
+      <Modal visible={showStreamSheet} transparent animationType="slide" onRequestClose={() => setShowStreamSheet(false)}>
+        <Pressable style={sf.streamOverlay} onPress={() => setShowStreamSheet(false)}>
+          <Pressable style={[sf.streamSheet, { backgroundColor: isDark ? '#141414' : '#fff' }]} onPress={() => {}}>
+            <View style={sf.streamHandle} />
+            <Text style={[sf.streamTitle, { color: colors.text }]}>Stream on…</Text>
+            {flipStreamLinks && ([
+              { key: 'appleMusic'   as const, label: 'Apple Music',   icon: 'apple'        as const, color: '#FC3C44' },
+              { key: 'spotify'      as const, label: 'Spotify',       icon: 'spotify'      as const, color: '#1DB954' },
+              { key: 'youtubeMusic' as const, label: 'YouTube Music', icon: 'youtube-play' as const, color: '#FF0000' },
+              { key: 'amazonMusic'  as const, label: 'Amazon Music',  icon: 'amazon'       as const, color: '#00A8E1' },
+            ]).filter(p => flipStreamLinks[p.key]).map(platform => (
+              <Pressable
+                key={platform.key}
+                style={({ pressed }) => [sf.streamRow, { borderBottomColor: isDark ? '#2a1e14' : '#f0f0f0', opacity: pressed ? 0.6 : 1 }]}
+                onPress={() => { Linking.openURL(flipStreamLinks[platform.key]!); setShowStreamSheet(false); }}>
+                <FontAwesome name={platform.icon} size={20} color={platform.color} />
+                <Text style={[sf.streamLabel, { color: colors.text }]}>{platform.label}</Text>
+                <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <FullPoolModal
         visible={fullListVisible}
         onClose={() => setFullListVisible(false)}
@@ -782,9 +833,10 @@ export default function FlipARecordScreen() {
                     </Text>
                   </Pressable>
                   <Pressable
-                    style={({ pressed }) => [sf.actionSecondary, { borderColor: borderCol, opacity: pressed ? 0.8 : 1 }]}>
-                    <FontAwesome name="headphones" size={14} color={colors.subtext} />
-                    <Text style={[sf.actionSecondaryText, { color: colors.subtext }]}>Open in Streaming</Text>
+                    style={({ pressed }) => [sf.actionSecondary, { borderColor: borderCol, opacity: pressed ? 0.8 : 1 }]}
+                    onPress={handleStream}>
+                    <FontAwesome name="music" size={14} color={colors.subtext} />
+                    <Text style={[sf.actionSecondaryText, { color: colors.subtext }]}>Stream</Text>
                   </Pressable>
                 </View>
               )}
@@ -960,4 +1012,12 @@ const sf = StyleSheet.create({
   recentInfo:        { flex: 1, gap: 2 },
   recentTitle:       { fontSize: 14, fontWeight: '600' },
   recentArtist:      { fontSize: 12 },
+
+  // Streaming sheet
+  streamOverlay: { flex: 1, justifyContent: 'flex-end' },
+  streamSheet:   { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 40 },
+  streamHandle:  { width: 36, height: 4, borderRadius: 2, backgroundColor: '#4a3020', alignSelf: 'center', marginBottom: 16 },
+  streamTitle:   { fontSize: 17, fontWeight: '700', paddingHorizontal: 20, marginBottom: 12 },
+  streamRow:     { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  streamLabel:   { flex: 1, fontSize: 16, fontWeight: '500' },
 });

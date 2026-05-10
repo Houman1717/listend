@@ -1078,22 +1078,15 @@ export default function AlbumDetailScreen() {
     }
   }
 
-  async function handleStream() {
-    if (amazonFetched) { setShowStreamSheet(true); return; }
+  function handleStream() {
+    setShowStreamSheet(true);
+    if (amazonFetched) return;
     setStreamLoading(true);
-    try {
-      const resp = await fetch(`${API_URL}/api/albums/streaming-links?appleId=${encodeURIComponent(albumId)}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        setAmazonMusicUrl(data.amazonMusic ?? null);
-      }
-    } catch (err) {
-      console.warn('[album-detail] amazon music link error:', err);
-    } finally {
-      setAmazonFetched(true);
-      setStreamLoading(false);
-      setShowStreamSheet(true);
-    }
+    fetch(`${API_URL}/api/albums/streaming-links?appleId=${encodeURIComponent(albumId)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.amazonMusic) setAmazonMusicUrl(data.amazonMusic); })
+      .catch(err => console.warn('[album-detail] amazon music link error:', err))
+      .finally(() => { setAmazonFetched(true); setStreamLoading(false); });
   }
 
   function handleArtistPress() {
@@ -1247,12 +1240,9 @@ export default function AlbumDetailScreen() {
         {/* ── 3b. Stream button ─────────────────────────────────────────────── */}
         <Pressable
           style={({ pressed }) => [s.streamBtn, { borderColor: isDark ? '#3a2818' : '#ddd', opacity: pressed ? 0.7 : 1 }]}
-          onPress={handleStream}
-          disabled={streamLoading}>
-          {streamLoading
-            ? <ActivityIndicator size="small" color="#D4A017" />
-            : <FontAwesome name="music" size={15} color="#D4A017" />}
-          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>{streamLoading ? 'Loading…' : 'Stream'}</Text>
+          onPress={handleStream}>
+          <FontAwesome name="music" size={15} color="#D4A017" />
+          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Stream</Text>
         </Pressable>
 
         {/* ── 4. Community Rating ───────────────────────────────────────────── */}
