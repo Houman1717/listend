@@ -842,11 +842,16 @@ export default function AlbumDetailScreen() {
   const [bioExpanded, setBioExpanded]     = useState(false);
   const [creditsExpanded, setCreditsExpanded] = useState(false);
 
-  // Streaming links
+  // Streaming links — constructed client-side; Odesli doesn't index Spotify/YTM for albums
   type StreamingLinks = { appleMusic: string | null; spotify: string | null; youtubeMusic: string | null; amazonMusic: string | null };
-  const [streamLinks, setStreamLinks]         = useState<StreamingLinks | null>(null);
-  const [streamLoading, setStreamLoading]     = useState(false);
   const [showStreamSheet, setShowStreamSheet] = useState(false);
+
+  const streamLinks: StreamingLinks = {
+    appleMusic:   `https://music.apple.com/us/album/${albumId}`,
+    spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
+    youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
+    amazonMusic:  `https://music.amazon.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
+  };
 
   // Community reviews + likes
   const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
@@ -1070,21 +1075,8 @@ export default function AlbumDetailScreen() {
     }
   }
 
-  async function handleStream() {
-    if (streamLinks) { setShowStreamSheet(true); return; }
-    setStreamLoading(true);
-    try {
-      const appleUrl = `https://music.apple.com/us/album/${albumId}`;
-      const resp = await fetch(`${API_URL}/api/albums/streaming-links?appleUrl=${encodeURIComponent(appleUrl)}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data: StreamingLinks = await resp.json();
-      setStreamLinks(data);
-      setShowStreamSheet(true);
-    } catch (err) {
-      console.warn('[album-detail] streaming-links error:', err);
-    } finally {
-      setStreamLoading(false);
-    }
+  function handleStream() {
+    setShowStreamSheet(true);
   }
 
   function handleArtistPress() {
@@ -1238,14 +1230,9 @@ export default function AlbumDetailScreen() {
         {/* ── 3b. Stream button ─────────────────────────────────────────────── */}
         <Pressable
           style={({ pressed }) => [s.streamBtn, { borderColor: isDark ? '#3a2818' : '#ddd', opacity: pressed ? 0.7 : 1 }]}
-          onPress={handleStream}
-          disabled={streamLoading}>
-          {streamLoading
-            ? <ActivityIndicator size="small" color="#D4A017" />
-            : <FontAwesome name="music" size={15} color="#D4A017" />}
-          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>
-            {streamLoading ? 'Loading…' : 'Stream'}
-          </Text>
+          onPress={handleStream}>
+          <FontAwesome name="music" size={15} color="#D4A017" />
+          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Stream</Text>
         </Pressable>
 
         {/* ── 4. Community Rating ───────────────────────────────────────────── */}
