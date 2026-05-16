@@ -1714,6 +1714,31 @@ app.get('/api/album-durations', [
   res.json(result);
 });
 
+// ── PATCH /api/re-listens ─────────────────────────────────────────────────────
+// Updates rating + review on the most recent re_listens row for the authed user.
+// Uses the service-role client so it bypasses RLS.
+
+app.patch('/api/re-listens', [
+  requireAuth,
+  body('spotify_id').trim().notEmpty().isLength({ max: 100 }),
+  body('rating').isInt({ min: 0, max: 10 }),
+  body('review').optional({ nullable: true }).trim().customSanitizer(stripHtml).isLength({ max: 5000 }),
+  validate,
+], async (req, res) => {
+  const userId   = req.user.id;
+  const { spotify_id, rating, review } = req.body;
+  const trimmed  = typeof review === 'string' ? review.trim() || null : null;
+
+  const { error } = await supabase
+    .from('re_listens')
+    .update({ rating, review: trimmed })
+    .eq('user_id', userId)
+    .eq('spotify_id', spotify_id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 // ── POST /api/flip-pool-artworks ──────────────────────────────────────────────
 // Batch artwork lookup for the Flip a Record pool.
 // Body: [{id, title, artist}]  →  returns {[id]: artworkUrl}
