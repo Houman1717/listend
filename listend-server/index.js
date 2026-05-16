@@ -1725,15 +1725,29 @@ app.patch('/api/re-listens', [
   body('review').optional({ nullable: true }).trim().customSanitizer(stripHtml).isLength({ max: 5000 }),
   validate,
 ], async (req, res) => {
-  const userId   = req.user.id;
+  const userId  = req.user.id;
   const { spotify_id, rating, review } = req.body;
-  const trimmed  = typeof review === 'string' ? review.trim() || null : null;
+  const trimmed = typeof review === 'string' ? review.trim() || null : null;
+
+  // Find the most recent re-listen row first so we only edit that one.
+  const { data: latest, error: selErr } = await supabase
+    .from('re_listens')
+    .select('listened_at')
+    .eq('user_id', userId)
+    .eq('spotify_id', spotify_id)
+    .order('listened_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (selErr) return res.status(500).json({ error: selErr.message });
+  if (!latest) return res.status(404).json({ error: 'No re-listen row found' });
 
   const { error } = await supabase
     .from('re_listens')
     .update({ rating, review: trimmed })
     .eq('user_id', userId)
-    .eq('spotify_id', spotify_id);
+    .eq('spotify_id', spotify_id)
+    .eq('listened_at', latest.listened_at);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
