@@ -853,9 +853,12 @@ export default function MyStatsScreen() {
         </View>
 
         {/* ── Rated Higher / Lower Than Average ─────────────────────────── */}
-        {hasComparison && (
+        {ratedAlbums.length > 0 && (
           <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
             <Text style={[s.cardTitle, { color: colors.textMuted }]}>RATED VS COMMUNITY</Text>
+            {!hasComparison && (
+              <EmptyState text="Your ratings will be compared to the community once enough listeners have rated the same albums." />
+            )}
 
             {/* Rated Higher */}
             <View style={rl.section}>
