@@ -23,8 +23,8 @@ const SUBTEXT  = '#A08060';
 const ACCENT   = '#D4A017';
 
 const TAG_COLORS  = ['#7a5018', '#8B6914', '#5c3a10', '#6B4422', '#9a7020', '#4a3218'];
-const GROW_CLR    = '#4caf50';
-const FADE_CLR    = '#e05252';
+const GROW_CLR    = '#7db85a';
+const FADE_CLR    = '#c0523a';
 
 type EvolutionEntry = {
   album:        LoggedAlbum;
