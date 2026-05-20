@@ -210,7 +210,6 @@ function BarRow({
   maxCount,
   colorIdx,
   pill = false,
-  imageUrl,
   onPress,
 }: {
   label: string;
@@ -218,7 +217,6 @@ function BarRow({
   maxCount: number;
   colorIdx: number;
   pill?: boolean;
-  imageUrl?: string;
   onPress?: () => void;
 }) {
   const pct = maxCount > 0 ? Math.max(count / maxCount, 0.02) : 0;
@@ -232,18 +230,7 @@ function BarRow({
           <Text style={br.pillText} numberOfLines={1}>{label}</Text>
         </View>
       ) : (
-        <View style={br.labelWrap}>
-          {imageUrl ? (
-            <ExpoImage
-              source={{ uri: imageUrl }}
-              style={br.artistThumb}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={br.artistThumbPlaceholder} />
-          )}
-          <Text style={br.label} numberOfLines={1}>{label}</Text>
-        </View>
+        <Text style={br.label} numberOfLines={1}>{label}</Text>
       )}
       <View style={br.track}>
         <View style={[br.fill, { flex: pct, opacity: 0.45 + pct * 0.55 }]} />
@@ -255,16 +242,53 @@ function BarRow({
 }
 
 const br = StyleSheet.create({
-  row:                  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, width: '100%' },
-  pill:                 { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, minWidth: 110, alignItems: 'center', backgroundColor: '#3a2818' },
-  pillText:             { color: TEXT, fontSize: 13, fontWeight: '600' },
-  labelWrap:            { flexDirection: 'row', alignItems: 'center', gap: 8, width: 130 },
-  artistThumb:          { width: 28, height: 28, borderRadius: 14 },
-  artistThumbPlaceholder: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#3a2818' },
-  label:                { color: TEXT, fontSize: 13, fontWeight: '500', flex: 1 },
-  track:                { flex: 1, height: 6, borderRadius: 3, backgroundColor: BORDER, overflow: 'hidden', flexDirection: 'row' },
-  fill:                 { height: 6, borderRadius: 3, backgroundColor: ACCENT },
-  count:                { color: SUBTEXT, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
+  row:      { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, width: '100%' },
+  pill:     { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, minWidth: 110, alignItems: 'center', backgroundColor: '#3a2818' },
+  pillText: { color: TEXT, fontSize: 13, fontWeight: '600' },
+  label:    { color: TEXT, fontSize: 13, fontWeight: '500', width: 110 },
+  track:    { flex: 1, height: 6, borderRadius: 3, backgroundColor: BORDER, overflow: 'hidden', flexDirection: 'row' },
+  fill:     { height: 6, borderRadius: 3, backgroundColor: ACCENT },
+  count:    { color: SUBTEXT, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
+});
+
+// ─── Artist grid card ─────────────────────────────────────────────────────────
+
+function ArtistGridCard({
+  artist,
+  label,
+  imageUrl,
+  onPress,
+  cardW,
+}: {
+  artist: string;
+  label: string;
+  imageUrl?: string;
+  onPress: () => void;
+  cardW: number;
+}) {
+  const imgSize = cardW - 20;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [{ width: cardW, alignItems: 'center', gap: 6, opacity: pressed ? 0.7 : 1 }]}>
+      {imageUrl ? (
+        <ExpoImage
+          source={{ uri: imageUrl }}
+          style={{ width: imgSize, height: imgSize, borderRadius: imgSize / 2 }}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={{ width: imgSize, height: imgSize, borderRadius: imgSize / 2, backgroundColor: '#3a2818' }} />
+      )}
+      <Text style={ag.name} numberOfLines={2}>{artist}</Text>
+      <Text style={ag.sub}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const ag = StyleSheet.create({
+  name: { color: TEXT,    fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  sub:  { color: SUBTEXT, fontSize: 11, fontWeight: '500', textAlign: 'center' },
 });
 
 // ─── Year Bar Chart with drill-down ──────────────────────────────────────────
@@ -494,6 +518,7 @@ export default function MyStatsScreen() {
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
+  const { width: screenWidth } = useWindowDimensions();
 
   const cardBg = isDark ? CARD_BG : colors.card;
 
@@ -695,45 +720,35 @@ export default function MyStatsScreen() {
               ))}
             </View>
           </View>
-          {artistView === 'listend' ? (
-            topArtists.length > 0 ? (
-              topArtists.map(([artist, count], i) => (
-                <BarRow
-                  key={artist}
-                  label={artist}
-                  count={count}
-                  maxCount={maxArtistCount}
-                  colorIdx={i}
-                  imageUrl={artistImages[artist]}
-                  onPress={() => setListModal({
-                    title: artist,
-                    albums: loggedAlbums.filter(a => a.artist === artist),
-                  })}
-                />
-              ))
-            ) : (
-              <EmptyState text="Log some albums to see your top artists." />
-            )
-          ) : (
-            topRatedArtists.length > 0 ? (
-              topRatedArtists.map(([artist, avg], i) => (
-                <BarRow
-                  key={artist}
-                  label={artist}
-                  count={parseFloat(avg.toFixed(1))}
-                  maxCount={10}
-                  colorIdx={i}
-                  imageUrl={artistImages[artist]}
-                  onPress={() => setListModal({
-                    title: artist,
-                    albums: loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
-                  })}
-                />
-              ))
-            ) : (
-              <EmptyState text="Rate at least 2 albums per artist to see ratings." />
-            )
-          )}
+          {(() => {
+            // screenWidth - scrollview padding (40) - card padding (36) - 2 gaps (20) / 3 cols
+            const cardW = (screenWidth - 96) / 3;
+            const items: [string, string][] = artistView === 'listend'
+              ? topArtists.map(([a, c]) => [a, `${c} album${c !== 1 ? 's' : ''}`])
+              : topRatedArtists.map(([a, avg]) => [a, `${avg.toFixed(1)} avg`]);
+            if (items.length === 0) {
+              return <EmptyState text={artistView === 'listend' ? 'Log some albums to see your top artists.' : 'Rate at least 2 albums per artist to see ratings.'} />;
+            }
+            return (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {items.map(([artist, sub]) => (
+                  <ArtistGridCard
+                    key={artist}
+                    artist={artist}
+                    label={sub}
+                    imageUrl={artistImages[artist]}
+                    cardW={cardW}
+                    onPress={() => setListModal({
+                      title: artist,
+                      albums: artistView === 'listend'
+                        ? loggedAlbums.filter(a => a.artist === artist)
+                        : loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
+                    })}
+                  />
+                ))}
+              </View>
+            );
+          })()}
         </View>
 
         {/* ── Most Listend Genres ────────────────────────────────────────── */}
