@@ -10,9 +10,10 @@ import {
   Modal,
   Platform,
   ActivityIndicator,
-  SafeAreaView,
   Linking,
+  Alert,
 } from 'react-native';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -26,6 +27,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
+import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -101,48 +103,43 @@ type SimilarAlbum = {
 type LikeState = { liked: boolean; count: number };
 
 type CommunityReview = {
-  id:       string;   // target_id = `${userId}_${albumId}`
-  userId:   string;
-  username: string;
-  rating:   number;
-  text?:    string;
-  dateStr?: string;
+  id:           string;   // `${userId}_${albumId}`
+  userId:       string;
+  username:     string;
+  avatarUrl?:   string | null;
+  rating:       number;
+  text?:        string;
+  dateStr?:     string;
+  listenedAt?:  string;
+  likeCount:    number;
+  commentCount: number;
 };
 
-// ─── Fake review data ─────────────────────────────────────────────────────────
+type ReviewSort = 'popular' | 'newest' | 'rating';
+type ReviewTab  = 'all' | 'friends' | 'own';
 
-type FakeReview = {
-  id: string;
-  username: string;
-  rating: number;
-  text: string;
-  dateStr: string;
-  likeCount: number;
+type FriendActivity = {
+  userId:    string;
+  username:  string;
+  avatarUrl?: string | null;
+  rating:    number;
+  hasReview: boolean;
+  review?:   string;
+  listenedAt?: string;
+  status:    'listened' | 'wantToListen';
+  reListenCount?:  number;
+  reListenRating?: number;
+  reListenReview?: string;
+  reListenAt?:     string;
 };
 
-const FAKE_ALBUM_REVIEWS: FakeReview[] = [
-  { id: 'f1', username: 'vinylhead_92',  rating: 9,  text: 'This album completely changed how I listen to music. Every track flows perfectly into the next — no skips whatsoever.',       dateStr: '3 days ago', likeCount: 41 },
-  { id: 'f2', username: 'moodboard_mel', rating: 8,  text: 'Production is immaculate. A few tracks feel like filler but the highs are so high it barely matters. Standout project.',    dateStr: '5 days ago', likeCount: 27 },
-  { id: 'f3', username: 'crate_digger',  rating: 10, text: 'Genuinely one of the best listening experiences I\'ve had all year. The emotion and craft on display here is unmatched.',   dateStr: '1 week ago', likeCount: 88 },
-  { id: 'f4', username: 'lofi_lyric',    rating: 7,  text: 'Really solid album, grew on me more and more with each listen. The second half especially hits different late at night.',   dateStr: '1 week ago', likeCount: 19 },
-];
-
-// ─── Review mock data ─────────────────────────────────────────────────────────
-
-const MOCK_COMMENTS: ReviewComment[] = [
-  // f1 – vinylhead_92 (2 comments + 1 reply)
-  { id: 'c1', reviewId: 'f1', userId: 'u1', username: 'tape_collector', body: 'Completely agree — the transitions are insane on this one.',          createdAt: '2 days ago' },
-  { id: 'c2', reviewId: 'f1', userId: 'u2', username: 'nightfreq',      body: 'Which track hit you hardest on first listen?',                        createdAt: '2 days ago' },
-  { id: 'c3', reviewId: 'f1', parentCommentId: 'c2', userId: 'u3', username: 'vinylhead_92', body: 'Track 5, no question. The way it builds out of nowhere…', createdAt: '1 day ago' },
-  // f2 – moodboard_mel (2 comments)
-  { id: 'c4', reviewId: 'f2', userId: 'u4', username: 'lo_hz',        body: 'Curious which tracks you thought were filler?',                       createdAt: '4 days ago' },
-  { id: 'c5', reviewId: 'f2', userId: 'u5', username: 'wavelength_w', body: 'The highs are genuinely unreal. Standout for sure.',                   createdAt: '3 days ago' },
-  // f3 – crate_digger (3 comments + 1 reply)
-  { id: 'c6', reviewId: 'f3', userId: 'u6', username: 'deep_cuts99',  body: 'GOTY contender. Shared this with three people already.',               createdAt: '6 days ago' },
-  { id: 'c7', reviewId: 'f3', userId: 'u7', username: 'auralfix',     body: 'The craft is what separates it — nothing sounds accidental.',           createdAt: '5 days ago' },
-  { id: 'c8', reviewId: 'f3', parentCommentId: 'c7', userId: 'u8', username: 'crate_digger', body: 'Exactly. Every detail feels intentional.',       createdAt: '5 days ago' },
-  { id: 'c9', reviewId: 'f3', userId: 'u9', username: 'sideB_fan',    body: 'Emotion and craft — that\'s the perfect way to put it.',               createdAt: '4 days ago' },
-];
+function sortReviews(reviews: CommunityReview[], sort: ReviewSort): CommunityReview[] {
+  return [...reviews].sort((a, b) => {
+    if (sort === 'popular') return (b.likeCount + b.commentCount) - (a.likeCount + a.commentCount);
+    if (sort === 'newest')  return new Date(b.listenedAt ?? 0).getTime() - new Date(a.listenedAt ?? 0).getTime();
+    return b.rating - a.rating;
+  });
+}
 
 // ─── Rating picker ────────────────────────────────────────────────────────────
 
@@ -244,39 +241,50 @@ function MiniRatingBar({ rating, isDark }: { rating: number; isDark: boolean }) 
 
 // ─── Community Rating ─────────────────────────────────────────────────────────
 
-// Mock distribution: index i = rating (i+1), value = count of ratings at that score
-// In production this would come from an API
-const COMMUNITY_DISTRIBUTION = [2, 3, 5, 8, 14, 22, 35, 48, 62, 41];
-const COMMUNITY_TOTAL = COMMUNITY_DISTRIBUTION.reduce((a, b) => a + b, 0);
-const COMMUNITY_AVG = (
-  COMMUNITY_DISTRIBUTION.reduce((sum, count, i) => sum + count * (i + 1), 0) / COMMUNITY_TOTAL
-).toFixed(1);
+const MIN_RATINGS_TO_SHOW = 1;
 
 function CommunityRatingSection({
   isDark,
   colors,
   sectionBg,
   borderColor,
+  ratings,
 }: {
   isDark: boolean;
   colors: { text: string; subtext: string; background: string };
   sectionBg: string;
   borderColor: string;
+  ratings: number[];
 }) {
-  const fillLevel = parseFloat(COMMUNITY_AVG); // e.g. 7.7
+  if (ratings.length === 0) return null;
+
+  if (ratings.length < MIN_RATINGS_TO_SHOW) {
+    return (
+      <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
+        <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Ratings</Text>
+        <Text style={{ color: colors.subtext, fontSize: 13, lineHeight: 19, marginTop: 4 }}>
+          Ratings are revealed once more listeners have rated this album.
+        </Text>
+      </View>
+    );
+  }
+
+  const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+  const avgStr = avg.toFixed(1);
+  const fillLevel = avg;
   const activeColor = '#D4A017';
   const inactiveColor = isDark ? '#2a1e14' : '#e0e0e0';
 
   return (
     <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
-      <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Community Rating</Text>
+      <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>Ratings</Text>
 
       <View style={s.communityRow}>
         {/* Avg score */}
         <View style={s.communityAvgBlock}>
-          <Text style={[s.communityAvg, { color: colors.text }]}>{COMMUNITY_AVG}</Text>
+          <Text style={[s.communityAvg, { color: colors.text }]}>{avgStr}</Text>
           <Text style={[s.communityAvgSub, { color: colors.subtext }]}>
-            {COMMUNITY_TOTAL} ratings
+            {ratings.length} ratings
           </Text>
         </View>
 
@@ -410,12 +418,13 @@ function AlbumReviewCard({
   highlighted = false,
   onLayout,
   commentCount = 0,
+  currentLikeCount,
   onCommentCountPress,
   comments,
   commentsExpanded = false,
   onAddComment,
 }: {
-  review: FakeReview;
+  review: CommunityReview;
   liked: boolean;
   onLike: () => void;
   onPress?: () => void;
@@ -428,12 +437,13 @@ function AlbumReviewCard({
   highlighted?: boolean;
   onLayout?: (y: number) => void;
   commentCount?: number;
+  currentLikeCount?: number;
   onCommentCountPress?: () => void;
   comments?: ReviewComment[];
   commentsExpanded?: boolean;
   onAddComment?: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
 }) {
-  const displayCount = review.likeCount + (liked ? 1 : 0);
+  const displayCount = currentLikeCount ?? review.likeCount;
   const cardStyle = [
     s.reviewCard,
     { backgroundColor: isDark ? '#2e2018' : '#fff', borderColor },
@@ -451,8 +461,11 @@ function AlbumReviewCard({
           style={[arc.userRow, { alignItems: 'flex-start' }]}
           onPress={isOwn ? undefined : () => onUsernamePress?.(review.username)}
           hitSlop={6}>
-          <View style={[arc.avatar, { backgroundColor: isOwn ? '#D4A017' : avatarColor(review.username) }]}>
-            <Text style={arc.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+          <View style={[arc.avatar, { backgroundColor: isOwn ? '#D4A017' : avatarColor(review.username), overflow: 'hidden' }]}>
+            {review.avatarUrl && !isOwn
+              ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+              : <Text style={arc.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+            }
           </View>
           <View style={{ gap: 3 }}>
             <Text style={[arc.username, { color: '#D4A017' }]} numberOfLines={1}>
@@ -464,9 +477,15 @@ function AlbumReviewCard({
       </View>
 
       {/* Review text */}
-      <Text style={[arc.reviewText, { color: isDark ? '#a07850' : '#4a3020' }]} numberOfLines={fullWidth ? 0 : 3}>
-        "{review.text}"
-      </Text>
+      {review.text ? (
+        <Text style={[arc.reviewText, { color: isDark ? '#a07850' : '#4a3020' }]} numberOfLines={fullWidth ? 0 : 3}>
+          "{review.text}"
+        </Text>
+      ) : (
+        <Text style={[arc.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
+          No written review.
+        </Text>
+      )}
 
       {/* Footer: date | comments | like */}
       <View style={arc.footer}>
@@ -537,6 +556,7 @@ function AlbumSingleReviewModal({
   albumYear,
   albumArtwork,
   liked,
+  currentLikeCount,
   onLike,
   comments,
   commentsExpanded,
@@ -547,12 +567,13 @@ function AlbumSingleReviewModal({
   isDark,
   colors,
 }: {
-  review: FakeReview;
+  review: CommunityReview;
   albumTitle: string;
   albumArtist: string;
   albumYear: number;
   albumArtwork: string;
   liked: boolean;
+  currentLikeCount?: number;
   onLike: () => void;
   comments: ReviewComment[];
   commentsExpanded: boolean;
@@ -563,11 +584,20 @@ function AlbumSingleReviewModal({
   isDark: boolean;
   colors: { text: string; subtext: string; background: string };
 }) {
+  const hasInteractedRef = useRef(false);
   const [localLiked, setLocalLiked] = useState(liked);
-  const [localLikeCount, setLocalLikeCount] = useState(review.likeCount);
+  const [localLikeCount, setLocalLikeCount] = useState(currentLikeCount ?? review.likeCount ?? 0);
   const border = isDark ? '#2a1e14' : '#e5e5e5';
 
+  // Sync when the parent's likes query resolves after the modal opens
+  useEffect(() => {
+    if (hasInteractedRef.current) return;
+    if (currentLikeCount !== undefined) setLocalLikeCount(currentLikeCount);
+    setLocalLiked(liked);
+  }, [currentLikeCount, liked]);
+
   function handleLike() {
+    hasInteractedRef.current = true;
     setLocalLiked(prev => {
       setLocalLikeCount(c => prev ? c - 1 : c + 1);
       return !prev;
@@ -580,7 +610,7 @@ function AlbumSingleReviewModal({
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }}>
+        <SafeAreaProvider><SafeAreaView style={{ flex: 1 }}>
 
           {/* Header */}
           <View style={[arm.header, { borderBottomColor: border }]}>
@@ -618,8 +648,11 @@ function AlbumSingleReviewModal({
               style={arm.authorRow}
               onPress={() => { onClose(); onUsernamePress?.(review.username); }}
               disabled={!onUsernamePress}>
-              <View style={[arm.avatar, { backgroundColor: avatarColor(review.username) }]}>
-                <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+              <View style={[arm.avatar, { backgroundColor: avatarColor(review.username), overflow: 'hidden' }]}>
+                {review.avatarUrl
+                  ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+                  : <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+                }
               </View>
               <View style={{ gap: 3 }}>
                 <Text style={arm.username}>@{review.username}</Text>
@@ -685,7 +718,7 @@ function AlbumSingleReviewModal({
               />
             )}
           </ScrollView>
-        </SafeAreaView>
+        </SafeAreaView></SafeAreaProvider>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -725,26 +758,42 @@ export default function AlbumDetailScreen() {
   const headerHeight = useHeaderHeight();
 
   const params = useLocalSearchParams<{
-    id: string; title?: string; artist?: string; year?: string; artworkUrl?: string;
+    id: string; title?: string; artist?: string; year?: string; artworkUrl?: string; reviewId?: string;
   }>();
 
   const { user } = useAuth();
-  const [myUsername, setMyUsername] = useState('');
+  const [myUsername,  setMyUsername]  = useState('');
+  const [myAvatarUrl, setMyAvatarUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!user?.id) return;
-    supabase.from('profiles').select('username').eq('id', user.id).single()
-      .then(({ data }) => { if (data?.username) setMyUsername(data.username); });
+    supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
+      .then(({ data }) => {
+        if (data?.username) setMyUsername(data.username);
+        setMyAvatarUrl((data as any)?.avatar_url ?? null);
+      });
   }, [user?.id]);
 
   const {
-    loggedAlbums, updateReview, updateDuration, playlists, addAlbumToPlaylist, removeAlbumFromPlaylist,
+    loggedAlbums, updateReview, updateReListenReview, updateDuration, playlists, addAlbumToPlaylist, removeAlbumFromPlaylist,
     wantToListen, addToWantToListen, removeFromWantToListen,
-    setPendingAlbum,
+    setPendingAlbum, reListenMode, setReListenMode, removeLoggedAlbum, undoLastReListenEntry,
   } = useAlbums();
 
-  const loggedAlbum = loggedAlbums.find(a => a.id === params.id);
+  const _paramTitle = (params.title ?? '').toLowerCase().trim();
+  const _paramArtist = (params.artist ?? '').toLowerCase().trim();
+  const _paramYear  = params.year ? parseInt(params.year, 10) : null;
+  const loggedAlbum = loggedAlbums.find(a => a.id === params.id)
+    ?? loggedAlbums.find(a =>
+        a.title.toLowerCase().trim() === _paramTitle &&
+        a.artist.toLowerCase().trim() === _paramArtist
+      )
+    ?? loggedAlbums.find(a =>
+        a.title.toLowerCase().trim() === _paramTitle &&
+        (_paramYear === null || a.year === _paramYear)
+      );
 
   const albumId       = params.id ?? '';
+  const myAlbumId     = loggedAlbum?.id ?? albumId;
   const albumTitle    = params.title    ?? loggedAlbum?.title    ?? '';
   const albumArtist   = params.artist   ?? loggedAlbum?.artist   ?? '';
   const albumYear     = params.year ? parseInt(params.year, 10) : (loggedAlbum?.year ?? 0);
@@ -752,8 +801,8 @@ export default function AlbumDetailScreen() {
   const albumCoverColor = loggedAlbum?.coverColor ?? '#2e2018';
 
   // Edit state (logged albums only)
-  const [rating, setRating]       = useState(loggedAlbum?.rating ?? 0);
-  const [review, setReview]       = useState(loggedAlbum?.review ?? '');
+  const [rating, setRating]       = useState(loggedAlbum?.lastRating ?? loggedAlbum?.rating ?? 0);
+  const [review, setReview]       = useState(loggedAlbum?.isRelistened ? (loggedAlbum?.lastReview ?? '') : (loggedAlbum?.review ?? ''));
   const [editMode, setEditMode]         = useState(false);
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
@@ -761,25 +810,23 @@ export default function AlbumDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const modalScrollRef = useRef<ScrollView>(null);
   const reviewYPositions = useRef<Map<string, number>>(new Map());
-  const [likedAlbumReviews, setLikedAlbumReviews] = useState<Set<string>>(new Set());
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
-  const [expandedAlbumReview, setExpandedAlbumReview] = useState<FakeReview | null>(null);
+  const [expandedAlbumReview, setExpandedAlbumReview] = useState<CommunityReview | null>(null);
   const [singleReviewCommentsOpen, setSingleReviewCommentsOpen] = useState(false);
-  const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(() => {
-    const m = new Map<string, ReviewComment[]>();
-    for (const c of MOCK_COMMENTS) {
-      m.set(c.reviewId, [...(m.get(c.reviewId) ?? []), c]);
-    }
-    return m;
-  });
+  const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(new Map());
+  const [reviewSort, setReviewSort] = useState<ReviewSort>('popular');
+  const [reviewTab,  setReviewTab]  = useState<ReviewTab>('all');
+  const [friendIds,       setFriendIds]       = useState<Set<string>>(new Set());
+  const [friendActivity,  setFriendActivity]  = useState<FriendActivity[]>([]);
 
   function handleToggleComments(reviewId: string) {
     setExpandedCommentsId(prev => prev === reviewId ? null : reviewId);
   }
 
   function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+    const tempId = `local_${Date.now()}`;
     const newComment: ReviewComment = {
-      id:              `local_${Date.now()}`,
+      id:              tempId,
       reviewId,
       parentCommentId: parentId ?? null,
       replyToUsername: replyToUsername ?? null,
@@ -794,43 +841,23 @@ export default function AlbumDetailScreen() {
       m.set(reviewId, [...(m.get(reviewId) ?? []), newComment]);
       return m;
     });
-  }
-
-  function handleReviewCardPress(review: FakeReview) {
-    setExpandedAlbumReview(review);
-    setSingleReviewCommentsOpen(false);
-  }
-
-  function handleReviewCommentCountPress(review: FakeReview) {
-    setExpandedAlbumReview(review);
-    setSingleReviewCommentsOpen(true);
-  }
-
-
-  function handleLikeAlbumReview(id: string) {
-    setLikedAlbumReviews(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  // Build review list — user's own review pinned first when available
-  const userOwnReview: FakeReview | null =
-    isLogged && loggedAlbum!.review
-      ? {
-          id: 'own',
-          username: myUsername || 'me',
-          rating: loggedAlbum!.rating,
-          text: loggedAlbum!.review!,
-          dateStr: formatLoggedDate(loggedAlbum!.dateLogged),
-          likeCount: 0,
+    if (user?.id) {
+      insertReviewComment(reviewId, user.id, body, parentId ?? null).then(realId => {
+        if (realId) {
+          setCommentsMap(prev => {
+            const m = new Map(prev);
+            const list = (m.get(reviewId) ?? []).map(c => c.id === tempId ? { ...c, id: realId } : c);
+            m.set(reviewId, list);
+            return m;
+          });
         }
-      : null;
+      });
+    }
+  }
 
-  const displayReviews: FakeReview[] = userOwnReview
-    ? [userOwnReview, ...FAKE_ALBUM_REVIEWS]
-    : FAKE_ALBUM_REVIEWS;
+  function handleReviewCardPress(review: CommunityReview) { openReview(review, false); }
+  function handleReviewCommentCountPress(review: CommunityReview) { openReview(review, true); }
+
 
   // Remote data
   const [tracks, setTracks]               = useState<Track[] | null>(null);
@@ -870,8 +897,50 @@ export default function AlbumDetailScreen() {
   const [reviewLikesMap, setReviewLikesMap]     = useState<Map<string, LikeState>>(new Map());
 
   const isLogged = !!loggedAlbum;
-  const isWanted = wantToListen.some(a => a.id === albumId);
-  const dirty    = isLogged && (rating !== loggedAlbum!.rating || review !== (loggedAlbum!.review ?? ''));
+  const isWanted = wantToListen.some(a => a.id === myAlbumId);
+  const baseReview = loggedAlbum?.isRelistened ? (loggedAlbum.lastReview ?? '') : (loggedAlbum?.review ?? '');
+  const dirty      = isLogged && (rating !== (loggedAlbum!.lastRating ?? loggedAlbum!.rating) || review !== baseReview);
+
+  // Own review (for Your Review tab)
+  const ownReview: CommunityReview | null = (isLogged && user?.id)
+    ? {
+        id:           `${user.id}_${myAlbumId}`,
+        userId:       user.id,
+        username:     myUsername || 'me',
+        avatarUrl:    myAvatarUrl,
+        rating:       loggedAlbum!.lastRating ?? loggedAlbum!.rating,
+        text:         (loggedAlbum!.isRelistened ? (loggedAlbum!.lastReview ?? loggedAlbum!.review) : loggedAlbum!.review) ?? undefined,
+        dateStr:      formatLoggedDate(loggedAlbum!.dateLogged),
+        listenedAt:   loggedAlbum!.dateLogged,
+        likeCount:    reviewLikesMap.get(`${user.id}_${myAlbumId}`)?.count ?? 0,
+        commentCount: 0,
+      }
+    : null;
+
+  // Auto-open own review when deep-linking from a like_review notification
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!params.reviewId || autoOpenedRef.current || !ownReview) return;
+    if (ownReview.id === params.reviewId) {
+      autoOpenedRef.current = true;
+      openReview(ownReview, false);
+    }
+  }, [params.reviewId, ownReview?.id]);
+
+  // All reviews including own — used for ratings average and preview
+  const allReviews = ownReview ? [ownReview, ...communityReviews] : communityReviews;
+  const communityRatings = allReviews.filter(r => r.rating > 0).map(r => r.rating);
+
+  // Preview: top 4 most popular — include own review so it can rank in
+  const previewReviews = sortReviews(allReviews, 'popular').slice(0, 4);
+
+  // Modal list: filtered by tab then sorted
+  const modalReviews: CommunityReview[] = (() => {
+    if (reviewTab === 'own')     return ownReview ? [ownReview] : [];
+    if (reviewTab === 'friends') return sortReviews(communityReviews.filter(r => friendIds.has(r.userId)), reviewSort);
+    // All tab — own review competes alongside everyone else's
+    return sortReviews(allReviews, reviewSort);
+  })();
 
   // ── Fetch tracklist + Last.fm ──────────────────────────────────────────────
   useEffect(() => {
@@ -953,53 +1022,79 @@ export default function AlbumDetailScreen() {
     if (!albumId) return;
 
     async function loadCommunityReviews() {
-      // 1. Fetch all rows for this album that have a review, excluding the current user
-      let query = supabase
+      // Query by title + year so we find all reviews regardless of which AM
+      // catalog ID each user happened to store (IDs diverge across accounts/time).
+      let q = supabase
         .from('user_albums')
-        .select('user_id, rating, review, listened_at')
-        .eq('spotify_id', albumId)
-        .not('review', 'is', null)
+        .select('user_id, rating, review, listened_at, spotify_id')
+        .ilike('title', albumTitle)
+        .not('listened_at', 'is', null)
         .order('listened_at', { ascending: false });
+      // Accept exact year match OR entries where year wasn't stored (0/null) to
+      // handle old logged albums that predate reliable year population.
+      if (albumYear > 0) q = q.or(`year.eq.${albumYear},year.is.null,year.eq.0`);
+      if (user?.id)      q = q.neq('user_id', user.id);
 
-      if (user?.id) query = query.neq('user_id', user.id);
+      const { data: titleRows } = await q;
 
-      const { data: rows } = await query;
-      if (!rows || rows.length === 0) { setCommunityReviews([]); return; }
-
-      // 2. Batch-fetch profiles for the reviewers
-      const userIds = [...new Set(rows.map((r: any) => r.user_id as string))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', userIds);
-
-      const profileMap = new Map<string, string>();
-      for (const p of (profiles ?? []) as any[]) {
-        profileMap.set(p.id, p.username ?? p.id);
+      // Deduplicate by user_id keeping most recent, then cross-check artist
+      // to avoid false positives from albums with the same title.
+      const seen = new Set<string>();
+      const rows: any[] = [];
+      for (const r of titleRows ?? []) {
+        if (!seen.has(r.user_id)) { seen.add(r.user_id); rows.push(r); }
       }
 
-      setCommunityReviews(rows.map((r: any) => ({
-        id:      `${r.user_id}_${albumId}`,
-        userId:  r.user_id,
-        username: profileMap.get(r.user_id) ?? r.user_id,
-        rating:  r.rating ?? 0,
-        text:    r.review ?? undefined,
-        dateStr: r.listened_at ? formatLoggedDate(r.listened_at) : undefined,
-      })));
+      if (rows.length === 0) { setCommunityReviews([]); return; }
+
+      const userIds   = rows.map(r => r.user_id as string);
+      const targetIds = rows.map(r => `${r.user_id}_${r.spotify_id}`);
+
+      const [{ data: profiles }, commentCounts] = await Promise.all([
+        supabase.from('profiles').select('id, username, avatar_url').in('id', userIds),
+        countReviewComments(targetIds),
+      ]);
+
+      const profileMap = new Map<string, { username: string; avatarUrl: string | null }>();
+      for (const p of (profiles ?? []) as any[]) {
+        profileMap.set(p.id, { username: p.username ?? p.id, avatarUrl: p.avatar_url ?? null });
+      }
+
+      setCommunityReviews(rows.map((r: any) => {
+        const targetId = `${r.user_id}_${r.spotify_id}`;
+        const prof = profileMap.get(r.user_id);
+        return {
+          id:           targetId,
+          userId:       r.user_id,
+          username:     prof?.username ?? r.user_id,
+          avatarUrl:    prof?.avatarUrl ?? null,
+          rating:       r.rating ?? 0,
+          text:         r.review ?? undefined,
+          dateStr:      r.listened_at ? formatLoggedDate(r.listened_at) : undefined,
+          listenedAt:   r.listened_at ?? undefined,
+          likeCount:    0,
+          commentCount: commentCounts.get(targetId) ?? 0,
+        };
+      }));
     }
 
     loadCommunityReviews();
-  }, [albumId, user?.id]);
+  }, [albumTitle, albumYear, user?.id]);
 
-  // ── Fetch like state for this album's reviews ──────────────────────────────
+  // ── Fetch like state + sync counts into communityReviews ──────────────────
   useEffect(() => {
     if (!albumId) return;
+
+    const targetIds = communityReviews.map(r => r.id);
+    const ownTargetId = user?.id && myAlbumId ? `${user.id}_${myAlbumId}` : null;
+    const allTargetIds = ownTargetId ? [...targetIds, ownTargetId] : targetIds;
+    if (allTargetIds.length === 0) return;
 
     supabase
       .from('likes')
       .select('user_id, target_id')
       .eq('target_type', 'review')
-      .like('target_id', `%_${albumId}`)
+      .in('target_id', allTargetIds)
       .then(({ data }) => {
         const newMap = new Map<string, LikeState>();
         for (const like of (data ?? []) as any[]) {
@@ -1010,8 +1105,171 @@ export default function AlbumDetailScreen() {
           });
         }
         setReviewLikesMap(newMap);
+        setCommunityReviews(prev => prev.map(r => ({
+          ...r,
+          likeCount: newMap.get(r.id)?.count ?? r.likeCount,
+        })));
       });
-  }, [albumId, user?.id]);
+  }, [communityReviews.length, user?.id, myAlbumId]);
+
+  // ── Fetch mutual friend IDs for Friends tab ────────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    async function loadFriendIds() {
+      const [{ data: outRows }, { data: inRows }] = await Promise.all([
+        supabase.from('follows').select('following_id').eq('follower_id', user!.id),
+        supabase.from('follows').select('follower_id').eq('following_id', user!.id),
+      ]);
+      if (!outRows?.length || !inRows?.length) return;
+      const inSet = new Set((inRows as any[]).map(r => r.follower_id as string));
+      setFriendIds(new Set(
+        (outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string)
+      ));
+    }
+    loadFriendIds();
+  }, [user?.id]);
+
+  // ── Fetch friend activity for this album ──────────────────────────────────
+  useEffect(() => {
+    if (friendIds.size === 0) return;
+    const ids = Array.from(friendIds);
+
+    async function loadFriendActivity() {
+      const [{ data: listened }, { data: wanted }, { data: reListenRows }] = await Promise.allSettled([
+        supabase
+          .from('user_albums')
+          .select('user_id, rating, review, listened_at')
+          .in('user_id', ids)
+          .ilike('title', albumTitle)
+          .not('listened_at', 'is', null),
+        supabase
+          .from('want_to_listen')
+          .select('user_id')
+          .in('user_id', ids)
+          .ilike('title', albumTitle),
+        supabase
+          .from('re_listens')
+          .select('user_id, rating, review, listened_at')
+          .in('user_id', ids)
+          .ilike('title', albumTitle)
+          .order('listened_at', { ascending: false }),
+      ]).then(results => results.map(r => (r.status === 'fulfilled' ? r.value : { data: null })));
+
+      const allUserIds = new Set<string>();
+      ((listened ?? []) as any[]).forEach(r => allUserIds.add(r.user_id as string));
+      ((wanted  ?? []) as any[]).forEach(r => allUserIds.add(r.user_id as string));
+      if (allUserIds.size === 0) return;
+
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url')
+        .in('id', Array.from(allUserIds));
+
+      const usernameMap = new Map<string, string>(
+        (profiles ?? []).map((p: any) => [p.id, p.username])
+      );
+      const avatarMap = new Map<string, string | null>(
+        (profiles ?? []).map((p: any) => [p.id, p.avatar_url ?? null])
+      );
+
+      // Build re-listen map: most recent re-listen per user
+      const reListenByUser = new Map<string, { count: number; rating: number; review?: string; listenedAt?: string }>();
+      for (const row of (reListenRows ?? []) as any[]) {
+        const existing = reListenByUser.get(row.user_id);
+        if (!existing) {
+          reListenByUser.set(row.user_id, { count: 1, rating: row.rating ?? 0, review: row.review ?? undefined, listenedAt: row.listened_at ?? undefined });
+        } else {
+          existing.count++;
+        }
+      }
+
+      // Deduplicate by user_id — keep the row with a review, or the most recent listen
+      const listenedByUser = new Map<string, any>();
+      for (const row of (listened ?? []) as any[]) {
+        const existing = listenedByUser.get(row.user_id);
+        if (!existing || (row.review && !existing.review) || (!existing.review && new Date(row.listened_at) > new Date(existing.listened_at))) {
+          listenedByUser.set(row.user_id, row);
+        }
+      }
+      const listenedRows = Array.from(listenedByUser.values());
+      const wantedRows   = (wanted  ?? []) as any[];
+      const listenedSet  = new Set<string>(listenedRows.map(r => r.user_id as string));
+      const activities: FriendActivity[] = [];
+
+      for (const row of listenedRows) {
+        const username = usernameMap.get(row.user_id);
+        if (!username || row.user_id === user?.id) continue;
+        const rl = reListenByUser.get(row.user_id);
+        activities.push({
+          userId:     row.user_id,
+          username,
+          avatarUrl:  avatarMap.get(row.user_id) ?? null,
+          rating:     row.rating ?? 0,
+          hasReview:  !!row.review,
+          review:     row.review ?? undefined,
+          listenedAt: row.listened_at ?? undefined,
+          status:     'listened',
+          reListenCount:  rl?.count,
+          reListenRating: rl?.rating,
+          reListenReview: rl?.review,
+          reListenAt:     rl?.listenedAt,
+        });
+      }
+
+      // Friends who only have re-listens (no user_albums entry for this album — edge case)
+      for (const [uid, rl] of reListenByUser) {
+        if (listenedSet.has(uid)) continue;
+        const username = usernameMap.get(uid);
+        if (!username || uid === user?.id) continue;
+        activities.push({
+          userId:     uid,
+          username,
+          avatarUrl:  avatarMap.get(uid) ?? null,
+          rating:     rl.rating,
+          hasReview:  !!rl.review,
+          review:     rl.review,
+          listenedAt: rl.listenedAt,
+          status:     'listened',
+          reListenCount:  rl.count,
+          reListenRating: rl.rating,
+          reListenReview: rl.review,
+          reListenAt:     rl.listenedAt,
+        });
+      }
+      for (const row of wantedRows) {
+        if (listenedSet.has(row.user_id as string)) continue;
+        const username = usernameMap.get(row.user_id);
+        if (!username || row.user_id === user?.id) continue;
+        activities.push({
+          userId:    row.user_id,
+          username,
+          avatarUrl: avatarMap.get(row.user_id) ?? null,
+          rating:    0,
+          hasReview: false,
+          status:    'wantToListen',
+        });
+      }
+
+      setFriendActivity(activities);
+    }
+
+    loadFriendActivity();
+  }, [friendIds, albumTitle]);
+
+  // ── Load real comments when a review is opened ─────────────────────────────
+  function openReview(review: CommunityReview, openComments = false) {
+    setExpandedAlbumReview(review);
+    setSingleReviewCommentsOpen(openComments);
+    if (!commentsMap.has(review.id)) {
+      fetchReviewComments(review.id).then(comments => {
+        setCommentsMap(prev => {
+          const m = new Map(prev);
+          if (!m.has(review.id)) m.set(review.id, comments);
+          return m;
+        });
+      });
+    }
+  }
 
   // ── Toggle like on a community review ─────────────────────────────────────
   async function handleToggleLike(review: CommunityReview) {
@@ -1052,9 +1310,10 @@ export default function AlbumDetailScreen() {
         setReviewLikesMap(new Map(reviewLikesMap)); // revert
       } else {
         supabase.from('notifications').insert({
-          user_id:  review.userId,
-          type:     'like_review',
-          actor_id: user.id,
+          user_id:   review.userId,
+          type:      'like_review',
+          actor_id:  user.id,
+          target_id: review.id,
         }).then(({ error: notifErr }) => {
           if (notifErr) console.error('[album-detail] notification error:', notifErr.message);
         });
@@ -1064,26 +1323,36 @@ export default function AlbumDetailScreen() {
 
   // ── Actions ────────────────────────────────────────────────────────────────
   function handleSave() {
-    updateReview(albumId, rating, review);
+    if (loggedAlbum?.isRelistened) {
+      updateReListenReview(myAlbumId, rating, review);
+    } else {
+      updateReview(myAlbumId, rating, review);
+    }
     setEditMode(false);
   }
 
   function handleCancelEdit() {
-    setRating(loggedAlbum?.rating ?? 0);
-    setReview(loggedAlbum?.review ?? '');
+    setRating(loggedAlbum?.lastRating ?? loggedAlbum?.rating ?? 0);
+    setReview(loggedAlbum?.isRelistened ? (loggedAlbum?.lastReview ?? '') : (loggedAlbum?.review ?? ''));
     setEditMode(false);
   }
 
   function handleLog() {
-    setPendingAlbum({ spotifyId: albumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork });
+    setPendingAlbum({ spotifyId: myAlbumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork });
+    router.push('/log-album');
+  }
+
+  function handleReListenPressed() {
+    setReListenMode(true);
+    setPendingAlbum({ spotifyId: myAlbumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork });
     router.push('/log-album');
   }
 
   function handleWantToListen() {
     if (isWanted) {
-      removeFromWantToListen(albumId);
+      removeFromWantToListen(myAlbumId);
     } else {
-      addToWantToListen({ id: albumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork });
+      addToWantToListen({ id: myAlbumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork });
     }
   }
 
@@ -1211,21 +1480,65 @@ export default function AlbumDetailScreen() {
                   <Text style={[s.secondaryBtnText, { color: colors.subtext }]}>Cancel</Text>
                 </Pressable>
               </View>
+              {loggedAlbum?.isRelistened ? (
+                <Pressable
+                  style={({ pressed }) => [s.removeListendBtn, { opacity: pressed ? 0.7 : 1 }]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Undo Last Re-listen',
+                      'Remove your most recent re-listen? Your previous rating and review will be restored.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Undo',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await undoLastReListenEntry(myAlbumId);
+                            setEditMode(false);
+                          },
+                        },
+                      ]
+                    );
+                  }}>
+                  <FontAwesome name="undo" size={13} color="#8B1A1A" />
+                  <Text style={s.removeListendBtnText}>Undo Last Re-listen</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [s.removeListendBtn, { opacity: pressed ? 0.7 : 1 }]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Remove from Listend',
+                      `Remove "${albumTitle}" from your Listend?`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Remove',
+                          style: 'destructive',
+                          onPress: () => { removeLoggedAlbum(myAlbumId); router.back(); },
+                        },
+                      ]
+                    );
+                  }}>
+                  <FontAwesome name="trash" size={13} color="#8B1A1A" />
+                  <Text style={s.removeListendBtnText}>Remove from Listend</Text>
+                </Pressable>
+              )}
             </View>
           ) : (
             <View style={s.editLogRow}>
               <View style={s.listendLeft}>
                 <View style={s.listendBadge}>
                   <FontAwesome name="headphones" size={12} color="#fff" />
-                  <Text style={s.listendBadgeText}>Listend</Text>
+                  <Text style={s.listendBadgeText}>{loggedAlbum?.isRelistened ? 'Re-listend' : 'Listend'}</Text>
                 </View>
                 <Text style={[s.editLogDate, { color: colors.subtext }]}>
                   {formatLoggedDate(loggedAlbum!.dateLogged)}
                 </Text>
               </View>
               <View style={s.editLogRight}>
-                <FontAwesome name="volume-up" size={14} color={loggedAlbum!.rating > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#ddd')} />
-                {loggedAlbum!.rating >= 1 && <MiniRatingBar rating={loggedAlbum!.rating} isDark={isDark} />}
+                <FontAwesome name="volume-up" size={14} color={(loggedAlbum!.lastRating ?? loggedAlbum!.rating) > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#ddd')} />
+                {(loggedAlbum!.lastRating ?? loggedAlbum!.rating) >= 1 && <MiniRatingBar rating={loggedAlbum!.lastRating ?? loggedAlbum!.rating} isDark={isDark} />}
                 <Pressable onPress={() => setEditMode(true)} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
                   <FontAwesome name="pencil" size={13} color={colors.subtext} />
                 </Pressable>
@@ -1235,25 +1548,35 @@ export default function AlbumDetailScreen() {
         ) : (
           <View style={s.ctaRow}>
             <Pressable
-              style={({ pressed }) => [s.listenBtn, s.ctaFlex, { borderColor: isDark ? '#4a3020' : '#a07850', opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [s.listenBtn, s.ctaFlex, { backgroundColor: '#D4A017', borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
               onPress={handleLog}>
-              <FontAwesome name="headphones" size={16} color={colors.text} />
-              <Text style={[s.listenBtnText, { color: colors.text }]}>Listen</Text>
+              <FontAwesome name="headphones" size={16} color="#fff" />
+              <Text style={[s.listenBtnText, { color: '#fff' }]}>Listen</Text>
             </Pressable>
             <Pressable
-              style={[s.secondaryBtn, s.ctaFlex, { borderColor: isDark ? '#3a2818' : '#ddd' }]}
+              style={({ pressed }) => [s.secondaryBtn, s.ctaFlex, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
               onPress={handleWantToListen}>
-              <FontAwesome name={isWanted ? 'bookmark' : 'bookmark-o'} size={14} color={isWanted ? '#D4A017' : colors.subtext} />
-              <Text style={[s.secondaryBtnText, { color: isWanted ? '#D4A017' : colors.subtext }]}>
+              <FontAwesome name={isWanted ? 'bookmark' : 'bookmark-o'} size={14} color="#D4A017" />
+              <Text style={[s.secondaryBtnText, { color: '#D4A017' }]}>
                 {isWanted ? 'Saved' : 'Want to Listen'}
               </Text>
             </Pressable>
           </View>
         )}
 
-        {/* ── 3b. Stream button ─────────────────────────────────────────────── */}
+        {/* ── 3b. Re-listen button ──────────────────────────────────────────── */}
+        {isLogged && (
+          <Pressable
+            style={({ pressed }) => [s.reListenBtn, { backgroundColor: '#D4A017', borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
+            onPress={handleReListenPressed}>
+            <FontAwesome name="repeat" size={15} color="#fff" />
+            <Text style={[s.reListenBtnText, { color: '#fff' }]}>Re-listen</Text>
+          </Pressable>
+        )}
+
+        {/* ── 3c. Stream button ─────────────────────────────────────────────── */}
         <Pressable
-          style={({ pressed }) => [s.streamBtn, { borderColor: isDark ? '#3a2818' : '#ddd', opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [s.streamBtn, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
           onPress={handleStream}>
           <FontAwesome name="music" size={15} color="#D4A017" />
           <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Listen on</Text>
@@ -1265,6 +1588,7 @@ export default function AlbumDetailScreen() {
           colors={colors}
           sectionBg={sectionBg}
           borderColor={borderColor}
+          ratings={communityRatings}
         />
 
         {/* ── 5. Reviews ────────────────────────────────────────────────────── */}
@@ -1272,24 +1596,29 @@ export default function AlbumDetailScreen() {
           <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 12 }]}>Reviews</Text>
           <FlatList
             horizontal
-            data={displayReviews}
+            data={previewReviews}
             keyExtractor={item => item.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={[s.reviewsScroll, { alignItems: 'stretch' }]}
             style={s.reviewsScrollView}
+            ListEmptyComponent={
+              <Text style={[s.emptyText, { color: mutedText, textAlign: 'left', paddingVertical: 8 }]}>
+                No reviews yet. Be the first!
+              </Text>
+            }
             renderItem={({ item }) => (
               <AlbumReviewCard
                 review={item}
-                liked={likedAlbumReviews.has(item.id)}
-                onLike={() => handleLikeAlbumReview(item.id)}
+                liked={reviewLikesMap.get(item.id)?.liked ?? false}
+                onLike={() => handleToggleLike(item)}
                 onPress={() => handleReviewCardPress(item)}
                 onUsernamePress={(username) => navigateToProfile(username, router)}
                 onCommentCountPress={() => handleReviewCommentCountPress(item)}
-                commentCount={commentsMap.get(item.id)?.length ?? 0}
+                commentCount={commentsMap.has(item.id) ? (commentsMap.get(item.id)?.length ?? 0) : item.commentCount}
+                currentLikeCount={reviewLikesMap.get(item.id)?.count ?? item.likeCount}
                 isDark={isDark}
                 colors={colors}
                 borderColor={borderColor}
-                isOwn={item.id === 'own'}
               />
             )}
             ListFooterComponent={
@@ -1307,7 +1636,101 @@ export default function AlbumDetailScreen() {
           />
         </View>
 
-        {/* ── 6. Tracklist ──────────────────────────────────────────────────── */}
+        {/* ── 6. Friends ────────────────────────────────────────────────────── */}
+        {friendActivity.length > 0 && (
+          <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
+            <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 12 }]}>
+              Friends
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+              <View style={{ flexDirection: 'row', gap: 16, paddingHorizontal: 4, paddingBottom: 2 }}>
+                {friendActivity.map((friend, fi) => {
+                  const initials = friend.username.slice(0, 2).toUpperCase();
+                  const isWant   = friend.status === 'wantToListen';
+
+                  const hasReListens   = (friend.reListenCount ?? 0) > 0;
+                  const displayRating  = hasReListens ? (friend.reListenRating ?? friend.rating) : friend.rating;
+                  const displayReview  = hasReListens ? (friend.reListenReview ?? friend.review) : friend.review;
+                  const displayDate    = hasReListens ? (friend.reListenAt ?? friend.listenedAt) : friend.listenedAt;
+                  const hasAnyReview   = !!(displayReview ?? friend.review);
+
+                  function handleFriendPress() {
+                    if (isWant) {
+                      navigateToProfile(friend.username, router);
+                      return;
+                    }
+                    const reviewId = `${friend.userId}_${albumTitle.toLowerCase().replace(/\s+/g, '_')}`;
+                    const fakeReview: CommunityReview = {
+                      id:           reviewId,
+                      userId:       friend.userId,
+                      username:     friend.username,
+                      avatarUrl:    friend.avatarUrl ?? undefined,
+                      rating:       displayRating,
+                      text:         displayReview,
+                      listenedAt:   displayDate,
+                      dateStr:      displayDate
+                        ? new Date(displayDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : undefined,
+                      likeCount:    0,
+                      commentCount: 0,
+                    };
+                    openReview(fakeReview, false);
+                  }
+
+                  return (
+                    <Pressable
+                      key={`${friend.userId}-${fi}`}
+                      onPress={handleFriendPress}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, alignItems: 'center', gap: 6 })}>
+                      {/* Avatar */}
+                      <View style={{ position: 'relative' }}>
+                        <View style={[
+                          s.friendAvatar,
+                          { backgroundColor: avatarColor(friend.username), overflow: 'hidden' },
+                        ]}>
+                          {friend.avatarUrl
+                            ? <ExpoImage source={{ uri: friend.avatarUrl }} style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} contentFit="cover" cachePolicy="disk" />
+                            : <Text style={s.friendAvatarText}>{initials}</Text>
+                          }
+                        </View>
+                        {isWant && (
+                          <View style={s.friendWantBadge}>
+                            <FontAwesome name="bookmark" size={8} color="#fff" />
+                          </View>
+                        )}
+                        {!isWant && displayRating > 0 && (
+                          <View style={s.friendRatingBadge}>
+                            <Text style={s.friendRatingText}>{displayRating}</Text>
+                          </View>
+                        )}
+                        {hasAnyReview && (
+                          <View style={s.friendPenBadge}>
+                            <FontAwesome name="quote-left" size={7} color="#fff" />
+                          </View>
+                        )}
+                        {hasReListens && (
+                          <View style={s.friendRelistenBadge}>
+                            <FontAwesome name="repeat" size={7} color="#fff" />
+                          </View>
+                        )}
+                      </View>
+                      {/* Username */}
+                      <Text style={[s.friendUsername, { color: colors.subtext }]} numberOfLines={1}>
+                        @{friend.username}
+                      </Text>
+                      {/* Status label */}
+                      {isWant && (
+                        <Text style={[s.friendStatusLabel, { color: mutedText }]}>wants to listen</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ── 7. Tracklist ──────────────────────────────────────────────────── */}
         <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
           <View style={s.tracklistHeader}>
             <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 0 }]}>Tracklist</Text>
@@ -1420,8 +1843,9 @@ export default function AlbumDetailScreen() {
           albumArtist={albumArtist}
           albumYear={albumYear}
           albumArtwork={albumArtwork}
-          liked={likedAlbumReviews.has(expandedAlbumReview.id)}
-          onLike={() => handleLikeAlbumReview(expandedAlbumReview.id)}
+          liked={reviewLikesMap.get(expandedAlbumReview.id)?.liked ?? false}
+          currentLikeCount={reviewLikesMap.get(expandedAlbumReview.id)?.count}
+          onLike={() => handleToggleLike(expandedAlbumReview)}
           comments={commentsMap.get(expandedAlbumReview.id) ?? []}
           commentsExpanded={singleReviewCommentsOpen}
           onToggleComments={() => setSingleReviewCommentsOpen(prev => !prev)}
@@ -1439,6 +1863,8 @@ export default function AlbumDetailScreen() {
         animationType="slide"
         onRequestClose={() => { setShowAllReviews(false); setHighlightedReviewId(null); setExpandedCommentsId(null); }}>
         <View style={[s.allReviewsModal, { backgroundColor: colors.background }]}>
+
+          {/* Header */}
           <View style={[s.allReviewsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
             <Text style={[s.allReviewsTitle, { color: colors.text }]}>Reviews</Text>
             <Pressable
@@ -1448,27 +1874,66 @@ export default function AlbumDetailScreen() {
               <FontAwesome name="times" size={20} color={colors.subtext} />
             </Pressable>
           </View>
+
+          {/* Tabs */}
+          <View style={[s.reviewTabRow, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
+            {(['all', 'friends', 'own'] as ReviewTab[]).map(tab => {
+              const labels: Record<ReviewTab, string> = { all: 'All', friends: 'Friends', own: 'Your Review' };
+              const active = reviewTab === tab;
+              return (
+                <Pressable key={tab} onPress={() => setReviewTab(tab)} style={s.reviewTabBtn}>
+                  <Text style={[s.reviewTabText, { color: active ? '#D4A017' : colors.subtext }]}>{labels[tab]}</Text>
+                  {active && <View style={s.reviewTabUnderline} />}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Sort bar — hidden on "Your Review" tab */}
+          {reviewTab !== 'own' && (
+            <View style={[s.reviewSortRow, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
+              {(['popular', 'newest', 'rating'] as ReviewSort[]).map(sort => {
+                const labels: Record<ReviewSort, string> = { popular: 'Most Popular', newest: 'Newest', rating: 'Top Rated' };
+                const active = reviewSort === sort;
+                return (
+                  <Pressable
+                    key={sort}
+                    onPress={() => setReviewSort(sort)}
+                    style={[s.reviewSortChip, active && { backgroundColor: '#D4A017' }, !active && { borderColor: isDark ? '#3a2818' : '#ddd', borderWidth: 1 }]}>
+                    <Text style={[s.reviewSortText, { color: active ? '#fff' : colors.subtext }]}>{labels[sort]}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
           <ScrollView
             ref={modalScrollRef}
             contentContainerStyle={[s.allReviewsList, { gap: 12, paddingHorizontal: 16 }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled">
-            {displayReviews.map(r => (
+
+            {modalReviews.length === 0 ? (
+              <Text style={[s.emptyText, { color: mutedText, textAlign: 'center', paddingVertical: 32 }]}>
+                {reviewTab === 'own' ? 'You haven\'t logged this album yet.' : reviewTab === 'friends' ? 'None of your friends have reviewed this album.' : 'No reviews yet.'}
+              </Text>
+            ) : modalReviews.map(r => (
               <AlbumReviewCard
                 key={r.id}
-                review={{ ...r }}
-                liked={likedAlbumReviews.has(r.id)}
-                onLike={() => handleLikeAlbumReview(r.id)}
-                onUsernamePress={() => navigateToProfile(r.username, router)}
+                review={r}
+                liked={reviewLikesMap.get(r.id)?.liked ?? false}
+                onLike={() => handleToggleLike(r)}
+                onUsernamePress={() => { setShowAllReviews(false); navigateToProfile(r.username, router); }}
                 onCommentCountPress={() => handleToggleComments(r.id)}
-                commentCount={commentsMap.get(r.id)?.length ?? 0}
+                commentCount={commentsMap.has(r.id) ? (commentsMap.get(r.id)?.length ?? 0) : r.commentCount}
+                currentLikeCount={reviewLikesMap.get(r.id)?.count ?? r.likeCount}
                 comments={commentsMap.get(r.id) ?? []}
                 commentsExpanded={expandedCommentsId === r.id}
                 onAddComment={(body, parentId, u, rtu, av) => handleAddComment(r.id, body, parentId, u, rtu, av)}
                 isDark={isDark}
                 colors={colors}
                 borderColor={borderColor}
-                isOwn={r.id === 'own'}
+                isOwn={r.userId === user?.id}
                 fullWidth
                 highlighted={r.id === highlightedReviewId}
                 onLayout={(y) => { reviewYPositions.current.set(r.id, y); }}
@@ -1527,11 +1992,11 @@ export default function AlbumDetailScreen() {
               </View>
             ) : (
               playlists.map(playlist => {
-                const inPlaylist = playlist.albumIds.includes(albumId);
+                const inPlaylist = playlist.albumIds.includes(myAlbumId);
                 return (
                   <Pressable
                     key={playlist.id}
-                    onPress={() => { inPlaylist ? removeAlbumFromPlaylist(playlist.id, albumId) : addAlbumToPlaylist(playlist.id, albumId); }}
+                    onPress={() => { inPlaylist ? removeAlbumFromPlaylist(playlist.id, myAlbumId) : addAlbumToPlaylist(playlist.id, myAlbumId); }}
                     style={({ pressed }) => [s.playlistRow, { borderBottomColor: isDark ? '#2a1e14' : '#f5e6c8', opacity: pressed ? 0.6 : 1 }]}>
                     <View style={s.playlistRowText}>
                       <Text style={[s.playlistRowName, { color: colors.text }]} numberOfLines={1}>{playlist.name}</Text>
@@ -1609,6 +2074,8 @@ const s = StyleSheet.create({
   editBlock: { width: '100%', marginTop: 16 },
   editBtnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   editBtnFlex: { flex: 1, marginTop: 0 },
+  removeListendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8B1A1A' },
+  removeListendBtnText: { color: '#8B1A1A', fontWeight: '600', fontSize: 14 },
 
   // Rating picker
   ratingContainer: { width: '100%', marginTop: 10 },
@@ -1661,14 +2128,36 @@ const s = StyleSheet.create({
   reviewCardLikeCount: { fontSize: 11, fontWeight: '600' },
 
   // Show More card
-  showMoreCard: { justifyContent: 'center', alignItems: 'center', gap: 8, alignSelf: 'stretch' },
+  showMoreCard: { justifyContent: 'center', alignItems: 'center', gap: 8, alignSelf: 'stretch', flex: 1 },
   showMoreText: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 17 },
+
+  // Friends section
+  friendAvatar:      { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  friendAvatarText:  { color: '#fff', fontSize: 15, fontWeight: '700' },
+  friendUsername:    { fontSize: 11, maxWidth: 56, textAlign: 'center' },
+  friendStatusLabel: { fontSize: 10, marginTop: -4 },
+  friendWantBadge:     { position: 'absolute', bottom: 0, right: 0, width: 16, height: 16, borderRadius: 8, backgroundColor: '#D4A017', alignItems: 'center', justifyContent: 'center' },
+  friendRatingBadge:   { position: 'absolute', bottom: -2, left: -4, backgroundColor: '#D4A017', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1 },
+  friendPenBadge:      { position: 'absolute', bottom: -2, left: 16, width: 16, height: 16, borderRadius: 8, backgroundColor: '#D4A017', alignItems: 'center', justifyContent: 'center' },
+  friendRelistenBadge: { position: 'absolute', bottom: -2, right: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: '#D4A017', alignItems: 'center', justifyContent: 'center' },
+  friendRatingText:  { color: '#fff', fontSize: 9, fontWeight: '700' },
 
   // All Reviews modal
   allReviewsModal: { flex: 1 },
   allReviewsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   allReviewsTitle: { fontSize: 18, fontWeight: '700' },
-  allReviewsList: { paddingBottom: 40 },
+  allReviewsList: { paddingTop: 12, paddingBottom: 40 },
+
+  // Review tabs
+  reviewTabRow: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth },
+  reviewTabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, position: 'relative' },
+  reviewTabText: { fontSize: 13, fontWeight: '600' },
+  reviewTabUnderline: { position: 'absolute', bottom: 0, left: '15%', right: '15%', height: 2, backgroundColor: '#D4A017', borderRadius: 1 },
+
+  // Sort chips
+  reviewSortRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  reviewSortChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  reviewSortText: { fontSize: 12, fontWeight: '600' },
   allReviewRow: { paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, gap: 6 },
   allReviewTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   allReviewUsername: { fontSize: 14, fontWeight: '700' },
@@ -1705,6 +2194,10 @@ const s = StyleSheet.create({
   // Stream button
   streamBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 44, borderRadius: 12, borderWidth: 1, marginTop: 10 },
   streamBtnText: { fontSize: 15, fontWeight: '600' },
+
+  // Re-listen button
+  reListenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 44, borderRadius: 12, borderWidth: 1, marginTop: 10 },
+  reListenBtnText: { fontSize: 15, fontWeight: '600' },
 
   // Streaming sheet
   streamPlatformRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
