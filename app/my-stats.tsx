@@ -566,6 +566,7 @@ export default function MyStatsScreen() {
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
+  const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
   const { width: screenWidth } = useWindowDimensions();
 
   const cardBg = isDark ? CARD_BG : colors.card;
@@ -717,6 +718,35 @@ export default function MyStatsScreen() {
     });
   }, [isLoaded]);
 
+  // Fetch community averages for all rated albums (excluding own rating)
+  useEffect(() => {
+    if (!isLoaded) return;
+    const ratedIds = loggedAlbums.filter(a => a.rating > 0).map(a => a.id);
+    if (ratedIds.length === 0) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const uid = session?.user?.id;
+      if (!uid) return;
+      supabase
+        .from('user_albums')
+        .select('spotify_id, rating')
+        .in('spotify_id', ratedIds)
+        .gt('rating', 0)
+        .neq('user_id', uid)
+        .then(({ data }) => {
+          const grouped: Record<string, number[]> = {};
+          for (const row of data ?? []) {
+            if (!grouped[row.spotify_id]) grouped[row.spotify_id] = [];
+            grouped[row.spotify_id].push(row.rating);
+          }
+          const avgs: Record<string, { avg: number; count: number }> = {};
+          for (const [id, ratings] of Object.entries(grouped)) {
+            avgs[id] = { avg: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length };
+          }
+          setCommunityAvgs(avgs);
+        });
+    });
+  }, [isLoaded]);
+
   // ── Re-Listend evolution (growers / faders) ───────────────────────────────
   const reListenedAlbums = loggedAlbums.filter(a => a.isRelistened);
   const totalReListens   = reListenedAlbums.reduce((s, a) => s + (a.reListenCount ?? 0), 0);
@@ -740,6 +770,22 @@ export default function MyStatsScreen() {
   const evAvgDelta      = evCount > 0 ? (evSumLatest - evSumFirst) / evCount : 0;
   const evFirstListenAvg = evCount > 0 ? evSumFirst  / evCount : 0;
   const evLongTermAvg    = evCount > 0 ? evSumLatest / evCount : 0;
+
+  // ── Community comparison (rated higher / lower than average) ─────────────
+  const MIN_COMMUNITY = 2;
+  type CompEntry = { album: LoggedAlbum; communityAvg: number; delta: number };
+  const compHigher: CompEntry[] = [];
+  const compLower:  CompEntry[] = [];
+  for (const album of loggedAlbums.filter(a => a.rating > 0)) {
+    const c = communityAvgs[album.id];
+    if (!c || c.count < MIN_COMMUNITY) continue;
+    const delta = album.rating - c.avg;
+    if (delta >= 1)  compHigher.push({ album, communityAvg: c.avg, delta });
+    if (delta <= -1) compLower.push({  album, communityAvg: c.avg, delta: Math.abs(delta) });
+  }
+  compHigher.sort((a, b) => b.delta - a.delta);
+  compLower.sort((a, b) => b.delta - a.delta);
+  const hasComparison = compHigher.length > 0 || compLower.length > 0;
 
   function handleRatingPress(rating: number, albums: LoggedAlbum[]) {
     setSelectedAlbums(albums);
@@ -799,6 +845,57 @@ export default function MyStatsScreen() {
             <EmptyState text="Rate some albums to see your breakdown." />
           )}
         </View>
+
+        {/* ── Rated Higher / Lower Than Average ─────────────────────────── */}
+        {hasComparison && (
+          <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
+            <Text style={[s.cardTitle, { color: colors.textMuted }]}>RATED VS COMMUNITY</Text>
+
+            {compHigher.length > 0 && (
+              <View style={rl.section}>
+                <View style={rl.sectionHeader}>
+                  <View style={[rl.sectionBadge, { backgroundColor: GROW_CLR }]}>
+                    <FontAwesome name="arrow-up" size={9} color="#fff" />
+                  </View>
+                  <Text style={[rl.sectionTitle, { color: colors.text }]}>Rated Higher</Text>
+                  <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{compHigher.length} above avg</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
+                  {compHigher.map(({ album, communityAvg }) => (
+                    <ComparisonCard
+                      key={album.id}
+                      album={album}
+                      communityAvg={communityAvg}
+                      onPress={() => handleAlbumPress(album)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {compLower.length > 0 && (
+              <View style={[rl.section, compHigher.length > 0 && { marginTop: 8 }]}>
+                <View style={rl.sectionHeader}>
+                  <View style={[rl.sectionBadge, { backgroundColor: FADE_CLR }]}>
+                    <FontAwesome name="arrow-down" size={9} color="#fff" />
+                  </View>
+                  <Text style={[rl.sectionTitle, { color: colors.text }]}>Rated Lower</Text>
+                  <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{compLower.length} below avg</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
+                  {compLower.map(({ album, communityAvg }) => (
+                    <ComparisonCard
+                      key={album.id}
+                      album={album}
+                      communityAvg={communityAvg}
+                      onPress={() => handleAlbumPress(album)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Most Listend Artists ───────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
@@ -1033,6 +1130,45 @@ const s = StyleSheet.create({
   footnote:  { color: SUBTEXT, fontSize: 12, marginTop: 6 },
   emptyWrap: { alignItems: 'center', paddingVertical: 16 },
   emptyText: { color: SUBTEXT, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+});
+
+// ─── Community comparison card ────────────────────────────────────────────────
+
+function ComparisonCard({ album, communityAvg, onPress }: {
+  album: LoggedAlbum;
+  communityAvg: number;
+  onPress: () => void;
+}) {
+  const delta    = album.rating - communityAvg;
+  const isHigher = delta > 0;
+  const deltaColor = isHigher ? GROW_CLR : FADE_CLR;
+  const sign       = isHigher ? '+' : '';
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [cc.card, { opacity: pressed ? 0.75 : 1 }]}>
+      {album.artworkUrl ? (
+        <ExpoImage source={{ uri: album.artworkUrl }} style={cc.art} contentFit="cover" cachePolicy="disk" />
+      ) : (
+        <View style={[cc.art, { backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }]}>
+          <FontAwesome name="music" size={20} color="rgba(255,255,255,0.3)" />
+        </View>
+      )}
+      <View style={[cc.deltaBadge, { backgroundColor: deltaColor }]}>
+        <Text style={cc.deltaBadgeText}>{sign}{delta.toFixed(1)}</Text>
+      </View>
+      <Text style={cc.title} numberOfLines={2}>{album.title}</Text>
+      <VolumeBadge rating={album.rating} />
+      <Text style={cc.communityAvg}>Community: {communityAvg.toFixed(1)}</Text>
+    </Pressable>
+  );
+}
+
+const cc = StyleSheet.create({
+  card:           { width: 110, gap: 5 },
+  art:            { width: 110, height: 110, borderRadius: 10 },
+  deltaBadge:     { position: 'absolute', top: 8, right: 8, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 },
+  deltaBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  title:          { color: TEXT,    fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  communityAvg:   { color: SUBTEXT, fontSize: 11, fontWeight: '500' },
 });
 
 const rl = StyleSheet.create({
