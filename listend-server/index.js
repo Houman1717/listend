@@ -58,6 +58,7 @@ for (const v of REQUIRED_VARS) {
 const memCache = new Map();
 
 const TTL_6H  = 6  * 60 * 60 * 1000;
+const TTL_1H  = 1  * 60 * 60 * 1000;
 const TTL_10M = 10 * 60 * 1000;
 
 function cacheGet(key) {
@@ -711,6 +712,117 @@ app.get('/discover/top-rated', async (req, res) => {
   }
 });
 
+// ── GET /api/discover/community-popular ──────────────────────────────────────
+// All-time most-logged albums from real Listend user data.
+// Aggregates in JS (same pattern as fetchTopAlbumsThisWeek) over up to 5000 rows.
+// Cached 1 h in-memory, 6 h in Supabase.
+
+app.get('/api/discover/community-popular', async (req, res) => {
+  const CACHE_KEY = 'discover:community-popular';
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_6H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, year, artwork_url')
+      .not('listened_at', 'is', null)
+      .limit(5000);
+
+    if (error) throw error;
+
+    const counts = new Map();
+    for (const r of (data ?? [])) {
+      if (!r.spotify_id) continue;
+      const e = counts.get(r.spotify_id);
+      if (e) {
+        e.count++;
+        // prefer non-empty artwork
+        if (!e.album.artworkUrl && r.artwork_url) e.album.artworkUrl = r.artwork_url;
+      } else {
+        counts.set(r.spotify_id, {
+          album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' },
+          count: 1,
+        });
+      }
+    }
+
+    const results = Array.from(counts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 50)
+      .map(e => e.album);
+
+    cacheSet(CACHE_KEY, results, TTL_1H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/api/discover/community-popular]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /api/discover/community-top-rated ────────────────────────────────────
+// All-time top-rated albums from real Listend user data.
+// Requires MIN_RATINGS reviews per album to appear.
+// Cached 1 h in-memory, 6 h in Supabase.
+
+const MIN_RATINGS = 3;
+
+app.get('/api/discover/community-top-rated', async (req, res) => {
+  const CACHE_KEY = 'discover:community-top-rated';
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_6H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, year, artwork_url, rating')
+      .not('rating', 'is', null)
+      .gt('rating', 0)
+      .limit(5000);
+
+    if (error) throw error;
+
+    const agg = new Map();
+    for (const r of (data ?? [])) {
+      if (!r.spotify_id) continue;
+      const e = agg.get(r.spotify_id);
+      if (e) {
+        e.totalRating += r.rating;
+        e.count++;
+        if (!e.album.artworkUrl && r.artwork_url) e.album.artworkUrl = r.artwork_url;
+      } else {
+        agg.set(r.spotify_id, {
+          album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' },
+          totalRating: r.rating,
+          count: 1,
+        });
+      }
+    }
+
+    const results = Array.from(agg.values())
+      .filter(e => e.count >= MIN_RATINGS)
+      .sort((a, b) => (b.totalRating / b.count) - (a.totalRating / a.count))
+      .slice(0, 50)
+      .map(e => e.album);
+
+    cacheSet(CACHE_KEY, results, TTL_1H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/api/discover/community-top-rated]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /discover/recommended ─────────────────────────────────────────────────
 
 app.get('/discover/recommended', async (req, res) => {
@@ -1047,6 +1159,157 @@ app.get('/lastfm/album', [
 
 // ── GET /album-tags — Apple Music + MusicBrainz genres ───────────────────────
 
+const MAIN_GENRES = [
+  'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
+  'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
+  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues',
+];
+
+// Maps lowercased keyword substrings → main genre (order matters: more specific first)
+const TAG_MAP = [
+  // Hip-Hop / Rap
+  ['hip-hop/rap',         'Hip-Hop / Rap'],
+  ['hip hop',             'Hip-Hop / Rap'],
+  ['hip-hop',             'Hip-Hop / Rap'],
+  ['trap',                'Hip-Hop / Rap'],
+  ['drill',               'Hip-Hop / Rap'],
+  ['grime',               'Hip-Hop / Rap'],
+  ['rap',                 'Hip-Hop / Rap'],
+  // R&B / Soul — before generic 'pop' / 'rock'
+  ['r&b/soul',            'R&B / Soul'],
+  ['r&b',                 'R&B / Soul'],
+  ['neo-soul',            'R&B / Soul'],
+  ['neo soul',            'R&B / Soul'],
+  ['soul',                'R&B / Soul'],
+  ['motown',              'R&B / Soul'],
+  ['funk',                'R&B / Soul'],
+  ['gospel',              'R&B / Soul'],
+  // Metal — before 'rock'
+  ['metalcore',           'Metal'],
+  ['heavy metal',         'Metal'],
+  ['death metal',         'Metal'],
+  ['black metal',         'Metal'],
+  ['thrash metal',        'Metal'],
+  ['doom metal',          'Metal'],
+  ['nu-metal',            'Metal'],
+  ['nu metal',            'Metal'],
+  ['prog metal',          'Metal'],
+  ['progressive metal',   'Metal'],
+  ['metal',               'Metal'],
+  // Indie / Alternative — before 'rock' and 'pop'
+  ['singer/songwriter',   'Folk / Singer-Songwriter'],
+  ['indie folk',          'Folk / Singer-Songwriter'],
+  ['folk rock',           'Folk / Singer-Songwriter'],
+  ['indie pop',           'Indie / Alternative'],
+  ['indie rock',          'Indie / Alternative'],
+  ['alternative rock',    'Indie / Alternative'],
+  ['post-punk',           'Indie / Alternative'],
+  ['post-rock',           'Indie / Alternative'],
+  ['shoegaze',            'Indie / Alternative'],
+  ['dream pop',           'Indie / Alternative'],
+  ['art rock',            'Indie / Alternative'],
+  ['noise rock',          'Indie / Alternative'],
+  ['math rock',           'Indie / Alternative'],
+  ['emo',                 'Indie / Alternative'],
+  ['lo-fi',               'Indie / Alternative'],
+  ['alternative',         'Indie / Alternative'],
+  ['indie',               'Indie / Alternative'],
+  // Rock
+  ['psychedelic rock',    'Rock'],
+  ['garage rock',         'Rock'],
+  ['classic rock',        'Rock'],
+  ['hard rock',           'Rock'],
+  ['soft rock',           'Rock'],
+  ['grunge',              'Rock'],
+  ['rock',                'Rock'],
+  // Electronic
+  ['drum and bass',       'Electronic'],
+  ['electropop',          'Pop'],
+  ['synth-pop',           'Pop'],
+  ['synthpop',            'Pop'],
+  ['electronica',         'Electronic'],
+  ['electronic',          'Electronic'],
+  ['techno',              'Electronic'],
+  ['house',               'Electronic'],
+  ['ambient',             'Electronic'],
+  ['trance',              'Electronic'],
+  ['dubstep',             'Electronic'],
+  ['idm',                 'Electronic'],
+  ['electro',             'Electronic'],
+  ['edm',                 'Electronic'],
+  ['dance',               'Electronic'],
+  // Pop
+  ['k-pop',               'Pop'],
+  ['teen pop',            'Pop'],
+  ['dance pop',           'Pop'],
+  ['pop',                 'Pop'],
+  // Folk / Singer-Songwriter
+  ['singer-songwriter',   'Folk / Singer-Songwriter'],
+  ['freak folk',          'Folk / Singer-Songwriter'],
+  ['new folk',            'Folk / Singer-Songwriter'],
+  ['acoustic',            'Folk / Singer-Songwriter'],
+  ['folk',                'Folk / Singer-Songwriter'],
+  // Country
+  ['bluegrass',           'Country'],
+  ['americana',           'Country'],
+  ['outlaw country',      'Country'],
+  ['country pop',         'Country'],
+  ['country',             'Country'],
+  // Jazz
+  ['jazz fusion',         'Jazz'],
+  ['smooth jazz',         'Jazz'],
+  ['free jazz',           'Jazz'],
+  ['big band',            'Jazz'],
+  ['bebop',               'Jazz'],
+  ['fusion',              'Jazz'],
+  ['jazz',                'Jazz'],
+  // Classical
+  ['contemporary classical', 'Classical'],
+  ['chamber music',       'Classical'],
+  ['orchestral',          'Classical'],
+  ['baroque',             'Classical'],
+  ['opera',               'Classical'],
+  ['classical',           'Classical'],
+  // Latin
+  ['reggaeton',           'Latin'],
+  ['dancehall',           'Latin'],
+  ['reggae',              'Latin'],
+  ['latin pop',           'Latin'],
+  ['bossa nova',          'Latin'],
+  ['salsa',               'Latin'],
+  ['bachata',             'Latin'],
+  ['cumbia',              'Latin'],
+  ['latin',               'Latin'],
+  // Blues
+  ['blues rock',          'Blues'],
+  ['delta blues',         'Blues'],
+  ['chicago blues',       'Blues'],
+  ['electric blues',      'Blues'],
+  ['blues',               'Blues'],
+  // Afrobeats
+  ['afrobeats',           'Afrobeats'],
+  ['afrobeat',            'Afrobeats'],
+  ['afropop',             'Afrobeats'],
+  ['afro pop',            'Afrobeats'],
+  ['highlife',            'Afrobeats'],
+];
+
+function normalizeGenreTags(rawTags) {
+  const seen = new Set();
+  const result = [];
+  for (const tag of rawTags) {
+    const lower = tag.toLowerCase();
+    for (const [keyword, main] of TAG_MAP) {
+      if (lower.includes(keyword) && !seen.has(main)) {
+        seen.add(main);
+        result.push(main);
+        break;
+      }
+    }
+  }
+  return result;
+}
+
 async function fetchAppleMusicGenres(amId) {
   if (!amId) return [];
   try {
@@ -1096,14 +1359,15 @@ app.get('/album-tags', [
       fetchAppleMusicGenres(amId),
       fetchMusicBrainzGenres(artistName, albumName),
     ]);
-    // Merge, deduplicate (case-insensitive), keep AM first
+    // Merge raw tags (AM first), then normalize to main genres
     const seen = new Set();
-    const tags = [...amGenres, ...mbGenres].filter(g => {
+    const rawTags = [...amGenres, ...mbGenres].filter(g => {
       const key = g.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
+    const tags = normalizeGenreTags(rawTags);
     const payload = { tags };
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
@@ -1875,7 +2139,8 @@ app.get('/api/admin/purge-artist-album-cache', requireAdmin, async (req, res) =>
 app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
   try {
     const keys = ['discover:new-releases', 'discover:popular', 'discover:coming-soon',
-                  'discover:classics', 'discover:top-rated', 'discover:recommended'];
+                  'discover:classics', 'discover:top-rated', 'discover:recommended',
+                  'discover:community-popular', 'discover:community-top-rated'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-discover-cache] done.');
@@ -2385,6 +2650,57 @@ app.get('/api/albums/streaming-links', [
     console.error('[/api/albums/streaming-links]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ── GET /api/stats/artist-countries ──────────────────────────────────────────
+// Looks up the country of origin for each artist via MusicBrainz.
+// Results cached per artist — first load may be slow, repeat visits instant.
+
+async function fetchArtistCountry(artistName) {
+  const CACHE_KEY = `artist_country_${artistName.toLowerCase().replace(/\s+/g, '_')}`;
+  const mem = cacheGet(CACHE_KEY);
+  if (mem !== undefined) return mem.country ?? null;
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_7D); return db.country ?? null; }
+
+  try {
+    const resp = await fetch(
+      `https://musicbrainz.org/ws/2/artist?query=artist:%22${encodeURIComponent(artistName)}%22&limit=1&fmt=json`,
+      { headers: { 'User-Agent': 'Listend/1.0 (contact@listend.app)' } }
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const country = data.artists?.[0]?.country ?? null;
+    const payload = { country };
+    cacheSet(CACHE_KEY, payload, TTL_7D);
+    await setCache(CACHE_KEY, payload);
+    return country;
+  } catch { return null; }
+}
+
+app.get('/api/stats/artist-countries', requireAuth, [
+  query('artists').trim().isLength({ max: 2000 }),
+  validate,
+], async (req, res) => {
+  const raw = (req.query.artists ?? '').trim();
+  if (!raw) return res.json({ countries: [], total: 0 });
+
+  const artists = [...new Set(
+    raw.split(',').map(a => a.trim()).filter(Boolean)
+  )].slice(0, 100);
+
+  // Process in batches of 5 with 1s between batches to stay within MB rate limit.
+  // Cached artists resolve instantly so batching only applies to fresh lookups.
+  const BATCH = 5;
+  const countries = new Set();
+  for (let i = 0; i < artists.length; i += BATCH) {
+    const batch = artists.slice(i, i + BATCH);
+    const results = await Promise.all(batch.map(fetchArtistCountry));
+    results.forEach(c => { if (c) countries.add(c); });
+    if (i + BATCH < artists.length) await new Promise(r => setTimeout(r, 1000));
+  }
+
+  res.json({ countries: [...countries], total: countries.size });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
