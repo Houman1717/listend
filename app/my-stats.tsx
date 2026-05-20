@@ -772,7 +772,7 @@ export default function MyStatsScreen() {
   const evLongTermAvg    = evCount > 0 ? evSumLatest / evCount : 0;
 
   // ── Community comparison (rated higher / lower than average) ─────────────
-  const MIN_COMMUNITY = 2;
+  const MIN_COMMUNITY = 1;
   type CompEntry = { album: LoggedAlbum; communityAvg: number; delta: number };
   const compHigher: CompEntry[] = [];
   const compLower:  CompEntry[] = [];
