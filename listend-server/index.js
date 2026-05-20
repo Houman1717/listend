@@ -25,6 +25,7 @@ async function amFetch(path) {
 const amArtwork = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
 
 const app = express();
+app.set('trust proxy', 1); // Railway sits behind a proxy
 const PORT = process.env.PORT || 8080;
 
 // ── Security headers ───────────────────────────────────────────────────────────
@@ -2659,7 +2660,7 @@ app.get('/api/albums/streaming-links', [
 async function fetchArtistCountry(artistName) {
   const CACHE_KEY = `artist_country_${artistName.toLowerCase().replace(/\s+/g, '_')}`;
   const mem = cacheGet(CACHE_KEY);
-  if (mem !== undefined) return mem.country ?? null;
+  if (mem !== undefined) return (mem && mem.country) ? mem.country : null;
   const db = await getCached(CACHE_KEY, TTL_7D);
   if (db) { cacheSet(CACHE_KEY, db, TTL_7D); return db.country ?? null; }
 

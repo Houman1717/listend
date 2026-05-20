@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, Fragment } from 'react';
@@ -8,6 +8,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
+import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 
 const MAIN_GENRES = new Set([
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
@@ -23,64 +24,85 @@ const ACCENT   = '#D4A017';
 
 const TAG_COLORS = ['#7a5018', '#8B6914', '#5c3a10', '#6B4422', '#9a7020', '#4a3218'];
 
-// ─── Rated Albums Modal ───────────────────────────────────────────────────────
+function VolumeBadge({ rating }: { rating: number }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <FontAwesome name="volume-up" size={9} color="#D4A017" />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+        {Array.from({ length: 10 }, (_, i) => {
+          const h = Math.round(3 + i * 1);
+          return <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : '#2a1e14' }} />;
+        })}
+      </View>
+      <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
+    </View>
+  );
+}
 
-function RatedAlbumsModal({
-  rating,
+// ─── Album List Modal (reused for rating drilldown + year drilldown) ──────────
+
+function AlbumListModal({
+  title,
   albums,
   onClose,
   onAlbumPress,
 }: {
-  rating: number | null;
+  title: string | null;
   albums: LoggedAlbum[];
   onClose: () => void;
   onAlbumPress: (album: LoggedAlbum) => void;
 }) {
-  const insets = useSafeAreaInsets();
-  const visible = rating !== null;
+  const insets  = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const cw      = calcCardWidth(width);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={title !== null} transparent animationType="slide" onRequestClose={onClose}>
       <View style={rm.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[rm.sheet, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
           <View style={rm.handle} />
           <View style={rm.header}>
-            <Text style={rm.title}>Rated {rating}</Text>
+            <Text style={rm.title}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={12}>
               <FontAwesome name="times" size={16} color={SUBTEXT} />
             </Pressable>
           </View>
           <Text style={rm.subtitle}>{albums.length} album{albums.length !== 1 ? 's' : ''}</Text>
+
           <FlatList
             data={albums}
             keyExtractor={a => a.id}
+            numColumns={COLS}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
+            contentContainerStyle={{ paddingHorizontal: PADDING, paddingTop: 12, paddingBottom: 8 }}
+            columnWrapperStyle={{ gap: GAP, marginBottom: GAP }}
             renderItem={({ item }) => (
               <Pressable
-                style={({ pressed }) => [rm.row, { opacity: pressed ? 0.7 : 1 }]}
+                style={({ pressed }) => [{ width: cw, opacity: pressed ? 0.7 : 1 }]}
                 onPress={() => { onClose(); setTimeout(() => onAlbumPress(item), 300); }}>
                 {item.artworkUrl ? (
                   <ExpoImage
                     source={{ uri: item.artworkUrl }}
-                    style={rm.artwork}
+                    style={{ width: cw, height: cw, borderRadius: 8 }}
                     contentFit="cover"
                     cachePolicy="disk"
+                    transition={200}
                   />
                 ) : (
-                  <View style={[rm.artwork, rm.artworkFallback]}>
-                    <Text style={rm.artworkInitial}>{item.title.charAt(0)}</Text>
+                  <View style={[rm.fallback, { width: cw, height: cw }]}>
+                    <FontAwesome name="music" size={cw * 0.28} color="#7a5535" />
                   </View>
                 )}
-                <View style={rm.info}>
-                  <Text style={rm.albumTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={rm.albumArtist} numberOfLines={1}>{item.artist}</Text>
-                </View>
-                <Text style={rm.ratingBadge}>{item.rating}</Text>
+                <Text style={rm.cardTitle}  numberOfLines={1}>{item.title}</Text>
+                <Text style={rm.cardArtist} numberOfLines={1}>{item.artist}</Text>
+                {item.rating > 0 && (
+                  <View style={{ marginTop: 3 }}>
+                    <VolumeBadge rating={item.rating} />
+                  </View>
+                )}
               </Pressable>
             )}
-            ItemSeparatorComponent={() => <View style={rm.separator} />}
           />
         </View>
       </View>
@@ -89,21 +111,16 @@ function RatedAlbumsModal({
 }
 
 const rm = StyleSheet.create({
-  overlay:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet:    { backgroundColor: '#161616', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER, maxHeight: '80%' },
-  handle:   { width: 36, height: 4, borderRadius: 2, backgroundColor: '#4a3020', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
-  header:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
-  title:    { color: TEXT, fontSize: 18, fontWeight: '700' },
-  subtitle: { color: SUBTEXT, fontSize: 13, paddingHorizontal: 16, marginBottom: 4 },
-  row:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  artwork:  { width: 48, height: 48, borderRadius: 6 },
-  artworkFallback: { backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' },
-  artworkInitial:  { color: ACCENT, fontSize: 18, fontWeight: '700' },
-  info:     { flex: 1 },
-  albumTitle:  { color: TEXT,   fontSize: 15, fontWeight: '600' },
-  albumArtist: { color: SUBTEXT, fontSize: 13, marginTop: 2 },
-  ratingBadge: { color: ACCENT, fontSize: 16, fontWeight: '700', width: 28, textAlign: 'right' },
-  separator:   { height: StyleSheet.hairlineWidth, backgroundColor: BORDER },
+  overlay:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+  sheet:      { backgroundColor: '#161616', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER, maxHeight: '85%' },
+  handle:     { width: 36, height: 4, borderRadius: 2, backgroundColor: '#4a3020', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  header:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
+  title:      { color: TEXT, fontSize: 18, fontWeight: '700' },
+  subtitle:   { color: SUBTEXT, fontSize: 13, paddingHorizontal: 16, marginBottom: 8 },
+  fallback:   { borderRadius: 8, backgroundColor: CARD_BG, justifyContent: 'center', alignItems: 'center' },
+  cardTitle:  { color: TEXT,    fontSize: 12, fontWeight: '600', marginTop: 4 },
+  cardArtist: { color: SUBTEXT, fontSize: 11, marginTop: 1 },
+  cardRating: { color: ACCENT,  fontSize: 11, fontWeight: '700', marginTop: 2 },
 });
 
 // ─── Hero Stats ───────────────────────────────────────────────────────────────
@@ -193,16 +210,21 @@ function BarRow({
   maxCount,
   colorIdx,
   pill = false,
+  onPress,
 }: {
   label: string;
   count: number;
   maxCount: number;
   colorIdx: number;
   pill?: boolean;
+  onPress?: () => void;
 }) {
   const pct = maxCount > 0 ? Math.max(count / maxCount, 0.02) : 0;
   return (
-    <View style={br.row}>
+    <Pressable
+      style={({ pressed }) => [br.row, onPress && { opacity: pressed ? 0.6 : 1 }]}
+      onPress={onPress}
+      disabled={!onPress}>
       {pill ? (
         <View style={[br.pill, { backgroundColor: TAG_COLORS[colorIdx % TAG_COLORS.length] }]}>
           <Text style={br.pillText} numberOfLines={1}>{label}</Text>
@@ -215,18 +237,228 @@ function BarRow({
         <View style={{ flex: 1 - pct }} />
       </View>
       <Text style={br.count}>{count}</Text>
-    </View>
+    </Pressable>
   );
 }
 
 const br = StyleSheet.create({
-  row:      { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  row:      { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, width: '100%' },
   pill:     { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, minWidth: 110, alignItems: 'center' },
   pillText: { color: TEXT, fontSize: 13, fontWeight: '600' },
   label:    { color: TEXT, fontSize: 13, fontWeight: '500', width: 110 },
   track:    { flex: 1, height: 6, borderRadius: 3, backgroundColor: BORDER, overflow: 'hidden', flexDirection: 'row' },
   fill:     { height: 6, borderRadius: 3, backgroundColor: ACCENT },
   count:    { color: SUBTEXT, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
+});
+
+// ─── Year Bar Chart with drill-down ──────────────────────────────────────────
+
+const CHART_H = 130;
+const BAR_W   = 38;
+const BAR_GAP = 10;
+
+type ChartView = 'albums' | 'ratings';
+
+type Bucket = {
+  key: number;
+  label: string;
+  albums: LoggedAlbum[];
+  count: number;
+  avgRating: number;
+};
+
+function buildDecadeBuckets(loggedAlbums: LoggedAlbum[]): Bucket[] {
+  const byDecade = new Map<number, LoggedAlbum[]>();
+  for (const album of loggedAlbums) {
+    if (!album.year || album.year < 1900 || album.year > 2030) continue;
+    const decade = Math.floor(album.year / 10) * 10;
+    if (!byDecade.has(decade)) byDecade.set(decade, []);
+    byDecade.get(decade)!.push(album);
+  }
+  return [...byDecade.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([decade, albums]) => {
+      const rated = albums.filter(a => a.rating > 0);
+      return {
+        key: decade,
+        label: `${decade}s`,
+        albums,
+        count: albums.length,
+        avgRating: rated.length > 0 ? rated.reduce((s, a) => s + a.rating, 0) / rated.length : 0,
+      };
+    });
+}
+
+function buildYearBuckets(loggedAlbums: LoggedAlbum[], decade: number): Bucket[] {
+  return Array.from({ length: 10 }, (_, i) => {
+    const year   = decade + i;
+    const albums = loggedAlbums.filter(a => a.year === year);
+    const rated  = albums.filter(a => a.rating > 0);
+    return {
+      key: year,
+      label: String(year),
+      albums,
+      count: albums.length,
+      avgRating: rated.length > 0 ? rated.reduce((s, a) => s + a.rating, 0) / rated.length : 0,
+    };
+  });
+}
+
+function YearChart({
+  loggedAlbums,
+  onAlbumPress,
+}: {
+  loggedAlbums: LoggedAlbum[];
+  onAlbumPress: (album: LoggedAlbum) => void;
+}) {
+  const [view,        setView]        = useState<ChartView>('albums');
+  const [drillDecade, setDrillDecade] = useState<number | null>(null);
+  const [modal,       setModal]       = useState<{ title: string; albums: LoggedAlbum[] } | null>(null);
+
+  const buckets: Bucket[] = drillDecade !== null
+    ? buildYearBuckets(loggedAlbums, drillDecade)
+    : buildDecadeBuckets(loggedAlbums);
+
+  const maxCount = Math.max(...buckets.map(b => b.count), 1);
+
+  function handleBarPress(bucket: Bucket) {
+    if (drillDecade === null) {
+      setDrillDecade(bucket.key);
+    } else if (bucket.albums.length > 0) {
+      setModal({ title: String(bucket.key), albums: bucket.albums });
+    }
+  }
+
+  if (buckets.length === 0) {
+    return <EmptyState text="Log some albums to see your year breakdown." />;
+  }
+
+  return (
+    <>
+      <AlbumListModal
+        title={modal?.title ?? null}
+        albums={modal?.albums ?? []}
+        onClose={() => setModal(null)}
+        onAlbumPress={(album) => { setModal(null); setTimeout(() => onAlbumPress(album), 300); }}
+      />
+
+      {/* Header row: back button + toggle */}
+      <View style={yc.headerRow}>
+        {drillDecade !== null ? (
+          <Pressable
+            style={({ pressed }) => [yc.backBtn, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => setDrillDecade(null)}>
+            <FontAwesome name="chevron-left" size={11} color={ACCENT} />
+            <Text style={yc.backText}>All decades</Text>
+          </Pressable>
+        ) : <View />}
+
+        <View style={yc.toggle}>
+          {(['albums', 'ratings'] as ChartView[]).map(v => (
+            <Pressable
+              key={v}
+              style={[yc.toggleBtn, view === v && yc.toggleActive]}
+              onPress={() => setView(v)}>
+              <Text style={[yc.toggleText, view === v && yc.toggleTextActive]}>
+                {v === 'albums' ? 'Albums' : 'Avg Rating'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Chart */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={yc.scroll}>
+        <View style={[yc.chartWrap, { height: CHART_H + 36 }]}>
+          {/* Guide lines */}
+          {[0.25, 0.5, 0.75, 1].map(pct => (
+            <View key={pct} style={[yc.guide, { bottom: pct * CHART_H + 28 }]} />
+          ))}
+
+          {/* Bars */}
+          {buckets.map(bucket => {
+            const value    = view === 'albums' ? bucket.count : bucket.avgRating;
+            const maxVal   = view === 'albums' ? maxCount : 10;
+            const barH     = maxVal > 0 ? Math.max((value / maxVal) * CHART_H, value > 0 ? 4 : 0) : 0;
+            const valLabel = view === 'albums'
+              ? (bucket.count > 0 ? String(bucket.count) : '')
+              : (bucket.avgRating > 0 ? bucket.avgRating.toFixed(1) : '');
+            const pressable = drillDecade === null || bucket.albums.length > 0;
+
+            return (
+              <Pressable
+                key={bucket.key}
+                style={({ pressed }) => [yc.col, pressable && pressed && { opacity: 0.6 }]}
+                onPress={() => handleBarPress(bucket)}
+                disabled={!pressable}>
+                <Text style={[yc.valLabel, { opacity: valLabel ? 1 : 0 }]}>{valLabel || '0'}</Text>
+                <View style={[yc.barArea, { height: CHART_H }]}>
+                  <View style={[yc.bar, { height: barH }]} />
+                </View>
+                <Text style={yc.decLabel}>{bucket.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {drillDecade !== null ? (
+        <>
+          <Pressable
+            style={({ pressed }) => [yc.seeAll, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => {
+              const allDecadeAlbums = loggedAlbums.filter(
+                a => a.year >= drillDecade && a.year < drillDecade + 10
+              );
+              setModal({ title: `${drillDecade}s — All Albums`, albums: allDecadeAlbums });
+            }}>
+            <Text style={yc.seeAllText}>
+              See all {loggedAlbums.filter(a => a.year >= drillDecade && a.year < drillDecade + 10).length} albums from the {drillDecade}s
+            </Text>
+            <FontAwesome name="chevron-right" size={11} color={ACCENT} />
+          </Pressable>
+          <Text style={yc.hint}>Tap a bar to see albums</Text>
+        </>
+      ) : (
+        <Text style={yc.hint}>Tap a decade to explore</Text>
+      )}
+    </>
+  );
+}
+
+const yc = StyleSheet.create({
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  backBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  backText:  { color: ACCENT, fontSize: 13, fontWeight: '600' },
+
+  toggle: {
+    flexDirection: 'row',
+    backgroundColor: BORDER,
+    borderRadius: 8,
+    padding: 2,
+  },
+  toggleBtn:        { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7 },
+  toggleActive:     { backgroundColor: ACCENT },
+  toggleText:       { color: SUBTEXT, fontSize: 13, fontWeight: '600' },
+  toggleTextActive: { color: '#0F0A07', fontSize: 13, fontWeight: '700' },
+
+  scroll:    { paddingRight: 8 },
+  chartWrap: { flexDirection: 'row', alignItems: 'flex-end', gap: BAR_GAP, position: 'relative' },
+  guide: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: BORDER,
+  },
+  col:      { width: BAR_W, alignItems: 'center', gap: 4 },
+  valLabel: { color: SUBTEXT, fontSize: 10, fontWeight: '600' },
+  barArea:  { width: BAR_W, justifyContent: 'flex-end' },
+  bar:      { width: BAR_W, backgroundColor: ACCENT, borderRadius: 4, opacity: 0.85 },
+  decLabel: { color: SUBTEXT, fontSize: 10, fontWeight: '500', textAlign: 'center' },
+  hint:       { color: SUBTEXT, fontSize: 12, marginTop: 6 },
+  seeAll:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER },
+  seeAllText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
 });
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -242,6 +474,7 @@ export default function MyStatsScreen() {
   const [selectedRating, setSelectedRating]   = useState<number | null>(null);
   const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
   const [countryCount,   setCountryCount]     = useState<number | '...' >('...');
+  const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[] } | null>(null);
 
   const cardBg = isDark ? CARD_BG : colors.card;
 
@@ -335,11 +568,17 @@ export default function MyStatsScreen() {
 
   return (
     <>
-      <RatedAlbumsModal
-        rating={selectedRating}
+      <AlbumListModal
+        title={selectedRating !== null ? `Rated ${selectedRating}` : null}
         albums={selectedAlbums}
         onClose={() => setSelectedRating(null)}
         onAlbumPress={handleAlbumPress}
+      />
+      <AlbumListModal
+        title={listModal?.title ?? null}
+        albums={listModal?.albums ?? []}
+        onClose={() => setListModal(null)}
+        onAlbumPress={(album) => { setListModal(null); setTimeout(() => handleAlbumPress(album), 300); }}
       />
 
       <ScrollView
@@ -353,6 +592,12 @@ export default function MyStatsScreen() {
           <StatRow stats={heroStats.slice(0, 3)} />
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 8 }} />
           <StatRow stats={heroStats.slice(3)} />
+        </View>
+
+        {/* ── Year Chart ────────────────────────────────────────────────── */}
+        <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
+          <Text style={[s.cardTitle, { color: colors.textMuted }]}>BY RELEASE YEAR</Text>
+          <YearChart loggedAlbums={loggedAlbums} onAlbumPress={handleAlbumPress} />
         </View>
 
         {/* ── Rating Distribution ────────────────────────────────────────── */}
@@ -373,7 +618,17 @@ export default function MyStatsScreen() {
           <Text style={[s.cardTitle, { color: colors.textMuted }]}>MOST LOGGED ARTISTS</Text>
           {topArtists.length > 0 ? (
             topArtists.map(([artist, count], i) => (
-              <BarRow key={artist} label={artist} count={count} maxCount={maxArtistCount} colorIdx={i} />
+              <BarRow
+                key={artist}
+                label={artist}
+                count={count}
+                maxCount={maxArtistCount}
+                colorIdx={i}
+                onPress={() => setListModal({
+                  title: artist,
+                  albums: loggedAlbums.filter(a => a.artist === artist),
+                })}
+              />
             ))
           ) : (
             <EmptyState text="Log some albums to see your top artists." />
@@ -386,7 +641,18 @@ export default function MyStatsScreen() {
           {topGenres.length > 0 ? (
             <>
               {topGenres.map(([genre, count], i) => (
-                <BarRow key={genre} label={genre} count={count} maxCount={maxGenreCount} colorIdx={i} pill />
+                <BarRow
+                  key={genre}
+                  label={genre}
+                  count={count}
+                  maxCount={maxGenreCount}
+                  colorIdx={i}
+                  pill
+                  onPress={() => setListModal({
+                    title: genre,
+                    albums: loggedAlbums.filter(a => a.genreTags?.includes(genre)),
+                  })}
+                />
               ))}
               <Text style={s.footnote}>Based on {totalTagged} of {loggedAlbums.length} logged albums</Text>
             </>
