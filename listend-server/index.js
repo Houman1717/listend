@@ -2704,6 +2704,43 @@ app.get('/api/stats/artist-countries', requireAuth, [
   res.json({ countries: [...countries], total: countries.size });
 });
 
+// ── GET /api/stats/artist-images ──────────────────────────────────────────────
+// Fetches Apple Music artist images for a list of artist names.
+// Results cached per artist for 7 days.
+
+async function fetchArtistImage(artistName) {
+  const CACHE_KEY = `artist_img_${artistName.toLowerCase().replace(/\s+/g, '_')}`;
+  const mem = cacheGet(CACHE_KEY);
+  if (mem !== undefined) return mem || null;
+  const db = await getCached(CACHE_KEY, TTL_7D);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_7D); return db; }
+
+  try {
+    const q = encodeURIComponent(artistName);
+    const data = await amFetch(`/catalog/us/search?types=artists&term=${q}&limit=3`);
+    const artists = data?.results?.artists?.data ?? [];
+    const match = artists.find(a => a.attributes?.name?.toLowerCase() === artistName.toLowerCase()) ?? artists[0];
+    const url = match ? amArtwork(match.attributes?.artwork) : null;
+    cacheSet(CACHE_KEY, url, TTL_7D);
+    if (url) await setCache(CACHE_KEY, url);
+    return url;
+  } catch { cacheSet(CACHE_KEY, null, TTL_7D); return null; }
+}
+
+app.get('/api/stats/artist-images', requireAuth, [
+  query('artists').trim().isLength({ max: 2000 }),
+  validate,
+], async (req, res) => {
+  const raw = (req.query.artists ?? '').trim();
+  if (!raw) return res.json({ images: {} });
+  const artistList = [...new Set(raw.split(',').map(a => a.trim()).filter(Boolean))].slice(0, 20);
+
+  const pairs = await Promise.all(artistList.map(async name => [name, await fetchArtistImage(name)]));
+  const images = {};
+  for (const [name, url] of pairs) { if (url) images[name] = url; }
+  res.json({ images });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

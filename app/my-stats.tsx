@@ -210,6 +210,7 @@ function BarRow({
   maxCount,
   colorIdx,
   pill = false,
+  imageUrl,
   onPress,
 }: {
   label: string;
@@ -217,6 +218,7 @@ function BarRow({
   maxCount: number;
   colorIdx: number;
   pill?: boolean;
+  imageUrl?: string;
   onPress?: () => void;
 }) {
   const pct = maxCount > 0 ? Math.max(count / maxCount, 0.02) : 0;
@@ -226,11 +228,22 @@ function BarRow({
       onPress={onPress}
       disabled={!onPress}>
       {pill ? (
-        <View style={[br.pill, { backgroundColor: TAG_COLORS[colorIdx % TAG_COLORS.length] }]}>
+        <View style={br.pill}>
           <Text style={br.pillText} numberOfLines={1}>{label}</Text>
         </View>
       ) : (
-        <Text style={br.label} numberOfLines={1}>{label}</Text>
+        <View style={br.labelWrap}>
+          {imageUrl ? (
+            <ExpoImage
+              source={{ uri: imageUrl }}
+              style={br.artistThumb}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={br.artistThumbPlaceholder} />
+          )}
+          <Text style={br.label} numberOfLines={1}>{label}</Text>
+        </View>
       )}
       <View style={br.track}>
         <View style={[br.fill, { flex: pct, opacity: 0.45 + pct * 0.55 }]} />
@@ -242,13 +255,16 @@ function BarRow({
 }
 
 const br = StyleSheet.create({
-  row:      { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, width: '100%' },
-  pill:     { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, minWidth: 110, alignItems: 'center' },
-  pillText: { color: TEXT, fontSize: 13, fontWeight: '600' },
-  label:    { color: TEXT, fontSize: 13, fontWeight: '500', width: 110 },
-  track:    { flex: 1, height: 6, borderRadius: 3, backgroundColor: BORDER, overflow: 'hidden', flexDirection: 'row' },
-  fill:     { height: 6, borderRadius: 3, backgroundColor: ACCENT },
-  count:    { color: SUBTEXT, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
+  row:                  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, width: '100%' },
+  pill:                 { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, minWidth: 110, alignItems: 'center', backgroundColor: '#3a2818' },
+  pillText:             { color: TEXT, fontSize: 13, fontWeight: '600' },
+  labelWrap:            { flexDirection: 'row', alignItems: 'center', gap: 8, width: 130 },
+  artistThumb:          { width: 28, height: 28, borderRadius: 14 },
+  artistThumbPlaceholder: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#3a2818' },
+  label:                { color: TEXT, fontSize: 13, fontWeight: '500', flex: 1 },
+  track:                { flex: 1, height: 6, borderRadius: 3, backgroundColor: BORDER, overflow: 'hidden', flexDirection: 'row' },
+  fill:                 { height: 6, borderRadius: 3, backgroundColor: ACCENT },
+  count:                { color: SUBTEXT, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
 });
 
 // ─── Year Bar Chart with drill-down ──────────────────────────────────────────
@@ -475,6 +491,9 @@ export default function MyStatsScreen() {
   const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
   const [countryCount,   setCountryCount]     = useState<number | '...' >('...');
   const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[] } | null>(null);
+  const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
+  const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
+  const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
 
   const cardBg = isDark ? CARD_BG : colors.card;
 
@@ -515,7 +534,7 @@ export default function MyStatsScreen() {
     { label: 'Streak Days',     value: streakDays > 0 ? streakDays : '—' },
   ];
 
-  // ── Most logged artists ───────────────────────────────────────────────────
+  // ── Most listend artists ──────────────────────────────────────────────────
   const artistCounts = new Map<string, number>();
   for (const album of loggedAlbums) {
     if (!album.artist) continue;
@@ -523,6 +542,19 @@ export default function MyStatsScreen() {
   }
   const topArtists     = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxArtistCount = topArtists[0]?.[1] ?? 1;
+
+  // ── Highest rated artists ─────────────────────────────────────────────────
+  const artistRatings = new Map<string, number[]>();
+  for (const album of loggedAlbums) {
+    if (!album.artist || album.rating <= 0) continue;
+    if (!artistRatings.has(album.artist)) artistRatings.set(album.artist, []);
+    artistRatings.get(album.artist)!.push(album.rating);
+  }
+  const topRatedArtists = [...artistRatings.entries()]
+    .filter(([, ratings]) => ratings.length >= 2)
+    .map(([artist, ratings]) => [artist, ratings.reduce((s, r) => s + r, 0) / ratings.length] as [string, number])
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
 
   // ── Favourite genres ──────────────────────────────────────────────────────
   const genreCounts = new Map<string, number>();
@@ -535,6 +567,21 @@ export default function MyStatsScreen() {
   const topGenres     = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   const maxGenreCount = topGenres[0]?.[1] ?? 1;
   const totalTagged   = loggedAlbums.filter(a => (a.genreTags?.length ?? 0) > 0).length;
+
+  // ── Highest rated genres ──────────────────────────────────────────────────
+  const genreRatings = new Map<string, number[]>();
+  for (const album of loggedAlbums) {
+    if (album.rating <= 0) continue;
+    for (const tag of album.genreTags ?? []) {
+      if (!MAIN_GENRES.has(tag)) continue;
+      if (!genreRatings.has(tag)) genreRatings.set(tag, []);
+      genreRatings.get(tag)!.push(album.rating);
+    }
+  }
+  const topRatedGenres = [...genreRatings.entries()]
+    .map(([genre, ratings]) => [genre, ratings.reduce((s, r) => s + r, 0) / ratings.length] as [string, number])
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
 
   // Fetch country count — waits for albums to load, then runs once
   useEffect(() => {
@@ -551,6 +598,27 @@ export default function MyStatsScreen() {
         .then(r => r.ok ? r.json() : null)
         .then(data => setCountryCount(data?.total ?? 0))
         .catch(() => setCountryCount(0));
+    });
+  }, [isLoaded]);
+
+  // Fetch artist images once albums are loaded
+  useEffect(() => {
+    if (!isLoaded || loggedAlbums.length === 0) return;
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+    const allNames = [...new Set([
+      ...topArtists.map(([a]) => a),
+      ...topRatedArtists.map(([a]) => a),
+    ])] as string[];
+    if (allNames.length === 0) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const token = session?.access_token;
+      if (!token) return;
+      fetch(`${API_URL}/api/stats/artist-images?artists=${encodeURIComponent(allNames.join(','))}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.images) setArtistImages(data.images); })
+        .catch(() => {});
     });
   }, [isLoaded]);
 
@@ -613,51 +681,119 @@ export default function MyStatsScreen() {
           )}
         </View>
 
-        {/* ── Most Logged Artists ────────────────────────────────────────── */}
+        {/* ── Most Listend Artists ───────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
-          <Text style={[s.cardTitle, { color: colors.textMuted }]}>MOST LOGGED ARTISTS</Text>
-          {topArtists.length > 0 ? (
-            topArtists.map(([artist, count], i) => (
-              <BarRow
-                key={artist}
-                label={artist}
-                count={count}
-                maxCount={maxArtistCount}
-                colorIdx={i}
-                onPress={() => setListModal({
-                  title: artist,
-                  albums: loggedAlbums.filter(a => a.artist === artist),
-                })}
-              />
-            ))
+          <View style={s.cardTitleRow}>
+            <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>MOST LISTEND ARTISTS</Text>
+            <View style={yc.toggle}>
+              {(['listend', 'rated'] as const).map(v => (
+                <Pressable key={v} onPress={() => setArtistView(v)} style={[yc.toggleBtn, artistView === v && yc.toggleActive]}>
+                  <Text style={[yc.toggleText, artistView === v && yc.toggleTextActive]}>
+                    {v === 'listend' ? 'Most Listend' : 'Highest Rated'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          {artistView === 'listend' ? (
+            topArtists.length > 0 ? (
+              topArtists.map(([artist, count], i) => (
+                <BarRow
+                  key={artist}
+                  label={artist}
+                  count={count}
+                  maxCount={maxArtistCount}
+                  colorIdx={i}
+                  imageUrl={artistImages[artist]}
+                  onPress={() => setListModal({
+                    title: artist,
+                    albums: loggedAlbums.filter(a => a.artist === artist),
+                  })}
+                />
+              ))
+            ) : (
+              <EmptyState text="Log some albums to see your top artists." />
+            )
           ) : (
-            <EmptyState text="Log some albums to see your top artists." />
+            topRatedArtists.length > 0 ? (
+              topRatedArtists.map(([artist, avg], i) => (
+                <BarRow
+                  key={artist}
+                  label={artist}
+                  count={parseFloat(avg.toFixed(1))}
+                  maxCount={10}
+                  colorIdx={i}
+                  imageUrl={artistImages[artist]}
+                  onPress={() => setListModal({
+                    title: artist,
+                    albums: loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
+                  })}
+                />
+              ))
+            ) : (
+              <EmptyState text="Rate at least 2 albums per artist to see ratings." />
+            )
           )}
         </View>
 
-        {/* ── Favourite Genres ───────────────────────────────────────────── */}
+        {/* ── Most Listend Genres ────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
-          <Text style={[s.cardTitle, { color: colors.textMuted }]}>FAVOURITE GENRES</Text>
-          {topGenres.length > 0 ? (
-            <>
-              {topGenres.map(([genre, count], i) => (
-                <BarRow
-                  key={genre}
-                  label={genre}
-                  count={count}
-                  maxCount={maxGenreCount}
-                  colorIdx={i}
-                  pill
-                  onPress={() => setListModal({
-                    title: genre,
-                    albums: loggedAlbums.filter(a => a.genreTags?.includes(genre)),
-                  })}
-                />
+          <View style={s.cardTitleRow}>
+            <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>MOST LISTEND GENRES</Text>
+            <View style={yc.toggle}>
+              {(['listend', 'rated'] as const).map(v => (
+                <Pressable key={v} onPress={() => setGenreView(v)} style={[yc.toggleBtn, genreView === v && yc.toggleActive]}>
+                  <Text style={[yc.toggleText, genreView === v && yc.toggleTextActive]}>
+                    {v === 'listend' ? 'Most Listend' : 'Highest Rated'}
+                  </Text>
+                </Pressable>
               ))}
-              <Text style={s.footnote}>Based on {totalTagged} of {loggedAlbums.length} logged albums</Text>
-            </>
+            </View>
+          </View>
+          {genreView === 'listend' ? (
+            topGenres.length > 0 ? (
+              <>
+                {topGenres.map(([genre, count], i) => (
+                  <BarRow
+                    key={genre}
+                    label={genre}
+                    count={count}
+                    maxCount={maxGenreCount}
+                    colorIdx={i}
+                    pill
+                    onPress={() => setListModal({
+                      title: genre,
+                      albums: loggedAlbums.filter(a => a.genreTags?.includes(genre)),
+                    })}
+                  />
+                ))}
+                <Text style={s.footnote}>Based on {totalTagged} of {loggedAlbums.length} logged albums</Text>
+              </>
+            ) : (
+              <EmptyState text="Log more albums to see your top genres here." />
+            )
           ) : (
-            <EmptyState text="Log more albums to see your top genres here." />
+            topRatedGenres.length > 0 ? (
+              <>
+                {topRatedGenres.map(([genre, avg], i) => (
+                  <BarRow
+                    key={genre}
+                    label={genre}
+                    count={parseFloat(avg.toFixed(1))}
+                    maxCount={10}
+                    colorIdx={i}
+                    pill
+                    onPress={() => setListModal({
+                      title: genre,
+                      albums: loggedAlbums.filter(a => a.genreTags?.includes(genre) && a.rating > 0),
+                    })}
+                  />
+                ))}
+                <Text style={s.footnote}>Based on rated albums only</Text>
+              </>
+            ) : (
+              <EmptyState text="Rate some albums to see your highest rated genres." />
+            )
           )}
         </View>
 
