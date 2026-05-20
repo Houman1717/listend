@@ -732,8 +732,8 @@ export default function MyStatsScreen() {
     if (firstRating <= 0 || latestRating <= 0) continue;
     const delta = latestRating - firstRating;
     evSumFirst += firstRating; evSumLatest += latestRating; evCount++;
-    if (delta >= 2)  evGrowers.push({ album, firstRating, latestRating, delta });
-    if (delta <= -2) evFaders.push({ album, firstRating, latestRating, delta });
+    if (delta >= 1)  evGrowers.push({ album, firstRating, latestRating, delta });
+    if (delta <= -1) evFaders.push({ album, firstRating, latestRating, delta });
   }
   evGrowers.sort((a, b) => b.delta - a.delta);
   evFaders.sort((a, b) => a.delta - b.delta);
