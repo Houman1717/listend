@@ -23,24 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const ACCENT   = '#D4A017';
-const GROW_CLR = '#4caf50';
-const FADE_CLR = '#e05252';
-const CARD_BG  = '#2E2018';
-const BORDER   = '#2a1e14';
-const TEXT     = '#f5e6c8';
-const SUBTEXT  = '#A08060';
-
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type EvolutionEntry = {
-  album:       LoggedAlbum;
-  firstRating: number;
-  latestRating: number;
-  delta:       number;
-};
 
 type SessionEntry = {
   listenedAt: string;
@@ -233,188 +216,6 @@ const hm = StyleSheet.create({
   trashBtn: { padding: 4, alignSelf: 'flex-start', marginTop: 4 },
 });
 
-// ─── Evolution card (Growers / Faders carousel) ───────────────────────────────
-
-function EvolutionCard({
-  entry,
-  onPress,
-}: {
-  entry: EvolutionEntry;
-  onPress: () => void;
-}) {
-  const { album, firstRating, latestRating, delta } = entry;
-  const isGrow = delta > 0;
-  const deltaColor = isGrow ? GROW_CLR : FADE_CLR;
-  const sign       = isGrow ? '+' : '';
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [ec.card, { opacity: pressed ? 0.75 : 1 }]}>
-      {album.artworkUrl ? (
-        <ExpoImage source={{ uri: album.artworkUrl }} style={ec.art} contentFit="cover" cachePolicy="disk" />
-      ) : (
-        <View style={[ec.art, { backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }]}>
-          <FontAwesome name="music" size={22} color="rgba(255,255,255,0.3)" />
-        </View>
-      )}
-      {/* Delta badge */}
-      <View style={[ec.deltaBadge, { backgroundColor: deltaColor }]}>
-        <Text style={ec.deltaBadgeText}>{sign}{delta}</Text>
-      </View>
-      <Text style={ec.title} numberOfLines={2}>{album.title}</Text>
-      <View style={ec.ratingRow}>
-        <Text style={ec.ratingOld}>{firstRating}</Text>
-        <FontAwesome name={isGrow ? 'arrow-up' : 'arrow-down'} size={10} color={deltaColor} />
-        <Text style={[ec.ratingNew, { color: deltaColor }]}>{latestRating}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-const ec = StyleSheet.create({
-  card:          { width: 110, gap: 6 },
-  art:           { width: 110, height: 110, borderRadius: 10 },
-  deltaBadge:    { position: 'absolute', top: 8, right: 8, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
-  deltaBadgeText:{ color: '#fff', fontSize: 12, fontWeight: '800' },
-  title:         { color: TEXT,    fontSize: 12, fontWeight: '600', lineHeight: 16 },
-  ratingRow:     { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  ratingOld:     { color: SUBTEXT, fontSize: 12, fontWeight: '600' },
-  ratingNew:     { fontSize: 12, fontWeight: '700' },
-});
-
-// ─── Analytics header (shown above album list) ────────────────────────────────
-
-function AnalyticsHeader({
-  growers,
-  faders,
-  avgDelta,
-  firstListenAvg,
-  longTermAvg,
-  totalRelistens,
-  isDark,
-  colors,
-  onCardPress,
-}: {
-  growers:       EvolutionEntry[];
-  faders:        EvolutionEntry[];
-  avgDelta:      number;
-  firstListenAvg: number;
-  longTermAvg:   number;
-  totalRelistens: number;
-  isDark:        boolean;
-  colors:        any;
-  onCardPress:   (album: LoggedAlbum) => void;
-}) {
-  const border = isDark ? BORDER : '#e5e5e5';
-  const cardBg = isDark ? CARD_BG : colors.card;
-  const hasEvolution = growers.length > 0 || faders.length > 0;
-
-  const deltaSign   = avgDelta > 0 ? '+' : '';
-  const deltaColor  = avgDelta >= 0.5 ? GROW_CLR : avgDelta <= -0.5 ? FADE_CLR : SUBTEXT;
-
-  if (!hasEvolution && totalRelistens === 0) return null;
-
-  return (
-    <View style={[ah.wrap, { borderBottomColor: border }]}>
-
-      {/* ── Stats strip ── */}
-      <View style={[ah.statsStrip, { backgroundColor: cardBg, borderColor: border }]}>
-        <View style={ah.statCell}>
-          <Text style={ah.statVal}>{totalRelistens}</Text>
-          <Text style={ah.statLbl}>Re-Listens</Text>
-        </View>
-        <View style={[ah.statDivider, { backgroundColor: border }]} />
-        <View style={ah.statCell}>
-          <Text style={[ah.statVal, { color: deltaColor }]}>{deltaSign}{avgDelta.toFixed(1)}</Text>
-          <Text style={ah.statLbl}>Avg Change</Text>
-        </View>
-        <View style={[ah.statDivider, { backgroundColor: border }]} />
-        <View style={ah.statCell}>
-          <Text style={ah.statVal}>{firstListenAvg > 0 ? firstListenAvg.toFixed(1) : '—'}</Text>
-          <Text style={ah.statLbl}>First Listen</Text>
-        </View>
-        <View style={[ah.statDivider, { backgroundColor: border }]} />
-        <View style={ah.statCell}>
-          <Text style={[ah.statVal, { color: longTermAvg > firstListenAvg ? GROW_CLR : longTermAvg < firstListenAvg ? FADE_CLR : TEXT }]}>
-            {longTermAvg > 0 ? longTermAvg.toFixed(1) : '—'}
-          </Text>
-          <Text style={ah.statLbl}>Long-Term</Text>
-        </View>
-      </View>
-
-      {/* ── Growers ── */}
-      {growers.length > 0 && (
-        <View style={ah.section}>
-          <View style={ah.sectionHeader}>
-            <View style={[ah.sectionBadge, { backgroundColor: GROW_CLR }]}>
-              <FontAwesome name="arrow-up" size={10} color="#fff" />
-            </View>
-            <Text style={[ah.sectionTitle, { color: colors.text }]}>Growers</Text>
-            <Text style={[ah.sectionSub, { color: SUBTEXT }]}>{growers.length} album{growers.length !== 1 ? 's' : ''} that grew on you</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ah.carousel}>
-            {growers.map(entry => (
-              <EvolutionCard key={entry.album.id} entry={entry} onPress={() => onCardPress(entry.album)} />
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* ── Faders ── */}
-      {faders.length > 0 && (
-        <View style={ah.section}>
-          <View style={ah.sectionHeader}>
-            <View style={[ah.sectionBadge, { backgroundColor: FADE_CLR }]}>
-              <FontAwesome name="arrow-down" size={10} color="#fff" />
-            </View>
-            <Text style={[ah.sectionTitle, { color: colors.text }]}>Faders</Text>
-            <Text style={[ah.sectionSub, { color: SUBTEXT }]}>{faders.length} album{faders.length !== 1 ? 's' : ''} that faded over time</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ah.carousel}>
-            {faders.map(entry => (
-              <EvolutionCard key={entry.album.id} entry={entry} onPress={() => onCardPress(entry.album)} />
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* ── Section label for album list below ── */}
-      <View style={[ah.listLabel, { borderTopColor: border }]}>
-        <Text style={[ah.listLabelText, { color: SUBTEXT }]}>ALL RE-LISTENS</Text>
-      </View>
-    </View>
-  );
-}
-
-const ah = StyleSheet.create({
-  wrap:         { paddingBottom: 0 },
-  statsStrip:   {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 14,
-    marginBottom: 2,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  statCell:     { flex: 1, alignItems: 'center', paddingVertical: 14, gap: 3 },
-  statDivider:  { width: StyleSheet.hairlineWidth, height: 36 },
-  statVal:      { color: TEXT,    fontSize: 18, fontWeight: '700' },
-  statLbl:      { color: SUBTEXT, fontSize: 10, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.6, textAlign: 'center' },
-
-  section:      { paddingTop: 18, gap: 10 },
-  sectionHeader:{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
-  sectionBadge: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  sectionTitle: { fontSize: 15, fontWeight: '700' },
-  sectionSub:   { fontSize: 12, fontWeight: '500' },
-  carousel:     { paddingHorizontal: 16, gap: 12, paddingBottom: 4 },
-
-  listLabel:    { marginTop: 20, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  listLabelText:{ fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase' },
-});
-
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a','#1a5a5a','#4a2818'];
@@ -436,9 +237,6 @@ export default function ReListenedScreen() {
   const [searchOpen,     setSearchOpen]     = useState(false);
   const [query,          setQuery]          = useState('');
   const searchRef = useRef<TextInput>(null);
-
-  // Re-listen evolution data (growers / faders)
-  const [allReLists, setAllReLists] = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
 
   useEffect(() => {
     if (!viewingOther) return;
@@ -489,24 +287,6 @@ export default function ReListenedScreen() {
       });
   }, [viewingOther]);
 
-  // Fetch all re-listen rows once so we can compute growers/faders without opening each album
-  useEffect(() => {
-    if (viewingOther || !user?.id) return;
-    supabase
-      .from('re_listens')
-      .select('spotify_id, rating, listened_at')
-      .eq('user_id', user.id)
-      .order('listened_at', { ascending: true })
-      .then(({ data }) => {
-        const map = new Map<string, { rating: number; listenedAt: string }[]>();
-        for (const r of data ?? []) {
-          if (!map.has(r.spotify_id)) map.set(r.spotify_id, []);
-          map.get(r.spotify_id)!.push({ rating: r.rating ?? 0, listenedAt: r.listened_at ?? '' });
-        }
-        setAllReLists(map);
-      });
-  }, [user?.id, viewingOther]);
-
   const reListenedAlbums = viewingOther
     ? otherAlbums
     : [...loggedAlbums.filter(a => a.isRelistened === true)].sort((a, b) => {
@@ -514,32 +294,6 @@ export default function ReListenedScreen() {
         const db = new Date(b.lastListenedAt ?? b.dateLogged).getTime();
         return db - da;
       });
-
-  // ── Growers / Faders derivation ──────────────────────────────────────────────
-  const growers: EvolutionEntry[] = [];
-  const faders:  EvolutionEntry[] = [];
-  let sumFirstRating = 0, sumLatestRating = 0, countRated = 0, totalRelistens = 0;
-  for (const album of reListenedAlbums) {
-    totalRelistens += album.reListenCount ?? 0;
-    if (viewingOther) continue; // only compute for own profile where we have allReLists
-    const lists = allReLists.get(album.id);
-    if (!lists || lists.length === 0) continue;
-    const latestRated = [...lists].reverse().find(r => r.rating > 0);
-    const latestRating = latestRated?.rating ?? 0;
-    const firstRating  = album.rating; // user_albums.rating = original listen rating
-    if (firstRating <= 0 || latestRating <= 0) continue;
-    const delta = latestRating - firstRating;
-    sumFirstRating  += firstRating;
-    sumLatestRating += latestRating;
-    countRated++;
-    if (delta >= 2)  growers.push({ album, firstRating, latestRating, delta });
-    if (delta <= -2) faders.push({ album, firstRating, latestRating, delta });
-  }
-  growers.sort((a, b) => b.delta - a.delta);
-  faders.sort((a, b) => a.delta - b.delta); // most negative first
-  const avgDelta      = countRated > 0 ? (sumLatestRating - sumFirstRating) / countRated : 0;
-  const firstListenAvg = countRated > 0 ? sumFirstRating  / countRated : 0;
-  const longTermAvg    = countRated > 0 ? sumLatestRating / countRated : 0;
 
   const displayAlbums = query.trim()
     ? reListenedAlbums.filter(a =>
@@ -641,100 +395,79 @@ export default function ReListenedScreen() {
     }
   }, [user]);
 
-  const listHeader = (
-    <>
-      {/* Analytics — only shown for own profile with re-listens */}
-      {!viewingOther && reListenedAlbums.length > 0 && (
-        <AnalyticsHeader
-          growers={growers}
-          faders={faders}
-          avgDelta={avgDelta}
-          firstListenAvg={firstListenAvg}
-          longTermAvg={longTermAvg}
-          totalRelistens={totalRelistens}
-          isDark={isDark}
-          colors={colors}
-          onCardPress={handleAlbumPress}
-        />
-      )}
-      {/* Count + search bar */}
-      {reListenedAlbums.length > 0 && (
-        <View style={[ss.countRow, { borderBottomColor: colors.border }]}>
-          <Text style={[ss.countText, { color: colors.subtext }]}>{reListenedAlbums.length} album{reListenedAlbums.length !== 1 ? 's' : ''}</Text>
-          <Pressable
-            onPress={() => {
-              const next = !searchOpen;
-              setSearchOpen(next);
-              if (!next) setQuery('');
-              else setTimeout(() => searchRef.current?.focus(), 50);
-            }}
-            hitSlop={10}
-            style={[ss.searchToggle, searchOpen && { backgroundColor: ACCENT }]}>
-            <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : ACCENT} />
-          </Pressable>
-        </View>
-      )}
-      {reListenedAlbums.length > 0 && searchOpen && (
-        <View style={[ss.searchBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <FontAwesome name="search" size={14} color={colors.subtext} />
-          <TextInput
-            ref={searchRef}
-            style={[ss.searchInput, { color: colors.text }]}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search albums…"
-            placeholderTextColor={colors.subtext}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-          />
-        </View>
-      )}
-    </>
-  );
-
   return (
     <>
       <Stack.Screen options={{ title: 'Re-listend', headerBackTitle: 'Back' }} />
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <FlatList
-        data={displayAlbums}
-        keyExtractor={item => item.id}
-        style={{ flex: 1 }}
-        ListHeaderComponent={listHeader}
-        contentContainerStyle={(displayAlbums.length === 0 && !otherLoading) ? s.emptyContainer : { paddingBottom: 40 }}
-        ListEmptyComponent={
-          <View style={s.emptyInner}>
-            <FontAwesome name="repeat" size={40} color={isDark ? '#3a2818' : '#ddd'} />
-            <Text style={[s.emptyTitle, { color: colors.text }]}>
-              {query.trim() ? 'No albums found' : 'No re-listens yet'}
-            </Text>
-            {!query.trim() && (
-              <Text style={[s.emptySubtext, { color: colors.subtext }]}>
-                Tap "Re-listen" on any album you've already logged to record another listen.
-              </Text>
-            )}
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View>
-            <ReListenedAlbumRow
-              album={item}
-              isDark={isDark}
-              colors={colors}
-              onPress={() => handleAlbumPress(item)}
-            />
-            {loadingAlbumId === item.id && (
-              <ActivityIndicator
-                size="small"
-                color={ACCENT}
-                style={StyleSheet.absoluteFill}
-              />
-            )}
+        {reListenedAlbums.length > 0 && (
+          <View style={[ss.countRow, { borderBottomColor: colors.border }]}>
+            <Text style={[ss.countText, { color: colors.subtext }]}>{reListenedAlbums.length} album{reListenedAlbums.length !== 1 ? 's' : ''}</Text>
+            <Pressable
+              onPress={() => {
+                const next = !searchOpen;
+                setSearchOpen(next);
+                if (!next) setQuery('');
+                else setTimeout(() => searchRef.current?.focus(), 50);
+              }}
+              hitSlop={10}
+              style={[ss.searchToggle, searchOpen && { backgroundColor: '#D4A017' }]}>
+              <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : '#D4A017'} />
+            </Pressable>
           </View>
         )}
-      />
+        {reListenedAlbums.length > 0 && searchOpen && (
+          <View style={[ss.searchBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+            <FontAwesome name="search" size={14} color={colors.subtext} />
+            <TextInput
+              ref={searchRef}
+              style={[ss.searchInput, { color: colors.text }]}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search albums…"
+              placeholderTextColor={colors.subtext}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
+        )}
+        <FlatList
+          data={displayAlbums}
+          keyExtractor={item => item.id}
+          style={{ flex: 1 }}
+          contentContainerStyle={(displayAlbums.length === 0 && !otherLoading) ? s.emptyContainer : { paddingBottom: 40 }}
+          ListEmptyComponent={
+            <View style={s.emptyInner}>
+              <FontAwesome name="repeat" size={40} color={isDark ? '#3a2818' : '#ddd'} />
+              <Text style={[s.emptyTitle, { color: colors.text }]}>
+                {query.trim() ? 'No albums found' : 'No re-listens yet'}
+              </Text>
+              {!query.trim() && (
+                <Text style={[s.emptySubtext, { color: colors.subtext }]}>
+                  Tap "Re-listen" on any album you've already logged to record another listen.
+                </Text>
+              )}
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View>
+              <ReListenedAlbumRow
+                album={item}
+                isDark={isDark}
+                colors={colors}
+                onPress={() => handleAlbumPress(item)}
+              />
+              {loadingAlbumId === item.id && (
+                <ActivityIndicator
+                  size="small"
+                  color="#D4A017"
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+            </View>
+          )}
+        />
       </View>
 
       {historyData && (

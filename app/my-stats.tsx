@@ -22,7 +22,54 @@ const TEXT     = '#f5e6c8';
 const SUBTEXT  = '#A08060';
 const ACCENT   = '#D4A017';
 
-const TAG_COLORS = ['#7a5018', '#8B6914', '#5c3a10', '#6B4422', '#9a7020', '#4a3218'];
+const TAG_COLORS  = ['#7a5018', '#8B6914', '#5c3a10', '#6B4422', '#9a7020', '#4a3218'];
+const GROW_CLR    = '#4caf50';
+const FADE_CLR    = '#e05252';
+
+type EvolutionEntry = {
+  album:        LoggedAlbum;
+  firstRating:  number;
+  latestRating: number;
+  delta:        number;
+};
+
+function EvolutionCard({ entry, onPress }: { entry: EvolutionEntry; onPress: () => void }) {
+  const { album, firstRating, latestRating, delta } = entry;
+  const isGrow     = delta > 0;
+  const deltaColor = isGrow ? GROW_CLR : FADE_CLR;
+  const sign       = isGrow ? '+' : '';
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [ev.card, { opacity: pressed ? 0.75 : 1 }]}>
+      {album.artworkUrl ? (
+        <ExpoImage source={{ uri: album.artworkUrl }} style={ev.art} contentFit="cover" cachePolicy="disk" />
+      ) : (
+        <View style={[ev.art, { backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }]}>
+          <FontAwesome name="music" size={22} color="rgba(255,255,255,0.3)" />
+        </View>
+      )}
+      <View style={[ev.badge, { backgroundColor: deltaColor }]}>
+        <Text style={ev.badgeText}>{sign}{delta}</Text>
+      </View>
+      <Text style={ev.title} numberOfLines={2}>{album.title}</Text>
+      <View style={ev.ratingRow}>
+        <Text style={ev.ratingOld}>{firstRating}</Text>
+        <FontAwesome name={isGrow ? 'arrow-up' : 'arrow-down'} size={10} color={deltaColor} />
+        <Text style={[ev.ratingNew, { color: deltaColor }]}>{latestRating}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+const ev = StyleSheet.create({
+  card:      { width: 110, gap: 6 },
+  art:       { width: 110, height: 110, borderRadius: 10 },
+  badge:     { position: 'absolute', top: 8, right: 8, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  title:     { color: TEXT,    fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  ratingOld: { color: SUBTEXT, fontSize: 12, fontWeight: '600' },
+  ratingNew: { fontSize: 12, fontWeight: '700' },
+});
 
 function VolumeBadge({ rating }: { rating: number }) {
   return (
@@ -518,6 +565,7 @@ export default function MyStatsScreen() {
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
+  const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
   const { width: screenWidth } = useWindowDimensions();
 
   const cardBg = isDark ? CARD_BG : colors.card;
@@ -646,6 +694,52 @@ export default function MyStatsScreen() {
         .catch(() => {});
     });
   }, [isLoaded]);
+
+  // Fetch all re-listen rows for grower/fader computation
+  useEffect(() => {
+    if (!isLoaded) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const uid = session?.user?.id;
+      if (!uid) return;
+      supabase
+        .from('re_listens')
+        .select('spotify_id, rating, listened_at')
+        .eq('user_id', uid)
+        .order('listened_at', { ascending: true })
+        .then(({ data }) => {
+          const map = new Map<string, { rating: number; listenedAt: string }[]>();
+          for (const r of data ?? []) {
+            if (!map.has(r.spotify_id)) map.set(r.spotify_id, []);
+            map.get(r.spotify_id)!.push({ rating: r.rating ?? 0, listenedAt: r.listened_at ?? '' });
+          }
+          setAllReLists(map);
+        });
+    });
+  }, [isLoaded]);
+
+  // ── Re-Listend evolution (growers / faders) ───────────────────────────────
+  const reListenedAlbums = loggedAlbums.filter(a => a.isRelistened);
+  const totalReListens   = reListenedAlbums.reduce((s, a) => s + (a.reListenCount ?? 0), 0);
+  const evGrowers: EvolutionEntry[] = [];
+  const evFaders:  EvolutionEntry[] = [];
+  let evSumFirst = 0, evSumLatest = 0, evCount = 0;
+  for (const album of reListenedAlbums) {
+    const lists = allReLists.get(album.id);
+    if (!lists || lists.length === 0) continue;
+    const latestRated = [...lists].reverse().find(r => r.rating > 0);
+    const latestRating = latestRated?.rating ?? 0;
+    const firstRating  = album.rating;
+    if (firstRating <= 0 || latestRating <= 0) continue;
+    const delta = latestRating - firstRating;
+    evSumFirst += firstRating; evSumLatest += latestRating; evCount++;
+    if (delta >= 2)  evGrowers.push({ album, firstRating, latestRating, delta });
+    if (delta <= -2) evFaders.push({ album, firstRating, latestRating, delta });
+  }
+  evGrowers.sort((a, b) => b.delta - a.delta);
+  evFaders.sort((a, b) => a.delta - b.delta);
+  const evAvgDelta      = evCount > 0 ? (evSumLatest - evSumFirst) / evCount : 0;
+  const evFirstListenAvg = evCount > 0 ? evSumFirst  / evCount : 0;
+  const evLongTermAvg    = evCount > 0 ? evSumLatest / evCount : 0;
 
   function handleRatingPress(rating: number, albums: LoggedAlbum[]) {
     setSelectedAlbums(albums);
@@ -820,6 +914,88 @@ export default function MyStatsScreen() {
           )}
         </View>
 
+        {/* ── Re-Listend ─────────────────────────────────────────────────── */}
+        {reListenedAlbums.length > 0 && (
+          <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
+            <Text style={[s.cardTitle, { color: colors.textMuted }]}>RE-LISTEND</Text>
+
+            {/* Stats strip */}
+            <View style={[rl.strip, { borderColor: BORDER }]}>
+              <View style={rl.cell}>
+                <Text style={rl.val}>{totalReListens}</Text>
+                <Text style={rl.lbl}>Re-Listens</Text>
+              </View>
+              <View style={[rl.divider, { backgroundColor: BORDER }]} />
+              <View style={rl.cell}>
+                <Text style={[rl.val, { color: evAvgDelta >= 0.5 ? GROW_CLR : evAvgDelta <= -0.5 ? FADE_CLR : SUBTEXT }]}>
+                  {evAvgDelta > 0 ? '+' : ''}{evAvgDelta.toFixed(1)}
+                </Text>
+                <Text style={rl.lbl}>Avg Change</Text>
+              </View>
+              <View style={[rl.divider, { backgroundColor: BORDER }]} />
+              <View style={rl.cell}>
+                <Text style={rl.val}>{evFirstListenAvg > 0 ? evFirstListenAvg.toFixed(1) : '—'}</Text>
+                <Text style={rl.lbl}>First Listen</Text>
+              </View>
+              <View style={[rl.divider, { backgroundColor: BORDER }]} />
+              <View style={rl.cell}>
+                <Text style={[rl.val, { color: evLongTermAvg > evFirstListenAvg ? GROW_CLR : evLongTermAvg < evFirstListenAvg ? FADE_CLR : TEXT }]}>
+                  {evLongTermAvg > 0 ? evLongTermAvg.toFixed(1) : '—'}
+                </Text>
+                <Text style={rl.lbl}>Long-Term</Text>
+              </View>
+            </View>
+
+            {/* Growers */}
+            {evGrowers.length > 0 && (
+              <View style={rl.section}>
+                <View style={rl.sectionHeader}>
+                  <View style={[rl.sectionBadge, { backgroundColor: GROW_CLR }]}>
+                    <FontAwesome name="arrow-up" size={9} color="#fff" />
+                  </View>
+                  <Text style={[rl.sectionTitle, { color: colors.text }]}>Growers</Text>
+                  <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{evGrowers.length} grew on you</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={rl.carousel}>
+                  {evGrowers.map(entry => (
+                    <EvolutionCard
+                      key={entry.album.id}
+                      entry={entry}
+                      onPress={() => setListModal({ title: entry.album.title, albums: [entry.album] })}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Faders */}
+            {evFaders.length > 0 && (
+              <View style={rl.section}>
+                <View style={rl.sectionHeader}>
+                  <View style={[rl.sectionBadge, { backgroundColor: FADE_CLR }]}>
+                    <FontAwesome name="arrow-down" size={9} color="#fff" />
+                  </View>
+                  <Text style={[rl.sectionTitle, { color: colors.text }]}>Faders</Text>
+                  <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{evFaders.length} faded over time</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={rl.carousel}>
+                  {evFaders.map(entry => (
+                    <EvolutionCard
+                      key={entry.album.id}
+                      entry={entry}
+                      onPress={() => setListModal({ title: entry.album.title, albums: [entry.album] })}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {evGrowers.length === 0 && evFaders.length === 0 && (
+              <EmptyState text="Re-listen to albums and rate them to see how your opinion changes." />
+            )}
+          </View>
+        )}
+
       </ScrollView>
     </>
   );
@@ -857,4 +1033,18 @@ const s = StyleSheet.create({
   footnote:  { color: SUBTEXT, fontSize: 12, marginTop: 6 },
   emptyWrap: { alignItems: 'center', paddingVertical: 16 },
   emptyText: { color: SUBTEXT, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+});
+
+const rl = StyleSheet.create({
+  strip:        { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', marginBottom: 4 },
+  cell:         { flex: 1, alignItems: 'center', paddingVertical: 12, gap: 3 },
+  divider:      { width: StyleSheet.hairlineWidth, height: 32 },
+  val:          { color: TEXT,    fontSize: 17, fontWeight: '700' },
+  lbl:          { color: SUBTEXT, fontSize: 10, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.6, textAlign: 'center' },
+  section:      { paddingTop: 16, gap: 10 },
+  sectionHeader:{ flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionBadge: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: TEXT },
+  sectionSub:   { fontSize: 12, fontWeight: '500' },
+  carousel:     { gap: 12, paddingBottom: 4 },
 });
