@@ -721,26 +721,32 @@ export default function MyStatsScreen() {
   // Fetch community averages for all rated albums (excluding own rating)
   useEffect(() => {
     if (!isLoaded) return;
-    const ratedIds = loggedAlbums.filter(a => a.rating > 0).map(a => a.id);
-    if (ratedIds.length === 0) return;
+    const ratedAlbums = loggedAlbums.filter(a => a.rating > 0);
+    if (ratedAlbums.length === 0) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       const uid = session?.user?.id;
       if (!uid) return;
+      // Match by title+year (not spotify_id) — different users may have different AM IDs for same album
       supabase
         .from('user_albums')
-        .select('spotify_id, rating')
-        .in('spotify_id', ratedIds)
+        .select('title, year, rating')
         .gt('rating', 0)
         .neq('user_id', uid)
         .then(({ data }) => {
-          const grouped: Record<string, number[]> = {};
+          // Build community map keyed by title_lower::year
+          const communityMap: Record<string, number[]> = {};
           for (const row of data ?? []) {
-            if (!grouped[row.spotify_id]) grouped[row.spotify_id] = [];
-            grouped[row.spotify_id].push(row.rating);
+            const key = `${(row.title ?? '').toLowerCase()}::${row.year ?? 0}`;
+            if (!communityMap[key]) communityMap[key] = [];
+            communityMap[key].push(row.rating);
           }
+          // Match against user's rated albums using same key
           const avgs: Record<string, { avg: number; count: number }> = {};
-          for (const [id, ratings] of Object.entries(grouped)) {
-            avgs[id] = { avg: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length };
+          for (const album of ratedAlbums) {
+            const key = `${album.title.toLowerCase()}::${album.year ?? 0}`;
+            const ratings = communityMap[key];
+            if (!ratings || ratings.length === 0) continue;
+            avgs[album.id] = { avg: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length };
           }
           setCommunityAvgs(avgs);
         });
