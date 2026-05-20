@@ -241,7 +241,7 @@ function MiniRatingBar({ rating, isDark }: { rating: number; isDark: boolean }) 
 
 // ─── Community Rating ─────────────────────────────────────────────────────────
 
-const MIN_RATINGS_TO_SHOW = 1;
+const MIN_RATINGS_TO_SHOW = 10;
 
 function CommunityRatingSection({
   isDark,

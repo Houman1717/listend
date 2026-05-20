@@ -778,7 +778,7 @@ export default function MyStatsScreen() {
   const evLongTermAvg    = evCount > 0 ? evSumLatest / evCount : 0;
 
   // ── Community comparison (rated higher / lower than average) ─────────────
-  const MIN_COMMUNITY = 1;
+  const MIN_COMMUNITY = 10;
   type CompEntry = { album: LoggedAlbum; communityAvg: number; delta: number };
   const compHigher: CompEntry[] = [];
   const compLower:  CompEntry[] = [];
@@ -873,7 +873,7 @@ export default function MyStatsScreen() {
                   ))}
                 </ScrollView>
               ) : (
-                <EmptyState text="No albums rated higher than the community average yet." />
+                <EmptyState text="Ratings are revealed once more listeners have rated this album." />
               )}
             </View>
 
@@ -893,7 +893,7 @@ export default function MyStatsScreen() {
                   ))}
                 </ScrollView>
               ) : (
-                <EmptyState text="No albums rated lower than the community average yet." />
+                <EmptyState text="Ratings are revealed once more listeners have rated this album." />
               )}
             </View>
           </View>
