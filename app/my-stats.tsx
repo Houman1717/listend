@@ -721,30 +721,38 @@ export default function MyStatsScreen() {
             </View>
           </View>
           {(() => {
-            // screenWidth - scrollview padding (40) - card padding (36) - 2 gaps (20) / 3 cols
-            const cardW = (screenWidth - 96) / 3;
+            // Floor ensures 3 cards + 2 gaps never exceed container width on any screen size
+            const GAP = 10;
+            const cardW = Math.floor((screenWidth - 40 - 36 - GAP * 2) / 3);
             const items: [string, string][] = artistView === 'listend'
               ? topArtists.map(([a, c]) => [a, `${c} album${c !== 1 ? 's' : ''}`])
               : topRatedArtists.map(([a, avg]) => [a, `${avg.toFixed(1)} avg`]);
             if (items.length === 0) {
               return <EmptyState text={artistView === 'listend' ? 'Log some albums to see your top artists.' : 'Rate at least 2 albums per artist to see ratings.'} />;
             }
+            // Chunk into explicit rows of 3 so layout never wraps unexpectedly
+            const rows: [string, string][][] = [];
+            for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
             return (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                {items.map(([artist, sub]) => (
-                  <ArtistGridCard
-                    key={artist}
-                    artist={artist}
-                    label={sub}
-                    imageUrl={artistImages[artist]}
-                    cardW={cardW}
-                    onPress={() => setListModal({
-                      title: artist,
-                      albums: artistView === 'listend'
-                        ? loggedAlbums.filter(a => a.artist === artist)
-                        : loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
-                    })}
-                  />
+              <View style={{ gap: 16 }}>
+                {rows.map((row, ri) => (
+                  <View key={ri} style={{ flexDirection: 'row', gap: GAP }}>
+                    {row.map(([artist, sub]) => (
+                      <ArtistGridCard
+                        key={artist}
+                        artist={artist}
+                        label={sub}
+                        imageUrl={artistImages[artist]}
+                        cardW={cardW}
+                        onPress={() => setListModal({
+                          title: artist,
+                          albums: artistView === 'listend'
+                            ? loggedAlbums.filter(a => a.artist === artist)
+                            : loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
+                        })}
+                      />
+                    ))}
+                  </View>
                 ))}
               </View>
             );
