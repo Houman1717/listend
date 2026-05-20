@@ -851,49 +851,45 @@ export default function MyStatsScreen() {
           <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
             <Text style={[s.cardTitle, { color: colors.textMuted }]}>RATED VS COMMUNITY</Text>
 
-            {compHigher.length > 0 && (
-              <View style={rl.section}>
-                <View style={rl.sectionHeader}>
-                  <View style={[rl.sectionBadge, { backgroundColor: GROW_CLR }]}>
-                    <FontAwesome name="arrow-up" size={9} color="#fff" />
-                  </View>
-                  <Text style={[rl.sectionTitle, { color: colors.text }]}>Rated Higher</Text>
-                  <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{compHigher.length} above avg</Text>
+            {/* Rated Higher */}
+            <View style={rl.section}>
+              <View style={rl.sectionHeader}>
+                <View style={[rl.sectionBadge, { backgroundColor: GROW_CLR }]}>
+                  <FontAwesome name="arrow-up" size={9} color="#fff" />
                 </View>
+                <Text style={[rl.sectionTitle, { color: colors.text }]}>Rated Higher</Text>
+                <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{compHigher.length} above avg</Text>
+              </View>
+              {compHigher.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
                   {compHigher.map(({ album, communityAvg }) => (
-                    <ComparisonCard
-                      key={album.id}
-                      album={album}
-                      communityAvg={communityAvg}
-                      onPress={() => handleAlbumPress(album)}
-                    />
+                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} />
                   ))}
                 </ScrollView>
-              </View>
-            )}
+              ) : (
+                <EmptyState text="No albums rated higher than the community average yet." />
+              )}
+            </View>
 
-            {compLower.length > 0 && (
-              <View style={[rl.section, compHigher.length > 0 && { marginTop: 8 }]}>
-                <View style={rl.sectionHeader}>
-                  <View style={[rl.sectionBadge, { backgroundColor: FADE_CLR }]}>
-                    <FontAwesome name="arrow-down" size={9} color="#fff" />
-                  </View>
-                  <Text style={[rl.sectionTitle, { color: colors.text }]}>Rated Lower</Text>
-                  <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{compLower.length} below avg</Text>
+            {/* Rated Lower */}
+            <View style={[rl.section, { marginTop: 8 }]}>
+              <View style={rl.sectionHeader}>
+                <View style={[rl.sectionBadge, { backgroundColor: FADE_CLR }]}>
+                  <FontAwesome name="arrow-down" size={9} color="#fff" />
                 </View>
+                <Text style={[rl.sectionTitle, { color: colors.text }]}>Rated Lower</Text>
+                <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{compLower.length} below avg</Text>
+              </View>
+              {compLower.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
                   {compLower.map(({ album, communityAvg }) => (
-                    <ComparisonCard
-                      key={album.id}
-                      album={album}
-                      communityAvg={communityAvg}
-                      onPress={() => handleAlbumPress(album)}
-                    />
+                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} />
                   ))}
                 </ScrollView>
-              </View>
-            )}
+              ) : (
+                <EmptyState text="No albums rated lower than the community average yet." />
+              )}
+            </View>
           </View>
         )}
 
