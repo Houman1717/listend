@@ -18,7 +18,6 @@ import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useHeaderHeight } from '@react-navigation/elements';
 import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -27,8 +26,6 @@ import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
-import { navigateToProfile } from '@/lib/navigateToProfile';
-import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 

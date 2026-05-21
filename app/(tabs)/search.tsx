@@ -20,7 +20,6 @@ import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyServ
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
-import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -931,12 +930,6 @@ export default function SearchScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
-      <SongInfoModal
-        song={activeSong}
-        onClose={() => setActiveSong(null)}
-        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-        onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
-      />
       <SongInfoModal
         song={activeSong}
         onClose={() => setActiveSong(null)}

@@ -34,7 +34,6 @@ import {
   fetchPopularReviewsThisWeek,
 } from '@/lib/homeData';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
-import { navigateToProfile } from '@/lib/navigateToProfile';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 

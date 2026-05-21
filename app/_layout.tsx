@@ -1,6 +1,5 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { OfflineBanner } from '@/components/OfflineBanner';
-import { OfflineBanner } from '@/components/OfflineBanner';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -16,7 +15,6 @@ import { FlipProvider } from '@/context/FlipContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { NotificationsProvider } from '@/context/NotificationsContext';
 import { LikedArtistsProvider } from '@/context/LikedArtistsContext';
-import { LikedFeaturedPlaylistsProvider } from '@/context/LikedFeaturedPlaylistsContext';
 import { LikedFeaturedPlaylistsProvider } from '@/context/LikedFeaturedPlaylistsContext';
 import { FavoritesSyncer } from '@/components/FavoritesSyncer';
 import { configureGoogleSignIn } from '@/lib/auth/googleAuth';
