@@ -18,16 +18,19 @@ const MAIN_GENRES = new Set([
   'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues',
 ]);
 
-// Apple Music commonly uses these as catch-alls — if tag[0] is one of these
-// and tag[1] is something more specific, prefer tag[1] (MusicBrainz).
-const WEAK_GENRES = new Set(['Pop', 'Indie / Alternative']);
+// Only override Apple Music's "Pop" tag when MusicBrainz's tag is one of these
+// definitively specific genres — ones AM would never apply to a true Pop album.
+const POP_OVERRIDE_GENRES = new Set([
+  'Hip-Hop / Rap', 'Metal', 'Jazz', 'Classical',
+  'Afrobeats', 'Electronic', 'Country', 'Blues', 'Latin',
+]);
 
 function pickGenreTag(genreTags: string[]): string | null {
   const filtered = genreTags.filter(t => MAIN_GENRES.has(t));
   const tag0 = filtered[0];
   const tag1 = filtered[1];
   if (!tag0) return null;
-  if (tag1 && WEAK_GENRES.has(tag0) && !WEAK_GENRES.has(tag1)) return tag1;
+  if (tag0 === 'Pop' && tag1 && POP_OVERRIDE_GENRES.has(tag1)) return tag1;
   return tag0;
 }
 
