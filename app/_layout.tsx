@@ -157,8 +157,6 @@ function ThemedApp() {
           <Stack.Screen name="liked-featured-playlists" options={{ title: 'Liked Playlists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="privacy-settings" options={{ title: 'Privacy', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="blocked-users" options={{ title: 'Blocked Users', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
-          <Stack.Screen name="discover-featured-playlist" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
-          <Stack.Screen name="liked-featured-playlists" options={{ title: 'Liked Playlists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
         </Stack>
       </NavThemeProvider>
     </FlipProvider>
