@@ -806,7 +806,6 @@ export default function AlbumDetailScreen() {
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const scrollRef = useRef<ScrollView>(null);
   const modalScrollRef = useRef<ScrollView>(null);
   const reviewYPositions = useRef<Map<string, number>>(new Map());
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
@@ -891,28 +890,6 @@ export default function AlbumDetailScreen() {
     }
   }, [amazonTapped, amazonFetching, amazonMusicUrl]);
 
-  // Streaming links
-  const [showStreamSheet, setShowStreamSheet] = useState(false);
-  const [amazonMusicUrl, setAmazonMusicUrl]   = useState<string | null>(null);
-  const [amazonFetching, setAmazonFetching]   = useState(false);
-  const [amazonFetched, setAmazonFetched]     = useState(false);
-  const [amazonTapped, setAmazonTapped]       = useState(false);
-
-  const streamLinks = {
-    appleMusic:   `https://music.apple.com/us/album/${albumId}`,
-    spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
-    youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
-    amazonMusic:  amazonMusicUrl,
-  };
-
-  // Auto-open Amazon Music once it resolves if the user already tapped it
-  useEffect(() => {
-    if (amazonTapped && !amazonFetching && amazonMusicUrl) {
-      Linking.openURL(amazonMusicUrl);
-      setShowStreamSheet(false);
-      setAmazonTapped(false);
-    }
-  }, [amazonTapped, amazonFetching, amazonMusicUrl]);
 
   // Community reviews + likes
   const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
@@ -938,16 +915,6 @@ export default function AlbumDetailScreen() {
         commentCount: 0,
       }
     : null;
-
-  // Auto-open own review when deep-linking from a like_review notification
-  const autoOpenedRef = useRef(false);
-  useEffect(() => {
-    if (!params.reviewId || autoOpenedRef.current || !ownReview) return;
-    if (ownReview.id === params.reviewId) {
-      autoOpenedRef.current = true;
-      openReview(ownReview, false);
-    }
-  }, [params.reviewId, ownReview?.id]);
 
   // Auto-open own review when deep-linking from a like_review notification
   const autoOpenedRef = useRef(false);
@@ -1373,21 +1340,6 @@ export default function AlbumDetailScreen() {
     loadFriendActivity();
   }, [friendIds, albumTitle]);
 
-  // ── Load real comments when a review is opened ─────────────────────────────
-  function openReview(review: CommunityReview, openComments = false) {
-    setExpandedAlbumReview(review);
-    setSingleReviewCommentsOpen(openComments);
-    if (!commentsMap.has(review.id)) {
-      fetchReviewComments(review.id).then(comments => {
-        setCommentsMap(prev => {
-          const m = new Map(prev);
-          if (!m.has(review.id)) m.set(review.id, comments);
-          return m;
-        });
-      });
-    }
-  }
-
   // ── Fetch mutual friend IDs for Friends tab ────────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
@@ -1503,22 +1455,6 @@ export default function AlbumDetailScreen() {
     } else {
       addToWantToListen({ id: myAlbumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork });
     }
-  }
-
-  function handleStream() {
-    setShowStreamSheet(true);
-    if (amazonFetched || amazonFetching) return;
-    setAmazonFetching(true);
-    fetch(`${API_URL}/api/albums/streaming-links?appleId=${encodeURIComponent(albumId)}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.amazonMusic) setAmazonMusicUrl(data.amazonMusic); })
-      .catch(err => console.warn('[album-detail] amazon music link error:', err))
-      .finally(() => { setAmazonFetched(true); setAmazonFetching(false); });
-  }
-
-  function handleAmazonPress() {
-    if (amazonMusicUrl) { Linking.openURL(amazonMusicUrl); setShowStreamSheet(false); }
-    else if (amazonFetching) { setAmazonTapped(true); }
   }
 
   function handleStream() {

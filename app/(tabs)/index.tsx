@@ -45,37 +45,37 @@ const PLACEHOLDER_FRIENDS = [
   {
     id: '1', user: 'alex_m', album: 'After Hours', artist: 'The Weeknd', year: '2020',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/500x500bb.jpg',
-    rating: 9, likeCount: 14, loggedDate: 'May 7, 2026',
+    rating: 9, likeCount: 14, loggedDate: 'May 7, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
     review: 'Blinding Lights alone makes this a classic, but the whole album is a cinematic fever dream. The production is immaculate — every synth line feels intentional. Abel at his darkest and most theatrical.',
   },
   {
     id: '2', user: 'sara_k', album: 'folklore', artist: 'Taylor Swift', year: '2020',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/80/dc/b580dca0-349d-036b-e09b-bd849f6affd8/20UMGIM64216.rgb.jpg/500x500bb.jpg',
-    rating: 10, likeCount: 31, loggedDate: 'May 6, 2026',
+    rating: 10, likeCount: 31, loggedDate: 'May 6, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
     review: 'This album made me feel things I didn\'t know I needed to feel. The cottagecore aesthetic works perfectly with the stripped-back production. "august" is a masterpiece.',
   },
   {
     id: '3', user: 'jvines', album: 'DAMN.', artist: 'Kendrick Lamar', year: '2017',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/86/c9/bb/86c9bb30-fe3d-442e-33c1-c106c4d23705/17UMGIM88776.rgb.jpg/500x500bb.jpg',
-    rating: 10, likeCount: 47, loggedDate: 'May 5, 2026',
+    rating: 10, likeCount: 47, loggedDate: 'May 5, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
     review: null,
   },
   {
     id: '4', user: 'priya_r', album: 'SOS', artist: 'SZA', year: '2022',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/3b/a9/bd3ba9fb-9609-144f-bcfe-ead67b5f6ab3/196589564931.jpg/500x500bb.jpg',
-    rating: 8, likeCount: 9, loggedDate: 'May 5, 2026',
+    rating: 8, likeCount: 9, loggedDate: 'May 5, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
     review: 'Long but never boring. SZA somehow makes 23 tracks feel cohesive. Her voice is doing everything.',
   },
   {
     id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk', year: '2013',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/500x500bb.jpg',
-    rating: null, likeCount: 5, loggedDate: 'May 4, 2026',
+    rating: null, likeCount: 5, loggedDate: 'May 4, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
     review: null,
   },
   {
     id: '6', user: 'nadia_w', album: 'Currents', artist: 'Tame Impala', year: '2015',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/500x500bb.jpg',
-    rating: 9, likeCount: 22, loggedDate: 'May 3, 2026',
+    rating: 9, likeCount: 22, loggedDate: 'May 3, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
     review: 'Kevin Parker locked himself in a studio and came out with the most immersive headphone album of the decade. "Eventually" breaks my heart every single time.',
   },
 ];
@@ -115,18 +115,6 @@ async function fetchHome(): Promise<{ albums: SpotifyAlbum[]; songs: SpotifyTrac
 
 // ─── Popular Reviews fake data ────────────────────────────────────────────────
 
-export type PopularReview = {
-  id: string;
-  username: string;
-  albumTitle: string;
-  albumArtist: string;
-  albumYear: string;
-  artworkUrl: string;
-  rating: number;
-  review: string;
-  likeCount: number;
-};
-
 export const POPULAR_REVIEWS_DATA: PopularReview[] = [
   {
     id: '1',
@@ -138,6 +126,7 @@ export const POPULAR_REVIEWS_DATA: PopularReview[] = [
     rating: 8,
     review: 'Blinding Lights alone makes this a classic, but the whole album is a cinematic fever dream. Abel at his darkest and best.',
     likeCount: 61,
+    commentCount: 0,
   },
   {
     id: '2',
@@ -149,6 +138,7 @@ export const POPULAR_REVIEWS_DATA: PopularReview[] = [
     rating: 9,
     review: 'Taylor proved she can do indie folk better than most indie folk artists. Cardigan is perfection.',
     likeCount: 104,
+    commentCount: 0,
   },
   {
     id: '3',
@@ -160,6 +150,7 @@ export const POPULAR_REVIEWS_DATA: PopularReview[] = [
     rating: 10,
     review: 'Every track on this hits different. HUMBLE. to DUCKWORTH — it\'s a full experience, not just songs. Kendrick is built different.',
     likeCount: 132,
+    commentCount: 0,
   },
   {
     id: '4',
@@ -171,6 +162,7 @@ export const POPULAR_REVIEWS_DATA: PopularReview[] = [
     rating: 9,
     review: 'Kill Bill is already a top-5 song of the decade. The whole album oozes emotion and SZA\'s voice is otherworldly.',
     likeCount: 89,
+    commentCount: 0,
   },
   {
     id: '5',
@@ -182,6 +174,7 @@ export const POPULAR_REVIEWS_DATA: PopularReview[] = [
     rating: 10,
     review: 'Get Lucky aside, this whole record is a love letter to the golden age of funk. Daft Punk\'s magnum opus without a doubt.',
     likeCount: 78,
+    commentCount: 0,
   },
   {
     id: '6',
@@ -193,6 +186,7 @@ export const POPULAR_REVIEWS_DATA: PopularReview[] = [
     rating: 9,
     review: "The Less I Know The Better is just pure indie-pop joy but the whole album is a psychedelic journey worth taking.",
     likeCount: 54,
+    commentCount: 0,
   },
 ];
 

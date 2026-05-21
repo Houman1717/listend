@@ -13,8 +13,6 @@ import { supabase } from '@/lib/supabase';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type LoggedAlbum = {
