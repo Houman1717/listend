@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -53,14 +53,47 @@ export function CommentBubble({
   onReply: () => void;
   onUsernamePress?: (username: string) => void;
 }) {
+  const { user } = useAuth();
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const interactedRef = useRef(false);
+
+  useEffect(() => {
+    if (!comment.id) return;
+    let cancelled = false;
+    supabase
+      .from('likes')
+      .select('user_id')
+      .eq('target_type', 'comment')
+      .eq('target_id', comment.id)
+      .then(({ data }) => {
+        if (cancelled || interactedRef.current) return;
+        const rows = (data ?? []) as any[];
+        setLikeCount(rows.length);
+        if (user?.id) setLiked(rows.some(r => r.user_id === user.id));
+      });
+    return () => { cancelled = true; };
+  }, [comment.id, user?.id]);
 
   function handleLike() {
-    setLiked(prev => {
-      setLikeCount(c => prev ? c - 1 : c + 1);
-      return !prev;
-    });
+    if (!user) return;
+    interactedRef.current = true;
+    const wasLiked = liked;
+    setLiked(!wasLiked);
+    setLikeCount(c => wasLiked ? c - 1 : c + 1);
+    if (wasLiked) {
+      supabase.from('likes').delete()
+        .eq('user_id', user.id).eq('target_type', 'comment').eq('target_id', comment.id)
+        .then(({ error }) => {
+          if (error) { setLiked(true); setLikeCount(c => c + 1); }
+        });
+    } else {
+      supabase.from('likes').insert({
+        user_id: user.id, target_type: 'comment', target_id: comment.id, target_owner_id: comment.userId,
+      }).then(({ error }) => {
+        if (error) { setLiked(false); setLikeCount(c => Math.max(0, c - 1)); }
+      });
+    }
   }
 
   const avatarSize = large ? 32 : 22;

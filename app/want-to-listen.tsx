@@ -4,12 +4,13 @@ import {
   Text,
   Pressable,
   ScrollView,
+  TextInput,
   Alert,
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -75,6 +76,9 @@ export default function WantToListenScreen() {
   const [sortKey, setSortKey]     = useState<SortKey>('date_new');
   const [shuffled, setShuffled]   = useState<WantToListenAlbum[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [query, setQuery]         = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<import('react-native').TextInput>(null);
 
   useEffect(() => {
     if (!viewingOther) return;
@@ -124,9 +128,13 @@ export default function WantToListenScreen() {
   }, [sourceList.length, viewingOther]);
 
   const displayList = useMemo(() => {
-    if (shuffled) return shuffled;
-    return applySort(sourceList, sortKey);
-  }, [sourceList, sortKey, shuffled]);
+    const sorted = shuffled ?? applySort(sourceList, sortKey);
+    if (!query.trim()) return sorted;
+    const q = query.toLowerCase();
+    return sorted.filter(a =>
+      a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
+    );
+  }, [sourceList, sortKey, shuffled, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -165,15 +173,42 @@ export default function WantToListenScreen() {
         noun="albums"
         isDark={isDark}
         onPress={() => setSheetOpen(true)}
+        onSearchPress={() => {
+          const next = !searchOpen;
+          setSearchOpen(next);
+          if (!next) setQuery('');
+          else setTimeout(() => searchInputRef.current?.focus(), 50);
+        }}
+        searchActive={searchOpen}
       />
+      {searchOpen && (
+        <View style={[s.searchBar, { borderBottomColor: colors.border }]}>
+          <FontAwesome name="search" size={14} color={colors.subtext} />
+          <TextInput
+            ref={searchInputRef}
+            style={[s.searchInput, { color: colors.text }]}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search albums…"
+            placeholderTextColor={colors.subtext}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+      )}
       <ScrollView
         contentContainerStyle={s.gridWrap}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
         {displayList.length === 0 ? (
           <View style={s.empty}>
-            <Text style={[s.emptyTitle, { color: colors.text }]}>Nothing here yet</Text>
+            <Text style={[s.emptyTitle, { color: colors.text }]}>
+              {query.trim() ? `No albums matching "${query}"` : 'Nothing here yet'}
+            </Text>
             <Text style={[s.emptySubtext, { color: colors.subtext }]}>
-              {viewingOther
+              {query.trim() ? '' : viewingOther
                 ? 'This user has nothing saved yet.'
                 : 'Tap the bookmark icon on any album in Search to save it here.'}
             </Text>
@@ -221,4 +256,11 @@ const s = StyleSheet.create({
   empty:        { alignItems: 'center', marginTop: 80, paddingHorizontal: 32 },
   emptyTitle:   { fontSize: 17, fontWeight: '600', marginBottom: 8 },
   emptySubtext: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchInput: { flex: 1, fontSize: 15, height: 36 },
 });

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 
 type NotificationsContextType = {
   unreadCount: number;
+  unreadDMCount: number;
   markAllRead: () => Promise<void>;
   /** Mark all unread 'message' notifications from a specific actor as read. */
   markMessagesRead: (actorId: string) => Promise<void>;
@@ -12,6 +13,7 @@ type NotificationsContextType = {
 
 const NotificationsContext = createContext<NotificationsContextType>({
   unreadCount: 0,
+  unreadDMCount: 0,
   markAllRead: async () => {},
   markMessagesRead: async () => {},
   refresh: () => {},
@@ -20,20 +22,31 @@ const NotificationsContext = createContext<NotificationsContextType>({
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadDMCount, setUnreadDMCount] = useState(0);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   async function fetchUnreadCount(uid: string) {
-    const { count } = await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', uid)
-      .eq('read', false);
-    setUnreadCount(count ?? 0);
+    const [{ count: total }, { count: dms }] = await Promise.all([
+      supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', uid)
+        .eq('read', false),
+      supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', uid)
+        .eq('type', 'message')
+        .eq('read', false),
+    ]);
+    setUnreadCount(total ?? 0);
+    setUnreadDMCount(dms ?? 0);
   }
 
   useEffect(() => {
     if (!user) {
       setUnreadCount(0);
+      setUnreadDMCount(0);
       return;
     }
 
@@ -66,6 +79,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .eq('user_id', user.id)
       .eq('read', false);
     setUnreadCount(0);
+    setUnreadDMCount(0);
   }
 
   async function markMessagesRead(actorId: string) {
@@ -77,13 +91,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .eq('type', 'message')
       .eq('actor_id', actorId)
       .eq('read', false);
-    // Refresh the badge count after marking read
     fetchUnreadCount(user.id);
   }
 
   return (
     <NotificationsContext.Provider value={{
       unreadCount,
+      unreadDMCount,
       markAllRead,
       markMessagesRead,
       refresh: () => user && fetchUnreadCount(user.id),

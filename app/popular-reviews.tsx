@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -13,8 +13,11 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { POPULAR_REVIEWS_DATA, POPULAR_REVIEW_COMMENTS, PopularReview } from './(tabs)/index';
+import { PopularReview, fetchPopularReviewsThisWeek } from '@/lib/homeData';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { SpotifyAlbum } from '@/context/SpotifyService';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 
@@ -50,6 +53,7 @@ function ReviewRow({
   onUsernamePress,
   comments,
   onAddComment,
+  onCommentsToggle,
   isDark,
   colors,
 }: {
@@ -60,11 +64,13 @@ function ReviewRow({
   onUsernamePress?: () => void;
   comments: ReviewComment[];
   onAddComment: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
+  onCommentsToggle?: () => void;
   isDark: boolean;
   colors: any;
 }) {
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const displayCount = item.likeCount + (liked ? 1 : 0);
+  const displayCommentCount = comments.length > 0 ? comments.length : item.commentCount;
   const border = isDark ? '#2a1e14' : '#e8e8e8';
   const subtext = isDark ? '#7a5535' : '#a07850';
 
@@ -112,7 +118,7 @@ function ReviewRow({
         </Pressable>
         <View style={s.footerActions}>
           <Pressable
-            onPress={() => setCommentsExpanded(prev => !prev)}
+            onPress={() => { onCommentsToggle?.(); setCommentsExpanded(prev => !prev); }}
             hitSlop={8}
             style={s.actionBtn}>
             <FontAwesome
@@ -121,7 +127,7 @@ function ReviewRow({
               color={commentsExpanded ? '#D4A017' : subtext}
             />
             <Text style={[s.actionCount, { color: commentsExpanded ? '#D4A017' : subtext }]}>
-              {comments.length}
+              {displayCommentCount}
             </Text>
           </Pressable>
           <Pressable onPress={onLike} hitSlop={10} style={s.actionBtn}>
@@ -159,31 +165,69 @@ export default function PopularReviewsScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
+  const { user } = useAuth();
 
+  const [reviews,      setReviews]      = useState<PopularReview[]>([]);
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
-  const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(() => {
-    const m = new Map<string, ReviewComment[]>();
-    for (const c of POPULAR_REVIEW_COMMENTS) {
-      m.set(c.reviewId, [...(m.get(c.reviewId) ?? []), c]);
-    }
-    return m;
-  });
+  const [commentsMap,  setCommentsMap]  = useState<Map<string, ReviewComment[]>>(new Map());
+
+  useEffect(() => {
+    fetchPopularReviewsThisWeek().then(setReviews);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id || reviews.length === 0) return;
+    const ids = reviews.map(r => r.id);
+    supabase.from('likes').select('target_id')
+      .eq('target_type', 'review').eq('user_id', user.id).in('target_id', ids)
+      .then(({ data }) => {
+        setLikedReviews(new Set((data ?? []).map((r: any) => r.target_id as string)));
+      });
+  }, [reviews.length, user?.id]);
 
   function handleLike(id: string) {
+    if (!user) return;
+    const wasLiked = likedReviews.has(id);
     setLikedReviews(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+    if (wasLiked) {
+      supabase.from('likes').delete()
+        .eq('user_id', user.id).eq('target_type', 'review').eq('target_id', id)
+        .then(({ error }) => {
+          if (error) setLikedReviews(prev => { const n = new Set(prev); n.add(id); return n; });
+        });
+    } else {
+      supabase.from('likes').insert({
+        user_id: user.id, target_type: 'review', target_id: id, target_owner_id: id.split('_')[0],
+      }).then(({ error }) => {
+        if (error) setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
+      });
+    }
+  }
+
+  function ensureCommentsLoaded(reviewId: string) {
+    if (!commentsMap.has(reviewId)) {
+      fetchReviewComments(reviewId).then(comments => {
+        setCommentsMap(prev => {
+          const m = new Map(prev);
+          if (!m.has(reviewId)) m.set(reviewId, comments);
+          return m;
+        });
+      });
+    }
   }
 
   function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+    const tempId = `pr_local_${Date.now()}`;
     const newComment: ReviewComment = {
-      id:              `pr_local_${Date.now()}`,
+      id:              tempId,
       reviewId,
       parentCommentId: parentId ?? null,
       replyToUsername: replyToUsername ?? null,
-      userId:          'me',
+      userId:          user?.id ?? 'me',
       username:        commenterUsername ?? 'me',
       avatarUrl:       avatarUrl ?? null,
       body,
@@ -194,6 +238,18 @@ export default function PopularReviewsScreen() {
       m.set(reviewId, [...(m.get(reviewId) ?? []), newComment]);
       return m;
     });
+    if (user?.id) {
+      insertReviewComment(reviewId, user.id, body, parentId ?? null).then(realId => {
+        if (realId) {
+          setCommentsMap(prev => {
+            const m = new Map(prev);
+            const list = (m.get(reviewId) ?? []).map(c => c.id === tempId ? { ...c, id: realId } : c);
+            m.set(reviewId, list);
+            return m;
+          });
+        }
+      });
+    }
   }
 
   async function navigateToAlbum(title: string, artist: string, artworkUrl: string, year: string) {
@@ -217,7 +273,7 @@ export default function PopularReviewsScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FlatList
-        data={POPULAR_REVIEWS_DATA}
+        data={reviews}
         keyExtractor={item => item.id}
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={[s.list, { paddingBottom: 40 }]}
@@ -232,6 +288,7 @@ export default function PopularReviewsScreen() {
             onUsernamePress={() => navigateToProfile(item.username, router)}
             comments={commentsMap.get(item.id) ?? []}
             onAddComment={(body, parentId, u, rtu, av) => handleAddComment(item.id, body, parentId, u, rtu, av)}
+            onCommentsToggle={() => ensureCommentsLoaded(item.id)}
             isDark={isDark}
             colors={colors}
           />

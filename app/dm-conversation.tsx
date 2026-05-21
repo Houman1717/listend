@@ -7,12 +7,14 @@ import {
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Modal,
   SafeAreaView,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
@@ -64,8 +66,9 @@ type AlbumResult = {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function DMConversationScreen() {
-  const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
+  const colorScheme  = useColorScheme();
+  const colors       = Colors[colorScheme ?? 'light'];
+  const headerHeight = useHeaderHeight();
 
   const { userId: otherUserId } = useLocalSearchParams<{ userId: string }>();
   const { user }   = useAuth();
@@ -84,6 +87,9 @@ export default function DMConversationScreen() {
   const [albumQuery,         setAlbumQuery]         = useState('');
   const [albumResults,       setAlbumResults]       = useState<AlbumResult[]>([]);
   const [albumSearchLoading, setAlbumSearchLoading] = useState(false);
+
+  // Other user's reviews for album messages (keyed by album id, with title+artist fallback key)
+  const [otherUserReviews, setOtherUserReviews] = useState<Record<string, { rating?: number; review?: string }>>({});
 
   const listRef        = useRef<FlatList<Message>>(null);
   const pollTimer      = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -124,6 +130,20 @@ export default function DMConversationScreen() {
     markMessagesRead(otherUserId);
   }, [user?.id, otherUserId]);
 
+  // ── Pre-load the other user's reviews as soon as the screen opens ────────────
+  useEffect(() => {
+    if (!otherUserId) return;
+    fetchOtherUserReviews();
+  }, [otherUserId]);
+
+  // ── Scroll to bottom when keyboard opens so messages stay visible ─────────────
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', () => {
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    });
+    return () => sub.remove();
+  }, []);
+
   async function fetchMessages() {
     if (!user || !otherUserId) return;
 
@@ -140,8 +160,28 @@ export default function DMConversationScreen() {
       console.error('[DMConversation] fetch error:', error);
     } else {
       setMessages(data ?? []);
+      fetchOtherUserReviews();
     }
     setLoadingMsgs(false);
+  }
+
+  async function fetchOtherUserReviews() {
+    if (!otherUserId) return;
+
+    const { data } = await supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, rating, review')
+      .eq('user_id', otherUserId);
+
+    if (!data) return;
+
+    const map: Record<string, { rating?: number; review?: string }> = {};
+    data.forEach(row => {
+      if (row.spotify_id) map[row.spotify_id] = { rating: row.rating ?? undefined, review: row.review ?? undefined };
+      const fallbackKey = `${row.title?.toLowerCase()}::${row.artist?.toLowerCase()}`;
+      map[fallbackKey] = { rating: row.rating ?? undefined, review: row.review ?? undefined };
+    });
+    setOtherUserReviews(map);
   }
 
   async function notifyRecipient() {
@@ -195,7 +235,11 @@ export default function DMConversationScreen() {
     setAlbumQuery('');
     setAlbumResults([]);
 
-    const loggedEntry = loggedAlbums.find(a => a.id === album.id);
+    const loggedEntry = loggedAlbums.find(a => a.id === album.id)
+      ?? loggedAlbums.find(a =>
+          a.title.toLowerCase() === album.title.toLowerCase() &&
+          a.artist.toLowerCase() === album.artist.toLowerCase()
+        );
     const albumDataWithRating = {
       ...album,
       ...(loggedEntry && loggedEntry.rating > 0 ? { sender_rating: loggedEntry.rating } : {}),
@@ -222,8 +266,8 @@ export default function DMConversationScreen() {
   function handleAlbumQueryChange(text: string) {
     setAlbumQuery(text);
     if (albumDebounce.current) clearTimeout(albumDebounce.current);
-    if (!text.trim()) { setAlbumResults([]); return; }
-    albumDebounce.current = setTimeout(() => searchAlbums(text), 400);
+    if (!text.trim() || text.trim().length < 2) { setAlbumResults([]); return; }
+    albumDebounce.current = setTimeout(() => searchAlbums(text), 700);
   }
 
   async function searchAlbums(q: string) {
@@ -264,7 +308,7 @@ export default function DMConversationScreen() {
     <KeyboardAvoidingView
       style={[s.root, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={88}>
+      keyboardVerticalOffset={headerHeight}>
 
       {/* ── Message list ───────────────────────────────────────────────────── */}
       <FlatList
@@ -297,6 +341,23 @@ export default function DMConversationScreen() {
                   colors={colors}
                   senderRating={item.album_data.sender_rating}
                   senderReview={item.album_data.sender_review}
+                  myLoggedEntry={(() => {
+                    const ad = item.album_data!;
+                    const fallbackKey = `${ad.title.toLowerCase()}::${ad.artist.toLowerCase()}`;
+                    if (isMe) {
+                      // I'm the sender — show other user's review in recipient slot
+                      return otherUserReviews[ad.id] ?? otherUserReviews[fallbackKey];
+                    } else {
+                      // I'm the recipient — show my own review in recipient slot
+                      return (
+                        loggedAlbums.find(a => a.id === ad.id)
+                        ?? loggedAlbums.find(a =>
+                            a.title.toLowerCase() === ad.title.toLowerCase() &&
+                            a.artist.toLowerCase() === ad.artist.toLowerCase()
+                          )
+                      );
+                    }
+                  })()}
                   onPress={() =>
                     router.push({
                       pathname: '/album-detail',
@@ -365,7 +426,9 @@ export default function DMConversationScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setAlbumSheetVisible(false)}>
-        <View style={as.overlay}>
+        <KeyboardAvoidingView
+          style={as.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setAlbumSheetVisible(false)} />
           <SafeAreaView style={[as.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
             {/* Handle + header */}
@@ -429,7 +492,7 @@ export default function DMConversationScreen() {
               />
             )}
           </SafeAreaView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
     </KeyboardAvoidingView>
@@ -457,6 +520,7 @@ function AlbumCard({
   colors,
   senderRating,
   senderReview,
+  myLoggedEntry,
   onPress,
 }: {
   album: { id: string; title: string; artist: string; artworkUrl: string; year?: number };
@@ -464,10 +528,12 @@ function AlbumCard({
   colors: ColorsType;
   senderRating?: number;
   senderReview?: string;
+  myLoggedEntry?: { rating?: number; review?: string } | undefined;
   onPress: () => void;
 }) {
-  const recipientRating = 8;
-  const recipientReview = 'Really solid project, a few tracks felt like filler but the highs carry it.';
+  // myLoggedEntry = other user's data when isMe, own data when not isMe
+  const recipientRating = myLoggedEntry?.rating && myLoggedEntry.rating > 0 ? myLoggedEntry.rating : undefined;
+  const recipientReview = myLoggedEntry?.review ?? undefined;
 
   const senderLabel    = isMe ? 'You' : 'Them';
   const recipientLabel = isMe ? 'Them' : 'You';
@@ -524,12 +590,18 @@ function AlbumCard({
         <View style={b.reviewSection}>
           <View style={b.reviewSectionHeader}>
             <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{recipientLabel}</Text>
-            <View style={b.ratingBadge}>
-              <FontAwesome name="volume-up" size={8} color="#fff" />
-              <Text style={b.ratingBadgeText}>{recipientRating}</Text>
-            </View>
+            {recipientRating ? (
+              <View style={b.ratingBadge}>
+                <FontAwesome name="volume-up" size={8} color="#fff" />
+                <Text style={b.ratingBadgeText}>{recipientRating}</Text>
+              </View>
+            ) : null}
           </View>
-          <Text style={[b.reviewText, { color: colors.subtext }]} numberOfLines={2}>"{recipientReview}"</Text>
+          {recipientReview ? (
+            <Text style={[b.reviewText, { color: colors.subtext }]} numberOfLines={2}>"{recipientReview}"</Text>
+          ) : (
+            <Text style={[b.reviewPlaceholder, { color: colors.textMuted }]}>No review yet</Text>
+          )}
         </View>
 
       </Pressable>
@@ -669,7 +741,8 @@ const as = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '75%',
+    maxHeight: '80%',
+    flexShrink: 1,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   handle: {

@@ -2,6 +2,27 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
+async function ensureProfile(user: User) {
+  const meta = user.user_metadata ?? {};
+
+  const emailPrefix = (user.email ?? '').split('@')[0].replace(/[^a-z0-9_]/gi, '_').toLowerCase();
+  const suffix = user.id.replace(/-/g, '').slice(-12);
+  const fallbackUsername = emailPrefix ? `${emailPrefix}_${suffix}` : `user_${suffix}`;
+
+  const displayName: string =
+    meta.full_name ?? meta.name ?? meta.display_name ?? fallbackUsername;
+
+  await supabase.from('profiles').upsert(
+    {
+      id:           user.id,
+      username:     fallbackUsername,
+      display_name: displayName,
+      avatar_url:   meta.avatar_url ?? meta.picture ?? null,
+    },
+    { onConflict: 'id', ignoreDuplicates: true }
+  );
+}
+
 type AuthContextType = {
   session: Session | null;
   user: User | null;

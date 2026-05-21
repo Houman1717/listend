@@ -14,7 +14,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum, Playlist } from '@/context/AlbumsContext';
@@ -24,6 +24,18 @@ import { supabase } from '@/lib/supabase';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LikeState = { liked: boolean; count: number };
+
+type LikedEntry =
+  | { kind: 'featured'; likedAt: string; pl: any }
+  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
+
+type LikedEntry =
+  | { kind: 'featured'; likedAt: string; pl: any }
+  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
+
+type LikedEntry =
+  | { kind: 'featured'; likedAt: string; pl: any }
+  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
 
 type LikedEntry =
   | { kind: 'featured'; likedAt: string; pl: any }
@@ -334,6 +346,106 @@ async function buildLikedEntries(
   return { entries, artMap };
 }
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+
+// ─── Build a chronologically-sorted liked-playlist list for any user ──────────
+
+async function buildLikedEntries(
+  userId: string,
+): Promise<{ entries: LikedEntry[]; artMap: Map<string, string | undefined> }> {
+  const { data: likedRows } = await supabase
+    .from('likes')
+    .select('target_id, target_owner_id, created_at')
+    .eq('user_id', userId)
+    .eq('target_type', 'playlist')
+    .order('created_at', { ascending: false });
+
+  const rows: any[] = likedRows ?? [];
+  const featuredRows = rows.filter(r => (r.target_id as string).startsWith('featured:'));
+  const userRows     = rows.filter(r => !(r.target_id as string).startsWith('featured:'));
+
+  const entries: LikedEntry[] = [];
+
+  if (featuredRows.length > 0) {
+    try {
+      const resp = await fetch(`${API_URL}/api/featured-playlists`);
+      const all: any[] = await resp.json();
+      const likedAtByFeaturedId = new Map<string, string>(
+        featuredRows.map((r: any) => [r.target_id.replace('featured:', ''), r.created_at as string])
+      );
+      for (const pl of all) {
+        if (likedAtByFeaturedId.has(pl.id)) {
+          entries.push({ kind: 'featured', likedAt: likedAtByFeaturedId.get(pl.id)!, pl });
+        }
+      }
+    } catch {}
+  }
+
+  const artMap = new Map<string, string | undefined>();
+
+  if (userRows.length > 0) {
+    const playlistIds = userRows.map((r: any) => r.target_id as string);
+    const likedAtById = new Map<string, string>(
+      userRows.map((r: any) => [r.target_id as string, r.created_at as string])
+    );
+
+    const { data: pls } = await supabase
+      .from('playlists')
+      .select('id, name, description, created_at, user_id')
+      .in('id', playlistIds);
+
+    if (pls && pls.length > 0) {
+      const { data: pas } = await supabase
+        .from('playlist_albums')
+        .select('playlist_id, spotify_id, position')
+        .in('playlist_id', playlistIds)
+        .order('position', { ascending: true });
+
+      const allSpotifyIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id as string))];
+      if (allSpotifyIds.length > 0) {
+        const { data: uas } = await supabase
+          .from('user_albums')
+          .select('spotify_id, artwork_url')
+          .in('spotify_id', allSpotifyIds);
+        for (const a of (uas ?? []) as any[]) {
+          if (!artMap.has(a.spotify_id)) artMap.set(a.spotify_id, a.artwork_url ?? undefined);
+        }
+      }
+
+      const ownerIds = [...new Set(pls.map((p: any) => p.user_id as string))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', ownerIds);
+      const usernameByUserId = new Map<string, string>(
+        (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
+      );
+
+      for (const p of pls as any[]) {
+        const playlist: Playlist = {
+          id:          p.id,
+          name:        p.name,
+          description: p.description ?? undefined,
+          albumIds:    (pas ?? [])
+            .filter((a: any) => a.playlist_id === p.id)
+            .map((a: any) => a.spotify_id as string),
+          createdAt:   p.created_at,
+        };
+        entries.push({
+          kind:     'user',
+          likedAt:  likedAtById.get(p.id) ?? '',
+          playlist,
+          ownerId:  p.user_id,
+          username: usernameByUserId.get(p.user_id) ?? '',
+        });
+      }
+    }
+  }
+
+  entries.sort((a, b) => b.likedAt.localeCompare(a.likedAt));
+  return { entries, artMap };
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MyPlaylistsScreen() {
@@ -527,6 +639,18 @@ export default function MyPlaylistsScreen() {
       .eq('target_id', `featured:${id}`);
   }
 
+  // ── Unlike a featured playlist from the liked tab ─────────────────────────
+  async function handleUnlikeFeaturedPlaylist(id: string) {
+    if (!user) return;
+    setLikedFeaturedPlaylists(prev => prev.filter(p => p.id !== id));
+    await supabase
+      .from('likes')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('target_type', 'playlist')
+      .eq('target_id', `featured:${id}`);
+  }
+
   // ── Unlike a playlist from the liked tab (removes it from the list) ───────
   async function handleUnlikeLikedPlaylist(playlist: Playlist) {
     if (!user) return;
@@ -575,6 +699,12 @@ export default function MyPlaylistsScreen() {
 
   // ── New playlist modal ────────────────────────────────────────────────────
   const [showNewPlaylist, setShowNewPlaylist] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<import('react-native').TextInput>(null);
+  const [queryLiked, setQueryLiked] = useState('');
+  const [searchOpenLiked, setSearchOpenLiked] = useState(false);
+  const searchInputLikedRef = useRef<import('react-native').TextInput>(null);
 
   function handleCreate(name: string, desc: string) {
     createPlaylist(name, desc || undefined);
@@ -621,6 +751,32 @@ export default function MyPlaylistsScreen() {
             Liked Playlists
           </Text>
         </Pressable>
+        {activeTab === 'mine' && (
+          <Pressable
+            onPress={() => {
+              const next = !searchOpen;
+              setSearchOpen(next);
+              if (!next) setQuery('');
+              else setTimeout(() => searchInputRef.current?.focus(), 50);
+            }}
+            hitSlop={8}
+            style={[s.tab, s.searchTab, searchOpen && { backgroundColor: '#D4A017', borderRadius: 6 }]}>
+            <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : '#D4A017'} />
+          </Pressable>
+        )}
+        {activeTab === 'liked' && (
+          <Pressable
+            onPress={() => {
+              const next = !searchOpenLiked;
+              setSearchOpenLiked(next);
+              if (!next) setQueryLiked('');
+              else setTimeout(() => searchInputLikedRef.current?.focus(), 50);
+            }}
+            hitSlop={8}
+            style={[s.tab, s.searchTab, searchOpenLiked && { backgroundColor: '#D4A017', borderRadius: 6 }]}>
+            <FontAwesome name="search" size={13} color={searchOpenLiked ? '#fff' : '#D4A017'} />
+          </Pressable>
+        )}
       </View>
 
       {/* New Playlist button — own user, My Playlists tab only */}
@@ -633,91 +789,151 @@ export default function MyPlaylistsScreen() {
         </Pressable>
       )}
 
+      {/* Search bar — toggled by magnifying glass */}
+      {activeTab === 'mine' && searchOpen && (
+        <View style={[s.searchBar, { borderBottomColor: isDark ? '#2e2018' : '#e8e8e8' }]}>
+          <FontAwesome name="search" size={14} color={colors.subtext} />
+          <TextInput
+            ref={searchInputRef}
+            style={[s.searchInput, { color: colors.text }]}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search playlists…"
+            placeholderTextColor={colors.subtext}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+      )}
+
       {/* ── Own user's playlists tab ────────────────────────────────────── */}
       {activeTab === 'mine' && !viewingOther && (
-        <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
-          {playlists.length === 0 ? (
-            <View style={s.emptyWrap}>
-              <FontAwesome name="list" size={36} color={isDark ? '#3a2818' : '#ddd'} />
-              <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
-              <Text style={[s.emptySub, { color: colors.subtext }]}>
-                Create one to start organising your albums.
-              </Text>
-            </View>
-          ) : (
-            playlists.map((playlist) => (
-              <PlaylistCard
-                key={playlist.id}
-                playlist={playlist}
-                albumMap={ownAlbumMap}
-                onPress={() =>
-                  router.push({ pathname: '/playlist-detail', params: { id: playlist.id } })
-                }
-                isDark={isDark}
-                colors={colors}
-              />
-            ))
-          )}
+        <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {(() => {
+            const q = query.trim().toLowerCase();
+            const filtered = q ? playlists.filter(p => p.name.toLowerCase().includes(q)) : playlists;
+            return filtered.length === 0 ? (
+              <View style={s.emptyWrap}>
+                <FontAwesome name="list" size={36} color={isDark ? '#3a2818' : '#ddd'} />
+                <Text style={[s.emptyTitle, { color: colors.text }]}>
+                  {q ? `No playlists matching "${query}"` : 'No playlists yet'}
+                </Text>
+                {!q && <Text style={[s.emptySub, { color: colors.subtext }]}>Create one to start organising your albums.</Text>}
+              </View>
+            ) : (
+              <>
+                {filtered.map((playlist) => (
+                  <PlaylistCard
+                    key={playlist.id}
+                    playlist={playlist}
+                    albumMap={ownAlbumMap}
+                    onPress={() =>
+                      router.push({ pathname: '/playlist-detail', params: { id: playlist.id } })
+                    }
+                    isDark={isDark}
+                    colors={colors}
+                  />
+                ))}
+              </>
+            );
+          })()}
         </ScrollView>
       )}
 
       {/* ── Other user's playlists tab ──────────────────────────────────── */}
       {activeTab === 'mine' && !!viewingOther && (
-        <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
-          {otherPlaylists.length === 0 ? (
-            <View style={s.emptyWrap}>
-              <FontAwesome name="list" size={36} color={isDark ? '#3a2818' : '#ddd'} />
-              <Text style={[s.emptyTitle, { color: colors.text }]}>No playlists yet</Text>
-              <Text style={[s.emptySub, { color: colors.subtext }]}>
-                This user has no playlists.
-              </Text>
-            </View>
-          ) : (
-            otherPlaylists.map((playlist) => {
-              const likeState = playlistLikesMap.get(playlist.id) ?? { liked: false, count: 0 };
-              return (
-                <PlaylistCard
-                  key={playlist.id}
-                  playlist={playlist}
-                  albumMap={otherAlbumMap}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/playlist-detail',
-                      params: { id: playlist.id, userId: viewingOther },
-                    })
-                  }
-                  isDark={isDark}
-                  colors={colors}
-                  likeCount={likeState.count}
-                  isLiked={likeState.liked}
-                  onLike={() => handleTogglePlaylistLike(playlist)}
-                />
-              );
-            })
-          )}
+        <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {(() => {
+            const q = query.trim().toLowerCase();
+            const filtered = q ? otherPlaylists.filter(p => p.name.toLowerCase().includes(q)) : otherPlaylists;
+            return filtered.length === 0 ? (
+              <View style={s.emptyWrap}>
+                <FontAwesome name="list" size={36} color={isDark ? '#3a2818' : '#ddd'} />
+                <Text style={[s.emptyTitle, { color: colors.text }]}>
+                  {q ? `No playlists matching "${query}"` : 'No playlists yet'}
+                </Text>
+                {!q && <Text style={[s.emptySub, { color: colors.subtext }]}>This user has no playlists.</Text>}
+              </View>
+            ) : (
+              <>
+                {filtered.map((playlist) => {
+                  const likeState = playlistLikesMap.get(playlist.id) ?? { liked: false, count: 0 };
+                  return (
+                    <PlaylistCard
+                      key={playlist.id}
+                      playlist={playlist}
+                      albumMap={otherAlbumMap}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/playlist-detail',
+                          params: { id: playlist.id, userId: viewingOther },
+                        })
+                      }
+                      isDark={isDark}
+                      colors={colors}
+                      likeCount={likeState.count}
+                      isLiked={likeState.liked}
+                      onLike={() => handleTogglePlaylistLike(playlist)}
+                    />
+                  );
+                })}
+              </>
+            );
+          })()}
         </ScrollView>
       )}
 
       {/* ── Liked playlists tab (own + other user) ──────────────────────── */}
+      {activeTab === 'liked' && searchOpenLiked && (
+        <View style={[s.searchBar, { borderBottomColor: isDark ? '#2e2018' : '#e8e8e8' }]}>
+          <FontAwesome name="search" size={14} color={colors.subtext} />
+          <TextInput
+            ref={searchInputLikedRef}
+            style={[s.searchInput, { color: colors.text }]}
+            value={queryLiked}
+            onChangeText={setQueryLiked}
+            placeholder="Search liked playlists…"
+            placeholderTextColor={colors.subtext}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+      )}
       {activeTab === 'liked' && (
         (viewingOther ? otherLikedLoading : likedLoading) ? (
           <View style={s.likedLoadingWrap}>
             <ActivityIndicator color="#D4A017" size="large" />
           </View>
         ) : (
-          <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false}>
-            {(viewingOther ? otherLikedEntries : likedEntries).length === 0 ? (
+          <ScrollView contentContainerStyle={s.listWrap} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {(() => {
+              const q = queryLiked.trim().toLowerCase();
+              const allEntries = viewingOther ? otherLikedEntries : likedEntries;
+              const filteredEntries = q
+                ? allEntries.filter(e =>
+                    e.kind === 'featured'
+                      ? e.pl.name.toLowerCase().includes(q)
+                      : e.playlist.name.toLowerCase().includes(q)
+                  )
+                : allEntries;
+              return filteredEntries.length === 0 ? (
               <View style={s.emptyWrap}>
                 <FontAwesome name="heart-o" size={36} color={isDark ? '#3a2818' : '#ddd'} />
-                <Text style={[s.emptyTitle, { color: colors.text }]}>No liked playlists</Text>
-                <Text style={[s.emptySub, { color: colors.subtext }]}>
+                <Text style={[s.emptyTitle, { color: colors.text }]}>
+                  {q ? `No playlists matching "${queryLiked}"` : 'No liked playlists'}
+                </Text>
+                {!q && <Text style={[s.emptySub, { color: colors.subtext }]}>
                   {viewingOther
                     ? 'This user has no liked playlists.'
                     : 'Like playlists from other users or by Listend playlists to find them here.'}
-                </Text>
+                </Text>}
               </View>
             ) : (
-              (viewingOther ? otherLikedEntries : likedEntries).map(entry =>
+              filteredEntries.map(entry =>
                 entry.kind === 'featured' ? (
                   <Pressable
                     key={`featured-${entry.pl.id}`}
@@ -765,7 +981,8 @@ export default function MyPlaylistsScreen() {
                   />
                 )
               )
-            )}
+            );
+            })()}
           </ScrollView>
         )
       )}
@@ -803,6 +1020,11 @@ const s = StyleSheet.create({
   },
   tabActive: {
     borderBottomColor: '#D4A017',
+  },
+  searchTab: {
+    flex: 0,
+    paddingHorizontal: 14,
+    borderBottomColor: 'transparent',
   },
   tabText: {
     fontSize: 14,
@@ -852,6 +1074,13 @@ const s = StyleSheet.create({
   emptyWrap:  { alignItems: 'center', paddingTop: 80, gap: 10 },
   emptyTitle: { fontSize: 17, fontWeight: '600', marginTop: 8 },
   emptySub:   { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchInput: { flex: 1, fontSize: 15, height: 36 },
 
   // ── New Playlist modal ────────────────────────────────────────────────────────
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },

@@ -4,17 +4,24 @@ import {
   Text,
   Pressable,
   ScrollView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  KeyboardAvoidingView,
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useMemo, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTH_NAMES = [
@@ -57,6 +64,217 @@ const rb = StyleSheet.create({
 
 const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a','#1a5a5a','#4a2818'];
 
+// ─── Volume badge ─────────────────────────────────────────────────────────────
+
+function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <FontAwesome name="volume-up" size={9} color="#D4A017" />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+        {Array.from({ length: 10 }, (_, i) => {
+          const h = Math.round(3 + i * 1);
+          return (
+            <View
+              key={i}
+              style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }}
+            />
+          );
+        })}
+      </View>
+      <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
+    </View>
+  );
+}
+
+// ─── Review modal (matches my-listend AlbumReviewModal) ───────────────────────
+
+function AlbumReviewModal({
+  album,
+  username,
+  isDark,
+  colors,
+  onClose,
+  onAlbumPress,
+  onUsernamePress,
+}: {
+  album: LoggedAlbum;
+  username: string;
+  isDark: boolean;
+  colors: any;
+  onClose: () => void;
+  onAlbumPress: () => void;
+  onUsernamePress?: () => void;
+}) {
+  const [liked,            setLiked]            = useState(false);
+  const [likeCount,        setLikeCount]        = useState(0);
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
+  const [localComments,    setLocalComments]    = useState<ReviewComment[]>([]);
+
+  const border  = isDark ? '#2a1e14' : '#e5e5e5';
+  const dateStr = album.dateLogged
+    ? new Date(album.dateLogged).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
+
+  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+    const c: ReviewComment = {
+      id:              `sc_${Date.now()}`,
+      reviewId:        album.id,
+      userId:          'me',
+      username:        commenterUsername ?? username,
+      avatarUrl:       avatarUrl ?? null,
+      body,
+      parentCommentId: parentId ?? undefined,
+      replyToUsername: replyToUsername ?? null,
+      createdAt:       'just now',
+    };
+    setLocalComments(prev => [...prev, c]);
+  }
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1 }}>
+
+          {/* Header */}
+          <View style={[rm.header, { borderBottomColor: border }]}>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
+            </Pressable>
+            <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={[rm.body, { paddingBottom: 40 }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+
+            {/* Album row */}
+            <Pressable
+              onPress={onAlbumPress}
+              style={({ pressed }) => [rm.albumRow, { opacity: pressed ? 0.7 : 1 }]}>
+              {album.artworkUrl ? (
+                <ExpoImage source={{ uri: album.artworkUrl }} style={rm.art} contentFit="cover" cachePolicy="disk" />
+              ) : (
+                <View style={[rm.art, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
+                  <FontAwesome name="music" size={20} color="rgba(255,255,255,0.4)" />
+                </View>
+              )}
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={[rm.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>{album.title}</Text>
+                <Text style={[rm.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                  {album.artist}{album.year > 0 ? ` · ${album.year}` : ''}
+                </Text>
+                {(album.lastRating ?? album.rating) > 0 && (
+                  <View style={rm.ratingRow}>
+                    <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} />
+                  </View>
+                )}
+                {album.isRelistened && (
+                  <FontAwesome name="repeat" size={9} color="#D4A017" style={{ marginTop: 2 }} />
+                )}
+              </View>
+            </Pressable>
+
+            {/* Author + date */}
+            <Pressable style={rm.authorRow} onPress={onUsernamePress} disabled={!onUsernamePress}>
+              <View style={[rm.avatar, { backgroundColor: avatarColor(username || '?') }]}>
+                <Text style={rm.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
+              </View>
+              <View style={{ gap: 1 }}>
+                <Text style={rm.username}>@{username || '…'}</Text>
+                {dateStr ? (
+                  <Text style={[rm.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                    {(album as any).isReListenEvent ? 'Re-listend' : 'Listend'} {dateStr}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+
+            {/* Review text — each entry shows its own review for that specific listen */}
+            {album.review ? (
+              <Text style={[rm.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                "{album.review}"
+              </Text>
+            ) : (
+              <Text style={[rm.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
+                No written review.
+              </Text>
+            )}
+
+            {/* Like + comment toggle */}
+            <View style={[rm.likeCommentRow, { borderColor: border }]}>
+              <Pressable onPress={() => { setLiked(p => !p); setLikeCount(p => liked ? p - 1 : p + 1); }} hitSlop={8} style={rm.likeBtn}>
+                <FontAwesome
+                  name={liked ? 'heart' : 'heart-o'}
+                  size={15}
+                  color={liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35')}
+                />
+                <Text style={[rm.likeCount, { color: liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35') }]}>
+                  {likeCount}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setCommentsExpanded(p => !p)}
+                hitSlop={8}
+                style={[rm.commentsToggle, { borderColor: border, flex: 1, marginBottom: 0 }]}>
+                <FontAwesome
+                  name="comment-o"
+                  size={13}
+                  color={commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060')}
+                />
+                <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060') }]}>
+                  {localComments.length === 0 ? 'No comments yet' : `${localComments.length} comment${localComments.length !== 1 ? 's' : ''}`}
+                </Text>
+                <FontAwesome
+                  name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={10}
+                  color={isDark ? '#6B4C35' : '#A08060'}
+                  style={{ marginLeft: 'auto' }}
+                />
+              </Pressable>
+            </View>
+
+            {commentsExpanded && (
+              <CommentsSection
+                comments={localComments}
+                isDark={isDark}
+                colors={colors}
+                onAddComment={handleAddComment}
+              />
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const rm = StyleSheet.create({
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTitle: { fontSize: 16, fontWeight: '700' },
+  body:        { paddingHorizontal: 20, paddingTop: 20, gap: 20 },
+  albumRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  art:         { width: 72, height: 72, borderRadius: 8, flexShrink: 0 },
+  albumTitle:  { fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
+  albumArtist: { fontSize: 13 },
+  ratingRow:   { marginTop: 2 },
+  authorRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar:      { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  avatarLetter:{ color: '#fff', fontSize: 14, fontWeight: '700' },
+  username:    { color: '#D4A017', fontSize: 13, fontWeight: '600' },
+  listenedDate:{ fontSize: 12 },
+  reviewText:  { fontSize: 15, lineHeight: 22, fontStyle: 'italic' },
+  likeCommentRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
+  likeBtn:          { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 4 },
+  likeCount:        { fontSize: 13, fontWeight: '600' },
+  commentsToggle:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10 },
+  commentsToggleText: { fontSize: 12, flex: 1 },
+});
+
 export default function SessionsScreen() {
   const colorScheme = useColorScheme();
   const colors      = Colors[colorScheme ?? 'light'];
@@ -70,13 +288,15 @@ export default function SessionsScreen() {
 
   const viewingOther = paramUserId || null;
   const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
+  const [ownReListens, setOwnReListens] = useState<LoggedAlbum[]>([]);
 
   useEffect(() => {
     if (!viewingOther) return;
     supabase
       .from('user_albums')
-      .select('spotify_id, title, artist, artwork_url, year, rating, listened_at')
+      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
       .eq('user_id', viewingOther)
+      .not('listened_at', 'is', null)
       .order('listened_at', { ascending: false })
       .then(({ data }) => {
         if (!data) return;
@@ -86,6 +306,7 @@ export default function SessionsScreen() {
           artist:     a.artist     ?? '',
           year:       a.year       ?? 0,
           rating:     a.rating     ?? 0,
+          review:     a.review     ?? undefined,
           dateLogged: a.listened_at ?? new Date().toISOString(),
           artworkUrl: a.artwork_url ?? undefined,
           coverColor: COVER_COLORS[i % COVER_COLORS.length],
@@ -93,7 +314,86 @@ export default function SessionsScreen() {
       });
   }, [viewingOther]);
 
-  const sourceAlbums = viewingOther ? otherAlbums : loggedAlbums;
+  useFocusEffect(useCallback(() => {
+    if (viewingOther || !user?.id) return;
+    supabase
+      .from('re_listens')
+      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+      .eq('user_id', user.id)
+      .order('listened_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        // Deduplicate by id+dateLogged in case DB has duplicate rows
+        const seen = new Set<string>();
+        const deduped = data.filter(a => {
+          const key = `${a.spotify_id}_${a.listened_at}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setOwnReListens(deduped.map((a, i) => ({
+          id:              a.spotify_id,
+          title:           a.title      ?? '',
+          artist:          a.artist     ?? '',
+          year:            a.year       ?? 0,
+          rating:          a.rating     ?? 0,
+          review:          a.review     ?? undefined,
+          dateLogged:      a.listened_at ?? new Date().toISOString(),
+          artworkUrl:      a.artwork_url ?? undefined,
+          coverColor:      COVER_COLORS[i % COVER_COLORS.length],
+          isRelistened:    true,
+          isReListenEvent: true,
+        } as LoggedAlbum & { isReListenEvent: boolean })));
+      });
+  }, [viewingOther, user?.id]));
+
+  // When context's loggedAlbums gets an optimistic re-listen edit, mirror it into
+  // ownReListens so sessions shows the updated rating without waiting for a DB refetch.
+  useEffect(() => {
+    if (viewingOther) return;
+    setOwnReListens(prev => {
+      if (prev.length === 0) return prev;
+      return prev.map(r => {
+        const ctx = loggedAlbums.find(a => a.id === r.id);
+        if (!ctx?.isRelistened) return r;
+        // Only update the most-recent re-listen entry for this album
+        const latestDate = prev
+          .filter(x => x.id === r.id)
+          .reduce<string>((max, x) => (x.dateLogged > max ? x.dateLogged : max), '');
+        if (r.dateLogged !== latestDate) return r;
+        return {
+          ...r,
+          rating: ctx.lastRating  ?? r.rating,
+          review: ctx.lastReview  !== undefined ? ctx.lastReview : r.review,
+        };
+      });
+    });
+  }, [loggedAlbums, viewingOther]);
+
+  const sourceAlbums = viewingOther
+    ? otherAlbums
+    : [...loggedAlbums, ...ownReListens].sort(
+        (a, b) => new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime()
+      );
+
+  // Review modal state
+  const [selectedAlbum,   setSelectedAlbum]   = useState<LoggedAlbum | null>(null);
+  const [profileUsername, setProfileUsername] = useState('');
+
+  useEffect(() => {
+    const uid = viewingOther || user?.id;
+    if (!uid || profileUsername) return;
+    supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', uid)
+      .single()
+      .then(({ data }) => { if (data?.username) setProfileUsername(data.username); });
+  }, [viewingOther, user?.id]);
+
+  function handleAlbumPress(album: LoggedAlbum) {
+    setSelectedAlbum(album);
+  }
 
   // Calendar navigation state — start at current month
   const now = new Date();
@@ -118,6 +418,7 @@ export default function SessionsScreen() {
   const monthlyCount = useMemo(() => {
     let n = 0;
     for (const album of sourceAlbums) {
+      if ((album as any).isReListenEvent) continue;
       const d = parseLogged(album.dateLogged);
       if (d && d.getFullYear() === viewYear && d.getMonth() === viewMonth) n++;
     }
@@ -126,6 +427,7 @@ export default function SessionsScreen() {
 
   const yearlyCount = useMemo(() => {
     return sourceAlbums.filter(a => {
+      if ((a as any).isReListenEvent) return false;
       const d = parseLogged(a.dateLogged);
       return d && d.getFullYear() === viewYear;
     }).length;
@@ -163,6 +465,7 @@ export default function SessionsScreen() {
   const selectedAlbums = selectedKey ? (albumsByDate.get(selectedKey) ?? []) : [];
 
   return (
+    <>
     <ScrollView
       style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.content}
@@ -240,11 +543,11 @@ export default function SessionsScreen() {
             contentContainerStyle={s.monthRow}>
             {monthlyAlbums.map(album => (
               <Pressable
-                key={album.id}
+                key={`${album.id}_${album.dateLogged}`}
                 style={({ pressed }) => [s.monthCard, { opacity: pressed ? 0.7 : 1 }]}
-                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}>
+                onPress={() => handleAlbumPress(album)}>
                 {album.artworkUrl ? (
-                  <ExpoImage source={{ uri: album.artworkUrl }} style={s.monthArt} 
+                  <ExpoImage source={{ uri: album.artworkUrl }} style={s.monthArt}
             contentFit="cover" cachePolicy="disk"
           />
                 ) : (
@@ -254,6 +557,13 @@ export default function SessionsScreen() {
                 )}
                 <Text style={[s.monthCardTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
                 <Text style={[s.monthCardArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
+                {(album.rating > 0 || album.isRelistened) && (
+                  <View style={{ marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    {album.rating > 0 && <VolumeBadge rating={album.rating} isDark={isDark} />}
+                    {!!album.review && <FontAwesome name="quote-left" size={8} color="#D4A017" />}
+                    {album.isRelistened && <FontAwesome name="repeat" size={8} color="#D4A017" />}
+                  </View>
+                )}
               </Pressable>
             ))}
           </ScrollView>
@@ -274,11 +584,11 @@ export default function SessionsScreen() {
           ) : (
             selectedAlbums.map(album => (
               <Pressable
-                key={album.id}
+                key={`${album.id}_${album.dateLogged}`}
                 style={({ pressed }) => [s.albumRow, { borderTopColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
-                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}>
+                onPress={() => handleAlbumPress(album)}>
                 {album.artworkUrl ? (
-                  <ExpoImage source={{ uri: album.artworkUrl }} style={s.albumArt} 
+                  <ExpoImage source={{ uri: album.artworkUrl }} style={s.albumArt}
             contentFit="cover" cachePolicy="disk"
           />
                 ) : (
@@ -290,7 +600,13 @@ export default function SessionsScreen() {
                   <Text style={[s.albumTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
                   <Text style={[s.albumArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
                 </View>
-                <RatingPip rating={album.rating} />
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  {album.rating > 0 && <VolumeBadge rating={album.rating} isDark={isDark} />}
+                  <View style={{ flexDirection: 'row', gap: 5 }}>
+                    {!!album.review && <FontAwesome name="quote-left" size={10} color="#D4A017" />}
+                    {album.isRelistened && <FontAwesome name="repeat" size={10} color="#D4A017" />}
+                  </View>
+                </View>
               </Pressable>
             ))
           )}
@@ -311,6 +627,27 @@ export default function SessionsScreen() {
       </View>
 
     </ScrollView>
+
+      {/* ── Review modal ─────────────────────────────────────────────────────── */}
+      {selectedAlbum && (
+        <AlbumReviewModal
+          album={selectedAlbum}
+          username={profileUsername}
+          isDark={isDark}
+          colors={colors}
+          onClose={() => setSelectedAlbum(null)}
+          onAlbumPress={() => {
+            const a = selectedAlbum;
+            setSelectedAlbum(null);
+            navigateToAlbum(router, a);
+          }}
+          onUsernamePress={viewingOther ? () => {
+            setSelectedAlbum(null);
+            router.push({ pathname: '/user-profile', params: { userId: viewingOther } });
+          } : undefined}
+        />
+      )}
+    </>
   );
 }
 

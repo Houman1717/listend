@@ -82,7 +82,24 @@ export default function DMsScreen() {
       return;
     }
 
-    const partnerIds = Array.from(convMap.keys());
+    // Filter out blocked partners (both directions)
+    const [blockedByMe, blockedByThem] = await Promise.all([
+      supabase.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
+      supabase.from('blocked_users').select('blocker_id').eq('blocked_id', user.id),
+    ]);
+    const blockedIds = new Set<string>([
+      ...(blockedByMe.data ?? []).map((r: any) => r.blocked_id as string),
+      ...(blockedByThem.data ?? []).map((r: any) => r.blocker_id as string),
+    ]);
+
+    const partnerIds = Array.from(convMap.keys()).filter(id => !blockedIds.has(id));
+
+    if (partnerIds.length === 0) {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
+
     const { data: profiles, error: profErr } = await supabase
       .from('profiles')
       .select('id, display_name, username, avatar_url')

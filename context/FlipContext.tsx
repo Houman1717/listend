@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
+import { useAlbums } from '@/context/AlbumsContext';
 import { FLIP_POOL } from '@/constants/FlipPool';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ type FlipContextType = {
   currentFlip: FlippedRecord | null; // most recent pending record
   poolExhausted: boolean;
   isLoaded: boolean;
+  libraryLoggedIds: Set<string>; // pool IDs already in the user's library
   flip: () => void;
   markLogged: (id: string) => void;
   markDidntListen: (id: string) => void;
@@ -42,6 +44,7 @@ const FlipContext = createContext<FlipContextType | null>(null);
 
 export function FlipProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { loggedAlbums } = useAlbums();
 
   const [history, setHistory]           = useState<FlippedRecord[]>([]);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
@@ -85,20 +88,35 @@ export function FlipProvider({ children }: { children: ReactNode }) {
   // The most recent flip that is still unresolved
   const currentFlip = history.find(r => r.status === 'pending') ?? null;
 
-  // IDs excluded from future flips: pending or logged (not didnt_listen — those return to pool)
-  const excludedIds = new Set(
+  // IDs excluded from future flips: pending or logged via flip history
+  const excludedByHistory = useMemo(() => new Set(
     history.filter(r => r.status === 'pending' || r.status === 'logged').map(r => r.id)
-  );
+  ), [history]);
 
-  const poolExhausted = FLIP_POOL.filter(a => !excludedIds.has(a.id)).length === 0;
+  // Pool IDs that match albums already in the user's Listend library (by title)
+  const libraryLoggedIds = useMemo(() => {
+    const loggedTitles = new Set(loggedAlbums.map(a => a.title.toLowerCase().trim()));
+    const ids = new Set<string>();
+    for (const a of FLIP_POOL) {
+      if (loggedTitles.has(a.title.toLowerCase().trim())) ids.add(a.id);
+    }
+    return ids;
+  }, [loggedAlbums]);
+
+  const poolExhausted = FLIP_POOL.filter(
+    a => !excludedByHistory.has(a.id) && !libraryLoggedIds.has(a.id)
+  ).length === 0;
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
   function flip() {
-    const available = FLIP_POOL.filter(a => !excludedIds.has(a.id));
+    const available = FLIP_POOL.filter(
+      a => !excludedByHistory.has(a.id) && !libraryLoggedIds.has(a.id)
+    );
     if (available.length === 0) return;
 
     const album = available[Math.floor(Math.random() * available.length)];
+    const now = Date.now();
     const record: FlippedRecord = {
       id:          album.id,
       title:       album.title,
@@ -106,12 +124,12 @@ export function FlipProvider({ children }: { children: ReactNode }) {
       year:        album.year,
       coverColor:  album.coverColor,
       genre:       album.genre,
-      flippedAt:   Date.now(),
+      flippedAt:   now,
       status:      'pending',
     };
 
     setHistory(prev => [record, ...prev]);
-    setCooldownUntil(Date.now() + COOLDOWN_MS);
+    setCooldownUntil(now + COOLDOWN_MS);
   }
 
   function markLogged(id: string) {
@@ -121,18 +139,15 @@ export function FlipProvider({ children }: { children: ReactNode }) {
   }
 
   function markDidntListen(id: string) {
-    // Status update only — cooldown stays active until it naturally expires
     setHistory(prev =>
       prev.map(r => r.id === id && r.status === 'pending' ? { ...r, status: 'didnt_listen' } : r)
     );
-    // Clear cooldown so the user can flip again immediately
-    setCooldownUntil(null);
   }
 
   return (
     <FlipContext.Provider value={{
       history, cooldownUntil, currentFlip, poolExhausted, isLoaded,
-      flip, markLogged, markDidntListen,
+      libraryLoggedIds, flip, markLogged, markDidntListen,
     }}>
       {children}
     </FlipContext.Provider>

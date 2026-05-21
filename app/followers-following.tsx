@@ -10,6 +10,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 
@@ -33,6 +34,7 @@ export default function FollowersFollowingScreen() {
   const { userId, type } = useLocalSearchParams<{ userId: string; type: ListType }>();
   const navigation = useNavigation();
   const router     = useRouter();
+  const { user: currentUser } = useAuth();
 
   const [users,   setUsers]   = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,17 @@ export default function FollowersFollowingScreen() {
     async function load() {
       setLoading(true);
 
+      // Fetch blocked IDs (both directions) to filter from list
+      const blockedIds = new Set<string>();
+      if (currentUser?.id) {
+        const [blockedByMe, blockedByThem] = await Promise.all([
+          supabase.from('blocked_users').select('blocked_id').eq('blocker_id', currentUser.id),
+          supabase.from('blocked_users').select('blocker_id').eq('blocked_id', currentUser.id),
+        ]);
+        (blockedByMe.data ?? []).forEach((r: any) => blockedIds.add(r.blocked_id));
+        (blockedByThem.data ?? []).forEach((r: any) => blockedIds.add(r.blocker_id));
+      }
+
       if (type === 'followers') {
         const { data, error } = await supabase
           .from('follows')
@@ -56,10 +69,11 @@ export default function FollowersFollowingScreen() {
         if (error) {
           console.error('[FollowersFollowing] followers query error:', error);
         } else {
+          const seen = new Set<string>();
           setUsers(
             (data ?? [])
               .map((row: any) => row.profile)
-              .filter(Boolean) as UserRow[]
+              .filter((p: any) => p && !blockedIds.has(p.id) && !seen.has(p.id) && seen.add(p.id)) as UserRow[]
           );
         }
       } else {
@@ -71,10 +85,11 @@ export default function FollowersFollowingScreen() {
         if (error) {
           console.error('[FollowersFollowing] following query error:', error);
         } else {
+          const seen = new Set<string>();
           setUsers(
             (data ?? [])
               .map((row: any) => row.profile)
-              .filter(Boolean) as UserRow[]
+              .filter((p: any) => p && !blockedIds.has(p.id) && !seen.has(p.id) && seen.add(p.id)) as UserRow[]
           );
         }
       }
@@ -111,9 +126,13 @@ export default function FollowersFollowingScreen() {
         return (
           <Pressable
             style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() =>
-              router.push({ pathname: '/user-profile', params: { userId: item.id } })
-            }>
+            onPress={() => {
+              if (item.id === currentUser?.id) {
+                router.push('/(tabs)/listend' as any);
+              } else {
+                router.push({ pathname: '/user-profile', params: { userId: item.id } });
+              }
+            }}>
             {item.avatar_url ? (
               <ExpoImage source={{ uri: item.avatar_url }} style={s.avatar} 
             contentFit="cover" cachePolicy="disk"

@@ -134,10 +134,8 @@ export default function EditProfileScreen() {
   const [displayName, setDisplayName] = useState('');
   const [username,    setUsername]    = useState('');
   const [bio,         setBio]         = useState('');
-  const [website,     setWebsite]     = useState('');
-  const [instagram,   setInstagram]   = useState('');
-  const [tiktok,      setTiktok]      = useState('');
-  const [twitter,     setTwitter]     = useState('');
+
+
 
   const [avatarUri,    setAvatarUri]    = useState<string | null>(null);
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
@@ -151,7 +149,7 @@ export default function EditProfileScreen() {
     if (!user) return;
     supabase
       .from('profiles')
-      .select('display_name, username, bio, website_url, instagram_url, tiktok_url, twitter_url, avatar_url')
+      .select('display_name, username, bio, avatar_url')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -159,10 +157,8 @@ export default function EditProfileScreen() {
           setDisplayName(data.display_name  ?? '');
           setUsername(   data.username      ?? '');
           setBio(        data.bio           ?? '');
-          setWebsite(    data.website_url   ?? '');
-          setInstagram(  data.instagram_url ?? '');
-          setTiktok(     data.tiktok_url    ?? '');
-          setTwitter(    data.twitter_url   ?? '');
+
+
           setAvatarUri(  data.avatar_url    ?? null);
         }
         setLoading(false);
@@ -200,10 +196,8 @@ export default function EditProfileScreen() {
             display_name:    displayName.trim(),
             username:        username.trim(),
             bio:             bio.trim(),
-            website_url:     website.trim(),
-            instagram_url:   instagram.trim(),
-            tiktok_url:      tiktok.trim(),
-            twitter_url:     twitter.trim(),
+
+
             avatar_url:      finalAvatarUrl,
           },
           { onConflict: 'id' },
@@ -224,7 +218,7 @@ export default function EditProfileScreen() {
     } finally {
       setSaving(false);
     }
-  }, [user, displayName, username, bio, website, instagram, tiktok, twitter, avatarUri, avatarBase64]);
+  }, [user, displayName, username, bio, avatarUri, avatarBase64]);
 
   // ── Inject Save button into header ───────────────────────────────────────
   useEffect(() => {
@@ -355,33 +349,7 @@ export default function EditProfileScreen() {
                 textColor={text}
                 iconColor={subtext}
               />
-              <View style={[s.linkSep, { backgroundColor: border }]} />
-              <LinkInput
-                icon="instagram"
-                placeholder="Instagram URL"
-                value={instagram}
-                onChangeText={setInstagram}
-                textColor={text}
-                iconColor={subtext}
-              />
-              <View style={[s.linkSep, { backgroundColor: border }]} />
-              <LinkInput
-                icon="music"
-                placeholder="TikTok URL"
-                value={tiktok}
-                onChangeText={setTiktok}
-                textColor={text}
-                iconColor={subtext}
-              />
-              <View style={[s.linkSep, { backgroundColor: border }]} />
-              <LinkInput
-                icon="twitter"
-                placeholder="Twitter / X URL"
-                value={twitter}
-                onChangeText={setTwitter}
-                textColor={text}
-                iconColor={subtext}
-              />
+
             </View>
 
           </View>

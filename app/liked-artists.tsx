@@ -4,12 +4,13 @@ import {
   Text,
   Pressable,
   FlatList,
+  TextInput,
   ActivityIndicator,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLikedArtists, LikedArtist } from '@/context/LikedArtistsContext';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -50,7 +51,14 @@ export default function LikedArtistsScreen() {
       });
   }, [userId]);
 
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<import('react-native').TextInput>(null);
+
   const artists = userId ? otherArtists : ownLikedArtists;
+  const filtered = query.trim()
+    ? artists.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
+    : artists;
 
   function renderItem({ item }: { item: LikedArtist }) {
     return (
@@ -92,19 +100,59 @@ export default function LikedArtistsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
-      {artists.length === 0 ? (
+      {/* Count row with search toggle */}
+      {artists.length > 0 && (
+        <View style={[s.countRow, { borderBottomColor: colors.border }]}>
+          <Text style={[s.countText, { color: colors.subtext }]}>{artists.length} artists</Text>
+          <Pressable
+            onPress={() => {
+              const next = !searchOpen;
+              setSearchOpen(next);
+              if (!next) setQuery('');
+              else setTimeout(() => searchInputRef.current?.focus(), 50);
+            }}
+            hitSlop={10}
+            style={[s.searchToggle, searchOpen && { backgroundColor: '#D4A017' }]}>
+            <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : '#D4A017'} />
+          </Pressable>
+        </View>
+      )}
+      {artists.length > 0 && searchOpen && (
+        <View style={[s.searchBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <FontAwesome name="search" size={14} color={colors.subtext} />
+          <TextInput
+            ref={searchInputRef}
+            style={[s.searchInput, { color: colors.text }]}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search artists…"
+            placeholderTextColor={colors.subtext}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+      )}
+
+      {filtered.length === 0 ? (
         <View style={s.emptyWrap}>
           <Text style={[s.emptyText, { color: colors.subtext }]}>
-            {userId ? 'This user has no liked artists yet.' : 'No liked artists yet. Tap ❤️ on any artist page to save them here.'}
+            {query.trim()
+              ? `No artists matching "${query}"`
+              : userId
+                ? 'This user has no liked artists yet.'
+                : 'No liked artists yet. Tap ❤️ on any artist page to save them here.'}
           </Text>
         </View>
       ) : (
         <FlatList
-          data={artists}
+          data={filtered}
           keyExtractor={item => item.id}
           renderItem={renderItem}
           contentContainerStyle={s.list}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         />
       )}
     </View>
@@ -114,6 +162,30 @@ export default function LikedArtistsScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   list: { paddingVertical: 8 },
+
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  countText: { fontSize: 13, fontWeight: '600' },
+  searchToggle: {
+    width: 28, height: 28, borderRadius: 6,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchInput: { flex: 1, fontSize: 15, height: 36 },
 
   row: {
     flexDirection: 'row',

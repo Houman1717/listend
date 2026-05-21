@@ -33,6 +33,7 @@ type NotificationItem = {
   actorName: string;
   actorUsername: string | null;
   actorAvatarUrl: string | null;
+  targetId: string | null;
 };
 
 // ─── Row ──────────────────────────────────────────────────────────────────────
@@ -110,7 +111,7 @@ export default function NotificationsScreen() {
     // Step 1 — fetch notification rows (no join)
     const { data: rows, error } = await supabase
       .from('notifications')
-      .select('id, type, read, created_at, actor_id')
+      .select('id, type, read, created_at, actor_id, target_id')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -148,6 +149,7 @@ export default function NotificationsScreen() {
           actorName:      prof?.display_name || prof?.username          || 'User',
           actorUsername:  prof?.username                                ?? null,
           actorAvatarUrl: prof?.avatar_url                              ?? null,
+          targetId:       row.target_id                                 ?? null,
         };
       }),
     );
@@ -177,7 +179,7 @@ export default function NotificationsScreen() {
   return (
     <FlatList
       data={items}
-      keyExtractor={item => item.id}
+      keyExtractor={(item, index) => `${item.id}-${index}`}
       style={n.container}
       contentContainerStyle={n.list}
       showsVerticalScrollIndicator={false}
@@ -188,8 +190,10 @@ export default function NotificationsScreen() {
           onPress={() => {
             if (item.type === 'message') {
               router.push({ pathname: '/dm-conversation', params: { userId: item.actorId } });
+            } else if (item.type === 'like_review' && item.targetId) {
+              const albumId = item.targetId.split('_')[1];
+              router.push({ pathname: '/album-detail', params: { id: albumId, reviewId: item.targetId } } as any);
             } else {
-              // follow, like_review, like_playlist → go to the actor's profile
               router.push({ pathname: '/user-profile', params: { userId: item.actorId } });
             }
           }}

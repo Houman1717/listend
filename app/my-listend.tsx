@@ -4,6 +4,7 @@ import {
   Text,
   Pressable,
   ScrollView,
+  TextInput,
   Alert,
   Modal,
   Platform,
@@ -14,7 +15,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
@@ -23,6 +24,7 @@ import { supabase } from '@/lib/supabase';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
+import { navigateToAlbum } from '@/lib/navigateToAlbum';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -79,6 +81,7 @@ function AlbumReviewModal({
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [localComments,    setLocalComments]    = useState<ReviewComment[]>([]);
 
+  const insets = useSafeAreaInsets();
   const border = isDark ? '#2a1e14' : '#e5e5e5';
   const dateStr = album.dateLogged
     ? new Date(album.dateLogged).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -109,7 +112,7 @@ function AlbumReviewModal({
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }}>
+        <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
 
           {/* Header */}
           <View style={[ml.header, { borderBottomColor: border }]}>
@@ -141,10 +144,13 @@ function AlbumReviewModal({
                 <Text style={[ml.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
                   {album.artist}{album.year > 0 ? ` · ${album.year}` : ''}
                 </Text>
-                {album.rating > 0 && (
+                {(album.lastRating ?? album.rating) > 0 && (
                   <View style={ml.ratingRow}>
-                    <VolumeBadge rating={album.rating} isDark={isDark} />
+                    <VolumeBadge rating={album.lastRating ?? album.rating} showNumber isDark={isDark} />
                   </View>
+                )}
+                {album.isRelistened && (
+                  <FontAwesome name="repeat" size={9} color="#D4A017" style={{ marginTop: 2 }} />
                 )}
               </View>
             </Pressable>
@@ -167,10 +173,16 @@ function AlbumReviewModal({
               </View>
             </Pressable>
 
-            {/* Review text */}
-            <Text style={[ml.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
-              "{album.review}"
-            </Text>
+            {/* Review text — show most recent re-listen review, fall back to original */}
+            {(album.lastReview ?? album.review) ? (
+              <Text style={[ml.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                "{album.lastReview ?? album.review}"
+              </Text>
+            ) : (
+              <Text style={[ml.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
+                No written review.
+              </Text>
+            )}
 
             {/* Like + comment toggle row */}
             <View style={[ml.likeCommentRow, { borderColor: border }]}>
@@ -217,8 +229,25 @@ function AlbumReviewModal({
                 onUsernamePress={onUsernamePress}
               />
             )}
+
+            {isOwner && album.isRelistened && onUndoReListen && (
+              <Pressable
+                onPress={onUndoReListen}
+                style={({ pressed }) => [ml.undoRelistenBtn, { opacity: pressed ? 0.7 : 1 }]}>
+                <FontAwesome name="undo" size={13} color="#8B1A1A" />
+                <Text style={ml.undoRelistenBtnText}>Undo Last Re-listen</Text>
+              </Pressable>
+            )}
+            {isOwner && onDelete && !album.isRelistened && (
+              <Pressable
+                onPress={onDelete}
+                style={({ pressed }) => [ml.deleteBtn, { opacity: pressed ? 0.7 : 1 }]}>
+                <FontAwesome name="trash" size={13} color="#8B1A1A" />
+                <Text style={ml.deleteBtnText}>Remove from Listend</Text>
+              </Pressable>
+            )}
           </ScrollView>
-        </SafeAreaView>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -232,19 +261,16 @@ function AlbumCard({
   colors,
   isDark,
   onPress,
-  onLongPress,
 }: {
   album: LoggedAlbum;
   cardWidth: number;
   colors: any;
   isDark: boolean;
   onPress: () => void;
-  onLongPress?: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      onLongPress={onLongPress}
       style={({ pressed }) => [s.card, { width: cardWidth, opacity: pressed ? 0.7 : 1 }]}>
       {album.artworkUrl ? (
         <ExpoImage
@@ -261,11 +287,16 @@ function AlbumCard({
       )}
       <Text style={[s.cardTitle,  { color: colors.text    }]} numberOfLines={1}>{album.title}</Text>
       <Text style={[s.cardArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
-      {album.rating > 0 && (
+      {((album.lastRating ?? album.rating) > 0 || album.isRelistened) && (
         <View style={{ marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <VolumeBadge rating={album.rating} showNumber isDark={isDark} />
-          {!!album.review && (
-            <FontAwesome name="pencil" size={8} color="#D4A017" />
+          {(album.lastRating ?? album.rating) > 0 && (
+            <VolumeBadge rating={album.lastRating ?? album.rating} showNumber isDark={isDark} />
+          )}
+          {!!(album.lastReview ?? album.review) && (
+            <FontAwesome name="quote-left" size={8} color="#D4A017" />
+          )}
+          {!!album.isRelistened && (
+            <FontAwesome name="repeat" size={8} color="#D4A017" />
           )}
         </View>
       )}
@@ -282,7 +313,7 @@ export default function MyListendScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { loggedAlbums, removeLoggedAlbum, updateDuration } = useAlbums();
+  const { loggedAlbums, removeLoggedAlbum, updateDuration, undoLastReListenEntry } = useAlbums();
   const { user } = useAuth();
   const { userId: paramUserId, username: paramUsername } = useLocalSearchParams<{ userId?: string; username?: string }>();
 
@@ -291,6 +322,9 @@ export default function MyListendScreen() {
   const [sortKey, setSortKey]       = useState<SortKey>('date_new');
   const [shuffled, setShuffled]     = useState<LoggedAlbum[] | null>(null);
   const [sheetOpen, setSheetOpen]   = useState(false);
+  const [query, setQuery]           = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<import('react-native').TextInput>(null);
 
   // Review modal state
   const [selectedAlbum,  setSelectedAlbum]  = useState<LoggedAlbum | null>(null);
@@ -310,27 +344,53 @@ export default function MyListendScreen() {
 
   useEffect(() => {
     if (!viewingOther) return;
-    supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms')
-      .eq('user_id', viewingOther)
-      .not('listened_at', 'is', null)
-      .order('listened_at', { ascending: false })
-      .then(({ data }) => {
-        if (!data) return;
-        setOtherAlbums(data.map((a, i) => ({
-          id:         a.spotify_id,
-          title:      a.title      ?? '',
-          artist:     a.artist     ?? '',
-          year:       a.year       ?? 0,
-          rating:     a.rating     ?? 0,
-          review:     a.review     ?? undefined,
-          dateLogged: a.listened_at ?? new Date().toISOString(),
-          artworkUrl: a.artwork_url ?? undefined,
-          coverColor: COVER_COLORS[i % COVER_COLORS.length],
-          durationMs: a.duration_ms ?? undefined,
-        })));
-      });
+    Promise.all([
+      supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms')
+        .eq('user_id', viewingOther)
+        .not('listened_at', 'is', null)
+        .order('listened_at', { ascending: false }),
+      supabase
+        .from('re_listens')
+        .select('spotify_id, rating, review, listened_at')
+        .eq('user_id', viewingOther)
+        .order('listened_at', { ascending: false }),
+    ]).then(([{ data: albums }, { data: reListens }]) => {
+      if (!albums) return;
+
+      // Build per-album re-listen summary (rows already ordered newest-first)
+      type RLSummary = { count: number; lastRating: number; lastReview?: string };
+      const rlMap = new Map<string, RLSummary>();
+      for (const r of (reListens ?? []) as any[]) {
+        const existing = rlMap.get(r.spotify_id);
+        if (!existing) {
+          rlMap.set(r.spotify_id, { count: 1, lastRating: r.rating ?? 0, lastReview: r.review ?? undefined });
+        } else {
+          existing.count++;
+        }
+      }
+
+      setOtherAlbums(albums.map((a, i) => {
+        const rl = rlMap.get(a.spotify_id);
+        return {
+          id:            a.spotify_id,
+          title:         a.title      ?? '',
+          artist:        a.artist     ?? '',
+          year:          a.year       ?? 0,
+          rating:        a.rating     ?? 0,
+          review:        a.review     ?? undefined,
+          dateLogged:    a.listened_at ?? new Date().toISOString(),
+          artworkUrl:    a.artwork_url ?? undefined,
+          coverColor:    COVER_COLORS[i % COVER_COLORS.length],
+          durationMs:    a.duration_ms ?? undefined,
+          isRelistened:  !!rl,
+          reListenCount: rl?.count,
+          lastRating:    rl?.lastRating,
+          lastReview:    rl?.lastReview,
+        };
+      }));
+    });
   }, [viewingOther]);
 
   const sourceAlbums = viewingOther ? otherAlbums : loggedAlbums;
@@ -356,9 +416,13 @@ export default function MyListendScreen() {
   }, [sourceAlbums.length, viewingOther]);
 
   const displayAlbums = useMemo(() => {
-    if (shuffled) return shuffled;
-    return applySort(sourceAlbums, sortKey);
-  }, [sourceAlbums, sortKey, shuffled]);
+    const sorted = shuffled ?? applySort(sourceAlbums, sortKey);
+    if (!query.trim()) return sorted;
+    const q = query.toLowerCase();
+    return sorted.filter(a =>
+      a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
+    );
+  }, [sourceAlbums, sortKey, shuffled, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -369,36 +433,12 @@ export default function MyListendScreen() {
     setSortKey(key);
   }
 
-  function confirmRemove(album: LoggedAlbum) {
-    Alert.alert(
-      'Remove Album',
-      `Remove "${album.title}" from your Listend?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => removeLoggedAlbum(album.id) },
-      ]
-    );
-  }
-
-  function navigateToAlbum(album: LoggedAlbum) {
-    router.push({
-      pathname: '/album-detail',
-      params: {
-        id:         album.id,
-        title:      album.title,
-        artist:     album.artist,
-        year:       String(album.year ?? ''),
-        artworkUrl: album.artworkUrl ?? '',
-      },
-    });
+  function handleAlbumNavigate(album: LoggedAlbum) {
+    navigateToAlbum(router, album);
   }
 
   function handleAlbumPress(album: LoggedAlbum) {
-    if (album.review && album.rating > 0) {
-      setSelectedAlbum(album);
-    } else {
-      navigateToAlbum(album);
-    }
+    setSelectedAlbum(album);
   }
 
   return (
@@ -409,11 +449,35 @@ export default function MyListendScreen() {
         noun="albums"
         isDark={isDark}
         onPress={() => setSheetOpen(true)}
+        onSearchPress={() => {
+          const next = !searchOpen;
+          setSearchOpen(next);
+          if (!next) setQuery('');
+          else setTimeout(() => searchInputRef.current?.focus(), 50);
+        }}
+        searchActive={searchOpen}
       />
-      <ScrollView contentContainerStyle={s.gridWrap} showsVerticalScrollIndicator={false}>
+      {searchOpen && (
+        <View style={[s.searchBar, { borderBottomColor: colors.border }]}>
+          <FontAwesome name="search" size={14} color={colors.subtext} />
+          <TextInput
+            ref={searchInputRef}
+            style={[s.searchInput, { color: colors.text }]}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search albums…"
+            placeholderTextColor={colors.subtext}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+      )}
+      <ScrollView contentContainerStyle={s.gridWrap} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {displayAlbums.length === 0 ? (
           <Text style={[s.emptyText, { color: colors.subtext }]}>
-            No albums logged yet — head to Search!
+            {query.trim() ? `No albums matching "${query}"` : 'No albums logged yet — head to Search!'}
           </Text>
         ) : (
           <View style={s.grid}>
@@ -425,7 +489,7 @@ export default function MyListendScreen() {
                 colors={colors}
                 isDark={isDark}
                 onPress={() => handleAlbumPress(album)}
-                onLongPress={!viewingOther ? () => confirmRemove(album) : undefined}
+
               />
             ))}
           </View>
@@ -448,7 +512,7 @@ export default function MyListendScreen() {
           onAlbumPress={() => {
             const a = selectedAlbum;
             setSelectedAlbum(null);
-            navigateToAlbum(a);
+            handleAlbumNavigate(a!);
           }}
           onUsernamePress={viewingOther
             ? (username) => { setSelectedAlbum(null); navigateToProfile(username, router); }
@@ -473,6 +537,13 @@ const s = StyleSheet.create({
   cardTitle:    { marginTop: 5, fontSize: 11, fontWeight: '600', lineHeight: 14 },
   cardArtist:   { fontSize: 10, lineHeight: 13, marginTop: 1 },
   emptyText:    { textAlign: 'center', marginTop: 80, fontSize: 15 },
+
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchInput: { flex: 1, fontSize: 15, height: 36 },
 });
 
 // ─── Modal styles ─────────────────────────────────────────────────────────────
@@ -514,4 +585,18 @@ const ml = StyleSheet.create({
     padding: 12, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, marginBottom: 12,
   },
   commentsToggleText: { fontSize: 14, fontWeight: '500' },
+
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 24, paddingVertical: 12, borderRadius: 10,
+    borderWidth: 1, borderColor: '#8B1A1A',
+  },
+  deleteBtnText: { color: '#8B1A1A', fontWeight: '600', fontSize: 14 },
+
+  undoRelistenBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 24, paddingVertical: 12, borderRadius: 10,
+    borderWidth: 1, borderColor: '#8B1A1A',
+  },
+  undoRelistenBtnText: { color: '#8B1A1A', fontWeight: '600', fontSize: 14 },
 });

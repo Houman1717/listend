@@ -18,6 +18,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -26,6 +27,8 @@ import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { navigateToProfile } from '@/lib/navigateToProfile';
+import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 
@@ -121,6 +124,16 @@ type ReviewTab  = 'all' | 'friends' | 'own';
 type FriendActivity = {
   userId:    string;
   username:  string;
+  rating:    number;
+  hasReview: boolean;
+  review?:   string;
+  listenedAt?: string;
+  status:    'listened' | 'wantToListen';
+};
+
+type FriendActivity = {
+  userId:    string;
+  username:  string;
   avatarUrl?: string | null;
   rating:    number;
   hasReview: boolean;
@@ -195,6 +208,26 @@ function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: 
       <Text style={[s.ratingHint, { color: isDark ? '#a07850' : '#a07850' }]}>
         {rating > 0 ? RATING_LABELS[rating] : ' '}
       </Text>
+    </View>
+  );
+}
+
+// ─── Volume badge (speaker + bars + number) ──────────────────────────────────
+
+function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <FontAwesome name="volume-up" size={10} color="#D4A017" />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+        {Array.from({ length: 10 }, (_, i) => {
+          const h = Math.round(3 + i * 1);
+          return (
+            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }} />
+          );
+        })}
+      </View>
+      <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
     </View>
   );
 }
@@ -748,6 +781,204 @@ const arm = StyleSheet.create({
   commentsToggleText: { fontSize: 13, fontWeight: '500' },
 });
 
+// ─── Single review modal (home-page style) ────────────────────────────────────
+
+function AlbumSingleReviewModal({
+  review,
+  albumTitle,
+  albumArtist,
+  albumYear,
+  albumArtwork,
+  liked,
+  currentLikeCount,
+  onLike,
+  comments,
+  commentsExpanded,
+  onToggleComments,
+  onAddComment,
+  onClose,
+  onUsernamePress,
+  isDark,
+  colors,
+}: {
+  review: CommunityReview;
+  albumTitle: string;
+  albumArtist: string;
+  albumYear: number;
+  albumArtwork: string;
+  liked: boolean;
+  currentLikeCount?: number;
+  onLike: () => void;
+  comments: ReviewComment[];
+  commentsExpanded: boolean;
+  onToggleComments: () => void;
+  onAddComment: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
+  onClose: () => void;
+  onUsernamePress?: (username: string) => void;
+  isDark: boolean;
+  colors: { text: string; subtext: string; background: string };
+}) {
+  const hasInteractedRef = useRef(false);
+  const [localLiked, setLocalLiked] = useState(liked);
+  const [localLikeCount, setLocalLikeCount] = useState(currentLikeCount ?? review.likeCount ?? 0);
+  const border = isDark ? '#2a1e14' : '#e5e5e5';
+
+  // Sync when the parent's likes query resolves after the modal opens
+  useEffect(() => {
+    if (hasInteractedRef.current) return;
+    if (currentLikeCount !== undefined) setLocalLikeCount(currentLikeCount);
+    setLocalLiked(liked);
+  }, [currentLikeCount, liked]);
+
+  function handleLike() {
+    hasInteractedRef.current = true;
+    setLocalLiked(prev => {
+      setLocalLikeCount(c => prev ? c - 1 : c + 1);
+      return !prev;
+    });
+    onLike();
+  }
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaView style={{ flex: 1 }}>
+
+          {/* Header */}
+          <View style={[arm.header, { borderBottomColor: border }]}>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
+            </Pressable>
+            <Text style={[arm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={[arm.body, { paddingBottom: 40 }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+
+            {/* Album row */}
+            <View style={arm.albumRow}>
+              {albumArtwork ? (
+                <ExpoImage source={{ uri: albumArtwork }} style={arm.art} contentFit="cover" cachePolicy="disk" />
+              ) : (
+                <View style={[arm.art, { backgroundColor: isDark ? '#2e2018' : '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                  <FontAwesome name="music" size={20} color="#7a5535" />
+                </View>
+              )}
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={[arm.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>{albumTitle}</Text>
+                <Text style={[arm.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                  {albumArtist}{albumYear > 0 ? ` · ${albumYear}` : ''}
+                </Text>
+              </View>
+            </View>
+
+            {/* Author + date + rating */}
+            <Pressable
+              style={arm.authorRow}
+              onPress={() => { onClose(); onUsernamePress?.(review.username); }}
+              disabled={!onUsernamePress}>
+              <View style={[arm.avatar, { backgroundColor: avatarColor(review.username) }]}>
+                <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+              </View>
+              <View style={{ gap: 3 }}>
+                <Text style={arm.username}>@{review.username}</Text>
+                {review.rating >= 1 && <VolumeBadge rating={review.rating} isDark={isDark} />}
+                <Text style={[arm.dateText, { color: isDark ? '#A08060' : '#6B4C35' }]}>{review.dateStr}</Text>
+              </View>
+            </Pressable>
+
+            {/* Review text */}
+            {review.text ? (
+              <Text style={[arm.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
+                "{review.text}"
+              </Text>
+            ) : (
+              <Text style={[arm.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
+                No written review.
+              </Text>
+            )}
+
+            {/* Like + comments row */}
+            <View style={[arm.likeCommentRow, { borderColor: border }]}>
+              <Pressable onPress={handleLike} hitSlop={8} style={arm.likeBtn}>
+                <FontAwesome
+                  name={localLiked ? 'heart' : 'heart-o'}
+                  size={15}
+                  color={localLiked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35')}
+                />
+                <Text style={[arm.likeCount, { color: localLiked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35') }]}>
+                  {localLikeCount}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={onToggleComments}
+                hitSlop={8}
+                style={[arm.commentsToggle, { borderColor: border, flex: 1, marginBottom: 0 }]}>
+                <FontAwesome
+                  name="comment-o"
+                  size={13}
+                  color={commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060')}
+                />
+                <Text style={[arm.commentsToggleText, { color: commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060') }]}>
+                  {comments.length === 0
+                    ? 'No comments yet'
+                    : `${comments.length} comment${comments.length !== 1 ? 's' : ''}`}
+                </Text>
+                <FontAwesome
+                  name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={10}
+                  color={isDark ? '#6B4C35' : '#A08060'}
+                  style={{ marginLeft: 'auto' }}
+                />
+              </Pressable>
+            </View>
+
+            {commentsExpanded && (
+              <CommentsSection
+                comments={comments}
+                isDark={isDark}
+                colors={colors}
+                onAddComment={onAddComment}
+                onUsernamePress={(username) => { onClose(); onUsernamePress?.(username); }}
+              />
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const arm = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTitle: { fontSize: 15, fontWeight: '700' },
+  body: { paddingHorizontal: 20, paddingTop: 20, gap: 14 },
+  albumRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  art: { width: 64, height: 64, borderRadius: 8 },
+  albumTitle: { fontSize: 15, fontWeight: '700', lineHeight: 20 },
+  albumArtist: { fontSize: 13 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  ratingBadge: { backgroundColor: '#D4A017', borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2 },
+  ratingNum: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  avatarLetter: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  username: { fontSize: 13, fontWeight: '700', color: '#D4A017' },
+  dateText: { fontSize: 11 },
+  reviewText: { fontSize: 15, lineHeight: 24, fontStyle: 'italic' },
+  likeCommentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
+  likeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingRight: 4 },
+  likeCount: { fontSize: 14, fontWeight: '600' },
+  commentsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, marginBottom: 4 },
+  commentsToggleText: { fontSize: 13, fontWeight: '500' },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AlbumDetailScreen() {
@@ -807,6 +1038,7 @@ export default function AlbumDetailScreen() {
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const scrollRef = useRef<ScrollView>(null);
   const modalScrollRef = useRef<ScrollView>(null);
   const reviewYPositions = useRef<Map<string, number>>(new Map());
@@ -892,6 +1124,29 @@ export default function AlbumDetailScreen() {
     }
   }, [amazonTapped, amazonFetching, amazonMusicUrl]);
 
+  // Streaming links
+  const [showStreamSheet, setShowStreamSheet] = useState(false);
+  const [amazonMusicUrl, setAmazonMusicUrl]   = useState<string | null>(null);
+  const [amazonFetching, setAmazonFetching]   = useState(false);
+  const [amazonFetched, setAmazonFetched]     = useState(false);
+  const [amazonTapped, setAmazonTapped]       = useState(false);
+
+  const streamLinks = {
+    appleMusic:   `https://music.apple.com/us/album/${albumId}`,
+    spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
+    youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
+    amazonMusic:  amazonMusicUrl,
+  };
+
+  // Auto-open Amazon Music once it resolves if the user already tapped it
+  useEffect(() => {
+    if (amazonTapped && !amazonFetching && amazonMusicUrl) {
+      Linking.openURL(amazonMusicUrl);
+      setShowStreamSheet(false);
+      setAmazonTapped(false);
+    }
+  }, [amazonTapped, amazonFetching, amazonMusicUrl]);
+
   // Community reviews + likes
   const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
   const [reviewLikesMap, setReviewLikesMap]     = useState<Map<string, LikeState>>(new Map());
@@ -916,6 +1171,16 @@ export default function AlbumDetailScreen() {
         commentCount: 0,
       }
     : null;
+
+  // Auto-open own review when deep-linking from a like_review notification
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!params.reviewId || autoOpenedRef.current || !ownReview) return;
+    if (ownReview.id === params.reviewId) {
+      autoOpenedRef.current = true;
+      openReview(ownReview, false);
+    }
+  }, [params.reviewId, ownReview?.id]);
 
   // Auto-open own review when deep-linking from a like_review notification
   const autoOpenedRef = useRef(false);
@@ -1256,6 +1521,123 @@ export default function AlbumDetailScreen() {
     loadFriendActivity();
   }, [friendIds, albumTitle]);
 
+  // ── Fetch friend activity for this album ──────────────────────────────────
+  useEffect(() => {
+    if (friendIds.size === 0) return;
+    const ids = Array.from(friendIds);
+
+    async function loadFriendActivity() {
+      const [{ data: listened }, { data: wanted }, { data: reListenRows }] = await Promise.allSettled([
+        supabase
+          .from('user_albums')
+          .select('user_id, rating, review, listened_at')
+          .in('user_id', ids)
+          .ilike('title', albumTitle)
+          .not('listened_at', 'is', null),
+        supabase
+          .from('want_to_listen')
+          .select('user_id')
+          .in('user_id', ids)
+          .ilike('title', albumTitle),
+        supabase
+          .from('re_listens')
+          .select('user_id, rating, review, listened_at')
+          .in('user_id', ids)
+          .ilike('title', albumTitle)
+          .order('listened_at', { ascending: false }),
+      ]).then(results => results.map(r => (r.status === 'fulfilled' ? r.value : { data: null })));
+
+      const allUserIds = new Set<string>();
+      ((listened ?? []) as any[]).forEach(r => allUserIds.add(r.user_id as string));
+      ((wanted  ?? []) as any[]).forEach(r => allUserIds.add(r.user_id as string));
+      if (allUserIds.size === 0) return;
+
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', Array.from(allUserIds));
+
+      const usernameMap = new Map<string, string>(
+        (profiles ?? []).map((p: any) => [p.id, p.username])
+      );
+
+      // Deduplicate by user_id — keep the row with a review, or the most recent listen
+      const listenedByUser = new Map<string, any>();
+      for (const row of (listened ?? []) as any[]) {
+        const existing = listenedByUser.get(row.user_id);
+        if (!existing || (row.review && !existing.review) || (!existing.review && new Date(row.listened_at) > new Date(existing.listened_at))) {
+          listenedByUser.set(row.user_id, row);
+        }
+      }
+      const listenedRows = Array.from(listenedByUser.values());
+      const wantedRows   = (wanted  ?? []) as any[];
+      const listenedSet  = new Set<string>(listenedRows.map(r => r.user_id as string));
+      const activities: FriendActivity[] = [];
+
+      for (const row of listenedRows) {
+        const username = usernameMap.get(row.user_id);
+        if (!username || row.user_id === user?.id) continue;
+        activities.push({
+          userId:     row.user_id,
+          username,
+          rating:     row.rating ?? 0,
+          hasReview:  !!row.review,
+          review:     row.review ?? undefined,
+          listenedAt: row.listened_at ?? undefined,
+          status:     'listened',
+        });
+      }
+      for (const row of wantedRows) {
+        if (listenedSet.has(row.user_id as string)) continue;
+        const username = usernameMap.get(row.user_id);
+        if (!username || row.user_id === user?.id) continue;
+        activities.push({
+          userId:    row.user_id,
+          username,
+          rating:    0,
+          hasReview: false,
+          status:    'wantToListen',
+        });
+      }
+
+      setFriendActivity(activities);
+    }
+
+    loadFriendActivity();
+  }, [friendIds, albumTitle]);
+
+  // ── Load real comments when a review is opened ─────────────────────────────
+  function openReview(review: CommunityReview, openComments = false) {
+    setExpandedAlbumReview(review);
+    setSingleReviewCommentsOpen(openComments);
+    if (!commentsMap.has(review.id)) {
+      fetchReviewComments(review.id).then(comments => {
+        setCommentsMap(prev => {
+          const m = new Map(prev);
+          if (!m.has(review.id)) m.set(review.id, comments);
+          return m;
+        });
+      });
+    }
+  }
+
+  // ── Fetch mutual friend IDs for Friends tab ────────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    async function loadFriendIds() {
+      const [{ data: outRows }, { data: inRows }] = await Promise.all([
+        supabase.from('follows').select('following_id').eq('follower_id', user!.id),
+        supabase.from('follows').select('follower_id').eq('following_id', user!.id),
+      ]);
+      if (!outRows?.length || !inRows?.length) return;
+      const inSet = new Set((inRows as any[]).map(r => r.follower_id as string));
+      setFriendIds(new Set(
+        (outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string)
+      ));
+    }
+    loadFriendIds();
+  }, [user?.id]);
+
   // ── Load real comments when a review is opened ─────────────────────────────
   function openReview(review: CommunityReview, openComments = false) {
     setExpandedAlbumReview(review);
@@ -1354,6 +1736,22 @@ export default function AlbumDetailScreen() {
     } else {
       addToWantToListen({ id: myAlbumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork });
     }
+  }
+
+  function handleStream() {
+    setShowStreamSheet(true);
+    if (amazonFetched || amazonFetching) return;
+    setAmazonFetching(true);
+    fetch(`${API_URL}/api/albums/streaming-links?appleId=${encodeURIComponent(albumId)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.amazonMusic) setAmazonMusicUrl(data.amazonMusic); })
+      .catch(err => console.warn('[album-detail] amazon music link error:', err))
+      .finally(() => { setAmazonFetched(true); setAmazonFetching(false); });
+  }
+
+  function handleAmazonPress() {
+    if (amazonMusicUrl) { Linking.openURL(amazonMusicUrl); setShowStreamSheet(false); }
+    else if (amazonFetching) { setAmazonTapped(true); }
   }
 
   function handleStream() {
@@ -1575,6 +1973,14 @@ export default function AlbumDetailScreen() {
         )}
 
         {/* ── 3c. Stream button ─────────────────────────────────────────────── */}
+        <Pressable
+          style={({ pressed }) => [s.streamBtn, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
+          onPress={handleStream}>
+          <FontAwesome name="music" size={15} color="#D4A017" />
+          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Listen on</Text>
+        </Pressable>
+
+        {/* ── 3b. Stream button ─────────────────────────────────────────────── */}
         <Pressable
           style={({ pressed }) => [s.streamBtn, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
           onPress={handleStream}>
@@ -1857,6 +2263,27 @@ export default function AlbumDetailScreen() {
         />
       )}
 
+      {/* ── Single review modal (focused, home-page style) ───────────────────── */}
+      {expandedAlbumReview && (
+        <AlbumSingleReviewModal
+          review={expandedAlbumReview}
+          albumTitle={albumTitle}
+          albumArtist={albumArtist}
+          albumYear={albumYear}
+          albumArtwork={albumArtwork}
+          liked={likedAlbumReviews.has(expandedAlbumReview.id)}
+          onLike={() => handleLikeAlbumReview(expandedAlbumReview.id)}
+          comments={commentsMap.get(expandedAlbumReview.id) ?? []}
+          commentsExpanded={singleReviewCommentsOpen}
+          onToggleComments={() => setSingleReviewCommentsOpen(prev => !prev)}
+          onAddComment={(body, parentId, u, rtu, av) => handleAddComment(expandedAlbumReview.id, body, parentId, u, rtu, av)}
+          onClose={() => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); }}
+          onUsernamePress={(username) => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); navigateToProfile(username, router); }}
+          isDark={isDark}
+          colors={colors}
+        />
+      )}
+
       {/* ── All Reviews modal ────────────────────────────────────────────────── */}
       <Modal
         visible={showAllReviews}
@@ -1941,6 +2368,40 @@ export default function AlbumDetailScreen() {
             ))}
           </ScrollView>
         </View>
+      </Modal>
+
+      {/* ── Streaming links sheet ────────────────────────────────────────────── */}
+      <Modal visible={showStreamSheet} transparent animationType="slide" onRequestClose={() => setShowStreamSheet(false)}>
+        <Pressable style={s.modalOverlay} onPress={() => setShowStreamSheet(false)}>
+          <Pressable style={[s.modalSheet, { backgroundColor: isDark ? '#141414' : '#fff' }]} onPress={() => {}}>
+            <View style={s.modalHandle} />
+            <Text style={[s.modalTitle, { color: colors.text }]}>Listen on…</Text>
+            {([
+              { key: 'appleMusic'   as const, label: 'Apple Music',   icon: 'apple'        as const, color: '#FC3C44' },
+              { key: 'spotify'      as const, label: 'Spotify',       icon: 'spotify'      as const, color: '#1DB954' },
+              { key: 'youtubeMusic' as const, label: 'YouTube Music', icon: 'youtube-play' as const, color: '#FF0000' },
+              { key: 'amazonMusic'  as const, label: 'Amazon Music',  icon: 'amazon'       as const, color: '#00A8E1' },
+            ]).filter(p => p.key !== 'amazonMusic' || !amazonFetched || amazonMusicUrl).map(platform => {
+              const isAmazon  = platform.key === 'amazonMusic';
+              const loading   = isAmazon && (amazonFetching || amazonTapped);
+              const onPress   = isAmazon
+                ? handleAmazonPress
+                : () => { Linking.openURL(streamLinks[platform.key]!); setShowStreamSheet(false); };
+              return (
+                <Pressable
+                  key={platform.key}
+                  style={({ pressed }) => [s.streamPlatformRow, { borderBottomColor: isDark ? '#2a1e14' : '#f0f0f0', opacity: pressed ? 0.6 : 1 }]}
+                  onPress={onPress}>
+                  <FontAwesome name={platform.icon} size={20} color={platform.color} />
+                  <Text style={[s.streamPlatformLabel, { color: colors.text }]}>{platform.label}</Text>
+                  {loading
+                    ? <ActivityIndicator size="small" color={platform.color} />
+                    : <FontAwesome name="chevron-right" size={13} color={colors.subtext} />}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* ── Streaming links sheet ────────────────────────────────────────────── */}
@@ -2076,6 +2537,8 @@ const s = StyleSheet.create({
   editBtnFlex: { flex: 1, marginTop: 0 },
   removeListendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8B1A1A' },
   removeListendBtnText: { color: '#8B1A1A', fontWeight: '600', fontSize: 14 },
+  removeListendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8B1A1A' },
+  removeListendBtnText: { color: '#8B1A1A', fontWeight: '600', fontSize: 14 },
 
   // Rating picker
   ratingContainer: { width: '100%', marginTop: 10 },
@@ -2083,6 +2546,8 @@ const s = StyleSheet.create({
   barsTrack: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, paddingBottom: 2, height: 44 },
   bar: { flex: 1, borderRadius: 2 },
   ratingHint: { marginTop: 10, fontSize: 13, textAlign: 'center', height: 18 },
+  ratingNumBox: { width: 30, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 },
+  ratingNumLarge: { fontSize: 20, fontWeight: '700' },
   ratingNumBox: { width: 30, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 },
   ratingNumLarge: { fontSize: 20, fontWeight: '700' },
 
@@ -2198,6 +2663,14 @@ const s = StyleSheet.create({
   // Re-listen button
   reListenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 44, borderRadius: 12, borderWidth: 1, marginTop: 10 },
   reListenBtnText: { fontSize: 15, fontWeight: '600' },
+
+  // Streaming sheet
+  streamPlatformRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  streamPlatformLabel: { flex: 1, fontSize: 16, fontWeight: '500' },
+
+  // Stream button
+  streamBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 44, borderRadius: 12, borderWidth: 1, marginTop: 10 },
+  streamBtnText: { fontSize: 15, fontWeight: '600' },
 
   // Streaming sheet
   streamPlatformRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },

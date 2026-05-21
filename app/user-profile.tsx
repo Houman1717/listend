@@ -12,6 +12,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
@@ -22,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { navigateToAlbum } from '@/lib/navigateToAlbum';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,8 @@ type Profile = {
   username: string | null;
   bio: string | null;
   avatar_url: string | null;
+  is_private: boolean;
+  allow_dms: boolean;
   top_albums:  FavAlbum[];
   top_songs:   FavSong[];
   top_artists: FavArtist[];
@@ -443,6 +447,10 @@ export default function UserProfileScreen() {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
 
+  const [isBlockedByMe,   setIsBlockedByMe]   = useState(false);
+  const [isBlockedByThem, setIsBlockedByThem] = useState(false);
+  const [blockLoading,    setBlockLoading]    = useState(false);
+
   const [albumCount,    setAlbumCount]    = useState(0);
   const [thisYearCount, setThisYearCount] = useState(0);
   const [avgRating,     setAvgRating]     = useState('—');
@@ -462,7 +470,7 @@ export default function UserProfileScreen() {
       try {
         const { data: prof, error: profErr } = await supabase
           .from('profiles')
-          .select('id, display_name, username, bio, avatar_url')
+          .select('id, display_name, username, bio, avatar_url, is_private, allow_dms')
           .eq('id', viewedUserId)
           .single();
 
@@ -476,13 +484,13 @@ export default function UserProfileScreen() {
 
           setProfile({
             ...prof,
+            is_private: prof.is_private ?? false,
+            allow_dms:  prof.allow_dms  ?? true,
             top_albums:  normaliseTopAlbums(favData?.top_albums),
             top_songs:   normaliseTopSongs(favData?.top_songs),
             top_artists: normaliseTopArtists(favData?.top_artists),
           });
-          navigation.setOptions({
-            title: prof.display_name || prof.username || 'Profile',
-          });
+          navigation.setOptions({ title: prof.display_name || prof.username || 'Profile' });
         }
 
         const [{ count: followers }, { count: following }] =
@@ -509,6 +517,14 @@ export default function UserProfileScreen() {
             .single();
           const viewedFollowsCurrent = !!incoming && !inErr;
           setIsMutual(currentFollowsViewed && viewedFollowsCurrent);
+
+          // Block status — both directions
+          const [{ data: blockedByMe }, { data: blockedByThem }] = await Promise.all([
+            supabase.from('blocked_users').select('blocker_id').match({ blocker_id: currentUserId, blocked_id: viewedUserId }).maybeSingle(),
+            supabase.from('blocked_users').select('blocker_id').match({ blocker_id: viewedUserId, blocked_id: currentUserId }).maybeSingle(),
+          ]);
+          setIsBlockedByMe(!!blockedByMe);
+          setIsBlockedByThem(!!blockedByThem);
         }
 
         const { data: userAlbums } = await supabase
@@ -554,6 +570,18 @@ export default function UserProfileScreen() {
     load();
   }, [userId, user, navigation]);
 
+  // ── Header 3-dot menu button ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (isOwnProfile || !profile) return;
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable onPress={handleOptionsMenu} hitSlop={12} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+          <FontAwesome name="ellipsis-v" size={18} color="#f5e6c8" />
+        </Pressable>
+      ),
+    });
+  }, [isOwnProfile, profile, isBlockedByMe]);
+
   // ── Follow / Unfollow ────────────────────────────────────────────────────────
   async function handleFollow() {
     const currentUserId = user?.id ?? null;
@@ -598,6 +626,75 @@ export default function UserProfileScreen() {
     }
 
     setFollowLoading(false);
+  }
+
+  // ── Block / Unblock ──────────────────────────────────────────────────────────
+  function handleOptionsMenu() {
+    const currentUserId = user?.id;
+    if (!currentUserId || !viewedUserId) return;
+
+    if (isBlockedByMe) {
+      Alert.alert('Unblock User', `Unblock ${profile?.display_name || profile?.username || 'this user'}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Unblock', onPress: () => doUnblock(currentUserId) },
+      ]);
+    } else {
+      Alert.alert(
+        profile?.display_name || profile?.username || 'User',
+        undefined,
+        [
+          { text: 'Block User', style: 'destructive', onPress: () => confirmBlock(currentUserId) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
+  }
+
+  function confirmBlock(currentUserId: string) {
+    Alert.alert(
+      'Block User',
+      `Block ${profile?.display_name || profile?.username || 'this user'}? They won't be able to see your profile or contact you.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Block', style: 'destructive', onPress: () => doBlock(currentUserId) },
+      ]
+    );
+  }
+
+  async function doBlock(currentUserId: string) {
+    setBlockLoading(true);
+    // Remove follow relationships in both directions
+    await Promise.all([
+      supabase.from('follows').delete().match({ follower_id: currentUserId, following_id: viewedUserId }),
+      supabase.from('follows').delete().match({ follower_id: viewedUserId, following_id: currentUserId }),
+    ]);
+    const { error } = await supabase
+      .from('blocked_users')
+      .insert({ blocker_id: currentUserId, blocked_id: viewedUserId });
+    if (!error) {
+      setIsBlockedByMe(true);
+      setIsFollowing(false);
+      setIsMutual(false);
+    } else {
+      console.error('[UserProfile] block error:', error);
+      Alert.alert('Error', 'Could not block user. Please try again.');
+    }
+    setBlockLoading(false);
+  }
+
+  async function doUnblock(currentUserId: string) {
+    setBlockLoading(true);
+    const { error } = await supabase
+      .from('blocked_users')
+      .delete()
+      .match({ blocker_id: currentUserId, blocked_id: viewedUserId });
+    if (!error) {
+      setIsBlockedByMe(false);
+    } else {
+      console.error('[UserProfile] unblock error:', error);
+      Alert.alert('Error', 'Could not unblock user. Please try again.');
+    }
+    setBlockLoading(false);
   }
 
   // ── Top 5 edit ───────────────────────────────────────────────────────────────
@@ -660,6 +757,28 @@ export default function UserProfileScreen() {
 
   const name    = profile.display_name || profile.username || '';
   const initial = name.charAt(0).toUpperCase() || '?';
+
+  // Blocked state — either direction
+  const isBlocked = isBlockedByMe || isBlockedByThem;
+  // Private account — viewer isn't following and isn't the owner
+  const isPrivateWall = !isOwnProfile && !isBlocked && profile.is_private && !isFollowing;
+
+  // ── Blocked wall ─────────────────────────────────────────────────────────────
+  if (isBlocked) {
+    return (
+      <View style={[s.center, { backgroundColor: colors.background }]}>
+        <FontAwesome name="ban" size={40} color={colors.subtext} style={{ opacity: 0.3, marginBottom: 16 }} />
+        <Text style={[s.wallTitle, { color: colors.text }]}>
+          {isBlockedByMe ? "You've blocked this user" : 'Content unavailable'}
+        </Text>
+        <Text style={[s.wallSub, { color: colors.subtext }]}>
+          {isBlockedByMe
+            ? 'Unblock them from Settings → Privacy → Blocked Users.'
+            : 'This content is not available.'}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <>
@@ -734,7 +853,7 @@ export default function UserProfileScreen() {
             </Text>
           </Pressable>
 
-          {isMutual && (
+          {isMutual && profile.allow_dms && (
             <Pressable
               style={({ pressed }) => [s.messageBtn, { borderColor: ACCENT, opacity: pressed ? 0.7 : 1 }]}
               onPress={() => router.push({ pathname: '/dm-conversation', params: { userId: viewedUserId } })}>
@@ -743,29 +862,40 @@ export default function UserProfileScreen() {
           )}
         </View>
 
+        {/* Private account wall — replaces stats + library */}
+        {isPrivateWall && (
+          <View style={s.privateWall}>
+            <FontAwesome name="lock" size={32} color={colors.subtext} style={{ opacity: 0.35, marginBottom: 12 }} />
+            <Text style={[s.wallTitle, { color: colors.text }]}>This account is private</Text>
+            <Text style={[s.wallSub, { color: colors.subtext }]}>Follow to see their library, reviews, and playlists.</Text>
+          </View>
+        )}
+
         {/* Stats */}
-        <View style={[s.statsRow, { backgroundColor: colors.surface }]}>
-          <Pressable
-            style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId, username: profile?.username ?? '' } })}>
-            <Text style={[s.statValue, { color: colors.text }]}>{albumCount}</Text>
-            <Text style={[s.statLabel, { color: colors.subtext }]}>Albums</Text>
-          </Pressable>
-          <View style={[s.statDivider, { backgroundColor: colors.border }]} />
-          <Pressable
-            style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}>
-            <Text style={[s.statValue, { color: colors.text }]}>{thisYearCount}</Text>
-            <Text style={[s.statLabel, { color: colors.subtext }]}>This Year</Text>
-          </Pressable>
-          <View style={[s.statDivider, { backgroundColor: colors.border }]} />
-          <Pressable
-            style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => setRatingModalVisible(true)}>
-            <Text style={[s.statValue, { color: colors.text }]}>{avgRating}</Text>
-            <Text style={[s.statLabel, { color: colors.subtext }]}>Avg Rating</Text>
-          </Pressable>
-        </View>
+        {!isPrivateWall && (
+          <View style={[s.statsRow, { backgroundColor: colors.surface }]}>
+            <Pressable
+              style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId, username: profile?.username ?? '' } })}>
+              <Text style={[s.statValue, { color: colors.text }]}>{albumCount}</Text>
+              <Text style={[s.statLabel, { color: colors.subtext }]}>Albums</Text>
+            </Pressable>
+            <View style={[s.statDivider, { backgroundColor: colors.border }]} />
+            <Pressable
+              style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}>
+              <Text style={[s.statValue, { color: colors.text }]}>{thisYearCount}</Text>
+              <Text style={[s.statLabel, { color: colors.subtext }]}>This Year</Text>
+            </Pressable>
+            <View style={[s.statDivider, { backgroundColor: colors.border }]} />
+            <Pressable
+              style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={() => setRatingModalVisible(true)}>
+              <Text style={[s.statValue, { color: colors.text }]}>{avgRating}</Text>
+              <Text style={[s.statLabel, { color: colors.subtext }]}>Avg Rating</Text>
+            </Pressable>
+          </View>
+        )}
 
       </View>
 
@@ -776,130 +906,135 @@ export default function UserProfileScreen() {
         distribution={ratingDist}
       />
 
-      {/* ── Top 5 Albums ───────────────────────────────────────────────────── */}
-      <View style={s.section}>
-        <View style={s.sectionHeader}>
-          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 ALBUMS</Text>
-          {isOwnProfile && (
-            top5EditMode ? (
-              <Pressable
-                onPress={handleSaveTop5}
-                disabled={isSaving}
-                style={({ pressed }) => ({ opacity: pressed || isSaving ? 0.6 : 1 })}>
-                {isSaving
-                  ? <ActivityIndicator size="small" color={ACCENT} />
-                  : <Text style={[s.editBtn, { color: ACCENT }]}>Done</Text>}
-              </Pressable>
-            ) : (
-              <Pressable onPress={handleEnterEditMode} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
-                <Text style={[s.editBtn, { color: ACCENT }]}>Edit</Text>
-              </Pressable>
-            )
-          )}
-        </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
-            const a = top5EditMode ? draftTopAlbums[i] : profile.top_albums[i];
-            if (top5EditMode) {
-              return (
-                <FavSlotEdit
-                  key={i}
-                  item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
-                  onPress={() => setSlotPicker({ type: 'album', index: i })}
-                />
-              );
-            }
-            return (
-              <FavSlotReadOnly
-                key={i}
-                item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
-                onPress={a ? () => router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl } }) : undefined}
-              />
-            );
-          })}
-        </View>
-      </View>
+      {!isPrivateWall && (
+        <>
+          {/* ── Top 5 Albums ─────────────────────────────────────────────────── */}
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 ALBUMS</Text>
+              {isOwnProfile && (
+                top5EditMode ? (
+                  <Pressable
+                    onPress={handleSaveTop5}
+                    disabled={isSaving}
+                    style={({ pressed }) => ({ opacity: pressed || isSaving ? 0.6 : 1 })}>
+                    {isSaving
+                      ? <ActivityIndicator size="small" color={ACCENT} />
+                      : <Text style={[s.editBtn, { color: ACCENT }]}>Done</Text>}
+                  </Pressable>
+                ) : (
+                  <Pressable onPress={handleEnterEditMode} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                    <Text style={[s.editBtn, { color: ACCENT }]}>Edit</Text>
+                  </Pressable>
+                )
+              )}
+            </View>
+            <View style={s.favRow}>
+              {Array.from({ length: 5 }).map((_, i) => {
+                const a = top5EditMode ? draftTopAlbums[i] : profile.top_albums[i];
+                if (top5EditMode) {
+                  return (
+                    <FavSlotEdit
+                      key={i}
+                      item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
+                      onPress={() => setSlotPicker({ type: 'album', index: i })}
+                    />
+                  );
+                }
+                return (
+                  <FavSlotReadOnly
+                    key={i}
+                    item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
+                    onPress={a ? () => navigateToAlbum(router, { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl }) : undefined}
+                  />
+                );
+              })}
+            </View>
+          </View>
 
-      <View style={[s.rule, { backgroundColor: colors.border }]} />
+          <View style={[s.rule, { backgroundColor: colors.border }]} />
 
-      {/* ── Top 5 Songs ────────────────────────────────────────────────────── */}
-      <View style={s.section}>
-        <View style={s.sectionHeader}>
-          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 SONGS</Text>
-        </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
-            const sg = top5EditMode ? draftTopSongs[i] : profile.top_songs[i];
-            if (top5EditMode) {
-              return (
-                <FavSlotEdit
-                  key={i}
-                  item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
-                  onPress={() => setSlotPicker({ type: 'song', index: i })}
-                />
-              );
-            }
-            return (
-              <FavSlotReadOnly
-                key={i}
-                item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
-                onPress={sg ? () => setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
-              />
-            );
-          })}
-        </View>
-      </View>
+          {/* ── Top 5 Songs ──────────────────────────────────────────────────── */}
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 SONGS</Text>
+            </View>
+            <View style={s.favRow}>
+              {Array.from({ length: 5 }).map((_, i) => {
+                const sg = top5EditMode ? draftTopSongs[i] : profile.top_songs[i];
+                if (top5EditMode) {
+                  return (
+                    <FavSlotEdit
+                      key={i}
+                      item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
+                      onPress={() => setSlotPicker({ type: 'song', index: i })}
+                    />
+                  );
+                }
+                return (
+                  <FavSlotReadOnly
+                    key={i}
+                    item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
+                    onPress={sg ? () => setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
+                  />
+                );
+              })}
+            </View>
+          </View>
 
-      <View style={[s.rule, { backgroundColor: colors.border }]} />
+          <View style={[s.rule, { backgroundColor: colors.border }]} />
 
-      {/* ── Top 5 Artists ──────────────────────────────────────────────────── */}
-      <View style={s.section}>
-        <View style={s.sectionHeader}>
-          <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 ARTISTS</Text>
-        </View>
-        <View style={s.favRow}>
-          {Array.from({ length: 5 }).map((_, i) => {
-            const ar = top5EditMode ? draftTopArtists[i] : profile.top_artists[i];
-            if (top5EditMode) {
-              return (
-                <FavSlotEdit
-                  key={i}
-                  item={ar ? { artworkUrl: ar.artworkUrl, title: ar.name } : undefined}
-                  circular
-                  onPress={() => setSlotPicker({ type: 'artist', index: i })}
-                />
-              );
-            }
-            return (
-              <FavSlotReadOnly
-                key={i}
-                item={ar ? { artworkUrl: ar.artworkUrl, title: ar.name } : undefined}
-                circular
-                onPress={ar ? () => router.push({ pathname: '/artist-detail', params: { id: ar.id, name: ar.name, artworkUrl: ar.artworkUrl } }) : undefined}
-              />
-            );
-          })}
-        </View>
-      </View>
+          {/* ── Top 5 Artists ────────────────────────────────────────────────── */}
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 ARTISTS</Text>
+            </View>
+            <View style={s.favRow}>
+              {Array.from({ length: 5 }).map((_, i) => {
+                const ar = top5EditMode ? draftTopArtists[i] : profile.top_artists[i];
+                if (top5EditMode) {
+                  return (
+                    <FavSlotEdit
+                      key={i}
+                      item={ar ? { artworkUrl: ar.artworkUrl, title: ar.name } : undefined}
+                      circular
+                      onPress={() => setSlotPicker({ type: 'artist', index: i })}
+                    />
+                  );
+                }
+                return (
+                  <FavSlotReadOnly
+                    key={i}
+                    item={ar ? { artworkUrl: ar.artworkUrl, title: ar.name } : undefined}
+                    circular
+                    onPress={ar ? () => router.push({ pathname: '/artist-detail', params: { id: ar.id, name: ar.name, artworkUrl: ar.artworkUrl } }) : undefined}
+                  />
+                );
+              })}
+            </View>
+          </View>
 
-      {/* ── Nav rows ──────────────────────────────────────────────────────── */}
-      <View style={[s.navGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <NavRow icon="music"      label="Listend"        sub={`${albumCount} albums`}        onPress={() => router.push({ pathname: '/my-listend',      params: { userId: viewedUserId, username: profile?.username ?? '' } })} colors={colors} />
-        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow icon="calendar"   label="Sessions"       sub="Listening diary"               onPress={() => router.push({ pathname: '/sessions',         params: { userId: viewedUserId } })} colors={colors} />
-        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow icon="bookmark-o" label="Want to Listen" sub={`${wantCount} saved`}          onPress={() => router.push({ pathname: '/want-to-listen',   params: { userId: viewedUserId } })} colors={colors} />
-        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`} onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })} colors={colors} />
-        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow icon="pencil"     label="Reviews"        sub={`${reviewCount} reviews`}      onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId } })} colors={colors} />
-        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow icon="list"       label="Playlists"      sub="Album lists"                   onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId } })} colors={colors} />
-        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow icon="heart"      label="Liked Artists"  sub="Their favourites"              onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId } })} colors={colors} />
-        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow icon="bar-chart"  label="Stats"          sub="Listening insights"            onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId } })} colors={colors} />
-      </View>
+          {/* ── Nav rows ────────────────────────────────────────────────────── */}
+          <View style={[s.navGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <NavRow icon="music"      label="Listend"        sub={`${albumCount} albums`}        onPress={() => router.push({ pathname: '/my-listend',      params: { userId: viewedUserId, username: profile?.username ?? '' } })} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="calendar"   label="Sessions"       sub="Listening diary"               onPress={() => router.push({ pathname: '/sessions',         params: { userId: viewedUserId } })} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="bookmark-o" label="Want to Listen" sub={`${wantCount} saved`}          onPress={() => router.push({ pathname: '/want-to-listen',   params: { userId: viewedUserId } })} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`} onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="quote-left" label="Reviews"        sub={`${reviewCount} reviews`}      onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId } })} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="list"       label="Playlists"      sub="Album lists"                   onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId } })} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="heart"      label="Liked Artists"  sub="Their favourites"              onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId } })} colors={colors} />
+            <NavRow icon="repeat"     label="Re-listend"     sub="Albums re-listend"             onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId } } as any)} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="bar-chart"  label="Stats"          sub="Listening insights"            onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId } })} colors={colors} />
+          </View>
+        </>
+      )}
 
       <SlotPickerModal
         visible={slotPicker !== null}
@@ -1064,6 +1199,16 @@ const s = StyleSheet.create({
   navLabel:     { fontSize: 16, fontWeight: '600' },
   navSub:       { fontSize: 13 },
   navSeparator: { height: StyleSheet.hairlineWidth, marginLeft: 58 },
+
+  // Private account wall
+  privateWall: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 32,
+    width: '100%',
+  },
+  wallTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
+  wallSub:   { fontSize: 14, textAlign: 'center', lineHeight: 20, opacity: 0.7 },
 });
 
 // ─── Rating modal styles ──────────────────────────────────────────────────────

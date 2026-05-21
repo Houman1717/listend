@@ -22,6 +22,18 @@ import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyServ
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useAlbums } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { navigateToProfile } from '@/lib/navigateToProfile';
+import { navigateToAlbum } from '@/lib/navigateToAlbum';
+import {
+  PopularReview,
+  fetchTopAlbumsThisWeek,
+  fetchTopSongsThisWeek,
+  fetchTopArtistsThisWeek,
+  fetchPopularReviewsThisWeek,
+} from '@/lib/homeData';
+import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
@@ -190,7 +202,7 @@ export { avatarColor };
 
 // ─── Popular review mock comments ────────────────────────────────────────────
 
-export const POPULAR_REVIEW_COMMENTS: ReviewComment[] = [
+export export const POPULAR_REVIEW_COMMENTS: ReviewComment[] = [
   // Review 1 — After Hours
   { id: 'pr_c1', reviewId: '1', userId: 'u1', username: 'nightfreq',     body: 'Blinding Lights is one of those songs that transcends the whole album.',  createdAt: '1 day ago'  },
   { id: 'pr_c2', reviewId: '1', userId: 'u2', username: 'wavesurfer',    body: 'The whole aesthetic is so coherent from start to finish.',                 createdAt: '2 days ago' },
@@ -266,6 +278,28 @@ function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumbe
   );
 }
 
+// ─── Volume + bars badge ──────────────────────────────────────────────────────
+
+function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumber?: boolean; isDark?: boolean }) {
+  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <FontAwesome name="volume-up" size={10} color="#D4A017" />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+        {Array.from({ length: 10 }, (_, i) => {
+          const h = Math.round(3 + i * 1);
+          return (
+            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }} />
+          );
+        })}
+      </View>
+      {showNumber && (
+        <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
+      )}
+    </View>
+  );
+}
+
 // ─── Album card ───────────────────────────────────────────────────────────────
 
 function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; isDark: boolean; isLogged?: boolean; onPress: () => void }) {
@@ -291,19 +325,14 @@ function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; is
 
 // ─── Song card ────────────────────────────────────────────────────────────────
 
-function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index: number; isDark: boolean; onPress: () => void }) {
+function SongCard({ item, isDark, onPress }: { item: SpotifyTrack; isDark: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: SONG_CARD, opacity: pressed ? 0.7 : 1 }]}>
-      <View>
-        {item.artworkUrl ? (
-          <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: SONG_CARD, height: SONG_CARD, borderRadius: 6 }} contentFit="cover" cachePolicy="disk" transition={200} />
-        ) : (
-          <ArtFallback size={SONG_CARD} radius={6} label={item.title} />
-        )}
-        <View style={s.rankBadge}>
-          <Text style={s.rankText}>#{index + 1}</Text>
-        </View>
-      </View>
+      {item.artworkUrl ? (
+        <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: SONG_CARD, height: SONG_CARD, borderRadius: 6 }} contentFit="cover" cachePolicy="disk" transition={200} />
+      ) : (
+        <ArtFallback size={SONG_CARD} radius={6} label={item.title} />
+      )}
       <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{item.title}</Text>
       <Text style={[s.cardSub,   { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
@@ -396,8 +425,11 @@ function PopularReviewCard({
           onPress={(e) => { e.stopPropagation?.(); onUsernamePress?.(); }}
           hitSlop={6}
           style={[pr.userRow, { opacity: 1 }]}>
-          <View style={[pr.avatar, { backgroundColor: avatarColor(item.username) }]}>
-            <Text style={pr.avatarLetter}>{item.username[0].toUpperCase()}</Text>
+          <View style={[pr.avatar, { backgroundColor: avatarColor(item.username), overflow: 'hidden' }]}>
+            {item.avatarUrl
+              ? <ExpoImage source={{ uri: item.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+              : <Text style={pr.avatarLetter}>{item.username[0].toUpperCase()}</Text>
+            }
           </View>
           <Text style={[pr.username, { color: '#D4A017' }]} numberOfLines={1}>
             @{item.username}
@@ -505,8 +537,11 @@ function PopularReviewModal({
               style={rm.authorRow}
               onPress={() => { onClose(); onUsernamePress?.(review.username); }}
               disabled={!onUsernamePress}>
-              <View style={[rm.avatar, { backgroundColor: avatarColor(review.username) }]}>
-                <Text style={rm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+              <View style={[rm.avatar, { backgroundColor: avatarColor(review.username), overflow: 'hidden' }]}>
+                {review.avatarUrl
+                  ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+                  : <Text style={rm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+                }
               </View>
               <Text style={rm.username}>@{review.username}</Text>
             </Pressable>
@@ -583,6 +618,114 @@ function FriendFullRow({
   onUsernamePress?: () => void;
 }) {
   const router = useRouter();
+  const router = useRouter();
+  const [liked,            setLiked]            = useState(false);
+  const [likeCount,        setLikeCount]        = useState(friend.likeCount);
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
+  const [localComments,    setLocalComments]    = useState<ReviewComment[]>([]);
+
+  const border  = isDark ? '#2a1e14' : '#e8e8e8';
+  const subtext = isDark ? '#6B4C35' : '#A08060';
+
+  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+    setLocalComments(prev => [...prev, {
+      id: `ffc_${Date.now()}`, reviewId: friend.id,
+      userId: 'me', username: commenterUsername ?? 'me', body,
+      parentCommentId: parentId ?? undefined,
+      replyToUsername: replyToUsername ?? null,
+      avatarUrl: avatarUrl ?? null,
+      createdAt: 'just now',
+    }]);
+  }
+
+  return (
+    <View style={[flr.card, { backgroundColor: isDark ? '#2e2018' : '#fff', borderColor: border }]}>
+      {/* Album row */}
+      <Pressable onPress={onAlbumPress} style={({ pressed }) => [flr.topRow, { opacity: pressed ? 0.7 : 1 }]}>
+        <ExpoImage source={{ uri: friend.artworkUrl }} style={flr.art} contentFit="cover" cachePolicy="disk" transition={200} />
+        <View style={flr.albumInfo}>
+          <Text style={[flr.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={2}>{friend.album}</Text>
+          <Text style={[flr.albumArtist, { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={1}>{friend.artist} · {friend.year}</Text>
+          {(!!friend.rating || friend.isReListened) && (
+            <View style={[flr.ratingRow, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+              {!!friend.rating && <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />}
+              {friend.isReListened && <FontAwesome name="repeat" size={9} color="#D4A017" />}
+            </View>
+          )}
+        </View>
+      </Pressable>
+
+      {/* Review text */}
+      {friend.review ? (
+        <Text style={[flr.reviewText, { color: isDark ? '#a07850' : '#3a2818' }]}>
+          "{friend.review}"
+        </Text>
+      ) : (
+        <Text style={[flr.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
+          No written review.
+        </Text>
+      )}
+
+      {/* Footer */}
+      <View style={[flr.footer, { borderTopColor: border }]}>
+        <Pressable
+          style={flr.userRow}
+          onPress={onUsernamePress}
+          hitSlop={6}>
+          <View style={[flr.avatar, { backgroundColor: avatarColor(friend.user), overflow: 'hidden' }]}>
+            {friend.avatarUrl
+              ? <ExpoImage source={{ uri: friend.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+              : <Text style={flr.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+            }
+          </View>
+          <View>
+            <Text style={flr.username}>@{friend.user}</Text>
+            <Text style={[flr.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>Listend {friend.loggedDate}</Text>
+          </View>
+        </Pressable>
+        <View style={flr.footerActions}>
+          <Pressable onPress={() => setCommentsExpanded(p => !p)} hitSlop={8} style={flr.actionBtn}>
+            <FontAwesome name="comment-o" size={16} color={commentsExpanded ? '#D4A017' : subtext} />
+            <Text style={[flr.actionCount, { color: commentsExpanded ? '#D4A017' : subtext }]}>{localComments.length}</Text>
+          </Pressable>
+          <Pressable onPress={onLike} hitSlop={8} style={flr.actionBtn}>
+            <FontAwesome name={liked ? 'heart' : 'heart-o'} size={16} color={liked ? '#D4A017' : subtext} />
+            <Text style={[flr.actionCount, { color: liked ? '#D4A017' : subtext }]}>{friend.likeCount + (liked ? 1 : 0)}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {commentsExpanded && (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 4 }}>
+          <CommentsSection
+            comments={localComments}
+            isDark={isDark}
+            colors={colors}
+            onAddComment={handleAddComment}
+            onUsernamePress={(username) => navigateToProfile(username, router)}
+            large
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Friend full row (used in See More list — popular-review style) ───────────
+
+function FriendFullRow({
+  friend,
+  isDark,
+  colors,
+  onAlbumPress,
+  onUsernamePress,
+}: {
+  friend: FriendEntry;
+  isDark: boolean;
+  colors: any;
+  onAlbumPress: () => void;
+  onUsernamePress?: () => void;
+}) {
   const [liked,            setLiked]            = useState(false);
   const [likeCount,        setLikeCount]        = useState(friend.likeCount);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
@@ -677,14 +820,12 @@ function FriendFullRow({
 
 function FriendCard({
   friend,
-  ago,
   isDark,
   colors,
   onPress,
   onUsernamePress,
 }: {
   friend: FriendEntry;
-  ago: string;
   isDark: boolean;
   colors: any;
   onPress: () => void;
@@ -709,12 +850,19 @@ function FriendCard({
         <ArtFallback size={artSize} radius={6} label={friend.album} />
       )}
       <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress?.(); }} hitSlop={6}>
+        <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress?.(); }} hitSlop={6}>
         <Text style={[s.friendUser, { color: '#D4A017' }]} numberOfLines={1}>@{friend.user}</Text>
+      </Pressable>
       </Pressable>
       <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{friend.album}</Text>
       <Text style={[s.cardSub,    { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{friend.artist}</Text>
       <Text style={[s.friendAgo, { color: colors.subtext, marginTop: 2 }]}>Listend {friend.loggedDate}</Text>
-      {friend.rating != null && <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />}
+      {(!!friend.rating || friend.isReListened) && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          {!!friend.rating && <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />}
+          {friend.isReListened && <FontAwesome name="repeat" size={9} color="#D4A017" />}
+        </View>
+      )}
       {friend.review ? (
         <Text style={[s.friendReviewSnippet, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={2}>
           "{friend.review}"
@@ -729,6 +877,9 @@ function FriendCard({
 function FriendReviewModal({
   friend,
   comments,
+  liked,
+  onLike,
+  onAddComment,
   isDark,
   colors,
   onClose,
@@ -737,39 +888,19 @@ function FriendReviewModal({
 }: {
   friend: FriendEntry;
   comments: ReviewComment[];
+  liked: boolean;
+  onLike: () => void;
+  onAddComment: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
   isDark: boolean;
   colors: any;
   onClose: () => void;
   onAlbumPress: () => void;
   onUsernamePress?: (username: string) => void;
 }) {
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(friend.likeCount);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
-  const [localComments, setLocalComments] = useState<ReviewComment[]>(comments);
 
   const bg     = isDark ? colors.background : colors.background;
   const border = isDark ? '#2a1e14' : '#e5e5e5';
-
-  function handleLike() {
-    setLiked(prev => !prev);
-    setLikeCount(prev => liked ? prev - 1 : prev + 1);
-  }
-
-  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
-    const newComment: ReviewComment = {
-      id:              `fc_new_${Date.now()}`,
-      reviewId:        friend.id,
-      userId:          'me',
-      username:        commenterUsername ?? 'me',
-      avatarUrl:       avatarUrl ?? null,
-      body,
-      parentCommentId: parentId ?? undefined,
-      replyToUsername: replyToUsername ?? null,
-      createdAt:       'just now',
-    };
-    setLocalComments(prev => [...prev, newComment]);
-  }
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -802,10 +933,13 @@ function FriendReviewModal({
                 <Text style={[rm.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
                   {friend.artist} · {friend.year}
                 </Text>
-                {friend.rating != null && (
+                {!!friend.rating && (
                   <View style={rm.ratingRow}>
                     <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />
                   </View>
+                )}
+                {friend.isReListened && (
+                  <FontAwesome name="repeat" size={9} color="#D4A017" style={{ marginTop: 2 }} />
                 )}
               </View>
             </Pressable>
@@ -815,8 +949,11 @@ function FriendReviewModal({
               style={rm.authorRow}
               onPress={() => { onClose(); onUsernamePress?.(friend.user); }}
               disabled={!onUsernamePress}>
-              <View style={[rm.avatar, { backgroundColor: avatarColor(friend.user) }]}>
-                <Text style={rm.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+              <View style={[rm.avatar, { backgroundColor: avatarColor(friend.user), overflow: 'hidden' }]}>
+                {friend.avatarUrl
+                  ? <ExpoImage source={{ uri: friend.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+                  : <Text style={rm.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+                }
               </View>
               <View style={{ gap: 1 }}>
                 <Text style={rm.username}>@{friend.user}</Text>
@@ -839,14 +976,14 @@ function FriendReviewModal({
 
             {/* Like + comment toggle row */}
             <View style={[frm.likeCommentRow, { borderColor: border }]}>
-              <Pressable onPress={handleLike} hitSlop={8} style={frm.likeBtn}>
+              <Pressable onPress={onLike} hitSlop={8} style={frm.likeBtn}>
                 <FontAwesome
                   name={liked ? 'heart' : 'heart-o'}
                   size={15}
                   color={liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35')}
                 />
                 <Text style={[frm.likeCount, { color: liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35') }]}>
-                  {likeCount}
+                  {friend.likeCount + (liked ? 1 : 0)}
                 </Text>
               </Pressable>
 
@@ -860,9 +997,9 @@ function FriendReviewModal({
                   color={commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060')}
                 />
                 <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060') }]}>
-                  {localComments.length === 0
+                  {comments.length === 0
                     ? 'No comments yet'
-                    : `${localComments.length} comment${localComments.length !== 1 ? 's' : ''}`}
+                    : `${comments.length} comment${comments.length !== 1 ? 's' : ''}`}
                 </Text>
                 <FontAwesome
                   name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
@@ -875,10 +1012,10 @@ function FriendReviewModal({
 
             {commentsExpanded && (
               <CommentsSection
-                comments={localComments}
+                comments={comments}
                 isDark={isDark}
                 colors={colors}
-                onAddComment={handleAddComment}
+                onAddComment={onAddComment}
                 onUsernamePress={(username) => { onClose(); onUsernamePress?.(username); }}
               />
             )}
@@ -889,6 +1026,206 @@ function FriendReviewModal({
   );
 }
 
+// ─── Friends Recent Activity types + fetch ────────────────────────────────────
+
+type FriendProfile = { id: string; username: string | null; avatarUrl: string | null };
+
+type FriendActivityItem =
+  | { kind: 'top5';            key: string; friend: FriendProfile; category: string; itemId: string; itemName: string; itemImageUrl: string | null; position: number; dateMs: number; dateLabel: string }
+  | { kind: 'likedArtist';     key: string; friend: FriendProfile; artistId: string; name: string; artworkUrl: string | null; dateMs: number; dateLabel: string }
+  | { kind: 'likedPlaylist';   key: string; friend: FriendProfile; targetId: string; name: string; artworkUrls: string[]; dateMs: number; dateLabel: string }
+  | { kind: 'createdPlaylist'; key: string; friend: FriendProfile; playlistId: string; name: string; artworkUrls: string[]; dateMs: number; dateLabel: string }
+  | { kind: 'wantToListen';    key: string; friend: FriendProfile; albumId: string; title: string; artist: string; artworkUrl: string | null; dateMs: number; dateLabel: string }
+  | { kind: 'flippedRecord';   key: string; friend: FriendProfile; albumTitle: string; albumArtist: string; artworkUrl: string | null; dateMs: number; dateLabel: string };
+
+function faDateLabel(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+async function fetchFriendPlaylistArtwork(playlistIds: string[]): Promise<Map<string, string[]>> {
+  if (playlistIds.length === 0) return new Map();
+  const { data: pas } = await supabase
+    .from('playlist_albums').select('playlist_id, spotify_id, position')
+    .in('playlist_id', playlistIds).order('position', { ascending: true });
+  const allIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id as string))];
+  const artMap = new Map<string, string>();
+  if (allIds.length > 0) {
+    const { data: uas } = await supabase.from('user_albums').select('spotify_id, artwork_url').in('spotify_id', allIds);
+    for (const a of (uas ?? []) as any[]) { if (a.artwork_url) artMap.set(a.spotify_id, a.artwork_url); }
+  }
+  const result = new Map<string, string[]>();
+  for (const id of playlistIds) {
+    const albums = (pas ?? []).filter((a: any) => a.playlist_id === id).slice(0, 4);
+    result.set(id, albums.map((a: any) => artMap.get(a.spotify_id) ?? '').filter(Boolean));
+  }
+  return result;
+}
+
+async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> {
+  const [{ data: outRows }, { data: inRows }] = await Promise.all([
+    supabase.from('follows').select('following_id').eq('follower_id', uid),
+    supabase.from('follows').select('follower_id').eq('following_id', uid),
+  ]);
+  if (!outRows?.length || !inRows?.length) return [];
+  const inSet = new Set((inRows as any[]).map(r => r.follower_id as string));
+  const friendIds = [...new Set((outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string))];
+  if (friendIds.length === 0) return [];
+
+  const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', friendIds);
+  const profileMap = new Map<string, FriendProfile>();
+  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { id: p.id, username: p.username, avatarUrl: p.avatar_url });
+
+  const items: FriendActivityItem[] = [];
+
+  const [{ data: top5Rows }, { data: likedArtistRows }, { data: likedPlRows }, { data: createdPlRows }, { data: wantRows }, { data: flipRows }] =
+    await Promise.all([
+      supabase.from('top5_changes').select('id, user_id, category, item_id, item_name, item_image_url, position, changed_at').in('user_id', friendIds).order('changed_at', { ascending: false }).limit(60),
+      supabase.from('liked_artists').select('user_id, artist_id, name, artwork_url, created_at').in('user_id', friendIds).order('created_at', { ascending: false }).limit(60),
+      supabase.from('likes').select('user_id, target_id, created_at').in('user_id', friendIds).eq('target_type', 'playlist').not('target_id', 'ilike', 'featured:%').order('created_at', { ascending: false }).limit(60),
+      supabase.from('playlists').select('id, user_id, name, created_at').in('user_id', friendIds).order('created_at', { ascending: false }).limit(60),
+      supabase.from('want_to_listen').select('user_id, spotify_id, title, artist, artwork_url, created_at').in('user_id', friendIds).order('created_at', { ascending: false }).limit(60),
+      supabase.from('flip_records').select('id, user_id, album_title, album_artist, artwork_url, flipped_at').in('user_id', friendIds).order('flipped_at', { ascending: false }).limit(60),
+    ]);
+
+  for (const r of (top5Rows ?? []) as any[]) {
+    const friend = profileMap.get(r.user_id); if (!friend) continue;
+    items.push({ kind: 'top5', key: `top5-${r.id}`, friend, category: r.category, itemId: r.item_id, itemName: r.item_name, itemImageUrl: r.item_image_url ?? null, position: r.position, dateMs: new Date(r.changed_at).getTime(), dateLabel: faDateLabel(r.changed_at) });
+  }
+
+  for (const r of (likedArtistRows ?? []) as any[]) {
+    const friend = profileMap.get(r.user_id); if (!friend) continue;
+    items.push({ kind: 'likedArtist', key: `la-${r.user_id}-${r.artist_id}`, friend, artistId: r.artist_id, name: r.name ?? '', artworkUrl: r.artwork_url ?? null, dateMs: new Date(r.created_at).getTime(), dateLabel: faDateLabel(r.created_at) });
+  }
+
+  if (likedPlRows && likedPlRows.length > 0) {
+    const plIds = (likedPlRows as any[]).map(r => r.target_id as string);
+    const [{ data: plData }, artworkMap] = await Promise.all([supabase.from('playlists').select('id, name').in('id', plIds), fetchFriendPlaylistArtwork(plIds)]);
+    const plNameMap = new Map((plData ?? []).map((p: any) => [p.id as string, p.name as string]));
+    for (const r of likedPlRows as any[]) {
+      const friend = profileMap.get(r.user_id); if (!friend) continue;
+      items.push({ kind: 'likedPlaylist', key: `lp-${r.user_id}-${r.target_id}`, friend, targetId: r.target_id, name: plNameMap.get(r.target_id) ?? 'Playlist', artworkUrls: artworkMap.get(r.target_id) ?? [], dateMs: new Date(r.created_at).getTime(), dateLabel: faDateLabel(r.created_at) });
+    }
+  }
+
+  if (createdPlRows && createdPlRows.length > 0) {
+    const plIds = (createdPlRows as any[]).map(r => r.id as string);
+    const artworkMap = await fetchFriendPlaylistArtwork(plIds);
+    for (const r of createdPlRows as any[]) {
+      const friend = profileMap.get(r.user_id); if (!friend) continue;
+      items.push({ kind: 'createdPlaylist', key: `cp-${r.user_id}-${r.id}`, friend, playlistId: r.id, name: r.name ?? 'Playlist', artworkUrls: artworkMap.get(r.id) ?? [], dateMs: new Date(r.created_at).getTime(), dateLabel: faDateLabel(r.created_at) });
+    }
+  }
+
+  for (const r of (wantRows ?? []) as any[]) {
+    const friend = profileMap.get(r.user_id); if (!friend) continue;
+    items.push({ kind: 'wantToListen', key: `wtl-${r.user_id}-${r.spotify_id}`, friend, albumId: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', artworkUrl: r.artwork_url ?? null, dateMs: new Date(r.created_at).getTime(), dateLabel: faDateLabel(r.created_at) });
+  }
+
+  for (const r of (flipRows ?? []) as any[]) {
+    const friend = profileMap.get(r.user_id); if (!friend) continue;
+    items.push({ kind: 'flippedRecord', key: `flip-${r.id}`, friend, albumTitle: r.album_title ?? '', albumArtist: r.album_artist ?? '', artworkUrl: r.artwork_url ?? null, dateMs: new Date(r.flipped_at).getTime(), dateLabel: faDateLabel(r.flipped_at) });
+  }
+
+  items.sort((a, b) => b.dateMs - a.dateMs);
+  return items.slice(0, 30);
+}
+
+const FA_PILL: Record<string, { label: string; icon: string }> = {
+  top5:            { label: 'Top 5',            icon: 'list-ol'  },
+  likedArtist:     { label: 'Liked Artist',     icon: 'heart'    },
+  likedPlaylist:   { label: 'Liked Playlist',   icon: 'heart'    },
+  createdPlaylist: { label: 'New Playlist',     icon: 'list'     },
+  wantToListen:    { label: 'Want to Listen',   icon: 'bookmark' },
+  flippedRecord:   { label: 'Flipped a Record', icon: 'random'   },
+};
+
+function PlaylistMosaicSmall({ artworkUrls, size, fallback }: { artworkUrls: string[]; size: number; fallback: string }) {
+  const half = size / 2;
+  const slots = Array.from({ length: 4 }, (_, i) => artworkUrls[i] ?? null);
+  return (
+    <View style={{ width: size, height: size, borderRadius: 6, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap', flexShrink: 0 }}>
+      {slots.map((url, i) =>
+        url
+          ? <ExpoImage key={i} source={{ uri: url }} style={{ width: half, height: half }} contentFit="cover" cachePolicy="disk" />
+          : <View key={i} style={{ width: half, height: half, backgroundColor: fallback }} />
+      )}
+    </View>
+  );
+}
+
+function FriendActivityCard({
+  item, isDark, colors, onPress, onUsernamePress,
+}: {
+  item: FriendActivityItem;
+  isDark: boolean;
+  colors: typeof Colors.light;
+  onPress: () => void;
+  onUsernamePress: () => void;
+}) {
+  const pill = FA_PILL[item.kind];
+  const artSize = FRIEND_CARD - 24;
+  const fallback = isDark ? '#2a1e14' : '#e5ddd5';
+
+  let imageUrl: string | null = null;
+  let isCircle = false;
+  let mosaicUrls: string[] | null = null;
+  let itemName = '';
+  let itemSub: string | null = null;
+
+  if (item.kind === 'top5') {
+    imageUrl = item.itemImageUrl;
+    isCircle = item.category === 'artists';
+    itemName = item.itemName;
+    const cat = item.category.charAt(0).toUpperCase() + item.category.slice(1);
+    itemSub = `Top 5 ${cat} · #${item.position}`;
+  } else if (item.kind === 'likedArtist') {
+    imageUrl = item.artworkUrl; isCircle = true; itemName = item.name;
+  } else if (item.kind === 'likedPlaylist') {
+    mosaicUrls = item.artworkUrls; itemName = item.name;
+    if (item.targetId.startsWith('featured:')) itemSub = 'by Listend';
+  } else if (item.kind === 'createdPlaylist') {
+    mosaicUrls = item.artworkUrls; itemName = item.name;
+  } else if (item.kind === 'wantToListen') {
+    imageUrl = item.artworkUrl; itemName = item.title; itemSub = item.artist;
+  } else if (item.kind === 'flippedRecord') {
+    imageUrl = item.artworkUrl; itemName = item.albumTitle; itemSub = item.albumArtist;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [{
+        width: FRIEND_CARD, borderRadius: 12, borderWidth: 1, padding: 12,
+        gap: 5,
+        backgroundColor: isDark ? '#3A2820' : '#FFFFFF',
+        borderColor: isDark ? '#2a1e14' : '#DDD5C8',
+        opacity: pressed ? 0.7 : 1,
+      }]}>
+      {mosaicUrls !== null ? (
+        <PlaylistMosaicSmall artworkUrls={mosaicUrls} size={artSize} fallback={fallback} />
+      ) : imageUrl ? (
+        <ExpoImage source={{ uri: imageUrl }} style={{ width: artSize, height: artSize, borderRadius: isCircle ? artSize / 2 : 6 }} contentFit="cover" cachePolicy="disk" />
+      ) : (
+        <View style={{ width: artSize, height: artSize, borderRadius: isCircle ? artSize / 2 : 6, backgroundColor: fallback, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: isDark ? '#7a5535' : '#a07850', fontSize: 28, fontWeight: '700' }}>{itemName.charAt(0)}</Text>
+        </View>
+      )}
+      <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress(); }} hitSlop={6}>
+        <Text style={{ color: '#D4A017', fontSize: 11, fontWeight: '700' }} numberOfLines={1}>@{item.friend.username ?? 'user'}</Text>
+      </Pressable>
+      <Text style={{ color: isDark ? '#f5e6c8' : '#1A0F0A', fontSize: 12, fontWeight: '600', lineHeight: 16 }} numberOfLines={2}>{itemName}</Text>
+      {itemSub ? <Text style={{ color: isDark ? '#A08060' : '#6B4C35', fontSize: 11 }} numberOfLines={1}>{itemSub}</Text> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: '#D4A017', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+          <FontAwesome name={pill.icon as any} size={8} color="#D4A017" />
+          <Text style={{ color: '#D4A017', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }}>{pill.label}</Text>
+        </View>
+      </View>
+      <Text style={{ color: isDark ? '#7a5535' : '#a07850', fontSize: 10 }} numberOfLines={1}>{item.dateLabel}</Text>
+    </Pressable>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
@@ -896,74 +1233,141 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
+  const { width } = useWindowDimensions();
 
+  const { user } = useAuth();
   const { loggedAlbums } = useAlbums();
   const loggedIds = new Set(loggedAlbums.map((a) => a.id));
 
-  const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(cache.albums   ?? []);
-  const [songs,   setSongs]   = useState<SpotifyTrack[]>(cache.songs    ?? []);
-  const [artists, setArtists] = useState<SpotifyArtist[]>(cache.artists ?? []);
-  const [loading, setLoading] = useState(!cache.albums);
+  const [albums,         setAlbums]         = useState<SpotifyAlbum[]>(cache.albums         ?? []);
+  const [songs,          setSongs]          = useState<SpotifyTrack[]>(cache.songs          ?? []);
+  const [artists,        setArtists]        = useState<SpotifyArtist[]>(cache.artists       ?? []);
+  const [popularReviews, setPopularReviews] = useState<PopularReview[]>(cache.popularReviews ?? []);
+  const [loading,        setLoading]        = useState(!cache.albums);
+  const [friendsListened,        setFriendsListened]        = useState<FriendEntry[]>([]);
+  const [friendsListenedLoading, setFriendsListenedLoading] = useState(false);
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
 
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
+  const [friendsActivity,        setFriendsActivity]        = useState<FriendActivityItem[]>([]);
+  const [friendsActivityLoading, setFriendsActivityLoading] = useState(false);
+  const [showAllFriendActivity,  setShowAllFriendActivity]  = useState(false);
+  const [showAllAlbums,          setShowAllAlbums]          = useState(false);
+  const [showAllSongs,           setShowAllSongs]           = useState(false);
+  const [showAllArtists,         setShowAllArtists]         = useState(false);
+
   // Friend review modal state
   const [expandedFriend, setExpandedFriend] = useState<FriendEntry | null>(null);
   const [showAllFriends, setShowAllFriends] = useState(false);
+  const [showAllFriends, setShowAllFriends] = useState(false);
+
+  // Friend review modal state
+  const [expandedFriend, setExpandedFriend] = useState<FriendEntry | null>(null);
 
   // Comments state for popular reviews
   const [expandedReview,     setExpandedReview]     = useState<PopularReview | null>(null);
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
-  const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(() => {
-    const m = new Map<string, ReviewComment[]>();
-    for (const c of POPULAR_REVIEW_COMMENTS) {
-      m.set(c.reviewId, [...(m.get(c.reviewId) ?? []), c]);
-    }
-    return m;
-  });
+  const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(new Map());
+
+  useEffect(() => {
+    if (!user?.id || popularReviews.length === 0) return;
+    const ids = popularReviews.map(r => r.id);
+    supabase.from('likes').select('target_id')
+      .eq('target_type', 'review').eq('user_id', user.id).in('target_id', ids)
+      .then(({ data }) => {
+        setLikedReviews(prev => {
+          const next = new Set(prev);
+          for (const r of (data ?? []) as any[]) next.add(r.target_id as string);
+          return next;
+        });
+      });
+  }, [popularReviews.length, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || friendsListened.length === 0) return;
+    const ids = friendsListened.map(r => r.id);
+    supabase.from('likes').select('target_id')
+      .eq('target_type', 'review').eq('user_id', user.id).in('target_id', ids)
+      .then(({ data }) => {
+        setLikedReviews(prev => {
+          const next = new Set(prev);
+          for (const r of (data ?? []) as any[]) next.add(r.target_id as string);
+          return next;
+        });
+      });
+  }, [friendsListened.length, user?.id]);
 
   function handleLikeReview(id: string) {
+    if (!user) return;
+    const wasLiked = likedReviews.has(id);
     setLikedReviews(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+    if (wasLiked) {
+      supabase.from('likes').delete()
+        .eq('user_id', user.id).eq('target_type', 'review').eq('target_id', id)
+        .then(({ error }) => {
+          if (error) setLikedReviews(prev => { const n = new Set(prev); n.add(id); return n; });
+        });
+    } else {
+      supabase.from('likes').insert({
+        user_id: user.id, target_type: 'review', target_id: id, target_owner_id: id.split('_')[0],
+      }).then(({ error }) => {
+        if (error) setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
+      });
+    }
   }
 
-  async function navigateToAlbum(title: string, artist: string, artworkUrl: string, year: string) {
-    try {
-      const q = encodeURIComponent(`${title} ${artist}`);
-      const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
-      if (res.ok) {
-        const data: SpotifyAlbum[] = await res.json();
-        const match = data[0];
-        if (match) {
-          router.push({ pathname: '/album-detail', params: { id: match.id, title: match.title, artist: match.artist, year: String(match.year), artworkUrl: match.artworkUrl } });
-          return;
-        }
-      }
-    } catch {}
-    router.push({ pathname: '/album-detail', params: { id: '', title, artist, artworkUrl, year } });
+  async function searchAndNavigateToAlbum(title: string, artist: string, artworkUrl: string, year: string) {
+    navigateToAlbum(router, { id: '', title, artist, artworkUrl, year });
+  }
+
+  function openReview(item: PopularReview, openComments = false) {
+    setExpandedReview(item);
+    setExpandedCommentsId(openComments ? item.id : null);
+    if (!commentsMap.has(item.id)) {
+      fetchReviewComments(item.id).then(comments => {
+        setCommentsMap(prev => {
+          const m = new Map(prev);
+          if (!m.has(item.id)) m.set(item.id, comments);
+          return m;
+        });
+      });
+    }
+  }
+
+  function openFriendReview(item: FriendEntry) {
+    setExpandedFriend(item);
+    if (!commentsMap.has(item.id)) {
+      fetchReviewComments(item.id).then(loaded => {
+        setCommentsMap(prev => {
+          const m = new Map(prev);
+          if (!m.has(item.id)) m.set(item.id, loaded);
+          return m;
+        });
+      });
+    }
   }
 
   function handleReviewCardPress(item: PopularReview) {
-    setExpandedReview(item);
-    setExpandedCommentsId(null);
+    openReview(item, false);
   }
 
   function handleReviewCommentCountPress(item: PopularReview) {
-    setExpandedReview(item);
-    setExpandedCommentsId(item.id);
+    openReview(item, true);
   }
 
   function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+    const tempId = `local_${Date.now()}`;
     const newComment: ReviewComment = {
-      id:              `local_${Date.now()}`,
+      id:              tempId,
       reviewId,
       parentCommentId: parentId ?? null,
       replyToUsername: replyToUsername ?? null,
-      userId:          'local',
+      userId:          user?.id ?? 'local',
       username:        commenterUsername ?? 'me',
       avatarUrl:       avatarUrl ?? null,
       body,
@@ -974,25 +1378,81 @@ export default function HomeScreen() {
       m.set(reviewId, [...(m.get(reviewId) ?? []), newComment]);
       return m;
     });
+    if (user?.id) {
+      insertReviewComment(reviewId, user.id, body, parentId ?? null).then(realId => {
+        if (realId) {
+          setCommentsMap(prev => {
+            const m = new Map(prev);
+            const list = (m.get(reviewId) ?? []).map(c => c.id === tempId ? { ...c, id: realId } : c);
+            m.set(reviewId, list);
+            return m;
+          });
+        }
+      });
+    }
   }
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setFriendsActivityLoading(true);
+    fetchFriendsActivity(user.id)
+      .then(setFriendsActivity)
+      .finally(() => setFriendsActivityLoading(false));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setFriendsListenedLoading(true);
+    fetchFriendsListened(user.id)
+      .then(setFriendsListened)
+      .finally(() => setFriendsListenedLoading(false));
+  }, [user?.id]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchHome()
-        .then((data) => {
-          cache.albums  = data.albums;
-          cache.songs   = data.songs;
-          cache.artists = data.artists;
-          setAlbums(data.albums);
-          setSongs(data.songs);
-          setArtists(data.artists);
-          const urls = data.albums.map(a => a.artworkUrl).filter(Boolean) as string[];
-          if (urls.length) ExpoImage.prefetch(urls);
+      Promise.allSettled([
+        fetchTopAlbumsThisWeek(),
+        fetchTopSongsThisWeek(),
+        fetchTopArtistsThisWeek(),
+        fetchPopularReviewsThisWeek(),
+      ])
+        .then(([albs, sngs, arts, reviews]) => {
+          if (albs.status === 'fulfilled')    { cache.albums         = albs.value;    setAlbums(albs.value);         const urls = albs.value.map(a => a.artworkUrl).filter(Boolean) as string[]; if (urls.length) ExpoImage.prefetch(urls); }
+          if (sngs.status === 'fulfilled')    { cache.songs          = sngs.value;    setSongs(sngs.value); }
+          if (arts.status === 'fulfilled')    { cache.artists        = arts.value;    setArtists(arts.value); }
+          if (reviews.status === 'fulfilled') { cache.popularReviews = reviews.value; setPopularReviews(reviews.value); }
+          if (albs.status    === 'rejected')    console.error('[Home] albums failed:',  albs.reason?.message);
+          if (sngs.status    === 'rejected')    console.error('[Home] songs failed:',   sngs.reason?.message);
+          if (arts.status    === 'rejected')    console.error('[Home] artists failed:',  arts.reason?.message);
+          if (reviews.status === 'rejected')    console.error('[Home] reviews failed:', reviews.reason?.message);
         })
-        .catch((err) => console.error('[Home] fetchHome failed:', err?.message ?? err))
         .finally(() => setLoading(false));
     }, [])
   );
+
+  function handleFriendActivityPress(item: FriendActivityItem) {
+    if (item.kind === 'top5') {
+      if (item.category === 'albums') {
+        router.push({ pathname: '/album-detail', params: { id: item.itemId, title: item.itemName, artworkUrl: item.itemImageUrl ?? '' } } as any);
+      } else {
+        router.push({ pathname: '/artist-detail', params: { id: item.itemId, name: item.itemName } });
+      }
+    } else if (item.kind === 'likedArtist') {
+      router.push({ pathname: '/artist-detail', params: { id: item.artistId, name: item.name } });
+    } else if (item.kind === 'likedPlaylist') {
+      if (item.targetId.startsWith('featured:')) {
+        router.push({ pathname: '/discover-featured-playlist', params: { id: item.targetId.replace('featured:', ''), name: item.name } } as any);
+      } else {
+        router.push({ pathname: '/playlist-detail', params: { id: item.targetId } });
+      }
+    } else if (item.kind === 'createdPlaylist') {
+      router.push({ pathname: '/playlist-detail', params: { id: item.playlistId } });
+    } else if (item.kind === 'wantToListen') {
+      navigateToAlbum(router, { id: item.albumId, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl ?? '' });
+    } else if (item.kind === 'flippedRecord') {
+      router.push('/flip-a-record' as any);
+    }
+  }
 
   function handleAlbumPress(item: SpotifyAlbum) {
     router.push({
@@ -1013,6 +1473,7 @@ export default function HomeScreen() {
   }
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.content}
@@ -1022,59 +1483,35 @@ export default function HomeScreen() {
       <Section title="Top Listend Albums This Week" loading={loading}>
         <FlatList
           horizontal
-          data={albums}
+          data={albums.slice(0, 10)}
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
           renderItem={({ item }) => (
             <AlbumCard item={item} isDark={isDark} isLogged={loggedIds.has(item.id)} onPress={() => handleAlbumPress(item)} />
           )}
-        />
-      </Section>
-
-      {/* 2 — Friends Recent Listend */}
-      <Section title="Friends Recent Listend" loading={false}>
-        <FlatList
-          horizontal
-          data={PLACEHOLDER_FRIENDS}
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[s.row, { alignItems: 'stretch' }]}
-          renderItem={({ item, index }) => (
-            <FriendCard
-              friend={item}
-              ago={AGO[index] ?? ''}
-              isDark={isDark}
-              colors={colors}
-              onPress={() => setExpandedFriend(item)}
-              onUsernamePress={() => navigateToProfile(item.user, router)}
-            />
-          )}
           ListFooterComponent={
-            <Pressable
-              onPress={() => setShowAllFriends(true)}
-              style={({ pressed }) => [
-                s.friendSeeMore,
-                {
-                  backgroundColor: isDark ? '#3A2820' : '#FFFFFF',
-                  borderColor: isDark ? '#2a1e14' : '#DDD5C8',
+            albums.length > 10 ? (
+              <Pressable
+                onPress={() => setShowAllAlbums(true)}
+                style={({ pressed }) => ({
+                  width: ALBUM_CARD, height: ALBUM_CARD, borderRadius: 6,
+                  justifyContent: 'center', alignItems: 'center',
+                  backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
                   opacity: pressed ? 0.7 : 1,
-                },
-              ]}>
-              <FontAwesome name="users" size={22} color={isDark ? '#7a5535' : '#a07850'} />
-              <Text style={[s.friendSeeMoreText, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>
-                See{'\n'}More
-              </Text>
-            </Pressable>
+                })}>
+                <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>See{'\n'}More</Text>
+              </Pressable>
+            ) : null
           }
         />
       </Section>
 
-      {/* 3 — Popular Reviews This Week */}
-      <Section title="Popular Reviews This Week" loading={false}>
+      {/* 2 — Popular Reviews This Week */}
+      <Section title="Popular Reviews This Week" loading={loading}>
         <FlatList
           horizontal
-          data={POPULAR_REVIEWS_DATA}
+          data={popularReviews.slice(0, 10)}
           keyExtractor={item => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={[s.row, { alignItems: 'stretch' }]}
@@ -1084,9 +1521,9 @@ export default function HomeScreen() {
               liked={likedReviews.has(item.id)}
               onLike={() => handleLikeReview(item.id)}
               onPress={() => handleReviewCardPress(item)}
-              onAlbumPress={() => navigateToAlbum(item.albumTitle, item.albumArtist, item.artworkUrl, item.albumYear)}
+              onAlbumPress={() => searchAndNavigateToAlbum(item.albumTitle, item.albumArtist, item.artworkUrl, item.albumYear)}
               onCommentCountPress={() => handleReviewCommentCountPress(item)}
-              commentCount={commentsMap.get(item.id)?.length ?? 0}
+              commentCount={commentsMap.has(item.id) ? (commentsMap.get(item.id)?.length ?? 0) : item.commentCount}
               isDark={isDark}
               colors={colors}
               onUsernamePress={() => navigateToProfile(item.username, router)}
@@ -1095,22 +1532,202 @@ export default function HomeScreen() {
           ListFooterComponent={
             <Pressable
               onPress={() => router.push('/popular-reviews')}
-              style={({ pressed }) => [
-                pr.seeMoreCard,
-                {
-                  backgroundColor: isDark ? '#3A2820' : '#FFFFFF',
-                  borderColor: isDark ? '#2a1e14' : '#DDD5C8',
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}>
-              <FontAwesome name="comments" size={22} color={isDark ? '#7a5535' : '#a07850'} />
-              <Text style={[pr.seeMoreText, { color: isDark ? '#7a5535' : '#a07850' }]}>
+              style={({ pressed }) => ({
+                width: 120, height: 192, borderRadius: 6,
+                justifyContent: 'center', alignItems: 'center',
+                backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
+                opacity: pressed ? 0.7 : 1,
+              })}>
+              <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>
                 See{'\n'}More
               </Text>
             </Pressable>
           }
         />
       </Section>
+
+      {/* 3 — Friends Recent Listend */}
+      <Section title="Friends Recent Listend" loading={friendsListenedLoading}>
+        <FlatList
+          horizontal
+          data={friendsListened.slice(0, 10)}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[s.row, { alignItems: 'stretch' }]}
+          renderItem={({ item }) => (
+            <FriendCard
+              friend={item}
+              isDark={isDark}
+              colors={colors}
+              onPress={() => openFriendReview(item)}
+              onUsernamePress={() => navigateToProfile(item.user, router)}
+            />
+          )}
+          ListFooterComponent={
+            <Pressable
+              onPress={() => setShowAllFriends(true)}
+              style={({ pressed }) => ({
+                width: 120, height: 285, borderRadius: 6,
+                justifyContent: 'center', alignItems: 'center',
+                backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
+                opacity: pressed ? 0.7 : 1,
+              })}>
+              <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>
+                See{'\n'}More
+              </Text>
+            </Pressable>
+          }
+        />
+      </Section>
+
+      {/* 4 — Friends Recent Activity */}
+      {(friendsActivityLoading || friendsActivity.length > 0) && (
+        <Section title="Friends Recent Activity" loading={friendsActivityLoading}>
+          <FlatList
+            horizontal
+            data={friendsActivity.slice(0, 10)}
+            keyExtractor={item => item.key}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[s.row, { alignItems: 'stretch' }]}
+            renderItem={({ item }) => (
+              <FriendActivityCard
+                item={item}
+                isDark={isDark}
+                colors={colors}
+                onUsernamePress={() => navigateToProfile(item.friend.username ?? '', router)}
+                onPress={() => handleFriendActivityPress(item)}
+              />
+            )}
+            ListFooterComponent={
+              friendsActivity.length > 10 ? (
+                <Pressable
+                  onPress={() => setShowAllFriendActivity(true)}
+                  style={({ pressed }) => ({
+                    width: 120, height: 240, borderRadius: 6,
+                    justifyContent: 'center', alignItems: 'center',
+                    backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
+                    opacity: pressed ? 0.7 : 1,
+                  })}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>
+                    See{'\n'}More
+                  </Text>
+                </Pressable>
+              ) : null
+            }
+          />
+        </Section>
+      )}
+
+      {/* Friends Recent Activity — full list modal */}
+      <Modal visible={showAllFriendActivity} animationType="slide" onRequestClose={() => setShowAllFriendActivity(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <SafeAreaView style={{ flex: 1 }}>
+            <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
+              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Friends Recent Activity</Text>
+              <Pressable onPress={() => setShowAllFriendActivity(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
+                <FontAwesome name="times" size={20} color={colors.subtext} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={friendsActivity}
+              keyExtractor={item => item.key}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 8, paddingBottom: 48 }}
+              ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 83 }} />}
+              renderItem={({ item }) => {
+                let imageUrl: string | null = null;
+                let isCircle = false;
+                let mosaicUrls: string[] | null = null;
+                let itemName = '';
+                let itemSub: string | null = null;
+                const pill = FA_PILL[item.kind];
+
+                if (item.kind === 'top5') {
+                  imageUrl = item.itemImageUrl; isCircle = item.category === 'artists'; itemName = item.itemName;
+                  const cat = item.category.charAt(0).toUpperCase() + item.category.slice(1);
+                  itemSub = `Top 5 ${cat} · #${item.position}`;
+                } else if (item.kind === 'likedArtist') {
+                  imageUrl = item.artworkUrl; isCircle = true; itemName = item.name;
+                } else if (item.kind === 'likedPlaylist') {
+                  mosaicUrls = item.artworkUrls; itemName = item.name;
+                  if (item.targetId.startsWith('featured:')) itemSub = 'by Listend';
+                } else if (item.kind === 'createdPlaylist') {
+                  mosaicUrls = item.artworkUrls; itemName = item.name;
+                } else if (item.kind === 'wantToListen') {
+                  imageUrl = item.artworkUrl; itemName = item.title; itemSub = item.artist;
+                } else if (item.kind === 'flippedRecord') {
+                  imageUrl = item.artworkUrl; itemName = item.albumTitle; itemSub = item.albumArtist;
+                }
+
+                const fallback = isDark ? '#2a1e14' : '#e5ddd5';
+                return (
+                  <Pressable
+                    style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, gap: 13, opacity: pressed ? 0.72 : 1 })}
+                    onPress={() => { setShowAllFriendActivity(false); handleFriendActivityPress(item); }}>
+                    {mosaicUrls !== null ? (
+                      <PlaylistMosaicSmall artworkUrls={mosaicUrls} size={52} fallback={fallback} />
+                    ) : imageUrl ? (
+                      <ExpoImage source={{ uri: imageUrl }} style={{ width: 52, height: 52, borderRadius: isCircle ? 26 : 8, flexShrink: 0 }} contentFit="cover" cachePolicy="disk" />
+                    ) : (
+                      <View style={{ width: 52, height: 52, borderRadius: isCircle ? 26 : 8, backgroundColor: fallback, justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                        <Text style={{ color: isDark ? '#7a5535' : '#a07850', fontSize: 18, fontWeight: '700' }}>{itemName.charAt(0)}</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Pressable onPress={() => { setShowAllFriendActivity(false); navigateToProfile(item.friend.username ?? '', router); }} hitSlop={6}>
+                        <Text style={{ color: '#D4A017', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>@{item.friend.username ?? 'user'}</Text>
+                      </Pressable>
+                      <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{itemName}</Text>
+                      {itemSub ? <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{itemSub}</Text> : null}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: '#D4A017', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <FontAwesome name={pill.icon as any} size={9} color="#D4A017" />
+                          <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 }}>{pill.label}</Text>
+                        </View>
+                        <Text style={{ color: colors.subtext, fontSize: 11 }}>{item.dateLabel}</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              }}
+            />
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* All friends list modal */}
+      <Modal visible={showAllFriends} animationType="slide" onRequestClose={() => setShowAllFriends(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <SafeAreaView style={{ flex: 1 }}>
+            <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
+              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Friends Recent Listend</Text>
+              <Pressable onPress={() => setShowAllFriends(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
+                <FontAwesome name="times" size={20} color={colors.subtext} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={friendsListened}
+              keyExtractor={item => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 48 }}
+              renderItem={({ item }) => (
+                <FriendFullRow
+                  friend={item}
+                  liked={likedReviews.has(item.id)}
+                  onLike={() => handleLikeReview(item.id)}
+                  isDark={isDark}
+                  colors={colors}
+                  onAlbumPress={() => {
+                    setShowAllFriends(false);
+                    navigateToAlbum(router, { id: item.albumId, title: item.album, artist: item.artist, year: item.year, artworkUrl: item.artworkUrl });
+                  }}
+                  onUsernamePress={() => { setShowAllFriends(false); navigateToProfile(item.user, router); }}
+                />
+              )}
+            />
+          </SafeAreaView>
+        </View>
+      </Modal>
 
       {/* All friends list modal */}
       <Modal visible={showAllFriends} animationType="slide" onRequestClose={() => setShowAllFriends(false)}>
@@ -1143,6 +1760,25 @@ export default function HomeScreen() {
           </SafeAreaView>
         </View>
       </Modal>
+
+      {/* Friend review modal */}
+      {expandedFriend && (
+        <FriendReviewModal
+          friend={expandedFriend}
+          comments={commentsMap.get(expandedFriend.id) ?? []}
+          liked={likedReviews.has(expandedFriend.id)}
+          onLike={() => handleLikeReview(expandedFriend.id)}
+          onAddComment={(body, parentId, u, rtu, av) => handleAddComment(expandedFriend.id, body, parentId, u, rtu, av)}
+          isDark={isDark}
+          colors={colors}
+          onClose={() => setExpandedFriend(null)}
+          onAlbumPress={() => {
+            setExpandedFriend(null);
+            navigateToAlbum(router, { id: expandedFriend.albumId, title: expandedFriend.album, artist: expandedFriend.artist, year: expandedFriend.year, artworkUrl: expandedFriend.artworkUrl });
+          }}
+          onUsernamePress={(username) => { setExpandedFriend(null); navigateToProfile(username, router); }}
+        />
+      )}
 
       {/* Friend review modal */}
       {expandedFriend && (
@@ -1181,7 +1817,7 @@ export default function HomeScreen() {
           onClose={() => { setExpandedReview(null); setExpandedCommentsId(null); }}
           onAlbumPress={() => {
             setExpandedReview(null);
-            navigateToAlbum(expandedReview.albumTitle, expandedReview.albumArtist, expandedReview.artworkUrl, expandedReview.albumYear);
+            searchAndNavigateToAlbum(expandedReview.albumTitle, expandedReview.albumArtist, expandedReview.artworkUrl, expandedReview.albumYear);
           }}
           liked={likedReviews.has(expandedReview.id)}
           onLike={() => handleLikeReview(expandedReview.id)}
@@ -1195,31 +1831,168 @@ export default function HomeScreen() {
       <Section title="Top Listend Songs This Week" loading={loading}>
         <FlatList
           horizontal
-          data={songs}
+          data={songs.slice(0, 10)}
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
-          renderItem={({ item, index }) => (
-            <SongCard item={item} index={index} isDark={isDark} onPress={() => handleSongPress(item)} />
+          renderItem={({ item }) => (
+            <SongCard item={item} isDark={isDark} onPress={() => handleSongPress(item)} />
           )}
+          ListFooterComponent={
+            songs.length > 10 ? (
+              <Pressable
+                onPress={() => setShowAllSongs(true)}
+                style={({ pressed }) => ({
+                  width: SONG_CARD, height: SONG_CARD, borderRadius: 6,
+                  justifyContent: 'center', alignItems: 'center',
+                  backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
+                  opacity: pressed ? 0.7 : 1,
+                })}>
+                <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>See{'\n'}More</Text>
+              </Pressable>
+            ) : null
+          }
         />
       </Section>
 
-      {/* 4 — Top Listend Artists This Week */}
+      {/* Top Listend Artists This Week */}
       <Section title="Top Listend Artists This Week" loading={loading}>
         <FlatList
           horizontal
-          data={artists}
+          data={artists.slice(0, 10)}
           keyExtractor={(item) => item.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
           renderItem={({ item }) => (
             <ArtistCard item={item} isDark={isDark} onPress={() => handleArtistPress(item)} />
           )}
+          ListFooterComponent={
+            artists.length > 10 ? (
+              <Pressable
+                onPress={() => setShowAllArtists(true)}
+                style={({ pressed }) => ({
+                  width: ARTIST_CARD, height: ARTIST_CARD, borderRadius: ARTIST_CARD / 2,
+                  justifyContent: 'center', alignItems: 'center',
+                  backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
+                  opacity: pressed ? 0.7 : 1,
+                })}>
+                <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>See{'\n'}More</Text>
+              </Pressable>
+            ) : null
+          }
         />
       </Section>
 
     </ScrollView>
+
+      {/* Albums — full list modal */}
+      <Modal visible={showAllAlbums} animationType="slide" onRequestClose={() => setShowAllAlbums(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <SafeAreaView style={{ flex: 1 }}>
+            <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
+              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Top Listend Albums This Week</Text>
+              <Pressable onPress={() => setShowAllAlbums(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
+                <FontAwesome name="times" size={20} color={colors.subtext} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={albums}
+              keyExtractor={item => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 8, paddingBottom: 48 }}
+              ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 83 }} />}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, gap: 13, opacity: pressed ? 0.72 : 1 })}
+                  onPress={() => { setShowAllAlbums(false); handleAlbumPress(item); }}>
+                  <View style={{ flexShrink: 0 }}>
+                    {item.artworkUrl
+                      ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: 52, height: 52, borderRadius: 8 }} contentFit="cover" cachePolicy="disk" />
+                      : <ArtFallback size={52} radius={8} label={item.title} />}
+                  </View>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{item.title}</Text>
+                    {item.artist ? <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{item.artist}</Text> : null}
+                  </View>
+                  <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
+                </Pressable>
+              )}
+            />
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* Songs — full list modal */}
+      <Modal visible={showAllSongs} animationType="slide" onRequestClose={() => setShowAllSongs(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <SafeAreaView style={{ flex: 1 }}>
+            <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
+              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Top Listend Songs This Week</Text>
+              <Pressable onPress={() => setShowAllSongs(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
+                <FontAwesome name="times" size={20} color={colors.subtext} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={songs}
+              keyExtractor={item => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 8, paddingBottom: 48 }}
+              ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 83 }} />}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, gap: 13, opacity: pressed ? 0.72 : 1 })}
+                  onPress={() => { setShowAllSongs(false); handleSongPress(item); }}>
+                  <View style={{ flexShrink: 0 }}>
+                    {item.artworkUrl
+                      ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: 52, height: 52, borderRadius: 8 }} contentFit="cover" cachePolicy="disk" />
+                      : <ArtFallback size={52} radius={8} label={item.title} />}
+                  </View>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{item.title}</Text>
+                    {item.artist ? <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{item.artist}</Text> : null}
+                  </View>
+                </Pressable>
+              )}
+            />
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* Artists — full list modal */}
+      <Modal visible={showAllArtists} animationType="slide" onRequestClose={() => setShowAllArtists(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <SafeAreaView style={{ flex: 1 }}>
+            <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
+              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Top Listend Artists This Week</Text>
+              <Pressable onPress={() => setShowAllArtists(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
+                <FontAwesome name="times" size={20} color={colors.subtext} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={artists}
+              keyExtractor={item => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 8, paddingBottom: 48 }}
+              ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 83 }} />}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, gap: 13, opacity: pressed ? 0.72 : 1 })}
+                  onPress={() => { setShowAllArtists(false); handleArtistPress(item); }}>
+                  {item.artworkUrl
+                    ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" cachePolicy="disk" />
+                    : <ArtFallback size={52} radius={26} label={item.name} />}
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{item.name}</Text>
+                    {item.genre ? <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{item.genre}</Text> : null}
+                  </View>
+                  <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
+                </Pressable>
+              )}
+            />
+          </SafeAreaView>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -1447,6 +2220,34 @@ const rm = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   commentsToggleText: { fontSize: 13, fontWeight: '600', flex: 1 },
+});
+
+// ─── Friend review modal styles ───────────────────────────────────────────────
+
+const frm = StyleSheet.create({
+  likeCommentRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  likeBtn:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 10, paddingHorizontal: 4 },
+  likeCount:      { fontSize: 13, fontWeight: '600' },
+});
+
+const flr = StyleSheet.create({
+  card:         { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  topRow:       { flexDirection: 'row', gap: 12, padding: 14, paddingBottom: 10 },
+  art:          { width: 84, height: 84, borderRadius: 8, flexShrink: 0 },
+  albumInfo:    { flex: 1, gap: 4, paddingTop: 2 },
+  albumTitle:   { fontSize: 15, fontWeight: '700', lineHeight: 20 },
+  albumArtist:  { fontSize: 13 },
+  ratingRow:    { marginTop: 2 },
+  reviewText:   { fontSize: 14, lineHeight: 21, fontStyle: 'italic', paddingHorizontal: 14, paddingBottom: 10 },
+  footer:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  userRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  avatar:       { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+  avatarLetter: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  username:     { color: '#D4A017', fontSize: 13, fontWeight: '600' },
+  listenedDate: { fontSize: 11, marginTop: 1 },
+  footerActions:{ flexDirection: 'row', gap: 18 },
+  actionBtn:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  actionCount:  { fontSize: 14 },
 });
 
 // ─── Friend review modal styles ───────────────────────────────────────────────

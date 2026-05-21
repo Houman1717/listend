@@ -22,6 +22,7 @@ import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext
 import { useAuth } from '@/context/AuthContext';
 import { useTheme, ThemePreference } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationsContext';
+import { useLikedArtists } from '@/context/LikedArtistsContext';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
@@ -639,6 +640,183 @@ function DraggableFavRow({
   );
 }
 
+// ─── Draggable Top-5 row ─────────────────────────────────────────────────────
+
+type FavItem = { artworkUrl?: string; title: string } | null;
+
+// Per-slot component so useAnimatedStyle is called at the top level of a component (not inside .map())
+function DraggableSlot({
+  index,
+  item,
+  editMode,
+  circular,
+  draggingIdx,
+  hoverIdx,
+  dragX,
+  dragY,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onSlotPress,
+  onRemove,
+}: {
+  index: number;
+  item: FavItem;
+  editMode: boolean;
+  circular: boolean;
+  draggingIdx: number;   // -1 = none
+  hoverIdx: number;
+  dragX: SharedValue<number>;
+  dragY: SharedValue<number>;
+  onDragStart: (idx: number) => void;
+  onDragMove:  (x: number)   => void;
+  onDragEnd:   (x: number)   => void;
+  onSlotPress: () => void;
+  onRemove:    () => void;
+}) {
+  const isDragging = draggingIdx === index;
+  const isHover    = hoverIdx === index && draggingIdx !== -1 && !isDragging;
+
+  const animStyle = useAnimatedStyle(() => {
+    if (isDragging) {
+      return {
+        transform: [
+          { translateX: dragX.value },
+          { translateY: dragY.value },
+          { scale: withSpring(1.1) },
+        ],
+        zIndex: 10,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+      };
+    }
+    return { opacity: withSpring(isHover ? 0.35 : 1), zIndex: 0 };
+  });
+
+  const canDrag = editMode && !!item;
+
+  const longPress = Gesture.LongPress()
+    .minDuration(280)
+    .runOnJS(true)
+    .onStart(() => { if (canDrag) onDragStart(index); });
+
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .onUpdate(e => {
+      if (draggingIdx !== index) return;
+      dragX.value = e.translationX;
+      dragY.value = e.translationY;
+      onDragMove(e.translationX);
+    })
+    .onEnd(e => {
+      if (draggingIdx !== index) return;
+      onDragEnd(e.translationX);
+    });
+
+  const gesture = Gesture.Simultaneous(longPress, pan);
+
+  const slot = (
+    <FavSlot
+      item={item}
+      editMode={editMode}
+      onPress={onSlotPress}
+      onRemove={onRemove}
+      circular={circular}
+    />
+  );
+
+  if (!canDrag) return slot;
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={animStyle}>{slot}</Animated.View>
+    </GestureDetector>
+  );
+}
+
+function DraggableFavRow({
+  items,
+  editMode,
+  circular = false,
+  onReorder,
+  onRemove,
+  onSlotPress,
+}: {
+  items: FavItem[];
+  editMode: boolean;
+  circular?: boolean;
+  onReorder: (from: number, to: number) => void;
+  onRemove:    (index: number) => void;
+  onSlotPress: (index: number) => void;
+}) {
+  const [order, setOrder]             = useState<FavItem[]>(items);
+  const [draggingIdx, setDraggingIdx] = useState(-1);
+  const [hoverIdx,    setHoverIdx]    = useState(-1);
+  const dragX     = useSharedValue(0);
+  const dragY     = useSharedValue(0);
+  const startSlot = useRef(0);
+
+  useEffect(() => { setOrder(items); }, [JSON.stringify(items)]);
+
+  function calcTarget(x: number) {
+    return Math.max(0, Math.min(4, Math.round(startSlot.current + x / SLOT_STEP)));
+  }
+
+  function handleDragStart(idx: number) {
+    startSlot.current = idx;
+    setDraggingIdx(idx);
+    setHoverIdx(idx);
+  }
+
+  function handleDragMove(x: number) {
+    setHoverIdx(calcTarget(x));
+  }
+
+  function handleDragEnd(x: number) {
+    const from = startSlot.current;
+    const to   = calcTarget(x);
+    dragX.value = 0;
+    dragY.value = 0;
+    setDraggingIdx(-1);
+    setHoverIdx(-1);
+    if (from === to) return;
+    // Reorder local display immediately
+    setOrder(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    onReorder(from, to);
+  }
+
+  return (
+    <View style={s.favRow}>
+      {order.map((item, i) => (
+        <DraggableSlot
+          key={i}
+          index={i}
+          item={item}
+          editMode={editMode}
+          circular={circular}
+          draggingIdx={draggingIdx}
+          hoverIdx={hoverIdx}
+          dragX={dragX}
+          dragY={dragY}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onSlotPress={() => onSlotPress(i)}
+          onRemove={() => onRemove(i)}
+        />
+      ))}
+    </View>
+  );
+}
+
 // ─── Navigation row ───────────────────────────────────────────────────────────
 
 function NavRow({
@@ -647,12 +825,14 @@ function NavRow({
   sub,
   onPress,
   colors,
+  badge,
 }: {
   icon: React.ComponentProps<typeof FontAwesome>['name'];
   label: string;
   sub: string;
   onPress: () => void;
   colors: typeof Colors.light;
+  badge?: number;
 }) {
   return (
     <Pressable
@@ -665,6 +845,22 @@ function NavRow({
         <Text style={[s.navLabel, { color: colors.text }]}>{label}</Text>
         <Text style={[s.navSub, { color: colors.subtext }]}>{sub}</Text>
       </View>
+      {badge != null && badge > 0 ? (
+        <View style={{
+          backgroundColor: '#D4A017',
+          borderRadius: 10,
+          minWidth: 20,
+          height: 20,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 6,
+          marginRight: 8,
+        }}>
+          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+            {badge > 99 ? '99+' : badge}
+          </Text>
+        </View>
+      ) : null}
       <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
     </Pressable>
   );
@@ -675,6 +871,21 @@ function NavRow({
 function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const router = useRouter();
   const { signOut, user } = useAuth();
+  const { preference, setPreference } = useTheme();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const sheetBg   = isDark ? '#161616' : '#ffffff';
+  const labelColor = isDark ? '#f5e6c8' : '#1A0F0A';
+  const sepColor   = isDark ? '#2a1e14' : '#e8e8e8';
+  const segBg      = isDark ? '#2a1e14' : '#e8e8e8';
+  const segTextColor = isDark ? '#6B4C35' : '#7a5535';
+
+  const insets = useSafeAreaInsets();
+  const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
+    { label: 'On',     value: 'dark'   },
+    { label: 'Off',    value: 'light'  },
+    { label: 'System', value: 'system' },
+  ];
   const { preference, setPreference } = useTheme();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -757,6 +968,19 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
               <FontAwesome name="user-o" size={16} color="#D4A017" />
             </View>
             <Text style={[ss.rowLabel, { color: labelColor }]}>Edit Profile</Text>
+            <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+          </Pressable>
+
+          <View style={[ss.separator, { backgroundColor: sepColor }]} />
+
+          {/* Privacy */}
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => { onClose(); router.push('/privacy-settings'); }}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="lock" size={16} color="#D4A017" />
+            </View>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>Privacy</Text>
             <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
           </Pressable>
 
@@ -853,7 +1077,6 @@ const ss = StyleSheet.create({
     backgroundColor: '#161616',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#2a1e14',
   },
@@ -921,7 +1144,8 @@ export default function ListendScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const { unreadCount } = useNotifications();
+  const { unreadCount, unreadDMCount } = useNotifications();
+  const { likedArtists } = useLikedArtists();
   const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, reorderTopAlbums, reorderTopSongs, reorderTopArtists, loggedAlbums, wantToListen } = useAlbums();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -1143,15 +1367,15 @@ export default function ListendScreen() {
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="bookmark-o" label="Want to Listen"  sub={`${wantToListen.length} saved`}   onPress={() => router.push('/want-to-listen')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="clock-o"    label="Recent Activity" sub={`${loggedAlbums.length} logged albums`} onPress={() => router.push('/recent-activity')} />
+        <NavRow colors={colors} icon="clock-o"    label="Recent Activity" sub="Your recent activity"                   onPress={() => router.push('/recent-activity')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="pencil"     label="My Reviews"      sub={`${reviewCount} reviews`}         onPress={() => router.push('/my-reviews')} />
+        <NavRow colors={colors} icon="quote-left" label="My Reviews"      sub={`${reviewCount} reviews`}         onPress={() => router.push('/my-reviews')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="list"       label="My Playlists"    sub="Your album lists"                 onPress={() => router.push('/my-playlists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="heart"      label="Liked Artists"   sub="Your favourites"                  onPress={() => router.push('/liked-artists')} />
+        <NavRow colors={colors} icon="heart"      label="Liked Artists"   sub={`${likedArtists.length} artists`} onPress={() => router.push('/liked-artists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                         onPress={() => router.push('/dms')} />
+        <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                         onPress={() => router.push('/dms')} badge={unreadDMCount} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="bar-chart"  label="My Stats"        sub="Your listening insights"          onPress={() => router.push('/my-stats')} />
       </View>

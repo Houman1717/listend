@@ -8,16 +8,18 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 
 const ACCENT = '#D4A017';
-const GRADIENT: [string, string, string] = ['#D4A017', '#B8880F', '#D4A017'];
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
@@ -49,9 +51,7 @@ export default function LoginScreen() {
 
       <View style={s.inner}>
         {/* Logo mark */}
-        <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.logo}>
-          <Text style={s.logoText}>L</Text>
-        </LinearGradient>
+        <Image source={require('@/assets/images/icon.png')} style={s.logo} />
         <Text style={[s.title, { color: colors.text }]}>Listend</Text>
         <Text style={[s.subtitle, { color: colors.subtext }]}>Sign in to your account</Text>
 
@@ -94,6 +94,30 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
+        <View style={s.dividerRow}>
+          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+          <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
+          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+        </View>
+
+        <SocialAuthButtons />
+
+        <View style={s.dividerRow}>
+          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+          <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
+          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+        </View>
+
+        <SocialAuthButtons />
+
+        <View style={s.dividerRow}>
+          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+          <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
+          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+        </View>
+
+        <SocialAuthButtons />
+
         <Pressable onPress={() => router.push('/signup')} style={s.switchRow}>
           <Text style={[s.switchText, { color: colors.subtext }]}>Don't have an account? </Text>
           <Text style={[s.switchText, { color: ACCENT }]}>Sign Up</Text>
@@ -113,14 +137,11 @@ const s = StyleSheet.create({
     gap: 8,
   },
   logo: {
-    width: 64,
-    height: 64,
+    width: 80,
+    height: 80,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 8,
   },
-  logoText: { color: '#fff', fontSize: 32, fontWeight: '800' },
   title:    { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   subtitle: { fontSize: 15, marginBottom: 24 },
   form:     { width: '100%', gap: 12 },
@@ -138,6 +159,15 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   btnText:   { color: '#fff', fontSize: 16, fontWeight: '700' },
-  switchRow: { flexDirection: 'row', marginTop: 24 },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 20,
+    gap: 10,
+  },
+  dividerLine:  { flex: 1, height: StyleSheet.hairlineWidth },
+  dividerLabel: { fontSize: 13 },
+  switchRow:  { flexDirection: 'row', marginTop: 20 },
   switchText: { fontSize: 14 },
 });

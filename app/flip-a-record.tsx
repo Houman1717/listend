@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Easing,
   FlatList,
   Linking,
   Modal,
@@ -22,8 +23,10 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useFlip, FlipStatus } from '@/context/FlipContext';
+import { useFlip, FlipStatus, FlippedRecord } from '@/context/FlipContext';
 import { useAlbums } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { FLIP_POOL, FlipAlbum } from '@/constants/FlipPool';
 
 const API_URL   = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -31,8 +34,6 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const ART_SIZE  = SCREEN_W - 48;
 
 // ─── Shared fetch helper ──────────────────────────────────────────────────────
-// Returns the real Spotify ID and artwork URL for an album title + artist.
-// Used by both the hero card and the history modal.
 
 type AlbumData = { spotifyId: string; artworkUrl: string };
 
@@ -76,12 +77,9 @@ function AlbumArt({
 
   useEffect(() => { setErrored(false); }, [artworkUrl]);
 
-  function handleLoad() {
-  }
-
   return (
-    <View style={{ width: size, height: size, borderRadius: 12, overflow: 'hidden', backgroundColor: coverColor }}>
-      {/* Vinyl placeholder — always rendered as base layer */}
+    <View style={{ width: size, height: size, backgroundColor: coverColor }}>
+      {/* Vinyl placeholder */}
       <View style={StyleSheet.absoluteFill}>
         <View style={[va.ring, { width: size * 0.88, height: size * 0.88, borderRadius: size * 0.44, top: size * 0.06, left: size * 0.06 }]} />
         <View style={[va.ring, { width: size * 0.68, height: size * 0.68, borderRadius: size * 0.34, top: size * 0.16, left: size * 0.16 }]} />
@@ -91,15 +89,13 @@ function AlbumArt({
         </View>
       </View>
 
-      {/* Real cover fades in once loaded */}
       {!!artworkUrl && !errored && (
         <ExpoImage
           source={{ uri: artworkUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           cachePolicy="disk"
-          transition={300}
-          onLoad={handleLoad}
+          transition={400}
           onError={() => setErrored(true)}
         />
       )}
@@ -113,45 +109,33 @@ const va = StyleSheet.create({
   letter: { color: 'rgba(255,255,255,0.85)', fontWeight: '800', letterSpacing: 1 },
 });
 
-// ─── History thumbnail: real image with colored-block fallback ────────────────
+// ─── Status badge ─────────────────────────────────────────────────────────────
 
-function HistoryThumb({
-  artworkUrl,
-  coverColor,
-  letter,
-}: {
-  artworkUrl: string;
-  coverColor: string;
-  letter: string;
-}) {
-  const [errored, setErrored] = useState(false);
-
-  useEffect(() => { setErrored(false); }, [artworkUrl]);
-
+function StatusBadge({ status }: { status: FlipStatus }) {
+  const config: Record<FlipStatus, { label: string; bg: string; text: string }> = {
+    logged:       { label: 'Logged',        bg: '#0f2e1a', text: '#4ade80' },
+    didnt_listen: { label: "Didn't Listen", bg: '#2e2018', text: '#a07850' },
+    pending:      { label: 'Pending',        bg: '#2e1f00', text: '#f59e0b' },
+  };
+  const { label, bg, text } = config[status];
   return (
-    <View style={[sm.thumb, { backgroundColor: coverColor }]}>
-      {!!artworkUrl && !errored ? (
-        <ExpoImage
-          source={{ uri: artworkUrl }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          cachePolicy="disk"
-          onError={() => setErrored(true)}
-        />
-      ) : (
-        <Text style={sm.thumbLetter}>{letter.toUpperCase()}</Text>
-      )}
+    <View style={[sb.badge, { backgroundColor: bg }]}>
+      <Text style={[sb.badgeText, { color: text }]}>{label}</Text>
     </View>
   );
 }
 
+const sb = StyleSheet.create({
+  badge:     { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+});
+
 // ─── Pool artwork cache + loader ─────────────────────────────────────────────
-// Module-level so state survives modal close/reopen.
 
 const POOL_ARTWORK_KEY = '@listend:poolArtworks';
-const poolCache: Record<string, string> = {};          // id → artworkUrl
-const poolInFlight = new Set<string>();                 // ids currently fetching
-const poolListeners: Record<string, Array<(u: string) => void>> = {}; // subscribers
+const poolCache: Record<string, string> = {};
+const poolInFlight = new Set<string>();
+const poolListeners: Record<string, Array<(u: string) => void>> = {};
 let poolCacheLoaded = false;
 let poolFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -173,79 +157,60 @@ async function ensurePoolCacheLoaded() {
 }
 
 function requestPoolArtwork(id: string, title: string, artist: string, onReady: (url: string) => void) {
-  // Already cached
   if (poolCache[id]) { onReady(poolCache[id]); return; }
-
-  // Subscribe to existing in-flight fetch
-  if (poolInFlight.has(id)) {
-    (poolListeners[id] ??= []).push(onReady);
-    return;
-  }
-
-  // Start a new fetch
+  if (poolInFlight.has(id)) { (poolListeners[id] ??= []).push(onReady); return; }
   poolInFlight.add(id);
   (poolListeners[id] ??= []).push(onReady);
-
   fetchAlbumData(title, artist)
     .then(({ artworkUrl }) => {
       poolInFlight.delete(id);
-      if (artworkUrl) {
-        poolCache[id] = artworkUrl;
-        scheduleStorageFlush();
-      }
+      if (artworkUrl) { poolCache[id] = artworkUrl; scheduleStorageFlush(); }
       const url = artworkUrl || '';
       (poolListeners[id] ?? []).forEach(fn => fn(url));
       delete poolListeners[id];
     })
-    .catch(() => {
-      poolInFlight.delete(id);
-      delete poolListeners[id];
-    });
+    .catch(() => { poolInFlight.delete(id); delete poolListeners[id]; });
 }
 
-// ─── Pool row ─────────────────────────────────────────────────────────────────
+// ─── Listened row ─────────────────────────────────────────────────────────────
 
-function PoolRow({
-  item,
-  status,
-  borderCol,
-  colors,
-  onPress,
+type ListenedStatus = FlipStatus | 'library';
+
+function ListenedRow({
+  id, title, artist, year, coverColor, status, borderCol, colors,
 }: {
-  item: FlipAlbum;
-  status: FlipStatus | null;
+  id: string;
+  title: string;
+  artist: string;
+  year: number;
+  coverColor: string;
+  status: ListenedStatus;
   borderCol: string;
   colors: (typeof Colors)['light'] | (typeof Colors)['dark'];
-  onPress: () => void;
 }) {
-  const [artworkUrl, setArtworkUrl] = useState(poolCache[item.id] ?? '');
+  const [artworkUrl, setArtworkUrl] = useState(poolCache[id] ?? '');
 
   useEffect(() => {
     let live = true;
-    requestPoolArtwork(item.id, item.title, item.artist, (url) => {
-      if (live && url) setArtworkUrl(url);
-    });
+    requestPoolArtwork(id, title, artist, (url) => { if (live && url) setArtworkUrl(url); });
     return () => { live = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id]);
+  }, [id]);
 
   return (
-    <TouchableOpacity
-      style={[sfl.row, { borderBottomColor: borderCol }]}
-      activeOpacity={0.7}
-      onPress={onPress}>
-      <View style={[sfl.thumb, { backgroundColor: item.coverColor }]}>
+    <View style={[sfl.row, { borderBottomColor: borderCol }]}>
+      <View style={[sfl.thumb, { backgroundColor: coverColor }]}>
         {artworkUrl ? (
           <ExpoImage source={{ uri: artworkUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
         ) : (
-          <Text style={sfl.thumbLetter}>{item.title.charAt(0).toUpperCase()}</Text>
+          <Text style={sfl.thumbLetter}>{title.charAt(0).toUpperCase()}</Text>
         )}
       </View>
       <View style={sfl.info}>
-        <Text style={[sfl.itemTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-        <Text style={[sfl.itemSub,   { color: colors.subtext }]} numberOfLines={1}>{item.artist} · {item.year}</Text>
+        <Text style={[sfl.itemTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
+        <Text style={[sfl.itemSub,   { color: colors.subtext }]} numberOfLines={1}>{artist} · {year}</Text>
       </View>
-      {status === 'logged' && (
+      {(status === 'logged' || status === 'library') && (
         <View style={[sfl.statusDot, { backgroundColor: '#0f2e1a' }]}>
           <Ionicons name="checkmark" size={14} color="#4ade80" />
         </View>
@@ -260,26 +225,21 @@ function PoolRow({
           <Ionicons name="close" size={14} color={colors.subtext} />
         </View>
       )}
-    </TouchableOpacity>
+    </View>
   );
 }
 
 // ─── Full Pool Modal ──────────────────────────────────────────────────────────
 
 function FullPoolModal({
-  visible,
-  onClose,
-  history,
-  onAlbumPress,
+  visible, onClose, history,
 }: {
   visible: boolean;
   onClose: () => void;
   history: FlippedRecord[];
-  onAlbumPress: (album: FlipAlbum) => void | Promise<void>;
 }) {
   const colorScheme = useColorScheme();
   const colors      = Colors[colorScheme ?? 'light'];
-  const isDark      = colorScheme === 'dark';
 
   const [storageReady, setStorageReady] = useState(poolCacheLoaded);
 
@@ -288,10 +248,16 @@ function FullPoolModal({
     ensurePoolCacheLoaded().then(() => setStorageReady(true));
   }, [visible]);
 
+  const { libraryLoggedIds } = useFlip();
+
   const statusMap: Record<string, FlipStatus> = {};
   for (const r of history) statusMap[r.id] = r.status;
 
-  const loggedCount = Object.values(statusMap).filter(s => s === 'logged').length;
+  const sortedPool  = [...FLIP_POOL].sort((a, b) => a.year - b.year);
+  // Count albums logged via flip history + those already in library
+  const loggedCount = FLIP_POOL.filter(
+    a => statusMap[a.id] === 'logged' || libraryLoggedIds.has(a.id)
+  ).length;
   const total       = FLIP_POOL.length;
   const listenedPct = total > 0 ? Math.round(loggedCount / total * 100) : 0;
 
@@ -302,7 +268,7 @@ function FullPoolModal({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={[sfl.container, { backgroundColor: bg }]}>
         <View style={[sfl.header, { borderBottomColor: borderCol }]}>
-          <Text style={[sfl.title, { color: colors.text }]}>1001 Albums List</Text>
+          <Text style={[sfl.title, { color: colors.text }]}>Must-Hear List</Text>
           <TouchableOpacity onPress={onClose} hitSlop={12}>
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -327,16 +293,16 @@ function FullPoolModal({
 
         {storageReady && (
           <FlatList
-            data={FLIP_POOL}
+            data={sortedPool}
             keyExtractor={item => item.id}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
               <PoolRow
                 item={item}
                 status={statusMap[item.id] ?? null}
+                libraryLogged={libraryLoggedIds.has(item.id)}
                 borderCol={borderCol}
                 colors={colors}
-                onPress={() => onAlbumPress(item)}
               />
             )}
           />
@@ -362,6 +328,8 @@ const sfl = StyleSheet.create({
   itemTitle:   { fontSize: 14, fontWeight: '600' },
   itemSub:     { fontSize: 12 },
   statusDot:   { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  emptyWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, paddingHorizontal: 40 },
+  emptyText:   { fontSize: 14, textAlign: 'center', lineHeight: 22 },
 });
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -369,7 +337,7 @@ const sfl = StyleSheet.create({
 function StatusBadge({ status }: { status: FlipStatus }) {
   const config: Record<FlipStatus, { label: string; bg: string; text: string }> = {
     logged:       { label: 'Logged',        bg: '#0f2e1a', text: '#4ade80' },
-    didnt_listen: { label: "Didn't Listen", bg: '#2e2018', text: '#a07850'    },
+    didnt_listen: { label: "Didn't Listen", bg: '#2e2018', text: '#a07850' },
     pending:      { label: 'Pending',        bg: '#2e1f00', text: '#f59e0b' },
   };
   const { label, bg, text } = config[status];
@@ -390,20 +358,15 @@ const st = StyleSheet.create({
 function FlipHistoryModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const colorScheme = useColorScheme();
   const colors      = Colors[colorScheme ?? 'light'];
-  const isDark      = colorScheme === 'dark';
   const router      = useRouter();
   const { history } = useFlip();
 
-  // Per-record cache: flip record id → { spotifyId, artworkUrl }
   const [cache, setCache] = useState<Record<string, AlbumData>>({});
 
-  // Fetch data for any history items not yet cached, whenever modal opens or history grows
   useEffect(() => {
     if (!visible || history.length === 0) return;
-
     const missing = history.filter(r => !cache[r.id]);
     if (missing.length === 0) return;
-
     Promise.allSettled(
       missing.map(async r => {
         const data = await fetchAlbumData(r.title, r.artist);
@@ -413,15 +376,10 @@ function FlipHistoryModal({ visible, onClose }: { visible: boolean; onClose: () 
       const updates: Record<string, AlbumData> = {};
       for (const result of results) {
         if (result.status === 'fulfilled') {
-          updates[result.value.flipId] = {
-            spotifyId:  result.value.spotifyId,
-            artworkUrl: result.value.artworkUrl,
-          };
+          updates[result.value.flipId] = { spotifyId: result.value.spotifyId, artworkUrl: result.value.artworkUrl };
         }
       }
-      if (Object.keys(updates).length > 0) {
-        setCache(prev => ({ ...prev, ...updates }));
-      }
+      if (Object.keys(updates).length > 0) setCache(prev => ({ ...prev, ...updates }));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, history.length]);
@@ -452,8 +410,6 @@ function FlipHistoryModal({ visible, onClose }: { visible: boolean; onClose: () 
                   router.push({
                     pathname: '/album-detail',
                     params: {
-                      // Use the real Spotify ID when available so the detail
-                      // screen can load tracks, Last.fm data, etc.
                       id:         hit?.spotifyId || record.id,
                       title:      record.title,
                       artist:     record.artist,
@@ -462,18 +418,10 @@ function FlipHistoryModal({ visible, onClose }: { visible: boolean; onClose: () 
                     },
                   } as any);
                 }}>
-                <HistoryThumb
-                  artworkUrl={hit?.artworkUrl ?? ''}
-                  coverColor={record.coverColor}
-                  letter={record.title.charAt(0)}
-                />
+                <HistoryThumb artworkUrl={hit?.artworkUrl ?? ''} coverColor={record.coverColor} letter={record.title.charAt(0)} />
                 <View style={sm.info}>
-                  <Text style={[sm.itemTitle, { color: colors.text }]} numberOfLines={1}>
-                    {record.title}
-                  </Text>
-                  <Text style={[sm.itemArtist, { color: colors.subtext }]} numberOfLines={1}>
-                    {record.artist} · {record.year}
-                  </Text>
+                  <Text style={[sm.itemTitle, { color: colors.text }]} numberOfLines={1}>{record.title}</Text>
+                  <Text style={[sm.itemArtist, { color: colors.subtext }]} numberOfLines={1}>{record.artist} · {record.year}</Text>
                 </View>
                 <StatusBadge status={record.status} />
                 <Ionicons name="chevron-forward" size={16} color={colors.subtext} style={{ marginLeft: 4 }} />
@@ -510,13 +458,12 @@ export default function FlipARecordScreen() {
 
   const { history, cooldownUntil, currentFlip, poolExhausted, flip, markLogged, markDidntListen } = useFlip();
   const { setPendingAlbum, addToWantToListen, removeFromWantToListen, wantToListen, loggedAlbums } = useAlbums();
+  const { user } = useAuth();
 
   const [now, setNow]                          = useState(Date.now());
-  const [historyModalVisible, setHistoryModal] = useState(false);
   const [fullListVisible, setFullListVisible]  = useState(false);
   const [artworkUrl, setArtworkUrl]            = useState('');
   const [spotifyId,  setSpotifyId]             = useState('');
-  // Cache for the "Recently Flipped" mini-list thumbnails + Spotify IDs
   const [recentCache, setRecentCache]          = useState<Record<string, AlbumData>>({});
 
   // Streaming sheet
@@ -532,33 +479,34 @@ export default function FlipARecordScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // ── Header clock button ───────────────────────────────────────────────────
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: history.length > 0
-        ? () => (
-            <Pressable onPress={() => setHistoryModal(true)} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }} hitSlop={12}>
-              <Ionicons name="time-outline" size={22} color="#D4A017" />
-            </Pressable>
-          )
-        : undefined,
-    });
-  }, [history.length, navigation]);
 
-  // ── Fetch Spotify data when a new album is revealed ───────────────────────
+
+  // ── Fetch data when a new album is revealed ───────────────────────────────
   useEffect(() => {
     if (!currentFlip) { setArtworkUrl(''); setSpotifyId(''); return; }
     setArtworkUrl('');
     setSpotifyId('');
     setAmazonMusicUrl(null);
     setAmazonFetched(false);
-    fetchAlbumData(currentFlip.title, currentFlip.artist).then(({ artworkUrl: url, spotifyId: sid }) => {
+    const savedFlip = currentFlip;
+    fetchAlbumData(savedFlip.title, savedFlip.artist).then(({ artworkUrl: url, spotifyId: sid }) => {
       setArtworkUrl(url);
       setSpotifyId(sid);
+      // Insert into Supabase with artwork in one shot so Recent Activity always has the cover
+      if (user) {
+        supabase.from('flip_records').upsert({
+          user_id:      user.id,
+          album_title:  savedFlip.title,
+          album_artist: savedFlip.artist,
+          album_year:   savedFlip.year,
+          flipped_at:   new Date(savedFlip.flippedAt).toISOString(),
+          artwork_url:  url || null,
+        }, { onConflict: 'user_id,flipped_at' }).then(() => {});
+      }
     });
   }, [currentFlip?.id]);
 
-  // ── Fetch data for the last 3 history items (recently flipped mini-list) ──
+  // ── Fetch data for the last 3 history items ───────────────────────────────
   useEffect(() => {
     const recent  = history.slice(0, 3);
     const missing = recent.filter(r => !recentCache[r.id]);
@@ -586,25 +534,30 @@ export default function FlipARecordScreen() {
     const newId = currentFlip?.id ?? null;
     if (newId !== null && newId !== prevFlipId.current) {
       revealAnim.setValue(0);
-      Animated.spring(revealAnim, { toValue: 1, tension: 55, friction: 9, useNativeDriver: true }).start();
+      Animated.timing(revealAnim, {
+        toValue: 1,
+        duration: 480,
+        easing: Easing.out(Easing.back(1.4)),
+        useNativeDriver: true,
+      }).start();
     }
     prevFlipId.current = newId;
   }, [currentFlip?.id]);
 
   const revealOpacity    = revealAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-  const revealScale      = revealAnim.interpolate({ inputRange: [0, 1], outputRange: [0.91, 1] });
-  const revealTranslateY = revealAnim.interpolate({ inputRange: [0, 1], outputRange: [32, 0] });
+  const revealScale      = revealAnim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
+  const revealTranslateY = revealAnim.interpolate({ inputRange: [0, 1], outputRange: [48, 0] });
 
-  // ── Flip button spin animation ────────────────────────────────────────────
-  const btnSpin   = useRef(new Animated.Value(0)).current;
-  const btnRotate = btnSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  // ── Vinyl animations ──────────────────────────────────────────────────────
+  // Idle: slow continuous rotation
+  const vinylIdleSpin = useRef(new Animated.Value(0)).current;
+  // On press: fast spin before reveal
+  const vinylFlipSpin = useRef(new Animated.Value(0)).current;
 
-  function handleFlipPress() {
-    btnSpin.setValue(0);
-    Animated.timing(btnSpin, { toValue: 1, duration: 320, useNativeDriver: true }).start(() => flip());
-  }
+  const vinylIdleRotate = vinylIdleSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const vinylFlipRotate = vinylFlipSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '1080deg'] });
 
-  // ── State flags ───────────────────────────────────────────────────────────
+  // Start idle loop when flip button is shown
   const cooldownActive = cooldownUntil !== null && now < cooldownUntil;
   const remainingMs    = cooldownActive ? cooldownUntil - now : 0;
   const hasPendingFlip = currentFlip?.status === 'pending';
@@ -613,13 +566,40 @@ export default function FlipARecordScreen() {
   const showFlipButton = !poolExhausted && !showAlbumCard && !showHowWas;
   const hasAlbum       = showAlbumCard || showHowWas;
 
-  // Real Spotify ID if available, otherwise fall back to the flip-pool id.
-  // Must be declared BEFORE isWanted so the closure captures the correct value.
+  useEffect(() => {
+    if (!showFlipButton) {
+      vinylIdleSpin.stopAnimation();
+      return;
+    }
+    vinylIdleSpin.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(vinylIdleSpin, {
+        toValue: 1,
+        duration: 5000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [showFlipButton]);
+
+  function handleFlipPress() {
+    vinylFlipSpin.setValue(0);
+    Animated.timing(vinylFlipSpin, {
+      toValue: 1,
+      duration: 560,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      vinylFlipSpin.setValue(0);
+      flip();
+    });
+  }
+
+  // ── State flags ───────────────────────────────────────────────────────────
   const detailId = spotifyId || currentFlip?.id || '';
 
-  // True if the current flip has already been added to Want to Listen.
-  // Check both the resolved Spotify ID and the flip-pool ID as fallback —
-  // the album may have been saved before spotifyId resolved.
   const isWanted = currentFlip
     ? wantToListen.some(a => a.id === detailId || a.id === currentFlip.id)
     : false;
@@ -651,7 +631,6 @@ export default function FlipARecordScreen() {
     else if (amazonFetching) { setAmazonTapped(true); }
   }
 
-  // Auto-open Amazon Music once resolved if user already tapped
   useEffect(() => {
     if (amazonTapped && !amazonFetching && amazonMusicUrl) {
       Linking.openURL(amazonMusicUrl);
@@ -660,14 +639,23 @@ export default function FlipARecordScreen() {
     }
   }, [amazonTapped, amazonFetching, amazonMusicUrl]);
 
+  // Derive streak: consecutive logged flips — skip the pending one at the top
+  const streak = (() => {
+    let count = 0;
+    for (const r of history) {
+      if (r.status === 'pending') continue;
+      if (r.status === 'logged') count++;
+      else break;
+    }
+    return count;
+  })();
+
   const borderCol = colors.border;
   const cardBg    = colors.background;
 
   return (
     <>
       <Stack.Screen options={{ title: 'Flip a Record' }} />
-
-      <FlipHistoryModal visible={historyModalVisible} onClose={() => setHistoryModal(false)} />
 
       {/* ── Streaming sheet ────────────────────────────────────────────────── */}
       <Modal visible={showStreamSheet} transparent animationType="slide" onRequestClose={() => setShowStreamSheet(false)}>
@@ -700,36 +688,29 @@ export default function FlipARecordScreen() {
         </Pressable>
       </Modal>
 
-      <FullPoolModal
+      <ProgressModal
         visible={fullListVisible}
         onClose={() => setFullListVisible(false)}
         history={history}
-        onAlbumPress={async (album) => {
-          setFullListVisible(false);
-          const { artworkUrl: url, spotifyId: sid } = await fetchAlbumData(album.title, album.artist);
-          router.push({
-            pathname: '/album-detail',
-            params: { id: sid || album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: url },
-          } as any);
-        }}
       />
 
+      {/* Subtle color tint from album cover */}
       {hasAlbum && currentFlip && (
         <View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: currentFlip.coverColor, opacity: 0.10 }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: currentFlip.coverColor, opacity: 0.08 }]}
         />
       )}
 
       <ScrollView
-        style={{ flex: 1, backgroundColor: 'transparent' }}
+        style={{ flex: 1 }}
         contentContainerStyle={sf.scrollContent}
         showsVerticalScrollIndicator={false}>
 
         {/* ── Pool exhausted ──────────────────────────────────────────── */}
         {poolExhausted && (
           <View style={[sf.emptyCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
-            <FontAwesome name="trophy" size={36} color="#D4A017" />
+            <FontAwesome name="trophy" size={40} color="#D4A017" />
             <Text style={[sf.emptyTitle, { color: colors.text }]}>You've flipped every record!</Text>
             <Text style={[sf.emptySubtext, { color: colors.subtext }]}>
               Albums return to the pool once you dismiss or log them.
@@ -737,28 +718,45 @@ export default function FlipARecordScreen() {
           </View>
         )}
 
-        {/* ── Idle: flip button ───────────────────────────────────────── */}
+        {/* ── Idle: spinning vinyl ────────────────────────────────────── */}
         {showFlipButton && (
-          <View style={[sf.idleCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
-            <View style={sf.idleVinyl}>
-              <View style={[sf.idleRing, { width: 200, height: 200, borderRadius: 100 }]} />
-              <View style={[sf.idleRing, { width: 140, height: 140, borderRadius: 70  }]} />
-              <View style={[sf.idleRing, { width: 80,  height: 80,  borderRadius: 40  }]} />
-              <View style={sf.idleCenter} />
-            </View>
+          <View style={sf.idleSection}>
+            {/* Atmospheric glow */}
+            <View style={sf.idleGlow} />
 
-            <Pressable
-              style={({ pressed }) => [sf.flipBtn, { opacity: pressed ? 0.88 : 1 }]}
-              onPress={handleFlipPress}>
-              <Animated.View style={{ transform: [{ rotate: btnRotate }] }}>
-                <FontAwesome name="random" size={18} color="#fff" />
+            {/* Vinyl — tap or use button below */}
+            <Pressable onPress={handleFlipPress}>
+              <Animated.View
+                style={[sf.vinyl, { transform: [{ rotate: vinylIdleRotate }, { rotate: vinylFlipRotate }] }]}>
+                {/* Groove rings */}
+                {[256, 228, 200, 172, 144, 116].map((d) => (
+                  <View key={d} style={[sf.groove, { width: d, height: d, borderRadius: d / 2 }]} />
+                ))}
+                {/* Center label */}
+                <LinearGradient
+                  colors={['#D4A017', '#B8880F']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={sf.vinylLabel}>
+                  <Text style={sf.vinylLabelText}>LISTEND</Text>
+                </LinearGradient>
+                {/* Center hole */}
+                <View style={sf.vinylHole} />
               </Animated.View>
-              <Text style={sf.flipBtnText}>Flip a Record</Text>
             </Pressable>
 
-            <Text style={[sf.idleHint, { color: colors.subtext }]}>
-              You'll get a random album from the 1001 list
-            </Text>
+            {/* Flip button */}
+            <View style={sf.idleTextWrap}>
+              <Pressable
+                style={({ pressed }) => [sf.flipBtn, { opacity: pressed ? 0.88 : 1 }]}
+                onPress={handleFlipPress}>
+                <FontAwesome name="random" size={22} color="#fff" />
+              </Pressable>
+              <Text style={[sf.flipBtnText, { color: colors.text }]}>Flip a Record</Text>
+              <Text style={[sf.idleHint, { color: colors.subtext }]}>
+                Flip into something legendary
+              </Text>
+            </View>
           </View>
         )}
 
@@ -777,8 +775,8 @@ export default function FlipARecordScreen() {
               shadowOffset: { width: 0, height: 8 },
             }]}>
 
-              {/* Hero art */}
-              <View style={sf.artWrap}>
+              {/* Hero art — full bleed */}
+              <View>
                 <AlbumArt
                   artworkUrl={artworkUrl}
                   coverColor={currentFlip.coverColor}
@@ -791,8 +789,9 @@ export default function FlipARecordScreen() {
                     <Text style={sf.loggedBadgeText}>Listend</Text>
                   </View>
                 )}
+                {/* Bottom gradient fade */}
                 <LinearGradient
-                  colors={['transparent', isDark ? 'rgba(17,17,17,0.7)' : 'rgba(255,255,255,0.7)', cardBg]}
+                  colors={['transparent', isDark ? 'rgba(15,10,7,0.85)' : 'rgba(255,255,255,0.85)', cardBg]}
                   style={sf.artGradient}
                 />
               </View>
@@ -826,41 +825,25 @@ export default function FlipARecordScreen() {
               {showAlbumCard && (
                 <View style={sf.actionsBlock}>
                   <Pressable
-                    style={({ pressed }) => [
-                      isWanted ? sf.actionSavedOutline : sf.actionPrimary,
-                      { opacity: pressed ? 0.75 : 1 },
-                    ]}
+                    style={({ pressed }) => [sf.actionSavedOutline, { opacity: pressed ? 0.75 : 1 }]}
                     onPress={() => {
                       if (isWanted) {
-                        // Unsave — remove whichever id was used to save it
-                        const savedId = wantToListen.find(
-                          a => a.id === detailId || a.id === currentFlip.id,
-                        )?.id ?? detailId;
+                        const savedId = wantToListen.find(a => a.id === detailId || a.id === currentFlip.id)?.id ?? detailId;
                         removeFromWantToListen(savedId);
                       } else {
-                        addToWantToListen({
-                          id: detailId || currentFlip.id,
-                          title: currentFlip.title,
-                          artist: currentFlip.artist,
-                          year: currentFlip.year,
-                          artworkUrl,
-                        });
+                        addToWantToListen({ id: detailId || currentFlip.id, title: currentFlip.title, artist: currentFlip.artist, year: currentFlip.year, artworkUrl });
                       }
                     }}>
-                    <FontAwesome
-                      name={isWanted ? 'bookmark' : 'bookmark-o'}
-                      size={14}
-                      color={isWanted ? '#D4A017' : '#fff'}
-                    />
-                    <Text style={isWanted ? sf.actionSavedText : sf.actionPrimaryText}>
+                    <FontAwesome name={isWanted ? 'bookmark' : 'bookmark-o'} size={14} color="#D4A017" />
+                    <Text style={sf.actionSavedText}>
                       {isWanted ? 'Saved' : 'Want to Listen'}
                     </Text>
                   </Pressable>
                   <Pressable
-                    style={({ pressed }) => [sf.actionSecondary, { borderColor: borderCol, opacity: pressed ? 0.8 : 1 }]}
+                    style={({ pressed }) => [sf.actionSecondary, { borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
                     onPress={handleStream}>
-                    <FontAwesome name="music" size={14} color={colors.subtext} />
-                    <Text style={[sf.actionSecondaryText, { color: colors.subtext }]}>Listen on</Text>
+                    <FontAwesome name="music" size={14} color="#D4A017" />
+                    <Text style={[sf.actionSecondaryText, { color: '#D4A017' }]}>Listen on</Text>
                   </Pressable>
                 </View>
               )}
@@ -872,18 +855,26 @@ export default function FlipARecordScreen() {
                   <View style={sf.howWasRow}>
                     <Pressable
                       style={({ pressed }) => [sf.actionPrimary, sf.flex1, { opacity: pressed ? 0.8 : 1 }]}
-                      onPress={() => {
+                      onPress={async () => {
+                        // Always resolve to a real AM ID before logging — never use the fake pool ID
+                        let amId = spotifyId;
+                        let art  = artworkUrl;
+                        if (!amId) {
+                          const fetched = await fetchAlbumData(currentFlip.title, currentFlip.artist);
+                          amId = fetched.spotifyId;
+                          if (fetched.artworkUrl) art = fetched.artworkUrl;
+                        }
                         markLogged(currentFlip.id);
-                        setPendingAlbum({ spotifyId: detailId || currentFlip.id, title: currentFlip.title, artist: currentFlip.artist, year: currentFlip.year, artworkUrl });
+                        setPendingAlbum({ spotifyId: amId || currentFlip.id, title: currentFlip.title, artist: currentFlip.artist, year: currentFlip.year, artworkUrl: art });
                         router.push('/log-album');
                       }}>
                       <FontAwesome name="plus" size={14} color="#fff" />
                       <Text style={sf.actionPrimaryText}>Log It</Text>
                     </Pressable>
                     <Pressable
-                      style={({ pressed }) => [sf.actionSecondary, sf.flex1, { borderColor: borderCol, opacity: pressed ? 0.8 : 1 }]}
+                      style={({ pressed }) => [sf.actionSecondary, sf.flex1, { borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
                       onPress={() => markDidntListen(currentFlip.id)}>
-                      <Text style={[sf.actionSecondaryText, { color: colors.subtext }]}>Didn't Listen</Text>
+                      <Text style={[sf.actionSecondaryText, { color: '#D4A017' }]}>Didn't Listen</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -914,13 +905,16 @@ export default function FlipARecordScreen() {
               style={({ pressed }) => [sf.statsBlock, { opacity: pressed ? 0.75 : 1 }]}
               onPress={() => setFullListVisible(true)}>
               <View style={sf.statsRow}>
-                <Text style={[sf.statsLabel, { color: colors.subtext }]}>
-                  {total} Albums
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Text style={[sf.statsLabel, { color: colors.subtext }]}>
-                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipped}</Text>{' flipped  ·  '}
+                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipped}</Text>{'  flipped'}
                   </Text>
+                  <View style={sf.streakBadge}>
+                    <FontAwesome name="fire" size={11} color={streak > 0 ? '#D4A017' : '#6B4C35'} />
+                    <Text style={[sf.streakText, { color: streak > 0 ? '#D4A017' : '#6B4C35' }]}>{streak} streak</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <FontAwesome name="headphones" size={13} color="#D4A017" />
                   <Text style={[sf.statsLabel, { color: colors.subtext }]}>
                     {' '}<Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text>{' listened'}
@@ -939,7 +933,7 @@ export default function FlipARecordScreen() {
         {history.length > 0 && (
           <View style={sf.recentBlock}>
             <Text style={[sf.recentHeading, { color: colors.text }]}>Recently Flipped</Text>
-            {history.slice(0, 3).map((record, i) => {
+            {history.slice(0, 3).map((record) => {
               const hit = recentCache[record.id];
               return (
                 <Pressable
@@ -962,9 +956,10 @@ export default function FlipARecordScreen() {
                   </View>
                   <View style={sf.recentInfo}>
                     <Text style={[sf.recentTitle, { color: colors.text }]} numberOfLines={1}>{record.title}</Text>
-                    <Text style={[sf.recentArtist, { color: colors.subtext }]} numberOfLines={1}>{record.artist}</Text>
+                    <Text style={[sf.recentArtist, { color: colors.subtext }]} numberOfLines={1}>{record.artist} · {record.year}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.subtext} />
+                  <StatusBadge status={record.status} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.subtext} style={{ marginLeft: 4 }} />
                 </Pressable>
               );
             })}
@@ -981,29 +976,50 @@ export default function FlipARecordScreen() {
 const sf = StyleSheet.create({
   scrollContent: { padding: 20, paddingBottom: 60 },
 
-  idleCard:   { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 40, paddingHorizontal: 24, alignItems: 'center', gap: 24 },
-  idleVinyl:  { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  idleRing:   { position: 'absolute', borderWidth: 1, borderColor: 'rgba(128,128,128,0.18)' },
-  idleCenter: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(128,128,128,0.2)' },
-  idleHint:   { fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  // Idle state
+  idleSection:  { alignItems: 'center', gap: 36, paddingTop: 40, paddingBottom: 16 },
+  idleGlow:     { position: 'absolute', width: 340, height: 340, borderRadius: 170, backgroundColor: '#D4A017', opacity: 0.07, top: 0 },
+  idleTextWrap: { alignItems: 'center', gap: 14 },
+  idleHint:     { fontSize: 14, textAlign: 'center', letterSpacing: -0.2 },
 
-  flipBtn:     { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#D4A017', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 16 },
-  flipBtnText: { color: '#fff', fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
+  // Vinyl
+  vinyl: {
+    width: 268,
+    height: 268,
+    borderRadius: 134,
+    backgroundColor: '#0a0a0a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.65,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 14,
+  },
+  groove:        { position: 'absolute', borderWidth: 1, borderColor: 'rgba(255,255,255,0.055)' },
+  vinylLabel:    { width: 98, height: 98, borderRadius: 49, justifyContent: 'center', alignItems: 'center' },
+  vinylLabelText:{ color: 'rgba(255,255,255,0.92)', fontSize: 10, fontWeight: '800', letterSpacing: 2.5 },
+  vinylHole:     { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#0a0a0a' },
 
-  emptyCard:    { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, padding: 32, alignItems: 'center', gap: 14 },
+  // Flip button — circle
+  flipBtn:     { width: 86, height: 86, borderRadius: 43, backgroundColor: '#D4A017', alignItems: 'center', justifyContent: 'center', shadowColor: '#D4A017', shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  flipBtnText: { fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
+
+  // Pool exhausted
+  emptyCard:    { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, padding: 40, alignItems: 'center', gap: 14 },
   emptyTitle:   { fontSize: 18, fontWeight: '700', textAlign: 'center', letterSpacing: -0.3 },
   emptySubtext: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
   albumCard:   { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   artWrap:     { position: 'relative' },
   artGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 },
-  loggedBadge: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1.5, borderColor: '#D4A017', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  loggedBadge: { position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1.5, borderColor: '#D4A017', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
   loggedBadgeText: { color: '#D4A017', fontSize: 12, fontWeight: '700' },
 
-  infoBlock:  { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 4, gap: 6 },
+  infoBlock:  { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 4, gap: 6 },
   genrePill:  { alignSelf: 'flex-start', borderRadius: 100, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 2 },
   genreText:  { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
-  albumTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, lineHeight: 29 },
+  albumTitle: { fontSize: 26, fontWeight: '800', letterSpacing: -0.6, lineHeight: 31 },
   albumArtist:{ fontSize: 15, lineHeight: 20 },
   tappable:   { textDecorationLine: 'underline' },
 
@@ -1019,20 +1035,24 @@ const sf = StyleSheet.create({
   actionSecondaryText:{ fontSize: 15, fontWeight: '500' },
   flex1: { flex: 1 },
 
-  countdownWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 18 },
+  countdownWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 20 },
   countdown:     { fontSize: 13, fontWeight: '500', letterSpacing: -0.1 },
 
-  statsBlock: { marginTop: 20, gap: 8 },
-  statsRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statsLabel: { fontSize: 13 },
-  track:      { height: 4, borderRadius: 2, overflow: 'hidden' },
-  fill:       { height: 4, borderRadius: 2, backgroundColor: '#D4A017' },
+  // Stats
+  statsBlock:   { marginTop: 24, gap: 8 },
+  statsRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statsLabel:   { fontSize: 13 },
+  streakBadge:  { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(212,160,23,0.15)', borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3 },
+  streakText:   { fontSize: 12, fontWeight: '700', color: '#D4A017' },
+  track:        { height: 4, borderRadius: 2, overflow: 'hidden' },
+  fill:         { height: 4, borderRadius: 2, backgroundColor: '#D4A017' },
 
-  recentBlock:       { marginTop: 24, gap: 10 },
+  // Recently flipped
+  recentBlock:       { marginTop: 28, gap: 10 },
   recentHeading:     { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
-  recentRow:         { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
-  recentThumb:       { width: 44, height: 44, borderRadius: 6, overflow: 'hidden', flexShrink: 0, justifyContent: 'center', alignItems: 'center' },
-  recentThumbLetter: { color: 'rgba(255,255,255,0.75)', fontSize: 16, fontWeight: '700' },
+  recentRow:         { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  recentThumb:       { width: 48, height: 48, borderRadius: 8, overflow: 'hidden', flexShrink: 0, justifyContent: 'center', alignItems: 'center' },
+  recentThumbLetter: { color: 'rgba(255,255,255,0.75)', fontSize: 18, fontWeight: '700' },
   recentInfo:        { flex: 1, gap: 2 },
   recentTitle:       { fontSize: 14, fontWeight: '600' },
   recentArtist:      { fontSize: 12 },

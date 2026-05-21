@@ -1,5 +1,6 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -16,7 +17,9 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { NotificationsProvider } from '@/context/NotificationsContext';
 import { LikedArtistsProvider } from '@/context/LikedArtistsContext';
 import { LikedFeaturedPlaylistsProvider } from '@/context/LikedFeaturedPlaylistsContext';
+import { LikedFeaturedPlaylistsProvider } from '@/context/LikedFeaturedPlaylistsContext';
 import { FavoritesSyncer } from '@/components/FavoritesSyncer';
+import { configureGoogleSignIn } from '@/lib/auth/googleAuth';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -36,6 +39,18 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
   });
+
+  useEffect(() => {
+    configureGoogleSignIn();
+  }, []);
+
+  useEffect(() => {
+    configureGoogleSignIn();
+  }, []);
+
+  useEffect(() => {
+    configureGoogleSignIn();
+  }, []);
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
@@ -140,6 +155,10 @@ function ThemedApp() {
           <Stack.Screen name="notifications" options={{ title: 'Notifications', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="popular-reviews" options={{ title: 'Popular Reviews This Week', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="liked-artists" options={{ title: 'Liked Artists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-featured-playlist" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="liked-featured-playlists" options={{ title: 'Liked Playlists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="privacy-settings" options={{ title: 'Privacy', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="blocked-users" options={{ title: 'Blocked Users', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-featured-playlist" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="liked-featured-playlists" options={{ title: 'Liked Playlists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
         </Stack>

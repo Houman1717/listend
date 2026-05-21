@@ -8,26 +8,26 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 
-const DARK_BG = '#1c1410';
-const CARD_BG = '#2e2018';
-const BORDER = '#2a1e14';
-const TEXT = '#f5e6c8';
-const SUBTEXT = '#a07850';
 const ACCENT = '#D4A017';
-const GRADIENT: [string, string, string] = ['#D4A017', '#B8880F', '#D4A017'];
 
 export default function SignUpScreen() {
+  const colorScheme = useColorScheme();
+  const colors      = Colors[colorScheme ?? 'dark'];
+
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]   = useState(false);
 
   async function handleSignUp() {
     if (!email.trim() || !password || !username.trim()) {
@@ -59,44 +59,40 @@ export default function SignUpScreen() {
     }
 
     setLoading(false);
-    // AuthContext picks up the new session → _layout.tsx redirects to (tabs)
   }
 
   return (
     <KeyboardAvoidingView
-      style={s.root}
+      style={[s.root, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
 
-      <LinearGradient
-        colors={['#D4A01718', '#B8880F12', '#D4A01708']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-
       <View style={s.inner}>
-        {/* Logo mark */}
-        <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.logo}>
-          <Text style={s.logoText}>L</Text>
-        </LinearGradient>
-        <Text style={s.title}>Listend</Text>
-        <Text style={s.subtitle}>Create your account</Text>
+        <Image source={require('@/assets/images/icon.png')} style={s.logo} />
+        <Text style={[s.title, { color: colors.text }]}>Listend</Text>
+        <Text style={[s.subtitle, { color: colors.subtext }]}>Create your account</Text>
 
         <View style={s.form}>
           <TextInput
-            style={s.input}
+            style={[s.input, {
+              backgroundColor: colors.surface,
+              borderColor:     colors.border,
+              color:           colors.text,
+            }]}
             placeholder="Username"
-            placeholderTextColor={SUBTEXT}
+            placeholderTextColor={colors.subtext}
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
             textContentType="username"
           />
           <TextInput
-            style={s.input}
+            style={[s.input, {
+              backgroundColor: colors.surface,
+              borderColor:     colors.border,
+              color:           colors.text,
+            }]}
             placeholder="Email"
-            placeholderTextColor={SUBTEXT}
+            placeholderTextColor={colors.subtext}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -104,9 +100,13 @@ export default function SignUpScreen() {
             textContentType="emailAddress"
           />
           <TextInput
-            style={s.input}
+            style={[s.input, {
+              backgroundColor: colors.surface,
+              borderColor:     colors.border,
+              color:           colors.text,
+            }]}
             placeholder="Password"
-            placeholderTextColor={SUBTEXT}
+            placeholderTextColor={colors.subtext}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -114,7 +114,7 @@ export default function SignUpScreen() {
           />
 
           <Pressable
-            style={({ pressed }) => [s.btn, { opacity: pressed ? 0.85 : 1 }]}
+            style={({ pressed }) => [s.btn, { backgroundColor: ACCENT, opacity: pressed ? 0.85 : 1 }]}
             onPress={handleSignUp}
             disabled={loading}>
             {loading
@@ -123,8 +123,16 @@ export default function SignUpScreen() {
           </Pressable>
         </View>
 
+        <View style={s.dividerRow}>
+          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+          <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
+          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+        </View>
+
+        <SocialAuthButtons />
+
         <Pressable onPress={() => router.back()} style={s.switchRow}>
-          <Text style={s.switchText}>Already have an account? </Text>
+          <Text style={[s.switchText, { color: colors.subtext }]}>Already have an account? </Text>
           <Text style={[s.switchText, { color: ACCENT }]}>Sign In</Text>
         </Pressable>
       </View>
@@ -133,7 +141,7 @@ export default function SignUpScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: DARK_BG },
+  root: { flex: 1 },
   inner: {
     flex: 1,
     alignItems: 'center',
@@ -142,38 +150,37 @@ const s = StyleSheet.create({
     gap: 8,
   },
   logo: {
-    width: 64,
-    height: 64,
+    width: 80,
+    height: 80,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 8,
   },
-  logoText: { color: '#fff', fontSize: 32, fontWeight: '800' },
-  title: { color: TEXT, fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  subtitle: { color: SUBTEXT, fontSize: 15, marginBottom: 24 },
-  form: { width: '100%', gap: 12 },
+  title:    { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, marginBottom: 24 },
+  form:     { width: '100%', gap: 12 },
   input: {
-    backgroundColor: CARD_BG,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: TEXT,
     fontSize: 16,
   },
   btn: {
-    backgroundColor: ACCENT,
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
     marginTop: 4,
   },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  switchRow: {
+  btnText:    { color: '#fff', fontSize: 16, fontWeight: '700' },
+  dividerRow: {
     flexDirection: 'row',
-    marginTop: 24,
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 20,
+    gap: 10,
   },
-  switchText: { color: SUBTEXT, fontSize: 14 },
+  dividerLine:  { flex: 1, height: StyleSheet.hairlineWidth },
+  dividerLabel: { fontSize: 13 },
+  switchRow:  { flexDirection: 'row', marginTop: 20 },
+  switchText: { fontSize: 14 },
 });

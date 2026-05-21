@@ -60,12 +60,13 @@ export function applySort<T extends {
   year: number;
   rating?: number;
   dateLogged?: string;
+  lastListenedAt?: string;
   dateAdded?: string;
   durationMs?: number;
 }>(arr: T[], key: SortKey): T[] {
   const a = [...arr];
-  const dateOf       = (x: T) => x.dateLogged ?? x.dateAdded ?? '';
-  const ratingOf     = (x: T) => x.rating ?? 0;
+  const dateOf       = (x: T) => x.lastListenedAt ?? x.dateLogged ?? x.dateAdded ?? '';
+  const ratingOf     = (x: T) => (x as any).lastRating ?? x.rating ?? 0;
   // Albums without a cached duration sort to the end regardless of direction
   const durationOf   = (x: T) => x.durationMs ?? -1;
 
@@ -105,12 +106,16 @@ export function SortBar({
   noun,
   isDark,
   onPress,
+  onSearchPress,
+  searchActive,
 }: {
   sortKey: SortKey;
   count: number;
   noun: string;
   isDark: boolean;
   onPress: () => void;
+  onSearchPress?: () => void;
+  searchActive?: boolean;
 }) {
   const subtext = isDark ? '#a07850' : '#7a5535';
   const surface = isDark ? '#2e2018' : '#f0ece7';
@@ -118,15 +123,25 @@ export function SortBar({
   return (
     <View style={[sb.bar, { backgroundColor: isDark ? '#1c1410' : '#faf7f4', borderBottomColor: border }]}>
       <Text style={[sb.count, { color: subtext }]}>{count} {noun}</Text>
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [sb.btn, { backgroundColor: surface, borderColor: border, opacity: pressed ? 0.7 : 1 }]}>
-        <Ionicons name="funnel-outline" size={13} color="#D4A017" />
-        <Text style={[sb.btnText, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
-          {sortLabel(sortKey)}
-        </Text>
-        <Ionicons name="chevron-down" size={11} color={subtext} />
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {onSearchPress && (
+          <Pressable
+            onPress={onSearchPress}
+            hitSlop={8}
+            style={({ pressed }) => [sb.btn, { backgroundColor: searchActive ? '#D4A017' : surface, borderColor: border, opacity: pressed ? 0.7 : 1 }]}>
+            <Ionicons name="search-outline" size={13} color={searchActive ? '#fff' : '#D4A017'} />
+          </Pressable>
+        )}
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => [sb.btn, { backgroundColor: surface, borderColor: border, opacity: pressed ? 0.7 : 1 }]}>
+          <Ionicons name="funnel-outline" size={13} color="#D4A017" />
+          <Text style={[sb.btnText, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
+            {sortLabel(sortKey)}
+          </Text>
+          <Ionicons name="chevron-down" size={11} color={subtext} />
+        </Pressable>
+      </View>
     </View>
   );
 }
