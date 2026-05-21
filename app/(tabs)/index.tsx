@@ -201,7 +201,7 @@ export { avatarColor };
 
 // ─── Popular review mock comments ────────────────────────────────────────────
 
-export export const POPULAR_REVIEW_COMMENTS: ReviewComment[] = [
+export const POPULAR_REVIEW_COMMENTS: ReviewComment[] = [
   // Review 1 — After Hours
   { id: 'pr_c1', reviewId: '1', userId: 'u1', username: 'nightfreq',     body: 'Blinding Lights is one of those songs that transcends the whole album.',  createdAt: '1 day ago'  },
   { id: 'pr_c2', reviewId: '1', userId: 'u2', username: 'wavesurfer',    body: 'The whole aesthetic is so coherent from start to finish.',                 createdAt: '2 days ago' },
