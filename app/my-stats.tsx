@@ -18,21 +18,6 @@ const MAIN_GENRES = new Set([
   'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues',
 ]);
 
-// Apple Music catch-alls — override with tag1 when tag1 is definitively specific.
-const CATCHALL_GENRES = new Set(['Pop', 'Indie / Alternative']);
-const STRONG_GENRES   = new Set([
-  'Hip-Hop / Rap', 'Metal', 'Jazz', 'Classical',
-  'Afrobeats', 'Electronic', 'Country', 'Blues', 'Latin',
-]);
-
-function pickGenreTag(genreTags: string[]): string | null {
-  const filtered = genreTags.filter(t => MAIN_GENRES.has(t));
-  const tag0 = filtered[0];
-  const tag1 = filtered[1];
-  if (!tag0) return null;
-  if (CATCHALL_GENRES.has(tag0) && tag1 && STRONG_GENRES.has(tag1)) return tag1;
-  return tag0;
-}
 
 const CARD_BG  = '#2E2018';
 const BORDER   = '#2a1e14';
@@ -666,18 +651,18 @@ export default function MyStatsScreen() {
   // ── Favourite genres ──────────────────────────────────────────────────────
   const genreCounts = new Map<string, number>();
   for (const album of loggedAlbums) {
-    const genre = pickGenreTag(album.genreTags ?? []);
+    const genre = (album.genreTags ?? []).find(t => MAIN_GENRES.has(t));
     if (genre) genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1);
   }
   const topGenres     = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   const maxGenreCount = topGenres[0]?.[1] ?? 1;
-  const totalTagged   = loggedAlbums.filter(a => pickGenreTag(a.genreTags ?? []) !== null).length;
+  const totalTagged   = loggedAlbums.filter(a => (a.genreTags ?? []).some(t => MAIN_GENRES.has(t))).length;
 
   // ── Highest rated genres ──────────────────────────────────────────────────
   const genreRatings = new Map<string, number[]>();
   for (const album of loggedAlbums) {
     if (album.rating <= 0) continue;
-    const genre = pickGenreTag(album.genreTags ?? []);
+    const genre = (album.genreTags ?? []).find(t => MAIN_GENRES.has(t));
     if (genre) {
       if (!genreRatings.has(genre)) genreRatings.set(genre, []);
       genreRatings.get(genre)!.push(album.rating);
