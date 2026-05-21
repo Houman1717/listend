@@ -698,7 +698,7 @@ export default function MyStatsScreen() {
     });
   }, [isLoaded]);
 
-  // Fetch artist images once the real album data is in
+  // Fetch artist images using the same /search?type=artist call that artist-detail uses
   useEffect(() => {
     if (!isLoaded || loggedAlbums.length === 0) return;
     const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -707,15 +707,19 @@ export default function MyStatsScreen() {
       ...topRatedArtists.map(([a]) => a),
     ])] as string[];
     if (allNames.length === 0) return;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const token = session?.access_token;
-      if (!token) return;
-      fetch(`${API_URL}/api/stats/artist-images?artists=${encodeURIComponent(allNames.join(','))}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data?.images) setArtistImages(data.images); })
-        .catch(() => {});
+    Promise.allSettled(
+      allNames.map(name =>
+        fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
+          .then(r => r.ok ? r.json() : [])
+          .then((results: { artworkUrl: string }[]) => ({ name, url: results[0]?.artworkUrl ?? '' }))
+          .catch(() => ({ name, url: '' }))
+      )
+    ).then(results => {
+      const images: Record<string, string> = {};
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.url) images[r.value.name] = r.value.url;
+      }
+      if (Object.keys(images).length > 0) setArtistImages(images);
     });
   }, [loggedAlbums]);
 
