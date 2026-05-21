@@ -275,7 +275,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
             lastReview:      row.is_relistened ? latestReListenReview.get(row.spotify_id) : undefined,
             lastListenedAt:  row.is_relistened ? latestReListenDate.get(row.spotify_id)   : undefined,
             genreTags:       row.genre_tags ?? [],
-            genreTags:       row.genre_tags ?? [],
           }));
           // Merge: preserve local state that is newer than what the DB returned.
           // Two cases this guards against:
@@ -305,6 +304,28 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
             AsyncStorage.setItem(sk(KEY.LOGGED, uid), JSON.stringify(result)).catch(() => {});
             return result;
           });
+        }
+      }
+
+      // 3a-backfill: fire genre-tag fetch for any album that has no tags yet
+      if (!cancelled && albumData) {
+        const missing = (albumData as any[]).filter(r => !r.genre_tags || r.genre_tags.length === 0);
+        for (const row of missing) {
+          const tagsUrl = `${API_URL}/album-tags?artist=${encodeURIComponent(row.artist ?? '')}&album=${encodeURIComponent(row.title ?? '')}&amId=${encodeURIComponent(row.spotify_id ?? '')}`;
+          fetch(tagsUrl)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              const tags: string[] = data?.tags ?? [];
+              if (tags.length === 0) return;
+              supabase
+                .from('user_albums')
+                .update({ genre_tags: tags })
+                .eq('user_id', uid)
+                .eq('spotify_id', row.spotify_id)
+                .then(({ error }) => { if (error) console.error('[AlbumsContext] backfill genre_tags error:', error.message); });
+              setLoggedAlbums(prev => prev.map(a => a.id === row.spotify_id ? { ...a, genreTags: tags } : a));
+            })
+            .catch(() => {});
         }
       }
 
