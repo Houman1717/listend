@@ -241,9 +241,6 @@ export default function ReListenedScreen() {
   // Re-listen evolution data (growers / faders)
   const [allReLists, setAllReLists] = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
 
-  // Re-listen evolution data (growers / faders)
-  const [allReLists, setAllReLists] = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
-
   useEffect(() => {
     if (!viewingOther) return;
     setOtherLoading(true);

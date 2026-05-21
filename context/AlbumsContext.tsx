@@ -31,9 +31,6 @@ export type LoggedAlbum = {
   lastListenedAt?: string;
   lastRating?: number;
   lastReview?: string;
-  lastListenedAt?: string;
-  lastRating?: number;
-  lastReview?: string;
   genreTags?: string[];
 };
 
@@ -94,11 +91,8 @@ type AlbumsContextType = {
   setReListenMode: (v: boolean) => void;
   updateReview: (id: string, rating: number, review: string) => void;
   updateReListenReview: (id: string, rating: number, review: string) => void;
-  updateReListenReview: (id: string, rating: number, review: string) => void;
   updateDuration: (id: string, durationMs: number) => void;
   removeLoggedAlbum: (id: string) => void;
-  removeReListenEntry: (albumId: string, listenedAt: string) => Promise<void>;
-  undoLastReListenEntry: (albumId: string) => Promise<void>;
   removeReListenEntry: (albumId: string, listenedAt: string) => Promise<void>;
   undoLastReListenEntry: (albumId: string) => Promise<void>;
   topAlbums: (TopAlbum | null)[];
@@ -584,29 +578,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  function updateReListenReview(id: string, rating: number, review: string) {
-    const trimmedReview = review.trim() || null;
-
-    // Optimistic local update so My Listend and Re-listend tab reflect immediately
-    setLoggedAlbums(prev => prev.map(a =>
-      a.id === id ? { ...a, lastRating: rating, lastReview: trimmedReview ?? undefined } : a
-    ));
-
-    if (!user) return;
-
-    // Use the server endpoint (service-role key) so the update bypasses RLS.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const token = session?.access_token;
-      if (!token) return;
-      fetch(`${API_URL}/api/re-listens`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ spotify_id: id, rating, review: trimmedReview }),
-      }).then(r => {
-        if (!r.ok) r.json().then(e => console.error('[AlbumsContext] updateReListenReview server error:', e));
-      }).catch(e => console.error('[AlbumsContext] updateReListenReview fetch error:', e));
-    });
-  }
 
   function updateDuration(id: string, durationMs: number) {
     setLoggedAlbums((prev) =>
@@ -837,45 +808,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     }));
   }
 
-  async function removeReListenEntry(albumId: string, listenedAt: string) {
-    if (!user) return;
-
-    await supabase
-      .from('re_listens')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('spotify_id', albumId)
-      .eq('listened_at', listenedAt);
-
-    // Fetch remaining re-listens to get new count and new latest rating/review
-    const { data: remaining } = await supabase
-      .from('re_listens')
-      .select('rating, review')
-      .eq('user_id', user.id)
-      .eq('spotify_id', albumId)
-      .order('listened_at', { ascending: false });
-
-    const newCount = (remaining ?? []).length;
-    const newLast  = remaining?.[0];
-
-    await supabase
-      .from('user_albums')
-      .update({ re_listen_count: newCount, is_relistened: newCount > 0 })
-      .eq('user_id', user.id)
-      .eq('spotify_id', albumId);
-
-    setLoggedAlbums(prev => prev.map(a => {
-      if (a.id !== albumId) return a;
-      return {
-        ...a,
-        reListenCount: newCount,
-        isRelistened:  newCount > 0,
-        lastRating:    newCount > 0 ? (newLast?.rating ?? undefined) : undefined,
-        lastReview:    newCount > 0 ? (newLast?.review ?? undefined) : undefined,
-      };
-    }));
-  }
-
   async function undoLastReListenEntry(albumId: string) {
     if (!user) return;
 
@@ -919,48 +851,6 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     }));
   }
 
-  async function undoLastReListenEntry(albumId: string) {
-    if (!user) return;
-
-    // Fetch all re-listens newest-first so we know which to delete and what the new latest is
-    const { data: all } = await supabase
-      .from('re_listens')
-      .select('rating, review, listened_at')
-      .eq('user_id', user.id)
-      .eq('spotify_id', albumId)
-      .order('listened_at', { ascending: false });
-
-    if (!all || all.length === 0) return;
-
-    const latest = all[0];
-
-    await supabase
-      .from('re_listens')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('spotify_id', albumId)
-      .eq('listened_at', latest.listened_at);
-
-    const newCount = all.length - 1;
-    const newLast  = all[1]; // second-most-recent becomes the new latest (undefined if none)
-
-    await supabase
-      .from('user_albums')
-      .update({ re_listen_count: newCount, is_relistened: newCount > 0 })
-      .eq('user_id', user.id)
-      .eq('spotify_id', albumId);
-
-    setLoggedAlbums(prev => prev.map(a => {
-      if (a.id !== albumId) return a;
-      return {
-        ...a,
-        reListenCount: newCount,
-        isRelistened:  newCount > 0,
-        lastRating:    newCount > 0 ? (newLast?.rating ?? undefined) : undefined,
-        lastReview:    newCount > 0 ? (newLast?.review ?? undefined) : undefined,
-      };
-    }));
-  }
 
   function removeFromWantToListen(id: string) {
     setWantToListen((prev) => prev.filter((a) => a.id !== id));
