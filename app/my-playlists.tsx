@@ -29,18 +29,6 @@ type LikedEntry =
   | { kind: 'featured'; likedAt: string; pl: any }
   | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
 
-type LikedEntry =
-  | { kind: 'featured'; likedAt: string; pl: any }
-  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
-
-type LikedEntry =
-  | { kind: 'featured'; likedAt: string; pl: any }
-  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
-
-type LikedEntry =
-  | { kind: 'featured'; likedAt: string; pl: any }
-  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
-
 // ─── Playlist artwork mosaic (2×2 grid of first 4 covers) ────────────────────
 
 function PlaylistMosaic({
@@ -346,103 +334,6 @@ async function buildLikedEntries(
   return { entries, artMap };
 }
 
-// ─── Build a chronologically-sorted liked-playlist list for any user ──────────
-
-async function buildLikedEntries(
-  userId: string,
-): Promise<{ entries: LikedEntry[]; artMap: Map<string, string | undefined> }> {
-  const { data: likedRows } = await supabase
-    .from('likes')
-    .select('target_id, target_owner_id, created_at')
-    .eq('user_id', userId)
-    .eq('target_type', 'playlist')
-    .order('created_at', { ascending: false });
-
-  const rows: any[] = likedRows ?? [];
-  const featuredRows = rows.filter(r => (r.target_id as string).startsWith('featured:'));
-  const userRows     = rows.filter(r => !(r.target_id as string).startsWith('featured:'));
-
-  const entries: LikedEntry[] = [];
-
-  if (featuredRows.length > 0) {
-    try {
-      const resp = await fetch(`${API_URL}/api/featured-playlists`);
-      const all: any[] = await resp.json();
-      const likedAtByFeaturedId = new Map<string, string>(
-        featuredRows.map((r: any) => [r.target_id.replace('featured:', ''), r.created_at as string])
-      );
-      for (const pl of all) {
-        if (likedAtByFeaturedId.has(pl.id)) {
-          entries.push({ kind: 'featured', likedAt: likedAtByFeaturedId.get(pl.id)!, pl });
-        }
-      }
-    } catch {}
-  }
-
-  const artMap = new Map<string, string | undefined>();
-
-  if (userRows.length > 0) {
-    const playlistIds = userRows.map((r: any) => r.target_id as string);
-    const likedAtById = new Map<string, string>(
-      userRows.map((r: any) => [r.target_id as string, r.created_at as string])
-    );
-
-    const { data: pls } = await supabase
-      .from('playlists')
-      .select('id, name, description, created_at, user_id')
-      .in('id', playlistIds);
-
-    if (pls && pls.length > 0) {
-      const { data: pas } = await supabase
-        .from('playlist_albums')
-        .select('playlist_id, spotify_id, position')
-        .in('playlist_id', playlistIds)
-        .order('position', { ascending: true });
-
-      const allSpotifyIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id as string))];
-      if (allSpotifyIds.length > 0) {
-        const { data: uas } = await supabase
-          .from('user_albums')
-          .select('spotify_id, artwork_url')
-          .in('spotify_id', allSpotifyIds);
-        for (const a of (uas ?? []) as any[]) {
-          if (!artMap.has(a.spotify_id)) artMap.set(a.spotify_id, a.artwork_url ?? undefined);
-        }
-      }
-
-      const ownerIds = [...new Set(pls.map((p: any) => p.user_id as string))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', ownerIds);
-      const usernameByUserId = new Map<string, string>(
-        (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
-      );
-
-      for (const p of pls as any[]) {
-        const playlist: Playlist = {
-          id:          p.id,
-          name:        p.name,
-          description: p.description ?? undefined,
-          albumIds:    (pas ?? [])
-            .filter((a: any) => a.playlist_id === p.id)
-            .map((a: any) => a.spotify_id as string),
-          createdAt:   p.created_at,
-        };
-        entries.push({
-          kind:     'user',
-          likedAt:  likedAtById.get(p.id) ?? '',
-          playlist,
-          ownerId:  p.user_id,
-          username: usernameByUserId.get(p.user_id) ?? '',
-        });
-      }
-    }
-  }
-
-  entries.sort((a, b) => b.likedAt.localeCompare(a.likedAt));
-  return { entries, artMap };
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -629,18 +520,6 @@ export default function MyPlaylistsScreen() {
   async function handleUnlikeFeaturedPlaylist(id: string) {
     if (!user) return;
     setLikedEntries(prev => prev.filter(e => !(e.kind === 'featured' && e.pl.id === id)));
-    await supabase
-      .from('likes')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('target_type', 'playlist')
-      .eq('target_id', `featured:${id}`);
-  }
-
-  // ── Unlike a featured playlist from the liked tab ─────────────────────────
-  async function handleUnlikeFeaturedPlaylist(id: string) {
-    if (!user) return;
-    setLikedFeaturedPlaylists(prev => prev.filter(p => p.id !== id));
     await supabase
       .from('likes')
       .delete()

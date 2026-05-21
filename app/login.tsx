@@ -16,8 +16,6 @@ import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
-import { SocialAuthButtons } from '@/components/SocialAuthButtons';
-import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 
 const ACCENT = '#D4A017';
 

@@ -578,10 +578,6 @@ export default function MyStatsScreen() {
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
   const [playlistAlbums, setPlaylistAlbums]   = useState<Record<string, { title: string; artist: string }[]>>({});
   const { width: screenWidth } = useWindowDimensions();
-  const { width: screenWidth } = useWindowDimensions();
-  const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
-  const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
-  const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
 
   const cardBg = isDark ? CARD_BG : colors.card;
 
@@ -668,21 +664,6 @@ export default function MyStatsScreen() {
     for (const tag of tags) {
       if (seen.has(tag)) continue;
       seen.add(tag);
-      if (!genreRatings.has(tag)) genreRatings.set(tag, []);
-      genreRatings.get(tag)!.push(album.rating);
-    }
-  }
-  const topRatedGenres = [...genreRatings.entries()]
-    .map(([genre, ratings]) => [genre, ratings.reduce((s, r) => s + r, 0) / ratings.length] as [string, number])
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-
-  // ── Highest rated genres ──────────────────────────────────────────────────
-  const genreRatings = new Map<string, number[]>();
-  for (const album of loggedAlbums) {
-    if (album.rating <= 0) continue;
-    for (const tag of album.genreTags ?? []) {
-      if (!MAIN_GENRES.has(tag)) continue;
       if (!genreRatings.has(tag)) genreRatings.set(tag, []);
       genreRatings.get(tag)!.push(album.rating);
     }
@@ -881,30 +862,6 @@ export default function MyStatsScreen() {
         });
     });
   }, [isLoaded]);
-
-  // ── Re-Listend evolution (growers / faders) ───────────────────────────────
-  const reListenedAlbums = loggedAlbums.filter(a => a.isRelistened);
-  const totalReListens   = reListenedAlbums.reduce((s, a) => s + (a.reListenCount ?? 0), 0);
-  const evGrowers: EvolutionEntry[] = [];
-  const evFaders:  EvolutionEntry[] = [];
-  let evSumFirst = 0, evSumLatest = 0, evCount = 0;
-  for (const album of reListenedAlbums) {
-    const lists = allReLists.get(album.id);
-    if (!lists || lists.length === 0) continue;
-    const latestRated = [...lists].reverse().find(r => r.rating > 0);
-    const latestRating = latestRated?.rating ?? 0;
-    const firstRating  = album.rating;
-    if (firstRating <= 0 || latestRating <= 0) continue;
-    const delta = latestRating - firstRating;
-    evSumFirst += firstRating; evSumLatest += latestRating; evCount++;
-    if (delta >= 1)  evGrowers.push({ album, firstRating, latestRating, delta });
-    if (delta <= -1) evFaders.push({ album, firstRating, latestRating, delta });
-  }
-  evGrowers.sort((a, b) => b.delta - a.delta);
-  evFaders.sort((a, b) => a.delta - b.delta);
-  const evAvgDelta      = evCount > 0 ? (evSumLatest - evSumFirst) / evCount : 0;
-  const evFirstListenAvg = evCount > 0 ? evSumFirst  / evCount : 0;
-  const evLongTermAvg    = evCount > 0 ? evSumLatest / evCount : 0;
 
   // ── Community comparison (rated higher / lower than average) ─────────────
   const MIN_COMMUNITY = 10;
@@ -1426,20 +1383,6 @@ const cc = StyleSheet.create({
 const pp = StyleSheet.create({
   name:  { color: TEXT,    fontSize: 11, fontWeight: '600', textAlign: 'center', lineHeight: 15 },
   count: { color: SUBTEXT, fontSize: 11, fontWeight: '500', textAlign: 'center' },
-});
-
-const rl = StyleSheet.create({
-  strip:        { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', marginBottom: 4 },
-  cell:         { flex: 1, alignItems: 'center', paddingVertical: 12, gap: 3 },
-  divider:      { width: StyleSheet.hairlineWidth, height: 32 },
-  val:          { color: TEXT,    fontSize: 17, fontWeight: '700' },
-  lbl:          { color: SUBTEXT, fontSize: 10, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.6, textAlign: 'center' },
-  section:      { paddingTop: 16, gap: 10 },
-  sectionHeader:{ flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionBadge: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: TEXT },
-  sectionSub:   { fontSize: 12, fontWeight: '500' },
-  carousel:     { gap: 12, paddingBottom: 4 },
 });
 
 const rl = StyleSheet.create({

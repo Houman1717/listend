@@ -360,14 +360,6 @@ export default function MyReviewsScreen() {
   useFocusEffect(useCallback(() => {
     setLikedFetchTick(t => t + 1);
   }, []));
-  const [likedFetchTick, setLikedFetchTick] = useState(0);
-
-  // Re-fetch liked reviews whenever this screen gains focus (covers the case
-  // where the user liked a review on another screen and then navigated back)
-  useFocusEffect(useCallback(() => {
-    setLikedFetchTick(t => t + 1);
-  }, []));
-
   // Fetch reviewer username for the modal
   useEffect(() => {
     const uid = viewingOther ?? user?.id;
@@ -683,45 +675,6 @@ export default function MyReviewsScreen() {
   }, [activeTab, viewingOther, user?.id, likedFetchTick]);
 
   // ── Unlike a review from the liked tab (own user) ─────────────────────────
-  async function handleUnlikeLikedReview(review: LikedReview) {
-    if (!user) return;
-    const targetId = `${review.ownerId}_${review.id}`;
-    setLikedReviews(prev => prev.filter(r => !(r.ownerId === review.ownerId && r.id === review.id)));
-    setSelectedLiked(null);
-    setLikedLikesMap(prev => {
-      const m = new Map(prev);
-      const ex = m.get(targetId) ?? { liked: true, count: 1 };
-      m.set(targetId, { liked: false, count: Math.max(0, ex.count - 1) });
-      return m;
-    });
-    await supabase.from('likes').delete()
-      .eq('user_id', user.id)
-      .eq('target_type', 'review')
-      .eq('target_id', targetId);
-  }
-
-  // ── Toggle like on a review in another user's liked-reviews tab ───────────
-  async function handleToggleLikedReviewLike(review: LikedReview) {
-    if (!user) return;
-    const targetId = `${review.ownerId}_${review.id}`;
-    const current  = likedLikesMap.get(targetId) ?? { liked: false, count: 0 };
-    setLikedLikesMap(prev => {
-      const m = new Map(prev);
-      m.set(targetId, { liked: !current.liked, count: Math.max(0, current.liked ? current.count - 1 : current.count + 1) });
-      return m;
-    });
-    if (current.liked) {
-      await supabase.from('likes').delete()
-        .eq('user_id', user.id)
-        .eq('target_type', 'review')
-        .eq('target_id', targetId);
-    } else {
-      await supabase.from('likes').insert({
-        user_id: user.id, target_type: 'review',
-        target_id: targetId, target_owner_id: review.ownerId,
-      });
-    }
-  }
 
   // ── Toggle like on another user's review ─────────────────────────────────
   async function handleToggleLike(album: LoggedAlbum) {
@@ -1130,29 +1083,6 @@ const s = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   searchInput: { flex: 1, fontSize: 15, height: 36 },
-});
-
-// ─── Modal styles ──────────────────────────────────────────────────────────────
-
-const mrd = StyleSheet.create({
-  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle:  { fontSize: 16, fontWeight: '700' },
-  albumRow:     { flexDirection: 'row', gap: 14, padding: 20, paddingBottom: 12 },
-  art:          { width: 80, height: 80, borderRadius: 8, flexShrink: 0 },
-  albumTitle:   { fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
-  albumArtist:  { fontSize: 13 },
-  ratingRow:    { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  authorRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 10 },
-  avatar:       { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
-  avatarLetter: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  username:     { color: '#D4A017', fontWeight: '600', fontSize: 14 },
-  listenedDate: { fontSize: 12 },
-  reviewText:   { fontSize: 14, lineHeight: 22, fontStyle: 'italic', paddingHorizontal: 20, paddingVertical: 6 },
-  likeCommentRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, marginTop: 6 },
-  likeBtn:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 6 },
-  likeCount:      { fontSize: 13, fontWeight: '600' },
-  commentsToggle:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth },
-  commentsToggleText: { fontSize: 12 },
 });
 
 // ─── Modal styles ──────────────────────────────────────────────────────────────
