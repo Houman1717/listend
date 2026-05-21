@@ -1068,7 +1068,7 @@ export default function MyStatsScreen() {
                     pill
                     onPress={() => setListModal({
                       title: genre,
-                      albums: loggedAlbums.filter(a => a.genreTags?.slice(0, 2).includes(genre)),
+                      albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre),
                     })}
                   />
                 ))}
@@ -1090,7 +1090,7 @@ export default function MyStatsScreen() {
                     pill
                     onPress={() => setListModal({
                       title: genre,
-                      albums: loggedAlbums.filter(a => a.genreTags?.slice(0, 2).includes(genre) && a.rating > 0),
+                      albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre && a.rating > 0),
                     })}
                   />
                 ))}
