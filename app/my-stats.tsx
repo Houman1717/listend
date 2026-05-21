@@ -573,6 +573,17 @@ export default function MyStatsScreen() {
   const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
+  // Seed artist images instantly from album artwork already in memory,
+  // so the UI renders immediately without waiting for the server fetch.
+  const albumArtworkByArtist = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    // loggedAlbums is newest-first, so the first hit per artist = most recent album
+    for (const a of loggedAlbums) {
+      if (a.artist && a.artworkUrl && !map[a.artist]) map[a.artist] = a.artworkUrl;
+    }
+    return map;
+  }, [loggedAlbums]);
+
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
@@ -1016,7 +1027,7 @@ export default function MyStatsScreen() {
                         key={artist}
                         artist={artist}
                         label={sub}
-                        imageUrl={artistImages[artist]}
+                        imageUrl={artistImages[artist] ?? albumArtworkByArtist[artist]}
                         cardW={cardW}
                         onPress={() => setListModal({
                           title: artist,
@@ -1025,7 +1036,7 @@ export default function MyStatsScreen() {
                             : loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
                           onTitlePress: () => {
                             setListModal(null);
-                            setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist, artworkUrl: artistImages[artist] ?? '' } } as any), 300);
+                            setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist, artworkUrl: artistImages[artist] ?? albumArtworkByArtist[artist] ?? '' } } as any), 300);
                           },
                         })}
                       />
