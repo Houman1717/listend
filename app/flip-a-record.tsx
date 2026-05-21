@@ -210,8 +210,6 @@ function ListenedRow({
 
 // ─── PoolRow — pool list item on main screen ─────────────────────────────────
 
-type ListenedStatus = 'logged' | 'library' | 'pending' | 'didnt_listen' | null;
-
 function PoolRow({ item, status, libraryLogged, borderCol, colors }: {
   item: FlipAlbum;
   status: FlipStatus | null;
