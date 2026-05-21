@@ -4,13 +4,11 @@ import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, Fragment } from 'react';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Svg, { Circle } from 'react-native-svg';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
-import { FLIP_POOL } from '@/constants/FlipPool';
 
 const MAIN_GENRES = new Set([
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
@@ -95,13 +93,11 @@ function AlbumListModal({
   albums,
   onClose,
   onAlbumPress,
-  onTitlePress,
 }: {
   title: string | null;
   albums: LoggedAlbum[];
   onClose: () => void;
   onAlbumPress: (album: LoggedAlbum) => void;
-  onTitlePress?: () => void;
 }) {
   const insets  = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -114,12 +110,7 @@ function AlbumListModal({
         <View style={[rm.sheet, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
           <View style={rm.handle} />
           <View style={rm.header}>
-            <Pressable onPress={onTitlePress} disabled={!onTitlePress} style={{ flex: 1, marginRight: 12 }}>
-              <Text style={[rm.title, onTitlePress && { color: ACCENT }]}>{title}</Text>
-              {onTitlePress && (
-                <Text style={{ color: SUBTEXT, fontSize: 12, marginTop: 2 }}>View artist profile →</Text>
-              )}
-            </Pressable>
+            <Text style={rm.title}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={12}>
               <FontAwesome name="times" size={16} color={SUBTEXT} />
             </Pressable>
@@ -570,13 +561,12 @@ export default function MyStatsScreen() {
   const [selectedRating, setSelectedRating]   = useState<number | null>(null);
   const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
   const [countryCount,   setCountryCount]     = useState<number | '...' >('...');
-  const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
+  const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[] } | null>(null);
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
-  const [playlistAlbums, setPlaylistAlbums]   = useState<Record<string, { title: string; artist: string }[]>>({});
   const { width: screenWidth } = useWindowDimensions();
 
   const cardBg = isDark ? CARD_BG : colors.card;
@@ -624,7 +614,7 @@ export default function MyStatsScreen() {
     if (!album.artist) continue;
     artistCounts.set(album.artist, (artistCounts.get(album.artist) ?? 0) + 1);
   }
-  const topArtists     = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 9);
+  const topArtists     = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxArtistCount = topArtists[0]?.[1] ?? 1;
 
   // ── Highest rated artists ─────────────────────────────────────────────────
@@ -638,16 +628,13 @@ export default function MyStatsScreen() {
     .filter(([, ratings]) => ratings.length >= 2)
     .map(([artist, ratings]) => [artist, ratings.reduce((s, r) => s + r, 0) / ratings.length] as [string, number])
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 9);
+    .slice(0, 5);
 
   // ── Favourite genres ──────────────────────────────────────────────────────
   const genreCounts = new Map<string, number>();
   for (const album of loggedAlbums) {
-    const tags = (album.genreTags ?? []).filter(t => MAIN_GENRES.has(t)).slice(0, 2);
-    const seen = new Set<string>();
-    for (const tag of tags) {
-      if (seen.has(tag)) continue;
-      seen.add(tag);
+    for (const tag of album.genreTags ?? []) {
+      if (!MAIN_GENRES.has(tag)) continue;
       genreCounts.set(tag, (genreCounts.get(tag) ?? 0) + 1);
     }
   }
@@ -659,11 +646,8 @@ export default function MyStatsScreen() {
   const genreRatings = new Map<string, number[]>();
   for (const album of loggedAlbums) {
     if (album.rating <= 0) continue;
-    const tags = (album.genreTags ?? []).filter(t => MAIN_GENRES.has(t)).slice(0, 2);
-    const seen = new Set<string>();
-    for (const tag of tags) {
-      if (seen.has(tag)) continue;
-      seen.add(tag);
+    for (const tag of album.genreTags ?? []) {
+      if (!MAIN_GENRES.has(tag)) continue;
       if (!genreRatings.has(tag)) genreRatings.set(tag, []);
       genreRatings.get(tag)!.push(album.rating);
     }
@@ -691,7 +675,7 @@ export default function MyStatsScreen() {
     });
   }, [isLoaded]);
 
-  // Fetch artist images once albums are loaded — same /search endpoint used by artist-detail
+  // Fetch artist images once albums are loaded
   useEffect(() => {
     if (!isLoaded || loggedAlbums.length === 0) return;
     const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -700,22 +684,15 @@ export default function MyStatsScreen() {
       ...topRatedArtists.map(([a]) => a),
     ])] as string[];
     if (allNames.length === 0) return;
-    Promise.allSettled(
-      allNames.map(name =>
-        fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
-          .then(r => r.ok ? r.json() : null)
-          .then((results: { id: string; name: string; artworkUrl: string }[] | null) => {
-            const url = results?.[0]?.artworkUrl;
-            return url ? { name, url } : null;
-          })
-          .catch(() => null)
-      )
-    ).then(settled => {
-      const images: Record<string, string> = {};
-      for (const r of settled) {
-        if (r.status === 'fulfilled' && r.value) images[r.value.name] = r.value.url;
-      }
-      if (Object.keys(images).length > 0) setArtistImages(images);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const token = session?.access_token;
+      if (!token) return;
+      fetch(`${API_URL}/api/stats/artist-images?artists=${encodeURIComponent(allNames.join(','))}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.images) setArtistImages(data.images); })
+        .catch(() => {});
     });
   }, [isLoaded]);
 
@@ -776,26 +753,6 @@ export default function MyStatsScreen() {
     });
   }, [isLoaded]);
 
-  // Fetch featured playlist album lists (in parallel, once)
-  useEffect(() => {
-    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-    const featuredIds = FEATURED_PLAYLISTS.filter(p => p.id !== 'flip-a-record').map(p => p.id);
-    Promise.allSettled(
-      featuredIds.map(id =>
-        fetch(`${API_URL}/api/featured-playlists/${id}`)
-          .then(r => r.ok ? r.json() : [])
-          .then((data: { title: string; artist: string }[]) => ({ id, albums: data }))
-          .catch(() => ({ id, albums: [] }))
-      )
-    ).then(results => {
-      const map: Record<string, { title: string; artist: string }[]> = {};
-      for (const r of results) {
-        if (r.status === 'fulfilled') map[r.value.id] = r.value.albums;
-      }
-      setPlaylistAlbums(map);
-    });
-  }, []);
-
   // ── Re-Listend evolution (growers / faders) ───────────────────────────────
   const reListenedAlbums = loggedAlbums.filter(a => a.isRelistened);
   const totalReListens   = reListenedAlbums.reduce((s, a) => s + (a.reListenCount ?? 0), 0);
@@ -836,25 +793,6 @@ export default function MyStatsScreen() {
   compLower.sort((a, b) => b.delta - a.delta);
   const hasComparison = compHigher.length > 0 || compLower.length > 0;
 
-  // ── Playlist progress ─────────────────────────────────────────────────────
-  const loggedSet = new Set(
-    loggedAlbums.map(a => `${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
-  );
-
-  const flipTotal = FLIP_POOL.length;
-  const flipDone  = FLIP_POOL.filter(
-    a => loggedSet.has(`${a.title.toLowerCase()}::${a.artist.toLowerCase()}`)
-  ).length;
-
-  const playlistProgress = FEATURED_PLAYLISTS.map(pl => {
-    if (pl.id === 'flip-a-record') return { ...pl, done: flipDone, total: flipTotal };
-    const albums = playlistAlbums[pl.id] ?? [];
-    const done = albums.filter(
-      a => loggedSet.has(`${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
-    ).length;
-    return { ...pl, done, total: albums.length };
-  });
-
   function handleRatingPress(rating: number, albums: LoggedAlbum[]) {
     setSelectedAlbums(albums);
     setSelectedRating(rating);
@@ -880,7 +818,6 @@ export default function MyStatsScreen() {
         albums={listModal?.albums ?? []}
         onClose={() => setListModal(null)}
         onAlbumPress={(album) => { setListModal(null); setTimeout(() => handleAlbumPress(album), 300); }}
-        onTitlePress={listModal?.onTitlePress}
       />
 
       <ScrollView
@@ -1008,10 +945,6 @@ export default function MyStatsScreen() {
                           albums: artistView === 'listend'
                             ? loggedAlbums.filter(a => a.artist === artist)
                             : loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
-                          onTitlePress: () => {
-                            setListModal(null);
-                            setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist, artworkUrl: artistImages[artist] ?? '' } } as any), 300);
-                          },
                         })}
                       />
                     ))}
@@ -1049,7 +982,7 @@ export default function MyStatsScreen() {
                     pill
                     onPress={() => setListModal({
                       title: genre,
-                      albums: loggedAlbums.filter(a => a.genreTags?.slice(0, 2).includes(genre)),
+                      albums: loggedAlbums.filter(a => a.genreTags?.includes(genre)),
                     })}
                   />
                 ))}
@@ -1071,7 +1004,7 @@ export default function MyStatsScreen() {
                     pill
                     onPress={() => setListModal({
                       title: genre,
-                      albums: loggedAlbums.filter(a => a.genreTags?.slice(0, 2).includes(genre) && a.rating > 0),
+                      albums: loggedAlbums.filter(a => a.genreTags?.includes(genre) && a.rating > 0),
                     })}
                   />
                 ))}
@@ -1165,102 +1098,8 @@ export default function MyStatsScreen() {
           </View>
         )}
 
-        {/* ── Playlist Progress ──────────────────────────────────────────── */}
-        <View style={[s.card, { backgroundColor: cardBg, borderColor: BORDER }]}>
-          <Text style={[s.cardTitle, { color: colors.textMuted }]}>PLAYLIST PROGRESS</Text>
-          {(() => {
-            const COL = 3;
-            const RING_GAP = 12;
-            const cellW = Math.floor((screenWidth - 40 - 36 - RING_GAP * (COL - 1)) / COL);
-            const rows: typeof playlistProgress[] = [];
-            for (let i = 0; i < playlistProgress.length; i += COL) {
-              rows.push(playlistProgress.slice(i, i + COL));
-            }
-            return (
-              <View style={{ gap: 20 }}>
-                {rows.map((row, ri) => (
-                  <View key={ri} style={{ flexDirection: 'row', gap: RING_GAP }}>
-                    {row.map(pl => (
-                      <Pressable
-                        key={pl.id}
-                        style={({ pressed }) => ({ width: cellW, alignItems: 'center', gap: 6, opacity: pressed ? 0.65 : 1 })}
-                        onPress={() => {
-                          if (pl.id === 'flip-a-record') {
-                            router.push('/flip-a-record' as any);
-                          } else {
-                            router.push({ pathname: '/discover-featured-playlist', params: { id: pl.id, name: pl.name } } as any);
-                          }
-                        }}>
-                        <ProgressRing done={pl.done} total={pl.total} size={68} />
-                        <Text style={pp.name} numberOfLines={2}>{pl.name}</Text>
-                        <Text style={pp.count}>
-                          {pl.total > 0 ? `${pl.done} / ${pl.total}` : '—'}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ))}
-              </View>
-            );
-          })()}
-        </View>
-
       </ScrollView>
     </>
-  );
-}
-
-// ─── Playlist Progress ────────────────────────────────────────────────────────
-
-const FEATURED_PLAYLISTS = [
-  { id: 'flip-a-record',    name: 'Flip a Record'    },
-  { id: 'all-time-classics',name: 'All-Time Classics' },
-  { id: 'late-night',       name: 'Late Night'        },
-  { id: 'summer',           name: 'Summer'            },
-  { id: 'heartbreak',       name: 'Heartbreak'        },
-  { id: 'road-trip',        name: 'Road Trip'         },
-  { id: 'chill',            name: 'Chill'             },
-  { id: 'hidden-gems',      name: 'Hidden Gems'       },
-  { id: 'essentials',       name: 'Essentials'        },
-];
-
-function ProgressRing({
-  done,
-  total,
-  size = 72,
-}: {
-  done: number;
-  total: number;
-  size?: number;
-}) {
-  const strokeWidth = 6;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const pct = total > 0 ? done / total : 0;
-  const dash = circumference * pct;
-  const gap = circumference - dash;
-  const center = size / 2;
-  const label = total > 0 ? `${Math.round(pct * 100)}%` : '0%';
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        {/* Track */}
-        <Circle
-          cx={center} cy={center} r={radius}
-          stroke={BORDER} strokeWidth={strokeWidth} fill="none"
-        />
-        {/* Progress */}
-        <Circle
-          cx={center} cy={center} r={radius}
-          stroke={ACCENT} strokeWidth={strokeWidth} fill="none"
-          strokeDasharray={`${dash} ${gap}`}
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${center}, ${center}`}
-        />
-      </Svg>
-      <Text style={{ color: TEXT, fontSize: 13, fontWeight: '700' }}>{label}</Text>
-    </View>
   );
 }
 
@@ -1335,11 +1174,6 @@ const cc = StyleSheet.create({
   deltaBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   title:          { color: TEXT,    fontSize: 12, fontWeight: '600', lineHeight: 16 },
   communityAvg:   { color: SUBTEXT, fontSize: 11, fontWeight: '500' },
-});
-
-const pp = StyleSheet.create({
-  name:  { color: TEXT,    fontSize: 11, fontWeight: '600', textAlign: 'center', lineHeight: 15 },
-  count: { color: SUBTEXT, fontSize: 11, fontWeight: '500', textAlign: 'center' },
 });
 
 const rl = StyleSheet.create({
