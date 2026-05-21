@@ -245,7 +245,7 @@ function Section({ title, loading, children }: { title: string; loading: boolean
 function ArtFallback({ size, radius, label }: { size: number; radius: number; label: string }) {
   return (
     <View style={[s.fallback, { width: size, height: size, borderRadius: radius }]}>
-      <Text style={[s.fallbackText, { fontSize: size * 0.32 }]}>{label[0]?.toUpperCase()}</Text>
+      <Text style={[s.fallbackText, { fontSize: size * 0.32 }]}>{(label ?? '?')[0]?.toUpperCase()}</Text>
     </View>
   );
 }
@@ -716,9 +716,7 @@ function FriendCard({
         <ArtFallback size={artSize} radius={6} label={friend.album} />
       )}
       <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress?.(); }} hitSlop={6}>
-        <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress?.(); }} hitSlop={6}>
         <Text style={[s.friendUser, { color: '#D4A017' }]} numberOfLines={1}>@{friend.user}</Text>
-      </Pressable>
       </Pressable>
       <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{friend.album}</Text>
       <Text style={[s.cardSub,    { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{friend.artist}</Text>
@@ -1410,36 +1408,30 @@ export default function HomeScreen() {
 
       {/* 3 — Friends Recent Listend */}
       <Section title="Friends Recent Listend" loading={friendsListenedLoading}>
-        <FlatList
-          horizontal
-          data={friendsListened.slice(0, 10)}
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[s.row, { alignItems: 'stretch' }]}
-          renderItem={({ item }) => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.row, { alignItems: 'stretch' }]}>
+          {friendsListened.slice(0, 10).map((item) => (
             <FriendCard
+              key={item.id}
               friend={item}
               isDark={isDark}
               colors={colors}
               onPress={() => openFriendReview(item)}
               onUsernamePress={() => navigateToProfile(item.user, router)}
             />
-          )}
-          ListFooterComponent={
-            <Pressable
-              onPress={() => setShowAllFriends(true)}
-              style={({ pressed }) => ({
-                width: 120, height: 285, borderRadius: 6,
-                justifyContent: 'center', alignItems: 'center',
-                backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
-                opacity: pressed ? 0.7 : 1,
-              })}>
-              <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>
-                See{'\n'}More
-              </Text>
-            </Pressable>
-          }
-        />
+          ))}
+          <Pressable
+            onPress={() => setShowAllFriends(true)}
+            style={({ pressed }) => ({
+              width: 120, height: 285, borderRadius: 6,
+              justifyContent: 'center', alignItems: 'center',
+              backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
+              opacity: pressed ? 0.7 : 1,
+            })}>
+            <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>
+              See{'\n'}More
+            </Text>
+          </Pressable>
+        </ScrollView>
       </Section>
 
       {/* 4 — Friends Recent Activity */}
