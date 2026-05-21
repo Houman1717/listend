@@ -346,8 +346,6 @@ async function buildLikedEntries(
   return { entries, artMap };
 }
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-
 // ─── Build a chronologically-sorted liked-playlist list for any user ──────────
 
 async function buildLikedEntries(

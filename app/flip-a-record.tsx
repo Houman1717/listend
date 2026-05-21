@@ -109,27 +109,6 @@ const va = StyleSheet.create({
   letter: { color: 'rgba(255,255,255,0.85)', fontWeight: '800', letterSpacing: 1 },
 });
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: FlipStatus }) {
-  const config: Record<FlipStatus, { label: string; bg: string; text: string }> = {
-    logged:       { label: 'Logged',        bg: '#0f2e1a', text: '#4ade80' },
-    didnt_listen: { label: "Didn't Listen", bg: '#2e2018', text: '#a07850' },
-    pending:      { label: 'Pending',        bg: '#2e1f00', text: '#f59e0b' },
-  };
-  const { label, bg, text } = config[status];
-  return (
-    <View style={[sb.badge, { backgroundColor: bg }]}>
-      <Text style={[sb.badgeText, { color: text }]}>{label}</Text>
-    </View>
-  );
-}
-
-const sb = StyleSheet.create({
-  badge:     { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
-  badgeText: { fontSize: 11, fontWeight: '700' },
-});
-
 // ─── Pool artwork cache + loader ─────────────────────────────────────────────
 
 const POOL_ARTWORK_KEY = '@listend:poolArtworks';

@@ -277,28 +277,6 @@ function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumbe
   );
 }
 
-// ─── Volume + bars badge ──────────────────────────────────────────────────────
-
-function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumber?: boolean; isDark?: boolean }) {
-  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <FontAwesome name="volume-up" size={10} color="#D4A017" />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
-        {Array.from({ length: 10 }, (_, i) => {
-          const h = Math.round(3 + i * 1);
-          return (
-            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }} />
-          );
-        })}
-      </View>
-      {showNumber && (
-        <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
-      )}
-    </View>
-  );
-}
-
 // ─── Album card ───────────────────────────────────────────────────────────────
 
 function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; isDark: boolean; isLogged?: boolean; onPress: () => void }) {
@@ -603,113 +581,6 @@ function PopularReviewModal({
 
 // ─── Friend full row (used in See More list — popular-review style) ───────────
 
-function FriendFullRow({
-  friend,
-  isDark,
-  colors,
-  onAlbumPress,
-  onUsernamePress,
-}: {
-  friend: FriendEntry;
-  isDark: boolean;
-  colors: any;
-  onAlbumPress: () => void;
-  onUsernamePress?: () => void;
-}) {
-  const router = useRouter();
-  const router = useRouter();
-  const [liked,            setLiked]            = useState(false);
-  const [likeCount,        setLikeCount]        = useState(friend.likeCount);
-  const [commentsExpanded, setCommentsExpanded] = useState(false);
-  const [localComments,    setLocalComments]    = useState<ReviewComment[]>([]);
-
-  const border  = isDark ? '#2a1e14' : '#e8e8e8';
-  const subtext = isDark ? '#6B4C35' : '#A08060';
-
-  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
-    setLocalComments(prev => [...prev, {
-      id: `ffc_${Date.now()}`, reviewId: friend.id,
-      userId: 'me', username: commenterUsername ?? 'me', body,
-      parentCommentId: parentId ?? undefined,
-      replyToUsername: replyToUsername ?? null,
-      avatarUrl: avatarUrl ?? null,
-      createdAt: 'just now',
-    }]);
-  }
-
-  return (
-    <View style={[flr.card, { backgroundColor: isDark ? '#2e2018' : '#fff', borderColor: border }]}>
-      {/* Album row */}
-      <Pressable onPress={onAlbumPress} style={({ pressed }) => [flr.topRow, { opacity: pressed ? 0.7 : 1 }]}>
-        <ExpoImage source={{ uri: friend.artworkUrl }} style={flr.art} contentFit="cover" cachePolicy="disk" transition={200} />
-        <View style={flr.albumInfo}>
-          <Text style={[flr.albumTitle, { color: isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={2}>{friend.album}</Text>
-          <Text style={[flr.albumArtist, { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={1}>{friend.artist} · {friend.year}</Text>
-          {(!!friend.rating || friend.isReListened) && (
-            <View style={[flr.ratingRow, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
-              {!!friend.rating && <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />}
-              {friend.isReListened && <FontAwesome name="repeat" size={9} color="#D4A017" />}
-            </View>
-          )}
-        </View>
-      </Pressable>
-
-      {/* Review text */}
-      {friend.review ? (
-        <Text style={[flr.reviewText, { color: isDark ? '#a07850' : '#3a2818' }]}>
-          "{friend.review}"
-        </Text>
-      ) : (
-        <Text style={[flr.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
-          No written review.
-        </Text>
-      )}
-
-      {/* Footer */}
-      <View style={[flr.footer, { borderTopColor: border }]}>
-        <Pressable
-          style={flr.userRow}
-          onPress={onUsernamePress}
-          hitSlop={6}>
-          <View style={[flr.avatar, { backgroundColor: avatarColor(friend.user), overflow: 'hidden' }]}>
-            {friend.avatarUrl
-              ? <ExpoImage source={{ uri: friend.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-              : <Text style={flr.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
-            }
-          </View>
-          <View>
-            <Text style={flr.username}>@{friend.user}</Text>
-            <Text style={[flr.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>Listend {friend.loggedDate}</Text>
-          </View>
-        </Pressable>
-        <View style={flr.footerActions}>
-          <Pressable onPress={() => setCommentsExpanded(p => !p)} hitSlop={8} style={flr.actionBtn}>
-            <FontAwesome name="comment-o" size={16} color={commentsExpanded ? '#D4A017' : subtext} />
-            <Text style={[flr.actionCount, { color: commentsExpanded ? '#D4A017' : subtext }]}>{localComments.length}</Text>
-          </Pressable>
-          <Pressable onPress={onLike} hitSlop={8} style={flr.actionBtn}>
-            <FontAwesome name={liked ? 'heart' : 'heart-o'} size={16} color={liked ? '#D4A017' : subtext} />
-            <Text style={[flr.actionCount, { color: liked ? '#D4A017' : subtext }]}>{friend.likeCount + (liked ? 1 : 0)}</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {commentsExpanded && (
-        <View style={{ paddingHorizontal: 14, paddingBottom: 4 }}>
-          <CommentsSection
-            comments={localComments}
-            isDark={isDark}
-            colors={colors}
-            onAddComment={handleAddComment}
-            onUsernamePress={(username) => navigateToProfile(username, router)}
-            large
-          />
-        </View>
-      )}
-    </View>
-  );
-}
-
 // ─── Friend full row (used in See More list — popular-review style) ───────────
 
 function FriendFullRow({
@@ -725,6 +596,7 @@ function FriendFullRow({
   onAlbumPress: () => void;
   onUsernamePress?: () => void;
 }) {
+  const router = useRouter();
   const [liked,            setLiked]            = useState(false);
   const [likeCount,        setLikeCount]        = useState(friend.likeCount);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
