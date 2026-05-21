@@ -729,7 +729,7 @@ function FriendCard({
       </Pressable>
       <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{friend.album}</Text>
       <Text style={[s.cardSub,    { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{friend.artist}</Text>
-      <Text style={[s.friendAgo, { color: colors.subtext, marginTop: 2 }]}>Listend {friend.loggedDate}</Text>
+      <Text style={[s.friendAgo, { color: colors.subtext, marginTop: 2 }]}>{friend.isReListened ? 'Re-Listend' : 'Listend'} {friend.loggedDate}</Text>
       {(!!friend.rating || friend.isReListened) && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           {!!friend.rating && <VolumeBadge rating={friend.rating} showNumber isDark={isDark} />}
@@ -1017,34 +1017,72 @@ async function fetchFriendsRecentListened(uid: string): Promise<FriendEntry[]> {
   const profileMap = new Map<string, { username: string | null; avatarUrl: string | null }>();
   for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { username: p.username, avatarUrl: p.avatar_url });
 
-  const { data: rows } = await supabase
-    .from('user_albums')
-    .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
-    .in('user_id', friendIds)
-    .not('rating', 'is', null)
-    .not('listened_at', 'is', null)
-    .order('listened_at', { ascending: false })
-    .limit(30);
+  const [{ data: rows }, { data: reListenRows }] = await Promise.all([
+    supabase
+      .from('user_albums')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
+      .in('user_id', friendIds)
+      .not('rating', 'is', null)
+      .not('listened_at', 'is', null)
+      .order('listened_at', { ascending: false })
+      .limit(30),
+    supabase
+      .from('re_listens')
+      .select('user_id, spotify_id, title, artist, artwork_url, rating, review, listened_at')
+      .in('user_id', friendIds)
+      .order('listened_at', { ascending: false })
+      .limit(30),
+  ]);
 
-  return (rows ?? []).map((r: any) => {
+  // Build tagged entries so we can sort by raw ISO timestamp before formatting
+  const tagged: { entry: FriendEntry; ts: number }[] = [];
+
+  for (const r of (rows ?? []) as any[]) {
     const profile = profileMap.get(r.user_id);
-    const reviewId = `${r.user_id}_${r.spotify_id}`;
-    return {
-      id: reviewId,
-      user: profile?.username ?? 'unknown',
-      album: r.title ?? '',
-      artist: r.artist ?? '',
-      year: r.year ?? '',
-      artworkUrl: r.artwork_url ?? null,
-      rating: r.rating ?? null,
-      likeCount: 0,
-      loggedDate: r.listened_at ? new Date(r.listened_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
-      avatarUrl: profile?.avatarUrl ?? null,
-      isReListened: false,
-      albumId: r.spotify_id ?? '',
-      review: r.review ?? null,
-    } as FriendEntry;
-  });
+    tagged.push({
+      ts: r.listened_at ? new Date(r.listened_at).getTime() : 0,
+      entry: {
+        id: `${r.user_id}_${r.spotify_id}`,
+        user: profile?.username ?? 'unknown',
+        album: r.title ?? '',
+        artist: r.artist ?? '',
+        year: r.year ?? '',
+        artworkUrl: r.artwork_url ?? null,
+        rating: r.rating ?? null,
+        likeCount: 0,
+        loggedDate: r.listened_at ? new Date(r.listened_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+        avatarUrl: profile?.avatarUrl ?? null,
+        isReListened: false,
+        albumId: r.spotify_id ?? '',
+        review: r.review ?? null,
+      } as FriendEntry,
+    });
+  }
+
+  for (const r of (reListenRows ?? []) as any[]) {
+    const profile = profileMap.get(r.user_id);
+    tagged.push({
+      ts: r.listened_at ? new Date(r.listened_at).getTime() : 0,
+      entry: {
+        id: `relisten_${r.user_id}_${r.spotify_id}_${r.listened_at}`,
+        user: profile?.username ?? 'unknown',
+        album: r.title ?? '',
+        artist: r.artist ?? '',
+        year: '',
+        artworkUrl: r.artwork_url ?? null,
+        rating: r.rating ?? null,
+        likeCount: 0,
+        loggedDate: r.listened_at ? new Date(r.listened_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+        avatarUrl: profile?.avatarUrl ?? null,
+        isReListened: true,
+        albumId: r.spotify_id ?? '',
+        review: r.review ?? null,
+      } as FriendEntry,
+    });
+  }
+
+  tagged.sort((a, b) => b.ts - a.ts);
+  return tagged.slice(0, 30).map(t => t.entry);
 }
 
 const FA_PILL: Record<string, { label: string; icon: string }> = {
@@ -1744,7 +1782,7 @@ export default function HomeScreen() {
 
     </ScrollView>
 
-      {/* Albums — full list modal */}
+      {/* Albums — 3-col grid modal */}
       <Modal visible={showAllAlbums} animationType="slide" onRequestClose={() => setShowAllAlbums(false)}>
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <SafeAreaView style={{ flex: 1 }}>
@@ -1757,31 +1795,30 @@ export default function HomeScreen() {
             <FlatList
               data={albums}
               keyExtractor={item => item.id}
+              numColumns={3}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 8, paddingBottom: 48 }}
-              ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 83 }} />}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, gap: 13, opacity: pressed ? 0.72 : 1 })}
-                  onPress={() => { setShowAllAlbums(false); handleAlbumPress(item); }}>
-                  <View style={{ flexShrink: 0 }}>
+              contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 48 }}
+              columnWrapperStyle={{ gap: 12 }}
+              renderItem={({ item }) => {
+                const cardW = (width - 32 - 24) / 3;
+                return (
+                  <Pressable
+                    style={({ pressed }) => ({ width: cardW, opacity: pressed ? 0.7 : 1, gap: 5 })}
+                    onPress={() => { setShowAllAlbums(false); handleAlbumPress(item); }}>
                     {item.artworkUrl
-                      ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: 52, height: 52, borderRadius: 8 }} contentFit="cover" cachePolicy="disk" />
-                      : <ArtFallback size={52} radius={8} label={item.title} />}
-                  </View>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{item.title}</Text>
-                    {item.artist ? <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{item.artist}</Text> : null}
-                  </View>
-                  <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
-                </Pressable>
-              )}
+                      ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: cardW, height: cardW, borderRadius: 8 }} contentFit="cover" cachePolicy="disk" />
+                      : <ArtFallback size={cardW} radius={8} label={item.title} />}
+                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: '600' }} numberOfLines={1}>{item.title}</Text>
+                    {item.artist ? <Text style={{ color: colors.subtext, fontSize: 10 }} numberOfLines={1}>{item.artist}</Text> : null}
+                  </Pressable>
+                );
+              }}
             />
           </SafeAreaView>
         </View>
       </Modal>
 
-      {/* Songs — full list modal */}
+      {/* Songs — 3-col grid modal */}
       <Modal visible={showAllSongs} animationType="slide" onRequestClose={() => setShowAllSongs(false)}>
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <SafeAreaView style={{ flex: 1 }}>
@@ -1794,30 +1831,30 @@ export default function HomeScreen() {
             <FlatList
               data={songs}
               keyExtractor={item => item.id}
+              numColumns={3}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 8, paddingBottom: 48 }}
-              ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 83 }} />}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, gap: 13, opacity: pressed ? 0.72 : 1 })}
-                  onPress={() => { setShowAllSongs(false); handleSongPress(item); }}>
-                  <View style={{ flexShrink: 0 }}>
+              contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 48 }}
+              columnWrapperStyle={{ gap: 12 }}
+              renderItem={({ item }) => {
+                const cardW = (width - 32 - 24) / 3;
+                return (
+                  <Pressable
+                    style={({ pressed }) => ({ width: cardW, opacity: pressed ? 0.7 : 1, gap: 5 })}
+                    onPress={() => { setShowAllSongs(false); handleSongPress(item); }}>
                     {item.artworkUrl
-                      ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: 52, height: 52, borderRadius: 8 }} contentFit="cover" cachePolicy="disk" />
-                      : <ArtFallback size={52} radius={8} label={item.title} />}
-                  </View>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{item.title}</Text>
-                    {item.artist ? <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{item.artist}</Text> : null}
-                  </View>
-                </Pressable>
-              )}
+                      ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: cardW, height: cardW, borderRadius: 8 }} contentFit="cover" cachePolicy="disk" />
+                      : <ArtFallback size={cardW} radius={8} label={item.title} />}
+                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: '600' }} numberOfLines={1}>{item.title}</Text>
+                    {item.artist ? <Text style={{ color: colors.subtext, fontSize: 10 }} numberOfLines={1}>{item.artist}</Text> : null}
+                  </Pressable>
+                );
+              }}
             />
           </SafeAreaView>
         </View>
       </Modal>
 
-      {/* Artists — full list modal */}
+      {/* Artists — 3-col grid modal */}
       <Modal visible={showAllArtists} animationType="slide" onRequestClose={() => setShowAllArtists(false)}>
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <SafeAreaView style={{ flex: 1 }}>
@@ -1830,23 +1867,24 @@ export default function HomeScreen() {
             <FlatList
               data={artists}
               keyExtractor={item => item.id}
+              numColumns={3}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 8, paddingBottom: 48 }}
-              ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 83 }} />}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, gap: 13, opacity: pressed ? 0.72 : 1 })}
-                  onPress={() => { setShowAllArtists(false); handleArtistPress(item); }}>
-                  {item.artworkUrl
-                    ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: 52, height: 52, borderRadius: 26 }} contentFit="cover" cachePolicy="disk" />
-                    : <ArtFallback size={52} radius={26} label={item.name} />}
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{item.name}</Text>
-                    {item.genre ? <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{item.genre}</Text> : null}
-                  </View>
-                  <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
-                </Pressable>
-              )}
+              contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 48 }}
+              columnWrapperStyle={{ gap: 12 }}
+              renderItem={({ item }) => {
+                const cardW = (width - 32 - 24) / 3;
+                return (
+                  <Pressable
+                    style={({ pressed }) => ({ width: cardW, opacity: pressed ? 0.7 : 1, gap: 5, alignItems: 'center' })}
+                    onPress={() => { setShowAllArtists(false); handleArtistPress(item); }}>
+                    {item.artworkUrl
+                      ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: cardW, height: cardW, borderRadius: cardW / 2 }} contentFit="cover" cachePolicy="disk" />
+                      : <ArtFallback size={cardW} radius={cardW / 2} label={item.name} />}
+                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: '600', textAlign: 'center' }} numberOfLines={1}>{item.name}</Text>
+                    {item.genre ? <Text style={{ color: colors.subtext, fontSize: 10, textAlign: 'center' }} numberOfLines={1}>{item.genre}</Text> : null}
+                  </Pressable>
+                );
+              }}
             />
           </SafeAreaView>
         </View>

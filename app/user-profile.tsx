@@ -1022,14 +1022,15 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="bookmark-o" label="Want to Listen" sub={`${wantCount} saved`}          onPress={() => router.push({ pathname: '/want-to-listen',   params: { userId: viewedUserId } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`} onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })} colors={colors} />
-            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="quote-left" label="Reviews"        sub={`${reviewCount} reviews`}      onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId } })} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="repeat"     label="Re-listend"     sub="Albums re-listend"             onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId } } as any)} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`} onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="list"       label="Playlists"      sub="Album lists"                   onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="heart"      label="Liked Artists"  sub="Their favourites"              onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId } })} colors={colors} />
-            <NavRow icon="repeat"     label="Re-listend"     sub="Albums re-listend"             onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId } } as any)} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="bar-chart"  label="Stats"          sub="Listening insights"            onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId } })} colors={colors} />
           </View>

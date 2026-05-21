@@ -1171,25 +1171,25 @@ export default function ListendScreen() {
 
       {/* ── Nav rows ─────────────────────────────────────────────────────────── */}
       <View style={[s.navGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <NavRow colors={colors} icon="music"      label="My Listend"      sub={`${loggedAlbums.length} albums`}  onPress={() => router.push('/my-listend')} />
+        <NavRow colors={colors} icon="music"      label="My Listend"      sub={`${loggedAlbums.length} albums`}                                            onPress={() => router.push('/my-listend')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="calendar"   label="Sessions"        sub="Your listening diary"             onPress={() => router.push('/sessions')} />
+        <NavRow colors={colors} icon="calendar"   label="Sessions"        sub="Your listening diary"                                                        onPress={() => router.push('/sessions')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="repeat"     label="Re-Listend"      sub={`${loggedAlbums.filter(a => a.isRelistened).length} albums`} onPress={() => router.push('/re-listened')} />
+        <NavRow colors={colors} icon="bookmark-o" label="Want to Listen"  sub={`${wantToListen.length} saved`}                                             onPress={() => router.push('/want-to-listen')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="bookmark-o" label="Want to Listen"  sub={`${wantToListen.length} saved`}   onPress={() => router.push('/want-to-listen')} />
+        <NavRow colors={colors} icon="quote-left" label="My Reviews"      sub={`${reviewCount} reviews`}                                                    onPress={() => router.push('/my-reviews')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="clock-o"    label="Recent Activity" sub="Your recent activity"                   onPress={() => router.push('/recent-activity')} />
+        <NavRow colors={colors} icon="repeat"     label="Re-Listend"      sub={`${loggedAlbums.filter(a => a.isRelistened).length} albums`}                 onPress={() => router.push('/re-listened')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="quote-left" label="My Reviews"      sub={`${reviewCount} reviews`}         onPress={() => router.push('/my-reviews')} />
+        <NavRow colors={colors} icon="clock-o"    label="Recent Activity" sub="Your recent activity"                                                        onPress={() => router.push('/recent-activity')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="list"       label="My Playlists"    sub="Your album lists"                 onPress={() => router.push('/my-playlists')} />
+        <NavRow colors={colors} icon="list"       label="My Playlists"    sub="Your album lists"                                                            onPress={() => router.push('/my-playlists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="heart"      label="Liked Artists"   sub={`${likedArtists.length} artists`} onPress={() => router.push('/liked-artists')} />
+        <NavRow colors={colors} icon="heart"      label="Liked Artists"   sub={`${likedArtists.length} artists`}                                            onPress={() => router.push('/liked-artists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                         onPress={() => router.push('/dms')} badge={unreadDMCount} />
+        <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                                                                    onPress={() => router.push('/dms')} badge={unreadDMCount} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="bar-chart"  label="My Stats"        sub="Your listening insights"          onPress={() => router.push('/my-stats')} />
+        <NavRow colors={colors} icon="bar-chart"  label="My Stats"        sub="Your listening insights"                                                     onPress={() => router.push('/my-stats')} />
       </View>
 
     </ScrollView>

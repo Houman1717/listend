@@ -31,6 +31,7 @@ const TYPE_META = {
   rated:        { label: 'Rated',           color: '#D4A017', icon: 'star'       },
   listened:     { label: 'Listened',        color: '#D4A017', icon: 'headphones' },
   wantToListen: { label: 'Want to Listen',  color: '#8B6914', icon: 'bookmark'   },
+  reListened:   { label: 'Re-Listend',      color: '#D4A017', icon: 'repeat'     },
 } as const;
 
 const TOP5_CATEGORY_LABEL: Record<string, string> = {
@@ -396,6 +397,31 @@ async function fetchActivityForUser(uid: string): Promise<ActivityItem[]> {
         dateMs:     w.created_at ? new Date(w.created_at).getTime() : null,
         dateLabel:  w.created_at ? formatDateLabel(w.created_at) : '',
         rating:     0,
+      });
+    }
+  }
+
+  const { data: reListens } = await supabase
+    .from('re_listens')
+    .select('spotify_id, title, artist, artwork_url, rating, review, listened_at')
+    .eq('user_id', uid)
+    .order('listened_at', { ascending: false });
+
+  if (reListens) {
+    for (const r of reListens) {
+      items.push({
+        key:        `relisten-${r.spotify_id}-${r.listened_at}`,
+        type:       'reListened',
+        id:         r.spotify_id,
+        title:      r.title       ?? '',
+        artist:     r.artist      ?? '',
+        year:       0,
+        artworkUrl: r.artwork_url ?? undefined,
+        coverColor: undefined,
+        dateMs:     r.listened_at ? new Date(r.listened_at).getTime() : null,
+        dateLabel:  r.listened_at ? formatDateLabel(r.listened_at) : '',
+        rating:     r.rating      ?? 0,
+        review:     r.review      ?? undefined,
       });
     }
   }
@@ -865,6 +891,7 @@ export default function RecentActivityScreen() {
   const [ownLikedPlaylists,    setOwnLikedPlaylists]    = useState<LikedPlaylistItem[]>([]);
   const [ownCreatedPlaylists,  setOwnCreatedPlaylists]  = useState<CreatedPlaylistItem[]>([]);
   const [ownFlips,             setOwnFlips]             = useState<FlipItem[]>([]);
+  const [ownReListens,         setOwnReListens]         = useState<ActivityItem[]>([]);
   const [otherActivity,        setOtherActivity]        = useState<ActivityItem[]>([]);
   const [otherFriends,         setOtherFriends]         = useState<FriendItem[]>([]);
   const [otherTop5Items,       setOtherTop5Items]       = useState<Top5ChangeItem[]>([]);
@@ -886,6 +913,30 @@ export default function RecentActivityScreen() {
     fetchLikedPlaylistsForUser(user.id).then(setOwnLikedPlaylists);
     fetchCreatedPlaylistsForUser(user.id).then(setOwnCreatedPlaylists);
     fetchFlipsForUser(user.id).then(setOwnFlips);
+    // Fetch own re-listens
+    supabase
+      .from('re_listens')
+      .select('spotify_id, title, artist, artwork_url, rating, review, listened_at')
+      .eq('user_id', user.id)
+      .order('listened_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const items: ActivityItem[] = data.map((r: any) => ({
+          key:        `relisten-${r.spotify_id}-${r.listened_at}`,
+          type:       'reListened' as ActivityType,
+          id:         r.spotify_id,
+          title:      r.title       ?? '',
+          artist:     r.artist      ?? '',
+          year:       0,
+          artworkUrl: r.artwork_url ?? undefined,
+          coverColor: undefined,
+          dateMs:     r.listened_at ? new Date(r.listened_at).getTime() : null,
+          dateLabel:  r.listened_at ? formatDateLabel(r.listened_at) : '',
+          rating:     r.rating      ?? 0,
+          review:     r.review      ?? undefined,
+        }));
+        setOwnReListens(items);
+      });
   }, [user?.id, viewingOther]);
 
   useEffect(() => {
@@ -1021,7 +1072,7 @@ export default function RecentActivityScreen() {
   }, [featuredLikedPlaylists, featuredLikeDates, viewingOther]);
 
   const feed = useMemo((): FeedItem[] => {
-    const activityItems      = viewingOther ? otherActivity         : ownActivityItems;
+    const activityItems      = viewingOther ? otherActivity         : [...ownActivityItems, ...ownReListens];
     const friendItems        = viewingOther ? otherFriends          : ownFriendItems;
     const top5Items          = viewingOther ? otherTop5Items        : ownTop5Items;
     const likedArtistItems   = viewingOther ? otherLikedArtists     : ownLikedArtists;
@@ -1053,7 +1104,7 @@ export default function RecentActivityScreen() {
 
     return combined;
   }, [
-    ownActivityItems, otherActivity,
+    ownActivityItems, ownReListens, otherActivity,
     ownFriendItems, otherFriends,
     ownTop5Items, otherTop5Items,
     ownLikedArtists, otherLikedArtists,
