@@ -1,7 +1,7 @@
 import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Svg, { Circle } from 'react-native-svg';
@@ -309,6 +309,8 @@ const br = StyleSheet.create({
 
 // ─── Artist grid card ─────────────────────────────────────────────────────────
 
+const INITIAL_COLORS = ['#7a5018', '#5c3a10', '#6B4422', '#4a3218', '#8B6914', '#3d2a0e'];
+
 function ArtistGridCard({
   artist,
   label,
@@ -323,6 +325,8 @@ function ArtistGridCard({
   cardW: number;
 }) {
   const imgSize = cardW - 20;
+  const initial = artist.trim().charAt(0).toUpperCase();
+  const bgColor = INITIAL_COLORS[artist.charCodeAt(0) % INITIAL_COLORS.length];
   return (
     <Pressable
       onPress={onPress}
@@ -332,9 +336,12 @@ function ArtistGridCard({
           source={{ uri: imageUrl }}
           style={{ width: imgSize, height: imgSize, borderRadius: imgSize / 2 }}
           contentFit="cover"
+          cachePolicy="disk"
         />
       ) : (
-        <View style={{ width: imgSize, height: imgSize, borderRadius: imgSize / 2, backgroundColor: '#3a2818' }} />
+        <View style={{ width: imgSize, height: imgSize, borderRadius: imgSize / 2, backgroundColor: bgColor, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: '#f5e6c8', fontSize: imgSize * 0.38, fontWeight: '700' }}>{initial}</Text>
+        </View>
       )}
       <Text style={ag.name} numberOfLines={2}>{artist}</Text>
       <Text style={ag.sub}>{label}</Text>
@@ -573,17 +580,6 @@ export default function MyStatsScreen() {
   const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
-  // Seed artist images instantly from album artwork already in memory,
-  // so the UI renders immediately without waiting for the server fetch.
-  const albumArtworkByArtist = useMemo<Record<string, string>>(() => {
-    const map: Record<string, string> = {};
-    // loggedAlbums is newest-first, so the first hit per artist = most recent album
-    for (const a of loggedAlbums) {
-      if (a.artist && a.artworkUrl && !map[a.artist]) map[a.artist] = a.artworkUrl;
-    }
-    return map;
-  }, [loggedAlbums]);
-
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
@@ -1027,7 +1023,7 @@ export default function MyStatsScreen() {
                         key={artist}
                         artist={artist}
                         label={sub}
-                        imageUrl={artistImages[artist] ?? albumArtworkByArtist[artist]}
+                        imageUrl={artistImages[artist]}
                         cardW={cardW}
                         onPress={() => setListModal({
                           title: artist,
@@ -1036,7 +1032,7 @@ export default function MyStatsScreen() {
                             : loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
                           onTitlePress: () => {
                             setListModal(null);
-                            setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist, artworkUrl: artistImages[artist] ?? albumArtworkByArtist[artist] ?? '' } } as any), 300);
+                            setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist, artworkUrl: artistImages[artist] ?? '' } } as any), 300);
                           },
                         })}
                       />

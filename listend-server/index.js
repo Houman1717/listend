@@ -2716,9 +2716,13 @@ async function fetchArtistImage(artistName) {
 
   try {
     const q = encodeURIComponent(artistName);
-    const data = await amFetch(`/catalog/us/search?types=artists&term=${q}&limit=3`);
+    const data = await amFetch(`/catalog/us/search?types=artists&term=${q}&limit=5`);
     const artists = data?.results?.artists?.data ?? [];
-    const match = artists.find(a => a.attributes?.name?.toLowerCase() === artistName.toLowerCase()) ?? artists[0];
+    // Prefer exact name match with artwork; fall back to any result with artwork
+    const nameLower = artistName.toLowerCase();
+    const exactWithArt = artists.find(a => a.attributes?.name?.toLowerCase() === nameLower && a.attributes?.artwork?.url);
+    const anyWithArt   = artists.find(a => a.attributes?.artwork?.url);
+    const match        = exactWithArt ?? anyWithArt ?? artists[0];
     const url = match ? amArtwork(match.attributes?.artwork) : null;
     cacheSet(CACHE_KEY, url, TTL_7D);
     if (url) await setCache(CACHE_KEY, url);
