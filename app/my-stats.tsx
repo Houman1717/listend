@@ -702,7 +702,7 @@ export default function MyStatsScreen() {
     });
   }, [isLoaded]);
 
-  // Fetch artist images once albums are loaded — single batch request
+  // Fetch artist images once the real album data is in
   useEffect(() => {
     if (!isLoaded || loggedAlbums.length === 0) return;
     const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -721,7 +721,7 @@ export default function MyStatsScreen() {
         .then(data => { if (data?.images) setArtistImages(data.images); })
         .catch(() => {});
     });
-  }, [isLoaded]);
+  }, [loggedAlbums]);
 
   // Fetch all re-listen rows for grower/fader computation
   useEffect(() => {
