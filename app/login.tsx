@@ -48,9 +48,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
 
       <View style={s.inner}>
-        {/* Logo mark */}
-        <Image source={require('@/assets/images/icon.png')} style={s.logo} />
-        <Text style={[s.title, { color: colors.text }]}>Listend</Text>
+        <Image source={require('@/assets/images/listend-logo.png')} style={s.logo} />
         <Text style={[s.subtitle, { color: colors.subtext }]}>Sign in to your account</Text>
 
         <View style={s.form}>
@@ -100,22 +98,6 @@ export default function LoginScreen() {
 
         <SocialAuthButtons />
 
-        <View style={s.dividerRow}>
-          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
-          <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
-          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
-        </View>
-
-        <SocialAuthButtons />
-
-        <View style={s.dividerRow}>
-          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
-          <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
-          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
-        </View>
-
-        <SocialAuthButtons />
-
         <Pressable onPress={() => router.push('/signup')} style={s.switchRow}>
           <Text style={[s.switchText, { color: colors.subtext }]}>Don't have an account? </Text>
           <Text style={[s.switchText, { color: ACCENT }]}>Sign Up</Text>
@@ -135,9 +117,9 @@ const s = StyleSheet.create({
     gap: 8,
   },
   logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 18,
+    width: 120,
+    height: 120,
+    borderRadius: 24,
     marginBottom: 8,
   },
   title:    { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },

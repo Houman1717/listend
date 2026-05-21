@@ -864,6 +864,7 @@ export default function RecentActivityScreen() {
   const [ownLikedArtists,      setOwnLikedArtists]      = useState<LikedArtistItem[]>([]);
   const [ownLikedPlaylists,    setOwnLikedPlaylists]    = useState<LikedPlaylistItem[]>([]);
   const [ownCreatedPlaylists,  setOwnCreatedPlaylists]  = useState<CreatedPlaylistItem[]>([]);
+  const [ownFlips,             setOwnFlips]             = useState<FlipItem[]>([]);
   const [otherActivity,        setOtherActivity]        = useState<ActivityItem[]>([]);
   const [otherFriends,         setOtherFriends]         = useState<FriendItem[]>([]);
   const [otherTop5Items,       setOtherTop5Items]       = useState<Top5ChangeItem[]>([]);
@@ -884,6 +885,7 @@ export default function RecentActivityScreen() {
     fetchLikedArtistsForUser(user.id).then(setOwnLikedArtists);
     fetchLikedPlaylistsForUser(user.id).then(setOwnLikedPlaylists);
     fetchCreatedPlaylistsForUser(user.id).then(setOwnCreatedPlaylists);
+    fetchFlipsForUser(user.id).then(setOwnFlips);
   }, [user?.id, viewingOther]);
 
   useEffect(() => {
@@ -1028,6 +1030,8 @@ export default function RecentActivityScreen() {
       : [...ownLikedPlaylists, ...ownFeaturedLikedPlaylists];
     const createdPlaylistItems = viewingOther ? otherCreatedPlaylists : ownCreatedPlaylists;
 
+    const flipItems = viewingOther ? otherFlips : ownFlips;
+
     const combined: FeedItem[] = [
       ...activityItems.map(d       => ({ kind: 'activity'        as const, data: d })),
       ...friendItems.map(d         => ({ kind: 'friend'          as const, data: d })),
@@ -1035,6 +1039,7 @@ export default function RecentActivityScreen() {
       ...likedArtistItems.map(d   => ({ kind: 'likedArtist'     as const, data: d })),
       ...likedPlaylistItems.map(d  => ({ kind: 'likedPlaylist'   as const, data: d })),
       ...createdPlaylistItems.map(d=> ({ kind: 'createdPlaylist' as const, data: d })),
+      ...flipItems.map(d           => ({ kind: 'flippedRecord'   as const, data: d })),
     ];
 
     combined.sort((a, b) => {
@@ -1054,6 +1059,7 @@ export default function RecentActivityScreen() {
     ownLikedArtists, otherLikedArtists,
     ownLikedPlaylists, otherLikedPlaylists, ownFeaturedLikedPlaylists, featuredLikeDates,
     ownCreatedPlaylists, otherCreatedPlaylists,
+    ownFlips, otherFlips,
     viewingOther,
   ]);
 

@@ -526,6 +526,24 @@ export default function MyListendScreen() {
             : undefined}
           isDark={isDark}
           colors={colors}
+          isOwner={!viewingOther}
+          onDelete={() => {
+            const id = selectedAlbum.id;
+            setSelectedAlbum(null);
+            Alert.alert(
+              'Remove from Listend',
+              'This will permanently delete this album and its review.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Remove', style: 'destructive', onPress: () => removeLoggedAlbum(id) },
+              ],
+            );
+          }}
+          onUndoReListen={selectedAlbum.isRelistened ? () => {
+            const id = selectedAlbum.id;
+            setSelectedAlbum(null);
+            undoLastReListenEntry(id);
+          } : undefined}
         />
       )}
     </View>

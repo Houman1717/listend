@@ -608,6 +608,7 @@ function AlbumSingleReviewModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      <SafeAreaProvider>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1, backgroundColor: colors.background }}>
@@ -718,6 +719,7 @@ function AlbumSingleReviewModal({
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -1255,91 +1257,6 @@ export default function AlbumDetailScreen() {
     loadFriendActivity();
   }, [friendIds, albumTitle]);
 
-  // ── Fetch friend activity for this album ──────────────────────────────────
-  useEffect(() => {
-    if (friendIds.size === 0) return;
-    const ids = Array.from(friendIds);
-
-    async function loadFriendActivity() {
-      const [{ data: listened }, { data: wanted }, { data: reListenRows }] = await Promise.allSettled([
-        supabase
-          .from('user_albums')
-          .select('user_id, rating, review, listened_at')
-          .in('user_id', ids)
-          .ilike('title', albumTitle)
-          .not('listened_at', 'is', null),
-        supabase
-          .from('want_to_listen')
-          .select('user_id')
-          .in('user_id', ids)
-          .ilike('title', albumTitle),
-        supabase
-          .from('re_listens')
-          .select('user_id, rating, review, listened_at')
-          .in('user_id', ids)
-          .ilike('title', albumTitle)
-          .order('listened_at', { ascending: false }),
-      ]).then(results => results.map(r => (r.status === 'fulfilled' ? r.value : { data: null })));
-
-      const allUserIds = new Set<string>();
-      ((listened ?? []) as any[]).forEach(r => allUserIds.add(r.user_id as string));
-      ((wanted  ?? []) as any[]).forEach(r => allUserIds.add(r.user_id as string));
-      if (allUserIds.size === 0) return;
-
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', Array.from(allUserIds));
-
-      const usernameMap = new Map<string, string>(
-        (profiles ?? []).map((p: any) => [p.id, p.username])
-      );
-
-      // Deduplicate by user_id — keep the row with a review, or the most recent listen
-      const listenedByUser = new Map<string, any>();
-      for (const row of (listened ?? []) as any[]) {
-        const existing = listenedByUser.get(row.user_id);
-        if (!existing || (row.review && !existing.review) || (!existing.review && new Date(row.listened_at) > new Date(existing.listened_at))) {
-          listenedByUser.set(row.user_id, row);
-        }
-      }
-      const listenedRows = Array.from(listenedByUser.values());
-      const wantedRows   = (wanted  ?? []) as any[];
-      const listenedSet  = new Set<string>(listenedRows.map(r => r.user_id as string));
-      const activities: FriendActivity[] = [];
-
-      for (const row of listenedRows) {
-        const username = usernameMap.get(row.user_id);
-        if (!username || row.user_id === user?.id) continue;
-        activities.push({
-          userId:     row.user_id,
-          username,
-          rating:     row.rating ?? 0,
-          hasReview:  !!row.review,
-          review:     row.review ?? undefined,
-          listenedAt: row.listened_at ?? undefined,
-          status:     'listened',
-        });
-      }
-      for (const row of wantedRows) {
-        if (listenedSet.has(row.user_id as string)) continue;
-        const username = usernameMap.get(row.user_id);
-        if (!username || row.user_id === user?.id) continue;
-        activities.push({
-          userId:    row.user_id,
-          username,
-          rating:    0,
-          hasReview: false,
-          status:    'wantToListen',
-        });
-      }
-
-      setFriendActivity(activities);
-    }
-
-    loadFriendActivity();
-  }, [friendIds, albumTitle]);
-
   // ── Fetch mutual friend IDs for Friends tab ────────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
@@ -1683,14 +1600,6 @@ export default function AlbumDetailScreen() {
           <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Listen on</Text>
         </Pressable>
 
-        {/* ── 3b. Stream button ─────────────────────────────────────────────── */}
-        <Pressable
-          style={({ pressed }) => [s.streamBtn, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
-          onPress={handleStream}>
-          <FontAwesome name="music" size={15} color="#D4A017" />
-          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Listen on</Text>
-        </Pressable>
-
         {/* ── 4. Community Rating ───────────────────────────────────────────── */}
         <CommunityRatingSection
           isDark={isDark}
@@ -1966,27 +1875,6 @@ export default function AlbumDetailScreen() {
         />
       )}
 
-      {/* ── Single review modal (focused, home-page style) ───────────────────── */}
-      {expandedAlbumReview && (
-        <AlbumSingleReviewModal
-          review={expandedAlbumReview}
-          albumTitle={albumTitle}
-          albumArtist={albumArtist}
-          albumYear={albumYear}
-          albumArtwork={albumArtwork}
-          liked={reviewLikesMap.get(expandedAlbumReview.id)?.liked ?? false}
-          onLike={() => handleToggleLike(expandedAlbumReview)}
-          comments={commentsMap.get(expandedAlbumReview.id) ?? []}
-          commentsExpanded={singleReviewCommentsOpen}
-          onToggleComments={() => setSingleReviewCommentsOpen(prev => !prev)}
-          onAddComment={(body, parentId, u, rtu, av) => handleAddComment(expandedAlbumReview.id, body, parentId, u, rtu, av)}
-          onClose={() => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); }}
-          onUsernamePress={(username) => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); navigateToProfile(username, router); }}
-          isDark={isDark}
-          colors={colors}
-        />
-      )}
-
       {/* ── All Reviews modal ────────────────────────────────────────────────── */}
       <Modal
         visible={showAllReviews}
@@ -2071,40 +1959,6 @@ export default function AlbumDetailScreen() {
             ))}
           </ScrollView>
         </View>
-      </Modal>
-
-      {/* ── Streaming links sheet ────────────────────────────────────────────── */}
-      <Modal visible={showStreamSheet} transparent animationType="slide" onRequestClose={() => setShowStreamSheet(false)}>
-        <Pressable style={s.modalOverlay} onPress={() => setShowStreamSheet(false)}>
-          <Pressable style={[s.modalSheet, { backgroundColor: isDark ? '#141414' : '#fff' }]} onPress={() => {}}>
-            <View style={s.modalHandle} />
-            <Text style={[s.modalTitle, { color: colors.text }]}>Listen on…</Text>
-            {([
-              { key: 'appleMusic'   as const, label: 'Apple Music',   icon: 'apple'        as const, color: '#FC3C44' },
-              { key: 'spotify'      as const, label: 'Spotify',       icon: 'spotify'      as const, color: '#1DB954' },
-              { key: 'youtubeMusic' as const, label: 'YouTube Music', icon: 'youtube-play' as const, color: '#FF0000' },
-              { key: 'amazonMusic'  as const, label: 'Amazon Music',  icon: 'amazon'       as const, color: '#00A8E1' },
-            ]).filter(p => p.key !== 'amazonMusic' || !amazonFetched || amazonMusicUrl).map(platform => {
-              const isAmazon  = platform.key === 'amazonMusic';
-              const loading   = isAmazon && (amazonFetching || amazonTapped);
-              const onPress   = isAmazon
-                ? handleAmazonPress
-                : () => { Linking.openURL(streamLinks[platform.key]!); setShowStreamSheet(false); };
-              return (
-                <Pressable
-                  key={platform.key}
-                  style={({ pressed }) => [s.streamPlatformRow, { borderBottomColor: isDark ? '#2a1e14' : '#f0f0f0', opacity: pressed ? 0.6 : 1 }]}
-                  onPress={onPress}>
-                  <FontAwesome name={platform.icon} size={20} color={platform.color} />
-                  <Text style={[s.streamPlatformLabel, { color: colors.text }]}>{platform.label}</Text>
-                  {loading
-                    ? <ActivityIndicator size="small" color={platform.color} />
-                    : <FontAwesome name="chevron-right" size={13} color={colors.subtext} />}
-                </Pressable>
-              );
-            })}
-          </Pressable>
-        </Pressable>
       </Modal>
 
       {/* ── Streaming links sheet ────────────────────────────────────────────── */}

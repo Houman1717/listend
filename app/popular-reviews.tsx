@@ -111,8 +111,11 @@ function ReviewRow({
       {/* Footer: avatar + username | comments + like */}
       <View style={s.footer}>
         <Pressable style={s.userRow} onPress={onUsernamePress} hitSlop={6}>
-          <View style={[s.avatar, { backgroundColor: avatarColor(item.username) }]}>
-            <Text style={s.avatarLetter}>{item.username[0].toUpperCase()}</Text>
+          <View style={[s.avatar, { backgroundColor: avatarColor(item.username), overflow: 'hidden' }]}>
+            {item.avatarUrl
+              ? <ExpoImage source={{ uri: item.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+              : <Text style={s.avatarLetter}>{item.username[0].toUpperCase()}</Text>
+            }
           </View>
           <Text style={[s.username, { color: '#D4A017' }]}>@{item.username}</Text>
         </Pressable>

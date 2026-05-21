@@ -101,9 +101,10 @@ const FRIEND_COMMENTS: ReviewComment[] = [
 // ─── Module-level cache — persists across navigations ─────────────────────────
 
 const cache: {
-  albums?:  SpotifyAlbum[];
-  songs?:   SpotifyTrack[];
-  artists?: SpotifyArtist[];
+  albums?:         SpotifyAlbum[];
+  songs?:          SpotifyTrack[];
+  artists?:        SpotifyArtist[];
+  popularReviews?: PopularReview[];
 } = {};
 
 // ─── Fetcher ──────────────────────────────────────────────────────────────────
@@ -584,15 +585,20 @@ function FriendFullRow({
   colors,
   onAlbumPress,
   onUsernamePress,
+  liked: likedProp,
+  onLike,
 }: {
   friend: FriendEntry;
   isDark: boolean;
   colors: any;
   onAlbumPress: () => void;
   onUsernamePress?: () => void;
+  liked?: boolean;
+  onLike?: () => void;
 }) {
   const router = useRouter();
-  const [liked,            setLiked]            = useState(false);
+  const [likedLocal,       setLikedLocal]       = useState(false);
+  const liked = likedProp ?? likedLocal;
   const [likeCount,        setLikeCount]        = useState(friend.likeCount);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [localComments,    setLocalComments]    = useState(
@@ -646,8 +652,11 @@ function FriendFullRow({
           style={flr.userRow}
           onPress={onUsernamePress}
           hitSlop={6}>
-          <View style={[flr.avatar, { backgroundColor: avatarColor(friend.user) }]}>
-            <Text style={flr.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+          <View style={[flr.avatar, { backgroundColor: avatarColor(friend.user), overflow: 'hidden' }]}>
+            {friend.avatarUrl
+              ? <ExpoImage source={{ uri: friend.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+              : <Text style={flr.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+            }
           </View>
           <View>
             <Text style={flr.username}>@{friend.user}</Text>
@@ -659,7 +668,7 @@ function FriendFullRow({
             <FontAwesome name="comment-o" size={16} color={commentsExpanded ? '#D4A017' : subtext} />
             <Text style={[flr.actionCount, { color: commentsExpanded ? '#D4A017' : subtext }]}>{localComments.length}</Text>
           </Pressable>
-          <Pressable onPress={() => { setLiked(p => !p); setLikeCount(n => liked ? n - 1 : n + 1); }} hitSlop={8} style={flr.actionBtn}>
+          <Pressable onPress={() => { if (onLike) { onLike(); } else { setLikedLocal(p => !p); } setLikeCount(n => liked ? n - 1 : n + 1); }} hitSlop={8} style={flr.actionBtn}>
             <FontAwesome name={liked ? 'heart' : 'heart-o'} size={16} color={liked ? '#D4A017' : subtext} />
             <Text style={[flr.actionCount, { color: liked ? '#D4A017' : subtext }]}>{likeCount}</Text>
           </Pressable>
@@ -994,6 +1003,50 @@ async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> 
   return items.slice(0, 30);
 }
 
+async function fetchFriendsRecentListened(uid: string): Promise<FriendEntry[]> {
+  const [{ data: outRows }, { data: inRows }] = await Promise.all([
+    supabase.from('follows').select('following_id').eq('follower_id', uid),
+    supabase.from('follows').select('follower_id').eq('following_id', uid),
+  ]);
+  if (!outRows?.length || !inRows?.length) return [];
+  const inSet = new Set((inRows as any[]).map(r => r.follower_id as string));
+  const friendIds = [...new Set((outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string))];
+  if (friendIds.length === 0) return [];
+
+  const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', friendIds);
+  const profileMap = new Map<string, { username: string | null; avatarUrl: string | null }>();
+  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { username: p.username, avatarUrl: p.avatar_url });
+
+  const { data: rows } = await supabase
+    .from('user_albums')
+    .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
+    .in('user_id', friendIds)
+    .not('rating', 'is', null)
+    .not('listened_at', 'is', null)
+    .order('listened_at', { ascending: false })
+    .limit(30);
+
+  return (rows ?? []).map((r: any) => {
+    const profile = profileMap.get(r.user_id);
+    const reviewId = `${r.user_id}_${r.spotify_id}`;
+    return {
+      id: reviewId,
+      user: profile?.username ?? 'unknown',
+      album: r.title ?? '',
+      artist: r.artist ?? '',
+      year: r.year ?? '',
+      artworkUrl: r.artwork_url ?? null,
+      rating: r.rating ?? null,
+      likeCount: 0,
+      loggedDate: r.listened_at ? new Date(r.listened_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+      avatarUrl: profile?.avatarUrl ?? null,
+      isReListened: false,
+      albumId: r.spotify_id ?? '',
+      review: r.review ?? null,
+    } as FriendEntry;
+  });
+}
+
 const FA_PILL: Record<string, { label: string; icon: string }> = {
   top5:            { label: 'Top 5',            icon: 'list-ol'  },
   likedArtist:     { label: 'Liked Artist',     icon: 'heart'    },
@@ -1263,8 +1316,8 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!user?.id) return;
     setFriendsListenedLoading(true);
-    fetchFriendsActivity(user.id)
-      .then(entries => setFriendsListened(entries as any))
+    fetchFriendsRecentListened(user.id)
+      .then(setFriendsListened)
       .finally(() => setFriendsListenedLoading(false));
   }, [user?.id]);
 
@@ -1583,38 +1636,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* All friends list modal */}
-      <Modal visible={showAllFriends} animationType="slide" onRequestClose={() => setShowAllFriends(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
-          <SafeAreaView style={{ flex: 1 }}>
-            <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
-              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Friends Recent Listend</Text>
-              <Pressable onPress={() => setShowAllFriends(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
-                <FontAwesome name="times" size={20} color={colors.subtext} />
-              </Pressable>
-            </View>
-            <FlatList
-              data={PLACEHOLDER_FRIENDS}
-              keyExtractor={item => item.id}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 48 }}
-              renderItem={({ item }) => (
-                <FriendFullRow
-                  friend={item}
-                  isDark={isDark}
-                  colors={colors}
-                  onAlbumPress={() => {
-                    setShowAllFriends(false);
-                    navigateToAlbum(item.album, item.artist, item.artworkUrl, item.year);
-                  }}
-                  onUsernamePress={() => { setShowAllFriends(false); navigateToProfile(item.user, router); }}
-                />
-              )}
-            />
-          </SafeAreaView>
-        </View>
-      </Modal>
-
       {/* Friend review modal */}
       {expandedFriend && (
         <FriendReviewModal
@@ -1629,22 +1650,6 @@ export default function HomeScreen() {
           onAlbumPress={() => {
             setExpandedFriend(null);
             navigateToAlbum(router, { id: expandedFriend.albumId, title: expandedFriend.album, artist: expandedFriend.artist, year: expandedFriend.year, artworkUrl: expandedFriend.artworkUrl });
-          }}
-          onUsernamePress={(username) => { setExpandedFriend(null); navigateToProfile(username, router); }}
-        />
-      )}
-
-      {/* Friend review modal */}
-      {expandedFriend && (
-        <FriendReviewModal
-          friend={expandedFriend}
-          comments={FRIEND_COMMENTS.filter(c => c.reviewId === expandedFriend.id)}
-          isDark={isDark}
-          colors={colors}
-          onClose={() => setExpandedFriend(null)}
-          onAlbumPress={() => {
-            setExpandedFriend(null);
-            navigateToAlbum(expandedFriend.album, expandedFriend.artist, expandedFriend.artworkUrl, expandedFriend.year);
           }}
           onUsernamePress={(username) => { setExpandedFriend(null); navigateToProfile(username, router); }}
         />

@@ -210,13 +210,17 @@ function ListenedRow({
 
 // ─── PoolRow — pool list item on main screen ─────────────────────────────────
 
+type PoolItem = { id: string; title: string; artist: string; year: number; coverColor: string };
+
 function PoolRow({ item, status, libraryLogged, borderCol, colors }: {
-  item: FlipAlbum;
+  item: PoolItem;
   status: FlipStatus | null;
   libraryLogged: boolean;
   borderCol: string;
   colors: (typeof Colors)['light'] | (typeof Colors)['dark'];
 }) {
+  const resolvedStatus: ListenedStatus | null = status ?? (libraryLogged ? 'library' : null);
+  if (!resolvedStatus) return null;
   return (
     <ListenedRow
       id={item.id}
@@ -224,7 +228,7 @@ function PoolRow({ item, status, libraryLogged, borderCol, colors }: {
       artist={item.artist}
       year={item.year}
       coverColor={item.coverColor}
-      status={status ?? (libraryLogged ? 'library' : null)}
+      status={resolvedStatus}
       borderCol={borderCol}
       colors={colors}
     />
@@ -262,25 +266,18 @@ function FullPoolModal({
   const colorScheme = useColorScheme();
   const colors      = Colors[colorScheme ?? 'light'];
 
-  const [storageReady, setStorageReady] = useState(poolCacheLoaded);
-
-  useEffect(() => {
-    if (!visible || storageReady) return;
-    ensurePoolCacheLoaded().then(() => setStorageReady(true));
-  }, [visible]);
-
   const { libraryLoggedIds } = useFlip();
 
-  const statusMap: Record<string, FlipStatus> = {};
-  for (const r of history) statusMap[r.id] = r.status;
+  // Deduplicate history by id, keeping most recent entry per album
+  const seenIds = new Set<string>();
+  const dedupedHistory: FlippedRecord[] = [];
+  for (const r of history) {
+    if (!seenIds.has(r.id)) { seenIds.add(r.id); dedupedHistory.push(r); }
+  }
 
-  const sortedPool  = [...FLIP_POOL].sort((a, b) => a.year - b.year);
-  // Count albums logged via flip history + those already in library
-  const loggedCount = FLIP_POOL.filter(
-    a => statusMap[a.id] === 'logged' || libraryLoggedIds.has(a.id)
-  ).length;
-  const total       = FLIP_POOL.length;
-  const listenedPct = total > 0 ? Math.round(loggedCount / total * 100) : 0;
+  const loggedCount  = dedupedHistory.filter(r => r.status === 'logged' || libraryLoggedIds.has(r.id)).length;
+  const total        = dedupedHistory.length;
+  const listenedPct  = total > 0 ? Math.round(loggedCount / total * 100) : 0;
 
   const bg        = colors.background;
   const borderCol = colors.border;
@@ -289,44 +286,55 @@ function FullPoolModal({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={[sfl.container, { backgroundColor: bg }]}>
         <View style={[sfl.header, { borderBottomColor: borderCol }]}>
-          <Text style={[sfl.title, { color: colors.text }]}>Must-Hear List</Text>
+          <Text style={[sfl.title, { color: colors.text }]}>My Flipped Records</Text>
           <TouchableOpacity onPress={onClose} hitSlop={12}>
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
 
-        <View style={[sfl.summary, { borderBottomColor: borderCol }]}>
-          <View style={sfl.summaryRow}>
-            <Text style={[sfl.summaryCount, { color: colors.subtext }]}>{total} Albums</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <FontAwesome name="headphones" size={13} color="#D4A017" />
-              <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
-                <Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text> listened
-                {'  ·  '}
-                <Text style={{ color: '#D4A017', fontWeight: '700' }}>{loggedCount}</Text> logged
-              </Text>
+        {total > 0 ? (
+          <>
+            <View style={[sfl.summary, { borderBottomColor: borderCol }]}>
+              <View style={sfl.summaryRow}>
+                <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
+                  <Text style={{ color: '#D4A017', fontWeight: '700' }}>{total}</Text> flipped
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <FontAwesome name="headphones" size={13} color="#D4A017" />
+                  <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
+                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text> logged
+                    {'  ·  '}
+                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{loggedCount}</Text> albums
+                  </Text>
+                </View>
+              </View>
+              <View style={[sfl.track, { backgroundColor: colors.border }]}>
+                <View style={[sfl.fill, { width: `${Math.max(listenedPct, listenedPct > 0 ? 2 : 0)}%` as any }]} />
+              </View>
             </View>
-          </View>
-          <View style={[sfl.track, { backgroundColor: colors.border }]}>
-            <View style={[sfl.fill, { width: `${Math.max(listenedPct, listenedPct > 0 ? 2 : 0)}%` as any }]} />
-          </View>
-        </View>
 
-        {storageReady && (
-          <FlatList
-            data={sortedPool}
-            keyExtractor={item => item.id}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <PoolRow
-                item={item}
-                status={statusMap[item.id] ?? null}
-                libraryLogged={libraryLoggedIds.has(item.id)}
-                borderCol={borderCol}
-                colors={colors}
-              />
-            )}
-          />
+            <FlatList
+              data={dedupedHistory}
+              keyExtractor={item => item.id}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <PoolRow
+                  item={item}
+                  status={item.status}
+                  libraryLogged={libraryLoggedIds.has(item.id)}
+                  borderCol={borderCol}
+                  colors={colors}
+                />
+              )}
+            />
+          </>
+        ) : (
+          <View style={sfl.emptyWrap}>
+            <FontAwesome name="random" size={36} color="#D4A017" />
+            <Text style={[sfl.emptyText, { color: colors.subtext }]}>
+              Flip your first record to start building your history.
+            </Text>
+          </View>
         )}
       </SafeAreaView>
     </Modal>
