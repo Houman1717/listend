@@ -691,35 +691,7 @@ export default function MyStatsScreen() {
     });
   }, [isLoaded]);
 
-  // Fetch artist images once albums are loaded — same /search endpoint used by artist-detail
-  useEffect(() => {
-    if (!isLoaded || loggedAlbums.length === 0) return;
-    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-    const allNames = [...new Set([
-      ...topArtists.map(([a]) => a),
-      ...topRatedArtists.map(([a]) => a),
-    ])] as string[];
-    if (allNames.length === 0) return;
-    Promise.allSettled(
-      allNames.map(name =>
-        fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
-          .then(r => r.ok ? r.json() : null)
-          .then((results: { id: string; name: string; artworkUrl: string }[] | null) => {
-            const url = results?.[0]?.artworkUrl;
-            return url ? { name, url } : null;
-          })
-          .catch(() => null)
-      )
-    ).then(settled => {
-      const images: Record<string, string> = {};
-      for (const r of settled) {
-        if (r.status === 'fulfilled' && r.value) images[r.value.name] = r.value.url;
-      }
-      if (Object.keys(images).length > 0) setArtistImages(images);
-    });
-  }, [isLoaded]);
-
-  // Fetch artist images once albums are loaded
+  // Fetch artist images once albums are loaded — single batch request
   useEffect(() => {
     if (!isLoaded || loggedAlbums.length === 0) return;
     const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
