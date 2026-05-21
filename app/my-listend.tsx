@@ -25,6 +25,7 @@ import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -67,6 +68,9 @@ function AlbumReviewModal({
   onUsernamePress,
   isDark,
   colors,
+  isOwner = false,
+  onUndoReListen,
+  onDelete,
 }: {
   album: LoggedAlbum;
   username: string;
@@ -75,6 +79,9 @@ function AlbumReviewModal({
   onUsernamePress?: (username: string) => void;
   isDark: boolean;
   colors: any;
+  isOwner?: boolean;
+  onUndoReListen?: () => void;
+  onDelete?: () => void;
 }) {
   const [liked,            setLiked]            = useState(false);
   const [likeCount,        setLikeCount]        = useState(0);

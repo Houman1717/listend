@@ -1974,8 +1974,8 @@ export default function AlbumDetailScreen() {
           albumArtist={albumArtist}
           albumYear={albumYear}
           albumArtwork={albumArtwork}
-          liked={likedAlbumReviews.has(expandedAlbumReview.id)}
-          onLike={() => handleLikeAlbumReview(expandedAlbumReview.id)}
+          liked={reviewLikesMap.get(expandedAlbumReview.id)?.liked ?? false}
+          onLike={() => handleToggleLike(expandedAlbumReview)}
           comments={commentsMap.get(expandedAlbumReview.id) ?? []}
           commentsExpanded={singleReviewCommentsOpen}
           onToggleComments={() => setSingleReviewCommentsOpen(prev => !prev)}

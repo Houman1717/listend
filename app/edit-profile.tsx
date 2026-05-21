@@ -141,6 +141,7 @@ export default function EditProfileScreen() {
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [website, setWebsite] = useState('');
   const [saving,  setSaving]  = useState(false);
   const [toast,   setToast]   = useState(false);
 

@@ -208,6 +208,50 @@ function ListenedRow({
   );
 }
 
+// ─── PoolRow — pool list item on main screen ─────────────────────────────────
+
+type ListenedStatus = 'logged' | 'library' | 'pending' | 'didnt_listen' | null;
+
+function PoolRow({ item, status, libraryLogged, borderCol, colors }: {
+  item: FlipAlbum;
+  status: FlipStatus | null;
+  libraryLogged: boolean;
+  borderCol: string;
+  colors: (typeof Colors)['light'] | (typeof Colors)['dark'];
+}) {
+  return (
+    <ListenedRow
+      id={item.id}
+      title={item.title}
+      artist={item.artist}
+      year={item.year}
+      coverColor={item.coverColor}
+      status={status ?? (libraryLogged ? 'library' : null)}
+      borderCol={borderCol}
+      colors={colors}
+    />
+  );
+}
+
+// ─── HistoryThumb ─────────────────────────────────────────────────────────────
+
+function HistoryThumb({ artworkUrl, coverColor, letter }: { artworkUrl: string; coverColor?: string; letter: string }) {
+  return (
+    <View style={[sfl.thumb, { backgroundColor: coverColor ?? '#2a1e14' }]}>
+      {artworkUrl
+        ? <ExpoImage source={{ uri: artworkUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+        : <Text style={sfl.thumbLetter}>{letter.toUpperCase()}</Text>
+      }
+    </View>
+  );
+}
+
+// ─── ProgressModal — alias for FullPoolModal ──────────────────────────────────
+
+function ProgressModal(props: { visible: boolean; onClose: () => void; history: any[] }) {
+  return <FullPoolModal {...props} />;
+}
+
 // ─── Full Pool Modal ──────────────────────────────────────────────────────────
 
 function FullPoolModal({

@@ -870,6 +870,7 @@ export default function RecentActivityScreen() {
   const [otherLikedArtists,    setOtherLikedArtists]    = useState<LikedArtistItem[]>([]);
   const [otherLikedPlaylists,  setOtherLikedPlaylists]  = useState<LikedPlaylistItem[]>([]);
   const [otherCreatedPlaylists,setOtherCreatedPlaylists]= useState<CreatedPlaylistItem[]>([]);
+  const [otherFlips,           setOtherFlips]           = useState<FlipItem[]>([]);
   const [loadingOther,         setLoadingOther]         = useState(false);
   const [selectedReview,       setSelectedReview]       = useState<ActivityItem | null>(null);
   const [reviewLikeState,      setReviewLikeState]      = useState<{ liked: boolean; count: number }>({ liked: false, count: 0 });

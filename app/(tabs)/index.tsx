@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -1264,8 +1265,8 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!user?.id) return;
     setFriendsListenedLoading(true);
-    fetchFriendsListened(user.id)
-      .then(setFriendsListened)
+    fetchFriendsActivity(user.id)
+      .then(entries => setFriendsListened(entries as any))
       .finally(() => setFriendsListenedLoading(false));
   }, [user?.id]);
 
