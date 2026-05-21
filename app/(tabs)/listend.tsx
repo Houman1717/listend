@@ -23,6 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme, ThemePreference } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { useLikedArtists } from '@/context/LikedArtistsContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
@@ -704,20 +705,6 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   const segTextColor = isDark ? '#6B4C35' : '#7a5535';
 
   const insets = useSafeAreaInsets();
-  const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
-    { label: 'On',     value: 'dark'   },
-    { label: 'Off',    value: 'light'  },
-    { label: 'System', value: 'system' },
-  ];
-  const { preference, setPreference } = useTheme();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const sheetBg   = isDark ? '#161616' : '#ffffff';
-  const labelColor = isDark ? '#f5e6c8' : '#1A0F0A';
-  const sepColor   = isDark ? '#2a1e14' : '#e8e8e8';
-  const segBg      = isDark ? '#2a1e14' : '#e8e8e8';
-  const segTextColor = isDark ? '#6B4C35' : '#7a5535';
-
   const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
     { label: 'On',     value: 'dark'   },
     { label: 'Off',    value: 'light'  },

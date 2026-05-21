@@ -134,50 +134,6 @@ function FeaturedPlaylistCard({ playlist, isDark, onPress }: { playlist: Feature
   );
 }
 
-// ─── Featured Playlist card ───────────────────────────────────────────────────
-
-function FeaturedPlaylistMosaic({ urls, size }: { urls: string[]; size: number }) {
-  const half = size / 2;
-  const slots = Array.from({ length: 4 }, (_, i) => urls[i] ?? null);
-  return (
-    <View style={{ width: size, height: size, borderRadius: 10, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
-      {slots.map((url, i) => (
-        <View key={i} style={{ width: half, height: half }}>
-          {url ? (
-            <ExpoImage source={{ uri: url }} style={{ width: half, height: half }} contentFit="cover" cachePolicy="disk" />
-          ) : (
-            <View style={{ width: half, height: half, backgroundColor: FALLBACK_BG }} />
-          )}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function FeaturedPlaylistCard({ playlist, isDark, onPress }: { playlist: FeaturedPlaylist; isDark: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        fp.card,
-        { backgroundColor: isDark ? '#1e1610' : '#F5EFE7', opacity: pressed ? 0.85 : 1 },
-      ]}>
-      <FeaturedPlaylistMosaic urls={playlist.artworkUrls} size={88} />
-      <View style={fp.info}>
-        <Text style={[fp.name, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
-          {playlist.name}
-        </Text>
-        <Text style={[fp.desc, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={2}>
-          {playlist.description}
-        </Text>
-        <Text style={[fp.albumCount, { color: isDark ? '#6B4C35' : '#A08060' }]}>
-          {playlist.albumCount} albums
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -678,39 +634,6 @@ const s = StyleSheet.create({
 
   chip:     { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth },
   chipText: { fontSize: 15, fontWeight: '600' },
-});
-
-// ─── Featured Playlist card styles ───────────────────────────────────────────
-
-const fp = StyleSheet.create({
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  scrollContent: { paddingHorizontal: 16, gap: 10 },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    gap: 14,
-    width: 272,
-  },
-  info:       { flex: 1 },
-  name:       { fontSize: 16, fontWeight: '700', marginBottom: 3 },
-  desc:       { fontSize: 13, lineHeight: 18, marginBottom: 6 },
-  albumCount: { fontSize: 12 },
-  badge: {
-    backgroundColor: 'rgba(212,160,23,0.12)',
-    borderWidth: 0.5,
-    borderColor: '#D4A017',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeText: { color: '#D4A017', fontSize: 10, fontWeight: '700' },
 });
 
 // ─── Featured Playlist card styles ───────────────────────────────────────────

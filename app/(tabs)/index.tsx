@@ -1131,10 +1131,6 @@ export default function HomeScreen() {
   // Friend review modal state
   const [expandedFriend, setExpandedFriend] = useState<FriendEntry | null>(null);
   const [showAllFriends, setShowAllFriends] = useState(false);
-  const [showAllFriends, setShowAllFriends] = useState(false);
-
-  // Friend review modal state
-  const [expandedFriend, setExpandedFriend] = useState<FriendEntry | null>(null);
 
   // Comments state for popular reviews
   const [expandedReview,     setExpandedReview]     = useState<PopularReview | null>(null);
@@ -2121,30 +2117,3 @@ const flr = StyleSheet.create({
   actionCount:  { fontSize: 14 },
 });
 
-// ─── Friend review modal styles ───────────────────────────────────────────────
-
-const frm = StyleSheet.create({
-  likeCommentRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  likeBtn:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 10, paddingHorizontal: 4 },
-  likeCount:      { fontSize: 13, fontWeight: '600' },
-});
-
-const flr = StyleSheet.create({
-  card:         { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  topRow:       { flexDirection: 'row', gap: 12, padding: 14, paddingBottom: 10 },
-  art:          { width: 84, height: 84, borderRadius: 8, flexShrink: 0 },
-  albumInfo:    { flex: 1, gap: 4, paddingTop: 2 },
-  albumTitle:   { fontSize: 15, fontWeight: '700', lineHeight: 20 },
-  albumArtist:  { fontSize: 13 },
-  ratingRow:    { marginTop: 2 },
-  reviewText:   { fontSize: 14, lineHeight: 21, fontStyle: 'italic', paddingHorizontal: 14, paddingBottom: 10 },
-  footer:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  userRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar:       { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  avatarLetter: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  username:     { color: '#D4A017', fontSize: 13, fontWeight: '600' },
-  listenedDate: { fontSize: 11, marginTop: 1 },
-  footerActions:{ flexDirection: 'row', gap: 18 },
-  actionBtn:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  actionCount:  { fontSize: 14 },
-});

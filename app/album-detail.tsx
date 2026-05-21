@@ -121,16 +121,6 @@ type ReviewTab  = 'all' | 'friends' | 'own';
 type FriendActivity = {
   userId:    string;
   username:  string;
-  rating:    number;
-  hasReview: boolean;
-  review?:   string;
-  listenedAt?: string;
-  status:    'listened' | 'wantToListen';
-};
-
-type FriendActivity = {
-  userId:    string;
-  username:  string;
   avatarUrl?: string | null;
   rating:    number;
   hasReview: boolean;

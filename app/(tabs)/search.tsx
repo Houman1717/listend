@@ -49,19 +49,6 @@ type PlaylistSearchResult = {
   rawFeaturedId?: string;
 };
 
-type PlaylistSearchResult = {
-  id: string;
-  name: string;
-  description?: string;
-  albumCount: number;
-  artworkUrls: string[];
-  ownerId?: string;
-  ownerUsername?: string;
-  isFeatured: boolean;
-  featuredEmoji?: string;
-  rawFeaturedId?: string;
-};
-
 type ResultItem =
   | (SpotifyAlbum  & { kind: 'album'  })
   | (SpotifyTrack  & { kind: 'song'   })
@@ -205,92 +192,6 @@ async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
   return results;
 }
 
-async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
-  const q = query.trim().toLowerCase();
-  const results: PlaylistSearchResult[] = [];
-
-  // Featured playlists
-  try {
-    const resp = await fetch(`${API_URL}/api/featured-playlists`);
-    if (resp.ok) {
-      const featured: any[] = await resp.json();
-      for (const p of featured) {
-        if (
-          (p.name ?? '').toLowerCase().includes(q) ||
-          (p.description ?? '').toLowerCase().includes(q)
-        ) {
-          results.push({
-            id: `featured:${p.id}`,
-            rawFeaturedId: p.id,
-            name: p.name,
-            description: p.description ?? undefined,
-            albumCount: (p.artworkUrls ?? []).length,
-            artworkUrls: (p.artworkUrls ?? []).slice(0, 4),
-            isFeatured: true,
-            featuredEmoji: p.emoji,
-          });
-        }
-      }
-    }
-  } catch {}
-
-  // User playlists from Supabase
-  const pattern = `%${query.trim()}%`;
-  const { data: pls } = await supabase
-    .from('playlists')
-    .select('id, name, description, user_id, created_at')
-    .or(`name.ilike.${pattern},description.ilike.${pattern}`)
-    .order('created_at', { ascending: false })
-    .limit(30);
-
-  if (pls && pls.length > 0) {
-    const playlistIds = (pls as any[]).map(p => p.id as string);
-    const ownerIds    = [...new Set((pls as any[]).map(p => p.user_id as string))];
-
-    const [pasResult, profilesResult] = await Promise.all([
-      supabase
-        .from('playlist_albums')
-        .select('playlist_id, spotify_id, position')
-        .in('playlist_id', playlistIds)
-        .order('position', { ascending: true }),
-      supabase.from('profiles').select('id, username').in('id', ownerIds),
-    ]);
-
-    const pas: any[] = pasResult.data ?? [];
-    const allSpotifyIds = [...new Set(pas.map((a: any) => a.spotify_id as string))];
-    const artworkMap = new Map<string, string>();
-    if (allSpotifyIds.length > 0) {
-      const { data: uas } = await supabase
-        .from('user_albums')
-        .select('spotify_id, artwork_url')
-        .in('spotify_id', allSpotifyIds);
-      for (const a of (uas ?? []) as any[]) {
-        if (!artworkMap.has(a.spotify_id)) artworkMap.set(a.spotify_id, a.artwork_url ?? '');
-      }
-    }
-
-    const usernameById = new Map<string, string>(
-      (profilesResult.data ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
-    );
-
-    for (const p of pls as any[]) {
-      const albumIds    = pas.filter((a: any) => a.playlist_id === p.id).map((a: any) => a.spotify_id as string);
-      const artworkUrls = albumIds.map(id => artworkMap.get(id) ?? '').filter(Boolean).slice(0, 4);
-      results.push({
-        id:            p.id,
-        name:          p.name,
-        description:   p.description ?? undefined,
-        albumCount:    albumIds.length,
-        artworkUrls,
-        ownerId:       p.user_id,
-        ownerUsername: usernameById.get(p.user_id) ?? '',
-        isFeatured:    false,
-      });
-    }
-  }
-
-  return results;
-}
 
 function resultToRecentItem(item: ResultItem): RecentItem {
   if (item.kind === 'album') {
@@ -657,46 +558,6 @@ export default function SearchScreen() {
     const entry = resultToRecentItem(item);
     setRecentItems((prev) => {
       const next = [entry, ...prev.filter((r) => !(r.kind === entry.kind && r.id === entry.id))].slice(0, MAX_RECENT);
-      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
-  }
-
-  function savePlaylistRecent(item: PlaylistSearchResult) {
-    const entry: RecentItem = {
-      kind:               'playlist',
-      id:                 item.id,
-      title:              item.name,
-      subtitle:           item.isFeatured ? (item.description ?? '') : (item.ownerUsername ? `@${item.ownerUsername}` : ''),
-      artworkUrl:         item.artworkUrls[0] ?? '',
-      circular:           false,
-      artworkUrls:        item.artworkUrls,
-      isFeatured:         item.isFeatured,
-      rawFeaturedId:      item.rawFeaturedId,
-      featuredEmoji:      item.featuredEmoji,
-      playlistDescription: item.description,
-      playlistOwnerId:    item.ownerId,
-    };
-    setRecentItems((prev) => {
-      const next = [entry, ...prev.filter((r) => !(r.kind === 'playlist' && r.id === entry.id))].slice(0, MAX_RECENT);
-      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
-  }
-
-  function saveUserRecent(item: UserProfile) {
-    const name = item.display_name || item.username || 'Unknown';
-    const entry: RecentItem = {
-      kind:      'user',
-      id:        item.id,
-      userId:    item.id,
-      title:     name,
-      subtitle:  item.username ? `@${item.username}` : '',
-      artworkUrl: item.avatar_url ?? '',
-      circular:  true,
-    };
-    setRecentItems((prev) => {
-      const next = [entry, ...prev.filter((r) => !(r.kind === 'user' && r.id === entry.id))].slice(0, MAX_RECENT);
       AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
