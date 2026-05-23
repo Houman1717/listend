@@ -824,6 +824,137 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
   }
 });
 
+// ── GET /api/discover/community-top-artists ───────────────────────────────────
+// All-time top artists from real Listend user data.
+// Mirrors fetchTopArtistsThisWeek() in lib/homeData.ts but with no date filter.
+// Sources: liked_artists + top5_changes category=artists + user_albums (logged albums).
+// Cached 1 h in-memory, 6 h in Supabase.
+
+app.get('/api/discover/community-top-artists', async (req, res) => {
+  const CACHE_KEY = 'discover:community-top-artists';
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_6H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
+
+  try {
+    const [{ data: likedRows, error: e1 }, { data: top5Rows, error: e2 }, { data: albumRows, error: e3 }] = await Promise.all([
+      supabase.from('liked_artists').select('artist_id, name, artwork_url').limit(5000),
+      supabase.from('top5_changes').select('item_id, item_name, item_image_url').eq('category', 'artists').limit(5000),
+      supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).limit(5000),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+    if (e3) throw e3;
+
+    const counts = new Map();
+    for (const r of (likedRows ?? [])) {
+      if (!r.artist_id) continue;
+      const e = counts.get(r.artist_id);
+      if (e) e.count++;
+      else counts.set(r.artist_id, { artist: { id: r.artist_id, name: r.name ?? '', genre: '', artworkUrl: r.artwork_url ?? '' }, count: 1 });
+    }
+    for (const r of (top5Rows ?? [])) {
+      if (!r.item_id) continue;
+      const e = counts.get(r.item_id);
+      if (e) e.count++;
+      else counts.set(r.item_id, { artist: { id: r.item_id, name: r.item_name ?? '', genre: '', artworkUrl: r.item_image_url ?? '' }, count: 1 });
+    }
+
+    // Dedup by name, picking best artworkUrl
+    const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
+    const byName = new Map();
+    for (const entry of sorted) {
+      const key = entry.artist.name.toLowerCase().trim();
+      if (!key) continue;
+      const existing = byName.get(key);
+      if (existing) {
+        existing.count += entry.count;
+        if (!existing.artist.artworkUrl && entry.artist.artworkUrl)
+          existing.artist = { ...existing.artist, artworkUrl: entry.artist.artworkUrl };
+      } else {
+        byName.set(key, { artist: { ...entry.artist }, count: entry.count });
+      }
+    }
+
+    // Add album log counts — only name available, no artwork (artwork_url is album art not artist)
+    for (const r of (albumRows ?? [])) {
+      const name = r.artist?.trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const existing = byName.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        byName.set(key, { artist: { id: `name:${key}`, name, genre: '', artworkUrl: '' }, count: 1 });
+      }
+    }
+
+    const results = Array.from(byName.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 48)
+      .map(e => e.artist);
+
+    cacheSet(CACHE_KEY, results, TTL_1H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/api/discover/community-top-artists]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /api/discover/community-top-songs ─────────────────────────────────────
+// All-time top songs from real Listend user data.
+// Mirrors fetchTopSongsThisWeek() in lib/homeData.ts but with no date filter.
+// Source: top5_changes category=songs (all-time Top 5 adds).
+// Cached 1 h in-memory, 6 h in Supabase.
+
+app.get('/api/discover/community-top-songs', async (req, res) => {
+  const CACHE_KEY = 'discover:community-top-songs';
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  const db = await getCached(CACHE_KEY, TTL_6H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
+
+  try {
+    const { data, error } = await supabase
+      .from('top5_changes')
+      .select('item_id, item_name, item_image_url')
+      .eq('category', 'songs')
+      .limit(5000);
+
+    if (error) throw error;
+
+    const counts = new Map();
+    for (const r of (data ?? [])) {
+      if (!r.item_id) continue;
+      const e = counts.get(r.item_id);
+      if (e) e.count++;
+      else counts.set(r.item_id, {
+        track: { id: r.item_id, title: r.item_name ?? '', artist: '', artworkUrl: r.item_image_url ?? '' },
+        count: 1,
+      });
+    }
+
+    const results = Array.from(counts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 48)
+      .map(e => e.track);
+
+    cacheSet(CACHE_KEY, results, TTL_1H);
+    await setCache(CACHE_KEY, results);
+    res.json(results);
+  } catch (err) {
+    console.error('[/api/discover/community-top-songs]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /discover/recommended ─────────────────────────────────────────────────
 
 app.get('/discover/recommended', async (req, res) => {
@@ -2140,7 +2271,8 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
   try {
     const keys = ['discover:new-releases', 'discover:popular', 'discover:coming-soon',
                   'discover:classics', 'discover:top-rated', 'discover:recommended',
-                  'discover:community-popular', 'discover:community-top-rated'];
+                  'discover:community-popular', 'discover:community-top-rated',
+                  'discover:community-top-artists', 'discover:community-top-songs'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-discover-cache] done.');

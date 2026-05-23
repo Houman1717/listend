@@ -69,9 +69,10 @@ export async function fetchTopSongsThisWeek(): Promise<SpotifyTrack[]> {
 
 export async function fetchTopArtistsThisWeek(): Promise<SpotifyArtist[]> {
   const since = weekAgo();
-  const [{ data: likedRows }, { data: top5Rows }] = await Promise.all([
+  const [{ data: likedRows }, { data: top5Rows }, { data: albumRows }] = await Promise.all([
     supabase.from('liked_artists').select('artist_id, name, artwork_url').gte('created_at', since).limit(300),
     supabase.from('top5_changes').select('item_id, item_name, item_image_url').eq('category', 'artists').gte('changed_at', since).limit(300),
+    supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).gte('listened_at', since).limit(500),
   ]);
 
   const counts = new Map<string, { artist: SpotifyArtist; count: number }>();
@@ -114,7 +115,51 @@ export async function fetchTopArtistsThisWeek(): Promise<SpotifyArtist[]> {
     }
   }
 
-  return Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.artist);
+  // Add album log counts — only artist name available, no artwork (r.artwork_url is album art)
+  for (const r of (albumRows ?? []) as any[]) {
+    const name = r.artist?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const existing = byName.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      byName.set(key, { artist: { id: `name:${key}`, name, genre: '', artworkUrl: '' }, count: 1 });
+    }
+  }
+
+  const ranked = Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.artist);
+
+  // Resolve AM artwork for any artist that came only from album logs (no artwork yet)
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+  const missing = ranked.filter(a => !a.artworkUrl);
+  if (missing.length > 0) {
+    const resolved = await Promise.allSettled(
+      missing.map(a =>
+        fetch(`${API_URL}/search?q=${encodeURIComponent(a.name)}&type=artist`)
+          .then(r => r.ok ? r.json() : [])
+          .then((results: { id: string; artworkUrl: string }[]) => ({ name: a.name, id: results[0]?.id ?? '', artworkUrl: results[0]?.artworkUrl ?? '' }))
+          .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
+      )
+    );
+    const artworkMap: Record<string, { id: string; artworkUrl: string }> = {};
+    for (const r of resolved) {
+      if (r.status === 'fulfilled' && r.value.artworkUrl) {
+        artworkMap[r.value.name.toLowerCase()] = { id: r.value.id, artworkUrl: r.value.artworkUrl };
+      }
+    }
+    for (const artist of ranked) {
+      if (!artist.artworkUrl) {
+        const hit = artworkMap[artist.name.toLowerCase()];
+        if (hit) {
+          artist.artworkUrl = hit.artworkUrl;
+          if (hit.id) artist.id = hit.id;
+        }
+      }
+    }
+  }
+
+  return ranked;
 }
 
 export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
