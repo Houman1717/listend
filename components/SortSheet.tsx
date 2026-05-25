@@ -108,6 +108,12 @@ export function SortBar({
   onPress,
   onSearchPress,
   searchActive,
+  tint = '#D4A017',
+  bg,
+  surface: surfaceProp,
+  border: borderProp,
+  subtext: subtextProp,
+  labelColor: labelColorProp,
 }: {
   sortKey: SortKey;
   count: number;
@@ -116,27 +122,35 @@ export function SortBar({
   onPress: () => void;
   onSearchPress?: () => void;
   searchActive?: boolean;
+  tint?: string;
+  bg?: string;
+  surface?: string;
+  border?: string;
+  subtext?: string;
+  labelColor?: string;
 }) {
-  const subtext = isDark ? '#a07850' : '#7a5535';
-  const surface = isDark ? '#2e2018' : '#f0ece7';
-  const border  = isDark ? '#3a2818' : '#ddd';
+  const subtext    = subtextProp  ?? (isDark ? '#a07850' : '#7a5535');
+  const surface    = surfaceProp  ?? (isDark ? '#2e2018' : '#f0ece7');
+  const border     = borderProp   ?? (isDark ? '#3a2818' : '#ddd');
+  const barBg      = bg           ?? (isDark ? '#1c1410' : '#faf7f4');
+  const labelColor = labelColorProp ?? (isDark ? '#f5e6c8' : '#1A0F0A');
   return (
-    <View style={[sb.bar, { backgroundColor: isDark ? '#1c1410' : '#faf7f4', borderBottomColor: border }]}>
+    <View style={[sb.bar, { backgroundColor: barBg, borderBottomColor: border }]}>
       <Text style={[sb.count, { color: subtext }]}>{count} {noun}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {onSearchPress && (
           <Pressable
             onPress={onSearchPress}
             hitSlop={8}
-            style={({ pressed }) => [sb.btn, { backgroundColor: searchActive ? '#D4A017' : surface, borderColor: border, opacity: pressed ? 0.7 : 1 }]}>
-            <Ionicons name="search-outline" size={13} color={searchActive ? '#fff' : '#D4A017'} />
+            style={({ pressed }) => [sb.btn, { backgroundColor: searchActive ? tint : surface, borderColor: border, opacity: pressed ? 0.7 : 1 }]}>
+            <Ionicons name="search-outline" size={13} color={searchActive ? '#fff' : tint} />
           </Pressable>
         )}
         <Pressable
           onPress={onPress}
           style={({ pressed }) => [sb.btn, { backgroundColor: surface, borderColor: border, opacity: pressed ? 0.7 : 1 }]}>
-          <Ionicons name="funnel-outline" size={13} color="#D4A017" />
-          <Text style={[sb.btnText, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
+          <Ionicons name="funnel-outline" size={13} color={tint} />
+          <Text style={[sb.btnText, { color: labelColor }]} numberOfLines={1}>
             {sortLabel(sortKey)}
           </Text>
           <Ionicons name="chevron-down" size={11} color={subtext} />
@@ -154,12 +168,14 @@ export function SortSheet({
   onSelect,
   onClose,
   isDark,
+  tint = '#D4A017',
 }: {
   visible: boolean;
   activeKey: SortKey;
   onSelect: (key: SortKey) => void;
   onClose: () => void;
   isDark: boolean;
+  tint?: string;
 }) {
   const bg      = isDark ? '#1c1410' : '#fff';
   const text    = isDark ? '#f5e6c8' : '#1A0F0A';
@@ -196,7 +212,7 @@ export function SortSheet({
                       style={[
                         ss.optBtn,
                         active
-                          ? ss.optBtnActive
+                          ? { backgroundColor: tint, borderColor: tint }
                           : { backgroundColor: surface, borderColor: border },
                       ]}>
                       <Text style={[ss.optText, { color: active ? '#fff' : subtext }]}>
@@ -215,7 +231,7 @@ export function SortSheet({
             style={[
               ss.shuffleBtn,
               activeKey === 'shuffle'
-                ? ss.shuffleBtnActive
+                ? { backgroundColor: tint, borderColor: tint }
                 : { backgroundColor: surface, borderColor: border },
             ]}>
             <Ionicons

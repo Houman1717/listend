@@ -13,7 +13,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -35,24 +37,24 @@ const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a
 
 // ─── Volume + bars badge ──────────────────────────────────────────────────────
 
-function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumber?: boolean; isDark?: boolean }) {
+function VolumeBadge({ rating, showNumber, isDark, tint = '#D4A017' }: { rating: number; showNumber?: boolean; isDark?: boolean; tint?: string }) {
   const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <FontAwesome name="volume-up" size={9} color="#D4A017" />
+      <FontAwesome name="volume-up" size={9} color={tint} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
           return (
             <View
               key={i}
-              style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }}
+              style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : inactive }}
             />
           );
         })}
       </View>
       {showNumber && (
-        <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
+        <Text style={{ color: tint, fontSize: 10, fontWeight: '700' }}>{rating}</Text>
       )}
     </View>
   );
@@ -153,11 +155,11 @@ function AlbumReviewModal({
                 </Text>
                 {(album.lastRating ?? album.rating) > 0 && (
                   <View style={ml.ratingRow}>
-                    <VolumeBadge rating={album.lastRating ?? album.rating} showNumber isDark={isDark} />
+                    <VolumeBadge rating={album.lastRating ?? album.rating} showNumber isDark={isDark} tint={colors.tint} />
                   </View>
                 )}
                 {album.isRelistened && (
-                  <FontAwesome name="repeat" size={9} color="#D4A017" style={{ marginTop: 2 }} />
+                  <FontAwesome name="repeat" size={9} color={colors.tint} style={{ marginTop: 2 }} />
                 )}
               </View>
             </Pressable>
@@ -171,7 +173,7 @@ function AlbumReviewModal({
                 <Text style={ml.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
               </View>
               <View style={{ gap: 1 }}>
-                <Text style={ml.username}>@{username || '…'}</Text>
+                <Text style={[ml.username, { color: colors.tint }]}>@{username || '…'}</Text>
                 {dateStr ? (
                   <Text style={[ml.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
                     Listend {dateStr}
@@ -297,13 +299,13 @@ function AlbumCard({
       {((album.lastRating ?? album.rating) > 0 || album.isRelistened) && (
         <View style={{ marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           {(album.lastRating ?? album.rating) > 0 && (
-            <VolumeBadge rating={album.lastRating ?? album.rating} showNumber isDark={isDark} />
+            <VolumeBadge rating={album.lastRating ?? album.rating} showNumber isDark={isDark} tint={colors.tint} />
           )}
           {!!(album.lastReview ?? album.review) && (
-            <FontAwesome name="quote-left" size={8} color="#D4A017" />
+            <FontAwesome name="quote-left" size={8} color={colors.tint} />
           )}
           {!!album.isRelistened && (
-            <FontAwesome name="repeat" size={8} color="#D4A017" />
+            <FontAwesome name="repeat" size={8} color={colors.tint} />
           )}
         </View>
       )}
@@ -317,12 +319,16 @@ export default function MyListendScreen() {
   const { width } = useWindowDimensions();
   const cardWidth = (width - PADDING * 2 - GAP * (COLS - 1)) / COLS;
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const { userId: paramUserId, username: paramUsername, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; username?: string; proTheme?: string }>();
+  const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
+  const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
+    ? themeToColors(getProTheme(_themeKey))
+    : Colors[colorScheme ?? 'dark'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { loggedAlbums, removeLoggedAlbum, updateDuration, undoLastReListenEntry } = useAlbums();
   const { user } = useAuth();
-  const { userId: paramUserId, username: paramUsername } = useLocalSearchParams<{ userId?: string; username?: string }>();
 
   const viewingOther = paramUserId || null;
   const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
@@ -450,6 +456,11 @@ export default function MyListendScreen() {
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
       <SortBar
         sortKey={sortKey}
         count={sourceAlbums.length}
@@ -463,6 +474,12 @@ export default function MyListendScreen() {
           else setTimeout(() => searchInputRef.current?.focus(), 50);
         }}
         searchActive={searchOpen}
+        tint={colors.tint}
+        bg={colors.background}
+        surface={colors.surface}
+        border={colors.border}
+        subtext={colors.subtext}
+        labelColor={colors.text}
       />
       {searchOpen && (
         <View style={[s.searchBar, { borderBottomColor: colors.border }]}>
@@ -509,6 +526,7 @@ export default function MyListendScreen() {
         onSelect={handleSelectSort}
         onClose={() => setSheetOpen(false)}
         isDark={isDark}
+        tint={colors.tint}
       />
 
       {selectedAlbum && (

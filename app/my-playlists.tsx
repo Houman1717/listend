@@ -12,7 +12,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect, useRef } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -113,7 +115,7 @@ function PlaylistCard({
           {playlist.name}
         </Text>
         {byUsername ? (
-          <Text style={[s.playlistMeta, { color: '#D4A017' }]} numberOfLines={1}>
+          <Text style={[s.playlistMeta, { color: colors.tint }]} numberOfLines={1}>
             by @{byUsername}
           </Text>
         ) : null}
@@ -132,19 +134,19 @@ function PlaylistCard({
             <FontAwesome
               name={isLiked ? 'heart' : 'heart-o'}
               size={hideChevron ? 18 : 16}
-              color={isLiked ? '#D4A017' : '#7a5535'}
+              color={isLiked ? colors.tint : '#7a5535'}
             />
             {!hideChevron && (likeCount ?? 0) > 0 && (
-              <Text style={[s.likeCount, { color: isLiked ? '#D4A017' : '#7a5535' }]}>
+              <Text style={[s.likeCount, { color: isLiked ? colors.tint : '#7a5535' }]}>
                 {likeCount}
               </Text>
             )}
           </Pressable>
         ) : (
           <View style={hideChevron ? { padding: 4 } : s.likeBtn}>
-            <FontAwesome name="heart" size={hideChevron ? 18 : 16} color="#D4A017" />
+            <FontAwesome name="heart" size={hideChevron ? 18 : 16} color={colors.tint} />
             {!hideChevron && (likeCount ?? 0) > 0 && (
-              <Text style={[s.likeCount, { color: '#D4A017' }]}>{likeCount}</Text>
+              <Text style={[s.likeCount, { color: colors.tint }]}>{likeCount}</Text>
             )}
           </View>
         )
@@ -221,7 +223,7 @@ function NewPlaylistModal({
           />
 
           <Pressable
-            style={[s.createBtn, { backgroundColor: name.trim() ? '#D4A017' : (isDark ? '#2a1e14' : '#ddd') }]}
+            style={[s.createBtn, { backgroundColor: name.trim() ? colors.tint : (isDark ? '#2a1e14' : '#ddd') }]}
             onPress={handleCreate}
             disabled={!name.trim()}>
             <Text style={[s.createBtnText, { color: name.trim() ? '#fff' : colors.subtext }]}>
@@ -339,12 +341,16 @@ async function buildLikedEntries(
 
 export default function MyPlaylistsScreen() {
   const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const { userId: paramUserId, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
+  const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
+  const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
+    ? themeToColors(getProTheme(_themeKey))
+    : Colors[colorScheme ?? 'dark'];
   const isDark      = colorScheme === 'dark';
   const router      = useRouter();
   const { loggedAlbums, playlists, createPlaylist, deletePlaylist } = useAlbums();
   const { user }    = useAuth();
-  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = paramUserId || null;
 
@@ -611,20 +617,25 @@ export default function MyPlaylistsScreen() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
 
       {/* Tab bar — always shown */}
       <View style={[s.tabRow, { borderBottomColor: isDark ? '#2e2018' : '#e8e8e8' }]}>
         <Pressable
           onPress={() => setActiveTab('mine')}
-          style={[s.tab, activeTab === 'mine' && s.tabActive]}>
-          <Text style={[s.tabText, { color: activeTab === 'mine' ? '#D4A017' : '#a07850' }]}>
+          style={[s.tab, activeTab === 'mine' && [s.tabActive, { borderBottomColor: colors.tint }]]}>
+          <Text style={[s.tabText, { color: activeTab === 'mine' ? colors.tint : '#a07850' }]}>
             {viewingOther ? 'Playlists' : 'My Playlists'}
           </Text>
         </Pressable>
         <Pressable
           onPress={() => setActiveTab('liked')}
-          style={[s.tab, activeTab === 'liked' && s.tabActive]}>
-          <Text style={[s.tabText, { color: activeTab === 'liked' ? '#D4A017' : '#a07850' }]}>
+          style={[s.tab, activeTab === 'liked' && [s.tabActive, { borderBottomColor: colors.tint }]]}>
+          <Text style={[s.tabText, { color: activeTab === 'liked' ? colors.tint : '#a07850' }]}>
             Liked Playlists
           </Text>
         </Pressable>
@@ -637,8 +648,8 @@ export default function MyPlaylistsScreen() {
               else setTimeout(() => searchInputRef.current?.focus(), 50);
             }}
             hitSlop={8}
-            style={[s.tab, s.searchTab, searchOpen && { backgroundColor: '#D4A017', borderRadius: 6 }]}>
-            <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : '#D4A017'} />
+            style={[s.tab, s.searchTab, searchOpen && { backgroundColor: colors.tint, borderRadius: 6 }]}>
+            <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : colors.tint} />
           </Pressable>
         )}
         {activeTab === 'liked' && (
@@ -650,8 +661,8 @@ export default function MyPlaylistsScreen() {
               else setTimeout(() => searchInputLikedRef.current?.focus(), 50);
             }}
             hitSlop={8}
-            style={[s.tab, s.searchTab, searchOpenLiked && { backgroundColor: '#D4A017', borderRadius: 6 }]}>
-            <FontAwesome name="search" size={13} color={searchOpenLiked ? '#fff' : '#D4A017'} />
+            style={[s.tab, s.searchTab, searchOpenLiked && { backgroundColor: colors.tint, borderRadius: 6 }]}>
+            <FontAwesome name="search" size={13} color={searchOpenLiked ? '#fff' : colors.tint} />
           </Pressable>
         )}
       </View>
@@ -661,8 +672,8 @@ export default function MyPlaylistsScreen() {
         <Pressable
           onPress={() => setShowNewPlaylist(true)}
           style={({ pressed }) => [s.newBtn, { opacity: pressed ? 0.7 : 1 }]}>
-          <FontAwesome name="plus" size={13} color="#D4A017" />
-          <Text style={s.newBtnText}>New Playlist</Text>
+          <FontAwesome name="plus" size={13} color={colors.tint} />
+          <Text style={[s.newBtnText, { color: colors.tint }]}>New Playlist</Text>
         </Pressable>
       )}
 
@@ -826,7 +837,7 @@ export default function MyPlaylistsScreen() {
                     <View style={s.playlistInfo}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>{entry.pl.name}</Text>
-                        <View style={{ backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                        <View style={{ backgroundColor: colors.tint, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                           <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>by Listend</Text>
                         </View>
                       </View>
@@ -834,7 +845,7 @@ export default function MyPlaylistsScreen() {
                     </View>
                     {!viewingOther && (
                       <Pressable onPress={() => handleUnlikeFeaturedPlaylist(entry.pl.id)} hitSlop={12} style={{ padding: 4 }}>
-                        <FontAwesome name="heart" size={18} color="#D4A017" />
+                        <FontAwesome name="heart" size={18} color={colors.tint} />
                       </Pressable>
                     )}
                   </Pressable>

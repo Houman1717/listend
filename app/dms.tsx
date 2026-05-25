@@ -7,14 +7,15 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,10 @@ type Conversation = {
 
 export default function DMsScreen() {
   const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme } = usePro();
+  const colors = (isPro && proTheme !== 'default')
+    ? themeToColors(getProTheme(proTheme))
+    : Colors[colorScheme ?? 'dark'];
 
   const { user } = useAuth();
   const router   = useRouter();
@@ -141,12 +145,23 @@ export default function DMsScreen() {
   if (loading) {
     return (
       <View style={[s.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color="#D4A017" size="large" />
+        <Stack.Screen options={{
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          headerShadowVisible: false,
+        }} />
+        <ActivityIndicator color={colors.tint} size="large" />
       </View>
     );
   }
 
   return (
+    <>
+      <Stack.Screen options={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
     <FlatList
       style={[s.container, { backgroundColor: colors.background }]}
       data={conversations}
@@ -156,7 +171,7 @@ export default function DMsScreen() {
       ListEmptyComponent={() => (
         <View style={s.emptyWrap}>
           <View style={[s.emptyIconRing, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <FontAwesome name="comments" size={36} color="#D4A017" />
+            <FontAwesome name="comments" size={36} color={colors.tint} />
           </View>
           <Text style={[s.emptyTitle, { color: colors.text }]}>No conversations yet</Text>
           <Text style={[s.emptySub, { color: colors.subtext }]}>
@@ -176,7 +191,7 @@ export default function DMsScreen() {
               })
             }>
             {item.partnerAvatarUrl ? (
-              <ExpoImage source={{ uri: item.partnerAvatarUrl }} style={s.avatar} 
+              <ExpoImage source={{ uri: item.partnerAvatarUrl }} style={s.avatar}
             contentFit="cover" cachePolicy="disk"
           />
             ) : (
@@ -195,6 +210,7 @@ export default function DMsScreen() {
         );
       }}
     />
+    </>
   );
 }
 

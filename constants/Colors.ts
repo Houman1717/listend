@@ -15,6 +15,20 @@ export const PALETTE = {
   tabInactive:   '#4a3020',
 } as const;
 
+export type ColorsShape = {
+  text: string;
+  background: string;
+  tint: string;
+  tabIconDefault: string;
+  tabIconSelected: string;
+  card: string;
+  surface: string;
+  elevated: string;
+  border: string;
+  subtext: string;
+  textMuted: string;
+};
+
 export default {
   light: {
     text:            '#1A0F0A',  // dark coffee

@@ -13,6 +13,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack } from 'expo-router';
@@ -80,8 +82,8 @@ function ReListenedAlbumRow({
         <Text style={[s.albumTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
         <Text style={[s.albumArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}{album.year > 0 ? ` · ${album.year}` : ''}</Text>
         <View style={s.listenCountRow}>
-          <FontAwesome name="repeat" size={11} color="#D4A017" />
-          <Text style={s.listenCountText}>{totalListens} listen{totalListens !== 1 ? 's' : ''}</Text>
+          <FontAwesome name="repeat" size={11} color={colors.tint} />
+          <Text style={[s.listenCountText, { color: colors.tint }]}>{totalListens} listen{totalListens !== 1 ? 's' : ''}</Text>
         </View>
       </View>
       <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
@@ -140,8 +142,8 @@ function HistoryModal({
                 {album.artist}{album.year > 0 ? ` · ${album.year}` : ''}
               </Text>
               <View style={hm.listenCountBadge}>
-                <FontAwesome name="repeat" size={11} color="#D4A017" />
-                <Text style={hm.listenCountBadgeText}>{entries.length} listen{entries.length !== 1 ? 's' : ''} total</Text>
+                <FontAwesome name="repeat" size={11} color={colors.tint} />
+                <Text style={[hm.listenCountBadgeText, { color: colors.tint }]}>{entries.length} listen{entries.length !== 1 ? 's' : ''} total</Text>
               </View>
             </View>
           </Pressable>
@@ -152,11 +154,11 @@ function HistoryModal({
               <View
                 key={idx}
                 style={[hm.entryRow, idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: border }]}>
-                <View style={[hm.entryIconWrap, { backgroundColor: entry.isOriginal ? '#D4A017' : (isDark ? '#2E2018' : '#f0ede8') }]}>
+                <View style={[hm.entryIconWrap, { backgroundColor: entry.isOriginal ? colors.tint : (isDark ? '#2E2018' : '#f0ede8') }]}>
                   <FontAwesome
                     name={entry.isOriginal ? 'headphones' : 'repeat'}
                     size={13}
-                    color={entry.isOriginal ? '#fff' : '#D4A017'}
+                    color={entry.isOriginal ? '#fff' : colors.tint}
                   />
                 </View>
                 <View style={hm.entryInfo}>
@@ -173,8 +175,8 @@ function HistoryModal({
                   ) : null}
                 </View>
                 {entry.rating > 0 && (
-                  <View style={[hm.entryRating, { borderColor: '#D4A017' }]}>
-                    <Text style={hm.entryRatingText}>{entry.rating}</Text>
+                  <View style={[hm.entryRating, { borderColor: colors.tint }]}>
+                    <Text style={[hm.entryRatingText, { color: colors.tint }]}>{entry.rating}</Text>
                   </View>
                 )}
                 {!entry.isOriginal && onDeleteEntry && (
@@ -222,12 +224,16 @@ const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a
 
 export default function ReListenedScreen() {
   const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const params      = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
+  const _themeKey = !params.userId ? ownProTheme : (params.proTheme ?? 'default');
+  const colors = ((!params.userId ? isPro : !!params.proTheme) && _themeKey !== 'default')
+    ? themeToColors(getProTheme(_themeKey))
+    : Colors[colorScheme ?? 'dark'];
   const isDark      = colorScheme === 'dark';
   const router      = useRouter();
   const { user }    = useAuth();
   const { loggedAlbums, removeReListenEntry } = useAlbums();
-  const params      = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = params.userId && params.userId !== user?.id ? params.userId : null;
 
@@ -400,7 +406,13 @@ export default function ReListenedScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Re-listend', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={{
+        title: 'Re-listend',
+        headerBackTitle: 'Back',
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         {reListenedAlbums.length > 0 && (
           <View style={[ss.countRow, { borderBottomColor: colors.border }]}>
@@ -413,8 +425,8 @@ export default function ReListenedScreen() {
                 else setTimeout(() => searchRef.current?.focus(), 50);
               }}
               hitSlop={10}
-              style={[ss.searchToggle, searchOpen && { backgroundColor: '#D4A017' }]}>
-              <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : '#D4A017'} />
+              style={[ss.searchToggle, searchOpen && { backgroundColor: colors.tint }]}>
+              <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : colors.tint} />
             </Pressable>
           </View>
         )}
@@ -464,7 +476,7 @@ export default function ReListenedScreen() {
               {loadingAlbumId === item.id && (
                 <ActivityIndicator
                   size="small"
-                  color="#D4A017"
+                  color={colors.tint}
                   style={StyleSheet.absoluteFill}
                 />
               )}

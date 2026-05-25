@@ -17,6 +17,8 @@ import { NotificationsProvider } from '@/context/NotificationsContext';
 import { LikedArtistsProvider } from '@/context/LikedArtistsContext';
 import { LikedFeaturedPlaylistsProvider } from '@/context/LikedFeaturedPlaylistsContext';
 import { FavoritesSyncer } from '@/components/FavoritesSyncer';
+import { ProProvider } from '@/context/ProContext';
+import { ProPaywallModal } from '@/components/ProPaywallModal';
 import { configureGoogleSignIn } from '@/lib/auth/googleAuth';
 
 export {
@@ -103,6 +105,7 @@ function ThemedApp() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <AuthProvider>
+    <ProProvider>
     <NotificationsProvider>
     <AlbumsProvider>
     <LikedArtistsProvider>
@@ -112,6 +115,7 @@ function ThemedApp() {
         <AuthGate />
         <FavoritesSyncer />
         <OfflineBanner />
+        <ProPaywallModal />
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
@@ -157,6 +161,7 @@ function ThemedApp() {
           <Stack.Screen name="liked-featured-playlists" options={{ title: 'Liked Playlists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="privacy-settings" options={{ title: 'Privacy', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="blocked-users" options={{ title: 'Blocked Users', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="pro-settings" options={{ title: 'Listend Pro', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
         </Stack>
       </NavThemeProvider>
     </FlipProvider>
@@ -164,6 +169,7 @@ function ThemedApp() {
     </LikedArtistsProvider>
     </AlbumsProvider>
     </NotificationsProvider>
+    </ProProvider>
     </AuthProvider>
     </GestureHandlerRootView>
   );

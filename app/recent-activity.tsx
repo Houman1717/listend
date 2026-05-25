@@ -12,14 +12,16 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useMemo, useState, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { type ColorsShape } from '@/constants/Colors';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
@@ -485,7 +487,7 @@ function ReviewCardModal({
   onUsernamePress,
 }: {
   item: ActivityItem;
-  colors: typeof Colors.light;
+  colors: ColorsShape;
   isDark: boolean;
   reviewerUsername: string;
   likeState: { liked: boolean; count: number };
@@ -553,13 +555,13 @@ function ReviewCardModal({
                 </Text>
                 {item.rating > 0 && (
                   <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, marginTop: 2 }}>
-                    <FontAwesome name="volume-up" size={11} color="#D4A017" />
+                    <FontAwesome name="volume-up" size={11} color={colors.tint} />
                     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
                       {BAR_HEIGHTS.map((h, i) => (
-                        <View key={i} style={{ width: 2.5, borderRadius: 1, height: h, backgroundColor: i + 1 <= item.rating ? '#D4A017' : inactive }} />
+                        <View key={i} style={{ width: 2.5, borderRadius: 1, height: h, backgroundColor: i + 1 <= item.rating ? colors.tint : inactive }} />
                       ))}
                     </View>
-                    <Text style={{ color: '#D4A017', fontSize: 11, fontWeight: '700', lineHeight: 16 }}>{item.rating}</Text>
+                    <Text style={{ color: colors.tint, fontSize: 11, fontWeight: '700', lineHeight: 16 }}>{item.rating}</Text>
                   </View>
                 )}
               </View>
@@ -570,7 +572,7 @@ function ReviewCardModal({
               style={rm.authorRow}
               onPress={() => onUsernamePress?.(reviewerUsername)}
               disabled={!onUsernamePress}>
-              <View style={[rm.avatar, { backgroundColor: reviewerUsername === 'you' ? '#D4A017' : avatarColor(reviewerUsername) }]}>
+              <View style={[rm.avatar, { backgroundColor: reviewerUsername === 'you' ? colors.tint : avatarColor(reviewerUsername) }]}>
                 <Text style={rm.avatarLetter}>{reviewerUsername[0]?.toUpperCase()}</Text>
               </View>
               <View style={{ gap: 2 }}>
@@ -599,16 +601,16 @@ function ReviewCardModal({
                   <FontAwesome
                     name={likeState.liked ? 'heart' : 'heart-o'}
                     size={15}
-                    color={likeState.liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35')}
+                    color={likeState.liked ? colors.tint : (isDark ? '#A08060' : '#6B4C35')}
                   />
-                  <Text style={[rm.likeCount, { color: likeState.liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35') }]}>
+                  <Text style={[rm.likeCount, { color: likeState.liked ? colors.tint : (isDark ? '#A08060' : '#6B4C35') }]}>
                     {likeState.count}
                   </Text>
                 </Pressable>
               ) : (
                 <View style={rm.likeBtn}>
-                  <FontAwesome name="heart" size={15} color={likeState.count > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#ddd')} />
-                  <Text style={[rm.likeCount, { color: likeState.count > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#bbb') }]}>
+                  <FontAwesome name="heart" size={15} color={likeState.count > 0 ? colors.tint : (isDark ? '#3a2818' : '#ddd')} />
+                  <Text style={[rm.likeCount, { color: likeState.count > 0 ? colors.tint : (isDark ? '#3a2818' : '#bbb') }]}>
                     {likeState.count}
                   </Text>
                 </View>
@@ -654,7 +656,7 @@ function ReviewCardModal({
 
 // ─── Row components ───────────────────────────────────────────────────────────
 
-type ColorsType = typeof Colors.light;
+type ColorsType = ColorsShape;
 
 function ActivityRow({ item, onPress, colors }: { item: ActivityItem; onPress: () => void; colors: ColorsType }) {
   const meta = TYPE_META[item.type];
@@ -677,9 +679,9 @@ function ActivityRow({ item, onPress, colors }: { item: ActivityItem; onPress: (
         <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
         <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>{item.artist}{item.year ? ` · ${item.year}` : ''}</Text>
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: meta.color }]}>
-            <FontAwesome name={meta.icon as any} size={9} color={meta.color} />
-            <Text style={[s.typeLabel, { color: meta.color }]}>{meta.label}</Text>
+          <View style={[s.typePill, { borderColor: colors.tint }]}>
+            <FontAwesome name={meta.icon as any} size={9} color={colors.tint} />
+            <Text style={[s.typeLabel, { color: colors.tint }]}>{meta.label}</Text>
           </View>
           {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
@@ -687,14 +689,14 @@ function ActivityRow({ item, onPress, colors }: { item: ActivityItem; onPress: (
 
       {item.rating > 0 && (
         <View style={s.bars}>
-          <FontAwesome name="volume-up" size={10} color="#D4A017" />
+          <FontAwesome name="volume-up" size={10} color={colors.tint} />
           {BAR_HEIGHTS.map((h, i) => (
             <View
               key={i}
-              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? '#D4A017' : colors.border }]}
+              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? colors.tint : colors.border }]}
             />
           ))}
-          <Text style={s.ratingNum}>{item.rating}</Text>
+          <Text style={[s.ratingNum, { color: colors.tint }]}>{item.rating}</Text>
         </View>
       )}
     </Pressable>
@@ -715,9 +717,9 @@ function FriendRow({ item, onPress, colors }: { item: FriendItem; onPress: () =>
         <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
         {item.username ? <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text> : null}
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: '#D4A017' }]}>
-            <FontAwesome name="handshake-o" size={9} color="#D4A017" />
-            <Text style={[s.typeLabel, { color: '#D4A017' }]}>Friends</Text>
+          <View style={[s.typePill, { borderColor: colors.tint }]}>
+            <FontAwesome name="handshake-o" size={9} color={colors.tint} />
+            <Text style={[s.typeLabel, { color: colors.tint }]}>Friends</Text>
           </View>
           {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
@@ -739,9 +741,9 @@ function LikedArtistRow({ item, onPress, colors }: { item: LikedArtistItem; onPr
       <View style={s.info}>
         <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: '#D4A017' }]}>
-            <FontAwesome name="heart" size={9} color="#D4A017" />
-            <Text style={[s.typeLabel, { color: '#D4A017' }]}>Liked Artist</Text>
+          <View style={[s.typePill, { borderColor: colors.tint }]}>
+            <FontAwesome name="heart" size={9} color={colors.tint} />
+            <Text style={[s.typeLabel, { color: colors.tint }]}>Liked Artist</Text>
           </View>
           {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
@@ -774,12 +776,12 @@ function LikedPlaylistRow({ item, onPress, colors }: { item: LikedPlaylistItem; 
       <View style={s.info}>
         <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
         {isByListend && (
-          <Text style={[s.artist, { color: '#D4A017', fontWeight: '600' }]}>by Listend</Text>
+          <Text style={[s.artist, { color: colors.tint, fontWeight: '600' }]}>by Listend</Text>
         )}
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: '#D4A017' }]}>
-            <FontAwesome name="heart" size={9} color="#D4A017" />
-            <Text style={[s.typeLabel, { color: '#D4A017' }]}>Liked Playlist</Text>
+          <View style={[s.typePill, { borderColor: colors.tint }]}>
+            <FontAwesome name="heart" size={9} color={colors.tint} />
+            <Text style={[s.typeLabel, { color: colors.tint }]}>Liked Playlist</Text>
           </View>
           {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
@@ -795,9 +797,9 @@ function CreatedPlaylistRow({ item, onPress, colors }: { item: CreatedPlaylistIt
       <View style={s.info}>
         <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: '#D4A017' }]}>
-            <FontAwesome name="list" size={9} color="#D4A017" />
-            <Text style={[s.typeLabel, { color: '#D4A017' }]}>Created Playlist</Text>
+          <View style={[s.typePill, { borderColor: colors.tint }]}>
+            <FontAwesome name="list" size={9} color={colors.tint} />
+            <Text style={[s.typeLabel, { color: colors.tint }]}>Created Playlist</Text>
           </View>
           {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
@@ -813,7 +815,7 @@ function FlippedRecordRow({ item, colors }: { item: FlipItem; colors: ColorsType
         <ExpoImage source={{ uri: item.artworkUrl }} style={s.art} contentFit="cover" cachePolicy="disk" />
       ) : (
         <View style={[s.art, { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 8 }]}>
-          <FontAwesome name="random" size={18} color="#D4A017" />
+          <FontAwesome name="random" size={18} color={colors.tint} />
         </View>
       )}
       <View style={s.info}>
@@ -822,9 +824,9 @@ function FlippedRecordRow({ item, colors }: { item: FlipItem; colors: ColorsType
           {item.albumArtist}{item.albumYear ? ` · ${item.albumYear}` : ''}
         </Text>
         <View style={s.meta}>
-          <View style={[s.typePill, { borderColor: '#D4A017' }]}>
-            <FontAwesome name="random" size={9} color="#D4A017" />
-            <Text style={[s.typeLabel, { color: '#D4A017' }]}>Flipped a Record</Text>
+          <View style={[s.typePill, { borderColor: colors.tint }]}>
+            <FontAwesome name="random" size={9} color={colors.tint} />
+            <Text style={[s.typeLabel, { color: colors.tint }]}>Flipped a Record</Text>
           </View>
           {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
@@ -858,7 +860,7 @@ function Top5Row({ item, onPress, colors }: { item: Top5ChangeItem; onPress: () 
           <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>{item.itemArtist}</Text>
         ) : null}
         <View style={s.meta}>
-          <View style={[s.typePill, s.typePillFilled]}>
+          <View style={[s.typePill, s.typePillFilled, { backgroundColor: colors.tint }]}>
             <FontAwesome name="list-ol" size={9} color="#1A0F0A" />
             <Text style={[s.typeLabel, { color: '#1A0F0A' }]}>
               {`Updated ${catLabel} · #${item.position}`}
@@ -875,13 +877,17 @@ function Top5Row({ item, onPress, colors }: { item: Top5ChangeItem; onPress: () 
 
 export default function RecentActivityScreen() {
   const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const { userId: paramUserId, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
+  const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
+  const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
+    ? themeToColors(getProTheme(_themeKey))
+    : Colors[colorScheme ?? 'dark'];
 
   const router = useRouter();
   const { user } = useAuth();
   const { loggedAlbums, wantToListen } = useAlbums();
   const { likedPlaylists: featuredLikedPlaylists } = useLikedFeaturedPlaylists();
-  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = paramUserId || null;
 
@@ -1150,6 +1156,11 @@ export default function RecentActivityScreen() {
 
   return (
     <>
+      <Stack.Screen options={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
     <FlatList
       data={feed}
       keyExtractor={item => item.data.key}

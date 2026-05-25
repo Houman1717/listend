@@ -13,11 +13,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect, Stack } from 'expo-router';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { type ColorsShape } from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -29,20 +31,20 @@ import { navigateToProfile } from '@/lib/navigateToProfile';
 
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
-function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
+function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
   const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={s.badge}>
-      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : inactive} />
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? tint : inactive} />
       <View style={s.badgeBars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View
             key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }]}
+            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? tint : inactive }]}
           />
         ))}
       </View>
-      {rating > 0 && <Text style={s.badgeNum}>{rating}</Text>}
+      {rating > 0 && <Text style={[s.badgeNum, { color: tint }]}>{rating}</Text>}
     </View>
   );
 }
@@ -65,7 +67,7 @@ function ReviewRow({
   byUsername,
 }: {
   album: LoggedAlbum;
-  colors: typeof Colors.light;
+  colors: ColorsShape;
   isDark: boolean;
   onPress: () => void;
   likeCount?: number;
@@ -95,11 +97,11 @@ function ReviewRow({
           {album.artist} · {album.year}
         </Text>
         {byUsername ? (
-          <Text style={[s.byUser, { color: '#D4A017' }]} numberOfLines={1}>by @{byUsername}</Text>
+          <Text style={[s.byUser, { color: colors.tint }]} numberOfLines={1}>by @{byUsername}</Text>
         ) : null}
-        <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} />
+        <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />
         {album.isRelistened && (
-          <FontAwesome name="repeat" size={9} color="#D4A017" style={{ marginTop: 2 }} />
+          <FontAwesome name="repeat" size={9} color={colors.tint} style={{ marginTop: 2 }} />
         )}
         {album.dateLogged ? (
           <Text style={[s.dateListend, { color: colors.subtext }]}>
@@ -119,10 +121,10 @@ function ReviewRow({
                 <FontAwesome
                   name={isLiked ? 'heart' : 'heart-o'}
                   size={13}
-                  color={isLiked ? '#D4A017' : '#7a5535'}
+                  color={isLiked ? colors.tint : '#7a5535'}
                 />
                 {likeCount > 0 && (
-                  <Text style={[s.likeCount, { color: isLiked ? '#D4A017' : '#7a5535' }]}>
+                  <Text style={[s.likeCount, { color: isLiked ? colors.tint : '#7a5535' }]}>
                     {likeCount}
                   </Text>
                 )}
@@ -130,8 +132,8 @@ function ReviewRow({
             ) : likeCount > 0 ? (
               // Read-only — own review, just show how many people liked it
               <View style={s.likeBtn}>
-                <FontAwesome name="heart" size={13} color="#D4A017" />
-                <Text style={[s.likeCount, { color: '#D4A017' }]}>{likeCount}</Text>
+                <FontAwesome name="heart" size={13} color={colors.tint} />
+                <Text style={[s.likeCount, { color: colors.tint }]}>{likeCount}</Text>
               </View>
             ) : null}
           </View>
@@ -158,7 +160,7 @@ function ReviewDetailModal({
 }: {
   album: LoggedAlbum;
   isDark: boolean;
-  colors: typeof Colors.light;
+  colors: ColorsShape;
   reviewerUsername: string;
   likeState: LikeState;
   onLike?: () => void;
@@ -226,7 +228,7 @@ function ReviewDetailModal({
                   {album.artist} · {album.year}
                 </Text>
                 <View style={mrd.ratingRow}>
-                  <VolumeBadge rating={album.rating} isDark={isDark} />
+                  <VolumeBadge rating={album.rating} isDark={isDark} tint={colors.tint} />
                 </View>
               </View>
             </Pressable>
@@ -236,7 +238,7 @@ function ReviewDetailModal({
               style={mrd.authorRow}
               onPress={() => onUsernamePress?.(reviewerUsername)}
               disabled={!onUsernamePress}>
-              <View style={[mrd.avatar, { backgroundColor: reviewerUsername === 'you' ? '#D4A017' : avatarColor(reviewerUsername) }]}>
+              <View style={[mrd.avatar, { backgroundColor: reviewerUsername === 'you' ? colors.tint : avatarColor(reviewerUsername) }]}>
                 <Text style={mrd.avatarLetter}>{reviewerUsername[0].toUpperCase()}</Text>
               </View>
               <View style={{ gap: 2 }}>
@@ -267,16 +269,16 @@ function ReviewDetailModal({
                   <FontAwesome
                     name={likeState.liked ? 'heart' : 'heart-o'}
                     size={15}
-                    color={likeState.liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35')}
+                    color={likeState.liked ? colors.tint : (isDark ? '#A08060' : '#6B4C35')}
                   />
-                  <Text style={[mrd.likeCount, { color: likeState.liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35') }]}>
+                  <Text style={[mrd.likeCount, { color: likeState.liked ? colors.tint : (isDark ? '#A08060' : '#6B4C35') }]}>
                     {likeState.count}
                   </Text>
                 </Pressable>
               ) : (
                 <View style={mrd.likeBtn}>
-                  <FontAwesome name="heart" size={15} color={likeState.count > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#ddd')} />
-                  <Text style={[mrd.likeCount, { color: likeState.count > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#bbb') }]}>
+                  <FontAwesome name="heart" size={15} color={likeState.count > 0 ? colors.tint : (isDark ? '#3a2818' : '#ddd')} />
+                  <Text style={[mrd.likeCount, { color: likeState.count > 0 ? colors.tint : (isDark ? '#3a2818' : '#bbb') }]}>
                     {likeState.count}
                   </Text>
                 </View>
@@ -326,12 +328,16 @@ const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a
 
 export default function MyReviewsScreen() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const { userId: paramUserId, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
+  const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
+  const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
+    ? themeToColors(getProTheme(_themeKey))
+    : Colors[colorScheme ?? 'dark'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { loggedAlbums, updateDuration } = useAlbums();
   const { user } = useAuth();
-  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = paramUserId || null;
   const [activeTab, setActiveTab]         = useState<'reviews' | 'liked'>('reviews');
@@ -783,14 +789,19 @@ export default function MyReviewsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
 
       {/* ── Tab bar ──────────────────────────────────────────────────────── */}
       <View style={[s.tabRow, { borderBottomColor: isDarkBorder }]}>
-        <Pressable onPress={() => setActiveTab('reviews')} style={[s.tab, activeTab === 'reviews' && s.tabActive]}>
-          <Text style={[s.tabText, { color: activeTab === 'reviews' ? '#D4A017' : '#a07850' }]}>Reviews</Text>
+        <Pressable onPress={() => setActiveTab('reviews')} style={[s.tab, activeTab === 'reviews' && [s.tabActive, { borderBottomColor: colors.tint }]]}>
+          <Text style={[s.tabText, { color: activeTab === 'reviews' ? colors.tint : '#a07850' }]}>Reviews</Text>
         </Pressable>
-        <Pressable onPress={() => setActiveTab('liked')} style={[s.tab, activeTab === 'liked' && s.tabActive]}>
-          <Text style={[s.tabText, { color: activeTab === 'liked' ? '#D4A017' : '#a07850' }]}>Liked Reviews</Text>
+        <Pressable onPress={() => setActiveTab('liked')} style={[s.tab, activeTab === 'liked' && [s.tabActive, { borderBottomColor: colors.tint }]]}>
+          <Text style={[s.tabText, { color: activeTab === 'liked' ? colors.tint : '#a07850' }]}>Liked Reviews</Text>
         </Pressable>
         {activeTab === 'liked' && (
           <Pressable
@@ -801,8 +812,8 @@ export default function MyReviewsScreen() {
               else setTimeout(() => searchInputLikedRef.current?.focus(), 50);
             }}
             hitSlop={8}
-            style={[s.searchToggleTab, searchOpenLiked && { backgroundColor: '#D4A017', borderRadius: 6 }]}>
-            <FontAwesome name="search" size={13} color={searchOpenLiked ? '#fff' : '#D4A017'} />
+            style={[s.searchToggleTab, searchOpenLiked && { backgroundColor: colors.tint, borderRadius: 6 }]}>
+            <FontAwesome name="search" size={13} color={searchOpenLiked ? '#fff' : colors.tint} />
           </Pressable>
         )}
       </View>
@@ -823,6 +834,12 @@ export default function MyReviewsScreen() {
               else setTimeout(() => searchInputRef.current?.focus(), 50);
             }}
             searchActive={searchOpen}
+            tint={colors.tint}
+            bg={colors.background}
+            surface={colors.surface}
+            border={colors.border}
+            subtext={colors.subtext}
+            labelColor={colors.text}
           />
           {searchOpen && (
             <View style={[s.searchBar, { borderBottomColor: isDark ? '#2e2018' : '#e8e8e8' }]}>
@@ -884,6 +901,7 @@ export default function MyReviewsScreen() {
             onSelect={handleSelectSort}
             onClose={() => setSheetOpen(false)}
             isDark={isDark}
+            tint={colors.tint}
           />
         </>
       )}

@@ -22,8 +22,10 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { type ColorsShape } from '@/constants/Colors';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
+import { ProBadge } from '@/components/ProBadge';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,7 +41,7 @@ const FAV_SLOT_SIZE = Math.floor(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ColorsType = typeof Colors.light;
+type ColorsType = ColorsShape;
 
 type FavAlbum  = { id: string; title: string; artist: string; artworkUrl: string; year?: number };
 type FavSong   = { id: string; title: string; artist: string; artworkUrl: string; releaseDate?: string };
@@ -53,6 +55,8 @@ type Profile = {
   avatar_url: string | null;
   is_private: boolean;
   allow_dms: boolean;
+  is_pro: boolean;
+  pro_theme: string | null;
   top_albums:  FavAlbum[];
   top_songs:   FavSong[];
   top_artists: FavArtist[];
@@ -155,13 +159,16 @@ function FavSlotReadOnly({
   item,
   circular = false,
   onPress,
+  colors: colorsProp,
 }: {
   item?: { artworkUrl?: string; title: string };
   circular?: boolean;
   onPress?: () => void;
+  colors?: ColorsShape;
 }) {
   const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
+  const systemC     = Colors[colorScheme ?? 'dark'] as ColorsShape;
+  const colors      = colorsProp ?? systemC;
   const radius      = circular ? FAV_SLOT_SIZE / 2 : 3;
 
   let inner: React.ReactNode;
@@ -405,7 +412,7 @@ function NavRow({
       style={({ pressed }) => [s.navRow, { opacity: pressed ? 0.6 : 1 }]}
       onPress={onPress}>
       <View style={s.navIconWrap}>
-        <FontAwesome name={icon} size={16} color={ACCENT} />
+        <FontAwesome name={icon} size={16} color={colors.tint} />
       </View>
       <View style={s.navRowText}>
         <Text style={[s.navLabel, { color: colors.text }]}>{label}</Text>
@@ -419,8 +426,8 @@ function NavRow({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function UserProfileScreen() {
-  const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
+  const colorScheme  = useColorScheme();
+  const systemColors = Colors[colorScheme ?? 'dark'];
 
   const { userId }     = useLocalSearchParams<{ userId: string }>();
   const viewedUserId   = userId;
@@ -432,6 +439,12 @@ export default function UserProfileScreen() {
 
   const [profile,        setProfile]        = useState<Profile | null>(null);
   const [loading,        setLoading]        = useState(true);
+
+  // Apply the viewed user's pro theme if they have one (default theme respects system light/dark)
+  const colors = (profile?.is_pro && profile.pro_theme && profile.pro_theme !== 'default')
+    ? themeToColors(getProTheme(profile.pro_theme))
+    : systemColors;
+  const profileAccent = colors.tint;
 
   const [top5EditMode,    setTop5EditMode]    = useState(false);
   const [isSaving,        setIsSaving]        = useState(false);
@@ -470,7 +483,7 @@ export default function UserProfileScreen() {
       try {
         const { data: prof, error: profErr } = await supabase
           .from('profiles')
-          .select('id, display_name, username, bio, avatar_url, is_private, allow_dms')
+          .select('id, display_name, username, bio, avatar_url, is_private, allow_dms, is_pro, pro_theme')
           .eq('id', viewedUserId)
           .single();
 
@@ -486,6 +499,8 @@ export default function UserProfileScreen() {
             ...prof,
             is_private: prof.is_private ?? false,
             allow_dms:  prof.allow_dms  ?? true,
+            is_pro:     prof.is_pro     ?? false,
+            pro_theme:  prof.pro_theme  ?? null,
             top_albums:  normaliseTopAlbums(favData?.top_albums),
             top_songs:   normaliseTopSongs(favData?.top_songs),
             top_artists: normaliseTopArtists(favData?.top_artists),
@@ -780,6 +795,8 @@ export default function UserProfileScreen() {
     );
   }
 
+  const navProTheme = profile?.is_pro ? (profile.pro_theme ?? 'default') : undefined;
+
   return (
     <>
     <SongInfoModal
@@ -811,8 +828,11 @@ export default function UserProfileScreen() {
           )}
         </View>
 
-        {/* Name */}
-        <Text style={[s.name, { color: colors.text }]}>{name}</Text>
+        {/* Name + Pro badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={[s.name, { color: colors.text }]}>{name}</Text>
+          {profile.is_pro && <ProBadge />}
+        </View>
 
         {/* Username */}
         {profile.username ? <Text style={[s.username, { color: colors.subtext }]}>@{profile.username}</Text> : null}
@@ -842,22 +862,22 @@ export default function UserProfileScreen() {
           <Pressable
             style={({ pressed }) => [
               s.followBtn,
-              isFollowing && { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: ACCENT },
+              isFollowing && { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: profileAccent },
               isMutual && s.followBtnMutual,
               { opacity: pressed || followLoading ? 0.7 : 1 },
             ]}
             onPress={handleFollow}
             disabled={followLoading}>
-            <Text style={[s.followBtnText, isFollowing && { color: ACCENT }]}>
+            <Text style={[s.followBtnText, isFollowing && { color: profileAccent }]}>
               {isFollowing ? 'Following' : 'Follow'}
             </Text>
           </Pressable>
 
           {isMutual && profile.allow_dms && (
             <Pressable
-              style={({ pressed }) => [s.messageBtn, { borderColor: ACCENT, opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [s.messageBtn, { borderColor: profileAccent, opacity: pressed ? 0.7 : 1 }]}
               onPress={() => router.push({ pathname: '/dm-conversation', params: { userId: viewedUserId } })}>
-              <Text style={[s.messageBtnText, { color: ACCENT }]}>Message</Text>
+              <Text style={[s.messageBtnText, { color: profileAccent }]}>Message</Text>
             </Pressable>
           )}
         </View>
@@ -946,6 +966,7 @@ export default function UserProfileScreen() {
                     key={i}
                     item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
                     onPress={a ? () => navigateToAlbum(router, { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl }) : undefined}
+                    colors={colors}
                   />
                 );
               })}
@@ -976,6 +997,7 @@ export default function UserProfileScreen() {
                     key={i}
                     item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
                     onPress={sg ? () => setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
+                    colors={colors}
                   />
                 );
               })}
@@ -1008,6 +1030,7 @@ export default function UserProfileScreen() {
                     item={ar ? { artworkUrl: ar.artworkUrl, title: ar.name } : undefined}
                     circular
                     onPress={ar ? () => router.push({ pathname: '/artist-detail', params: { id: ar.id, name: ar.name, artworkUrl: ar.artworkUrl } }) : undefined}
+                    colors={colors}
                   />
                 );
               })}
@@ -1016,23 +1039,23 @@ export default function UserProfileScreen() {
 
           {/* ── Nav rows ────────────────────────────────────────────────────── */}
           <View style={[s.navGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <NavRow icon="music"      label="Listend"        sub={`${albumCount} albums`}        onPress={() => router.push({ pathname: '/my-listend',      params: { userId: viewedUserId, username: profile?.username ?? '' } })} colors={colors} />
+            <NavRow icon="music"      label="Listend"         sub={`${albumCount} albums`}         onPress={() => router.push({ pathname: '/my-listend',      params: { userId: viewedUserId, username: profile?.username ?? '', ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="calendar"   label="Sessions"       sub="Listening diary"               onPress={() => router.push({ pathname: '/sessions',         params: { userId: viewedUserId } })} colors={colors} />
+            <NavRow icon="calendar"   label="Sessions"        sub="Listening diary"                onPress={() => router.push({ pathname: '/sessions',         params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="bookmark-o" label="Want to Listen" sub={`${wantCount} saved`}          onPress={() => router.push({ pathname: '/want-to-listen',   params: { userId: viewedUserId } })} colors={colors} />
+            <NavRow icon="bookmark-o" label="Want to Listen"  sub={`${wantCount} saved`}           onPress={() => router.push({ pathname: '/want-to-listen',   params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="quote-left" label="Reviews"        sub={`${reviewCount} reviews`}      onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId } })} colors={colors} />
+            <NavRow icon="quote-left" label="Reviews"         sub={`${reviewCount} reviews`}       onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="repeat"     label="Re-listend"     sub="Albums re-listend"             onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId } } as any)} colors={colors} />
+            <NavRow icon="repeat"     label="Re-listend"      sub="Albums re-listend"              onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } } as any)} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`} onPress={() => router.push({ pathname: '/recent-activity', params: { userId: viewedUserId } })} colors={colors} />
+            <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`}  onPress={() => router.push({ pathname: '/recent-activity',  params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="list"       label="Playlists"      sub="Album lists"                   onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId } })} colors={colors} />
+            <NavRow icon="list"       label="Playlists"       sub="Album lists"                    onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="heart"      label="Liked Artists"  sub="Their favourites"              onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId } })} colors={colors} />
+            <NavRow icon="heart"      label="Liked Artists"   sub="Their favourites"               onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId,                     ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="bar-chart"  label="Stats"          sub="Listening insights"            onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId } })} colors={colors} />
+            <NavRow icon="bar-chart"  label="Stats"           sub="Listening insights"             onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
           </View>
         </>
       )}

@@ -23,6 +23,8 @@ import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -67,7 +69,10 @@ type AlbumResult = {
 
 export default function DMConversationScreen() {
   const colorScheme  = useColorScheme();
-  const colors       = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme } = usePro();
+  const colors = (isPro && proTheme !== 'default')
+    ? themeToColors(getProTheme(proTheme))
+    : Colors[colorScheme ?? 'dark'] as typeof Colors.dark;
   const headerHeight = useHeaderHeight();
 
   const { userId: otherUserId } = useLocalSearchParams<{ userId: string }>();
@@ -299,7 +304,7 @@ export default function DMConversationScreen() {
   if (loadingMsgs) {
     return (
       <View style={[s.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={ACCENT} size="large" />
+        <ActivityIndicator color={colors.tint} size="large" />
       </View>
     );
   }
@@ -389,7 +394,7 @@ export default function DMConversationScreen() {
           }]}
           onPress={() => setAlbumSheetVisible(true)}
           hitSlop={8}>
-          <FontAwesome name="music" size={18} color={ACCENT} />
+          <FontAwesome name="music" size={18} color={colors.tint} />
         </Pressable>
 
         <TextInput
@@ -410,6 +415,7 @@ export default function DMConversationScreen() {
         <Pressable
           style={({ pressed }) => [
             s.sendBtn,
+            { backgroundColor: colors.tint },
             (!inputText.trim() || sending) && s.sendBtnDisabled,
             { opacity: pressed ? 0.7 : 1 },
           ]}
@@ -462,7 +468,7 @@ export default function DMConversationScreen() {
 
             {/* Results */}
             {albumSearchLoading ? (
-              <ActivityIndicator color={ACCENT} style={{ marginTop: 32 }} />
+              <ActivityIndicator color={colors.tint} style={{ marginTop: 32 }} />
             ) : (
               <FlatList
                 data={albumResults}
@@ -486,7 +492,7 @@ export default function DMConversationScreen() {
                         {item.artist}{item.year ? ` · ${item.year}` : ''}
                       </Text>
                     </View>
-                    <FontAwesome name="paper-plane-o" size={14} color={ACCENT} />
+                    <FontAwesome name="paper-plane-o" size={14} color={colors.tint} />
                   </Pressable>
                 )}
               />
@@ -504,7 +510,7 @@ export default function DMConversationScreen() {
 function TextBubble({ text, isMe, time, colors }: { text: string; isMe: boolean; time: string; colors: ColorsType }) {
   return (
     <View style={[b.row, isMe ? b.rowMe : b.rowThem]}>
-      <View style={[b.bubble, isMe ? b.bubbleMe : { ...b.bubbleThem, backgroundColor: colors.surface }]}>
+      <View style={[b.bubble, isMe ? [b.bubbleMe, { backgroundColor: colors.tint }] : { ...b.bubbleThem, backgroundColor: colors.surface }]}>
         <Text style={[b.text, isMe ? b.textMe : { color: colors.text }]}>{text}</Text>
         <Text style={[b.time, isMe ? b.timeMe : { color: colors.subtext }]}>
           {new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -573,7 +579,7 @@ function AlbumCard({
           <View style={b.reviewSectionHeader}>
             <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{senderLabel}</Text>
             {senderRating ? (
-              <View style={b.ratingBadge}>
+              <View style={[b.ratingBadge, { backgroundColor: colors.tint }]}>
                 <FontAwesome name="volume-up" size={8} color="#fff" />
                 <Text style={b.ratingBadgeText}>{senderRating}</Text>
               </View>
@@ -591,7 +597,7 @@ function AlbumCard({
           <View style={b.reviewSectionHeader}>
             <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{recipientLabel}</Text>
             {recipientRating ? (
-              <View style={b.ratingBadge}>
+              <View style={[b.ratingBadge, { backgroundColor: colors.tint }]}>
                 <FontAwesome name="volume-up" size={8} color="#fff" />
                 <Text style={b.ratingBadgeText}>{recipientRating}</Text>
               </View>

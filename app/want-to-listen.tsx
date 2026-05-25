@@ -9,7 +9,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -64,12 +66,16 @@ export default function WantToListenScreen() {
   const { width } = useWindowDimensions();
   const cardWidth = (width - PADDING * 2 - GAP * (COLS - 1)) / COLS;
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const { userId: paramUserId, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
+  const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
+  const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
+    ? themeToColors(getProTheme(_themeKey))
+    : Colors[colorScheme ?? 'dark'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { wantToListen, removeFromWantToListen, updateDuration } = useAlbums();
   const { user } = useAuth();
-  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = paramUserId || null;
   const [otherList, setOtherList] = useState<WantToListenAlbum[]>([]);
@@ -167,6 +173,11 @@ export default function WantToListenScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
       <SortBar
         sortKey={sortKey}
         count={sourceList.length}
@@ -180,6 +191,12 @@ export default function WantToListenScreen() {
           else setTimeout(() => searchInputRef.current?.focus(), 50);
         }}
         searchActive={searchOpen}
+        tint={colors.tint}
+        bg={colors.background}
+        surface={colors.surface}
+        border={colors.border}
+        subtext={colors.subtext}
+        labelColor={colors.text}
       />
       {searchOpen && (
         <View style={[s.searchBar, { borderBottomColor: colors.border }]}>
@@ -236,6 +253,7 @@ export default function WantToListenScreen() {
         onSelect={handleSelectSort}
         onClose={() => setSheetOpen(false)}
         isDark={isDark}
+        tint={colors.tint}
       />
     </View>
   );

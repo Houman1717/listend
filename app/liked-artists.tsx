@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect, useRef } from 'react';
 import { useLikedArtists, LikedArtist } from '@/context/LikedArtistsContext';
@@ -18,11 +20,14 @@ import { supabase } from '@/lib/supabase';
 
 export default function LikedArtistsScreen() {
   const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'dark'];
-
-  const params   = useLocalSearchParams<{ readOnly?: string; userId?: string }>();
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const params   = useLocalSearchParams<{ readOnly?: string; userId?: string; proTheme?: string }>();
   const readOnly = params.readOnly === '1';
   const userId   = params.userId ?? null;
+  const _themeKey = !readOnly ? ownProTheme : (params.proTheme ?? 'default');
+  const colors = ((!readOnly ? isPro : !!params.proTheme) && _themeKey !== 'default')
+    ? themeToColors(getProTheme(_themeKey))
+    : Colors[colorScheme ?? 'dark'];
 
   const { likedArtists: ownLikedArtists, unlike } = useLikedArtists();
   const router = useRouter();
@@ -72,7 +77,7 @@ export default function LikedArtistsScreen() {
           />
           ) : (
             <View style={[s.avatar, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}>
-              <Text style={[s.avatarInitial, { color: '#D4A017' }]}>{item.name.charAt(0)}</Text>
+              <Text style={[s.avatarInitial, { color: colors.tint }]}>{item.name.charAt(0)}</Text>
             </View>
           )}
           <Text style={[s.name, { color: colors.text }]}>{item.name}</Text>
@@ -81,7 +86,7 @@ export default function LikedArtistsScreen() {
               style={({ pressed }) => [s.heartBtn, { opacity: pressed ? 0.6 : 1 }]}
               onPress={() => unlike(item.id)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <FontAwesome name="heart" size={20} color="#D4A017" />
+              <FontAwesome name="heart" size={20} color={colors.tint} />
             </Pressable>
           )}
         </Pressable>
@@ -100,6 +105,11 @@ export default function LikedArtistsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
       {/* Count row with search toggle */}
       {artists.length > 0 && (
         <View style={[s.countRow, { borderBottomColor: colors.border }]}>
@@ -112,8 +122,8 @@ export default function LikedArtistsScreen() {
               else setTimeout(() => searchInputRef.current?.focus(), 50);
             }}
             hitSlop={10}
-            style={[s.searchToggle, searchOpen && { backgroundColor: '#D4A017' }]}>
-            <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : '#D4A017'} />
+            style={[s.searchToggle, searchOpen && { backgroundColor: colors.tint }]}>
+            <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : colors.tint} />
           </Pressable>
         </View>
       )}

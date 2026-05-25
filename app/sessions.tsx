@@ -11,7 +11,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useFocusEffect } from '@react-navigation/native';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -66,23 +68,23 @@ const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a
 
 // ─── Volume badge ─────────────────────────────────────────────────────────────
 
-function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
+function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
   const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <FontAwesome name="volume-up" size={9} color="#D4A017" />
+      <FontAwesome name="volume-up" size={9} color={tint} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
           return (
             <View
               key={i}
-              style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }}
+              style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : inactive }}
             />
           );
         })}
       </View>
-      <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
+      <Text style={{ color: tint, fontSize: 10, fontWeight: '700' }}>{rating}</Text>
     </View>
   );
 }
@@ -170,11 +172,11 @@ function AlbumReviewModal({
                 </Text>
                 {(album.lastRating ?? album.rating) > 0 && (
                   <View style={rm.ratingRow}>
-                    <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} />
+                    <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />
                   </View>
                 )}
                 {album.isRelistened && (
-                  <FontAwesome name="repeat" size={9} color="#D4A017" style={{ marginTop: 2 }} />
+                  <FontAwesome name="repeat" size={9} color={colors.tint} style={{ marginTop: 2 }} />
                 )}
               </View>
             </Pressable>
@@ -185,7 +187,7 @@ function AlbumReviewModal({
                 <Text style={rm.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
               </View>
               <View style={{ gap: 1 }}>
-                <Text style={rm.username}>@{username || '…'}</Text>
+                <Text style={[rm.username, { color: colors.tint }]}>@{username || '…'}</Text>
                 {dateStr ? (
                   <Text style={[rm.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
                     {(album as any).isReListenEvent ? 'Re-listend' : 'Listend'} {dateStr}
@@ -277,41 +279,92 @@ const rm = StyleSheet.create({
 
 export default function SessionsScreen() {
   const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const { userId: paramUserId, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
+  const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
+  const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
+    ? themeToColors(getProTheme(_themeKey))
+    : Colors[colorScheme ?? 'dark'];
   const isDark      = colorScheme === 'dark';
 
   const { width } = useWindowDimensions();
   const router    = useRouter();
   const { loggedAlbums } = useAlbums();
   const { user } = useAuth();
-  const { userId: paramUserId } = useLocalSearchParams<{ userId?: string }>();
 
   const viewingOther = paramUserId || null;
   const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
+  const [otherReListens, setOtherReListens] = useState<LoggedAlbum[]>([]);
   const [ownReListens, setOwnReListens] = useState<LoggedAlbum[]>([]);
 
   useEffect(() => {
     if (!viewingOther) return;
-    supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
-      .eq('user_id', viewingOther)
-      .not('listened_at', 'is', null)
-      .order('listened_at', { ascending: false })
-      .then(({ data }) => {
-        if (!data) return;
-        setOtherAlbums(data.map((a, i) => ({
-          id:         a.spotify_id,
-          title:      a.title      ?? '',
-          artist:     a.artist     ?? '',
-          year:       a.year       ?? 0,
-          rating:     a.rating     ?? 0,
-          review:     a.review     ?? undefined,
-          dateLogged: a.listened_at ?? new Date().toISOString(),
-          artworkUrl: a.artwork_url ?? undefined,
-          coverColor: COVER_COLORS[i % COVER_COLORS.length],
-        })));
+    Promise.all([
+      supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+        .eq('user_id', viewingOther)
+        .not('listened_at', 'is', null)
+        .order('listened_at', { ascending: false }),
+      supabase
+        .from('re_listens')
+        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
+        .eq('user_id', viewingOther)
+        .order('listened_at', { ascending: false }),
+    ]).then(([{ data: albums }, { data: reListens }]) => {
+      if (!albums) return;
+
+      type RLSummary = { count: number; lastRating: number; lastReview?: string };
+      const rlMap = new Map<string, RLSummary>();
+      for (const r of (reListens ?? []) as any[]) {
+        const existing = rlMap.get(r.spotify_id);
+        if (!existing) {
+          rlMap.set(r.spotify_id, { count: 1, lastRating: r.rating ?? 0, lastReview: r.review ?? undefined });
+        } else {
+          existing.count++;
+        }
+      }
+
+      setOtherAlbums(albums.map((a, i) => {
+        const rl = rlMap.get(a.spotify_id);
+        return {
+          id:            a.spotify_id,
+          title:         a.title      ?? '',
+          artist:        a.artist     ?? '',
+          year:          a.year       ?? 0,
+          rating:        a.rating     ?? 0,
+          review:        a.review     ?? undefined,
+          dateLogged:    a.listened_at ?? new Date().toISOString(),
+          artworkUrl:    a.artwork_url ?? undefined,
+          coverColor:    COVER_COLORS[i % COVER_COLORS.length],
+          isRelistened:  !!rl,
+          reListenCount: rl?.count,
+          lastRating:    rl?.lastRating,
+          lastReview:    rl?.lastReview,
+        };
+      }));
+
+      const seen = new Set<string>();
+      const deduped = (reListens ?? []).filter((a: any) => {
+        const key = `${a.spotify_id}_${a.listened_at}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
+      setOtherReListens(deduped.map((a: any, i: number) => ({
+        id:              a.spotify_id,
+        title:           a.title      ?? '',
+        artist:          a.artist     ?? '',
+        year:            a.year       ?? 0,
+        rating:          a.rating     ?? 0,
+        review:          a.review     ?? undefined,
+        dateLogged:      a.listened_at ?? new Date().toISOString(),
+        artworkUrl:      a.artwork_url ?? undefined,
+        coverColor:      COVER_COLORS[i % COVER_COLORS.length],
+        isRelistened:    true,
+        isReListenEvent: true,
+      } as LoggedAlbum & { isReListenEvent: boolean })));
+    });
   }, [viewingOther]);
 
   useFocusEffect(useCallback(() => {
@@ -371,7 +424,9 @@ export default function SessionsScreen() {
   }, [loggedAlbums, viewingOther]);
 
   const sourceAlbums = viewingOther
-    ? otherAlbums
+    ? [...otherAlbums, ...otherReListens].sort(
+        (a, b) => new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime()
+      )
     : [...loggedAlbums, ...ownReListens].sort(
         (a, b) => new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime()
       );
@@ -466,6 +521,11 @@ export default function SessionsScreen() {
 
   return (
     <>
+      <Stack.Screen options={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }} />
     <ScrollView
       style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.content}
@@ -509,7 +569,7 @@ export default function SessionsScreen() {
               style={[
                 s.dayCell,
                 { width: cellSize, height: cellSize + 10 },
-                isSelected && s.dayCellSelected,
+                isSelected && { backgroundColor: colors.tint },
                 isToday && !isSelected && { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
               ]}
               onPress={() => setSelectedKey(isSelected ? null : k)}>
@@ -517,12 +577,12 @@ export default function SessionsScreen() {
                 s.dayNum,
                 { color: colors.text },
                 isSelected && s.dayNumSelected,
-                isToday && !isSelected && { color: '#D4A017' },
+                isToday && !isSelected && { color: colors.tint },
               ]}>
                 {day}
               </Text>
               {hasAlbums && (
-                <View style={[s.dot, isSelected && s.dotSelected]} />
+                <View style={[s.dot, isSelected ? s.dotSelected : { backgroundColor: colors.tint }]} />
               )}
             </Pressable>
           );
@@ -557,11 +617,11 @@ export default function SessionsScreen() {
                 )}
                 <Text style={[s.monthCardTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
                 <Text style={[s.monthCardArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
-                {(album.rating > 0 || album.isRelistened) && (
+                {((album.lastRating ?? album.rating) > 0 || album.isRelistened) && (
                   <View style={{ marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    {album.rating > 0 && <VolumeBadge rating={album.rating} isDark={isDark} />}
-                    {!!album.review && <FontAwesome name="quote-left" size={8} color="#D4A017" />}
-                    {album.isRelistened && <FontAwesome name="repeat" size={8} color="#D4A017" />}
+                    {(album.lastRating ?? album.rating) > 0 && <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />}
+                    {!!(album.lastReview ?? album.review) && <FontAwesome name="quote-left" size={8} color={colors.tint} />}
+                    {album.isRelistened && <FontAwesome name="repeat" size={8} color={colors.tint} />}
                   </View>
                 )}
               </Pressable>
@@ -601,10 +661,10 @@ export default function SessionsScreen() {
                   <Text style={[s.albumArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  {album.rating > 0 && <VolumeBadge rating={album.rating} isDark={isDark} />}
+                  {(album.lastRating ?? album.rating) > 0 && <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />}
                   <View style={{ flexDirection: 'row', gap: 5 }}>
-                    {!!album.review && <FontAwesome name="quote-left" size={10} color="#D4A017" />}
-                    {album.isRelistened && <FontAwesome name="repeat" size={10} color="#D4A017" />}
+                    {!!(album.lastReview ?? album.review) && <FontAwesome name="quote-left" size={10} color={colors.tint} />}
+                    {album.isRelistened && <FontAwesome name="repeat" size={10} color={colors.tint} />}
                   </View>
                 </View>
               </Pressable>

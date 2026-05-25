@@ -17,7 +17,7 @@ import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { ColorsShape } from '@/constants/Colors';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme, ThemePreference } from '@/context/ThemeContext';
@@ -26,6 +26,9 @@ import { useLikedArtists } from '@/context/LikedArtistsContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { usePro } from '@/context/ProContext';
+import { ProBadge } from '@/components/ProBadge';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 
 const DARK_BG   = '#0F0A07';
 const CARD_BG   = '#2E2018';
@@ -44,11 +47,13 @@ function RatingModal({
   onClose,
   avgRating,
   distribution,
+  tint = ACCENT,
 }: {
   visible: boolean;
   onClose: () => void;
   avgRating: string;
   distribution: { rating: number; count: number }[];
+  tint?: string;
 }) {
   const maxCount = Math.max(...distribution.map(d => d.count), 1);
   return (
@@ -71,7 +76,7 @@ function RatingModal({
             </Pressable>
           </View>
           <View style={rm.avgBlock}>
-            <Text style={rm.avgValue}>{avgRating}</Text>
+            <Text style={[rm.avgValue, { color: tint }]}>{avgRating}</Text>
             <Text style={rm.avgLabel}>average rating</Text>
           </View>
           <View style={rm.distBlock}>
@@ -85,6 +90,7 @@ function RatingModal({
                     <View style={[rm.barFilled, {
                       flex: filled,
                       opacity: 0.4 + (count / maxCount) * 0.6,
+                      backgroundColor: tint,
                     }]} />
                     {empty > 0 && <View style={{ flex: empty }} />}
                   </View>
@@ -117,6 +123,7 @@ function ProfileHeader({
   onPressAvgRating,
   isDark,
   colors,
+  isPro,
 }: {
   displayName: string;
   username: string;
@@ -132,7 +139,8 @@ function ProfileHeader({
   onPressThisYear: () => void;
   onPressAvgRating: () => void;
   isDark: boolean;
-  colors: typeof Colors.light;
+  colors: ColorsShape;
+  isPro?: boolean;
 }) {
   const router  = useRouter();
   const initial = (displayName || username || '?').charAt(0).toUpperCase();
@@ -207,8 +215,11 @@ function ProfileHeader({
           }
         </View>
 
-        {/* Name */}
-        <Text style={[ph.name, { color: colors.text }]}>{displayName || username || ''}</Text>
+        {/* Name + Pro badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={[ph.name, { color: colors.text }]}>{displayName || username || ''}</Text>
+          {isPro && <ProBadge />}
+        </View>
 
         {/* Username */}
         {username ? <Text style={[ph.username, { color: colors.subtext }]}>@{username}</Text> : null}
@@ -655,7 +666,7 @@ function NavRow({
   label: string;
   sub: string;
   onPress: () => void;
-  colors: typeof Colors.light;
+  colors: ColorsShape;
   badge?: number;
 }) {
   return (
@@ -663,7 +674,7 @@ function NavRow({
       style={({ pressed }) => [s.navRow, { opacity: pressed ? 0.6 : 1 }]}
       onPress={onPress}>
       <View style={s.navIconWrap}>
-        <FontAwesome name={icon} size={16} color="#D4A017" />
+        <FontAwesome name={icon} size={16} color={colors.tint} />
       </View>
       <View style={s.navRowText}>
         <Text style={[s.navLabel, { color: colors.text }]}>{label}</Text>
@@ -671,7 +682,7 @@ function NavRow({
       </View>
       {badge != null && badge > 0 ? (
         <View style={{
-          backgroundColor: '#D4A017',
+          backgroundColor: colors.tint,
           borderRadius: 10,
           minWidth: 20,
           height: 20,
@@ -696,6 +707,7 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   const router = useRouter();
   const { signOut, user } = useAuth();
   const { preference, setPreference } = useTheme();
+  const { isPro, showPaywall } = usePro();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const sheetBg   = isDark ? '#161616' : '#ffffff';
@@ -796,13 +808,27 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
-          {/* Subscription */}
-          <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
+          {/* Listend Pro / Subscription */}
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => {
+              onClose();
+              if (isPro) {
+                setTimeout(() => router.push('/pro-settings'), 300);
+              } else {
+                setTimeout(() => showPaywall(), 300);
+              }
+            }}>
             <View style={ss.iconWrap}>
-              <FontAwesome name="star-o" size={16} color="#D4A017" />
+              <FontAwesome name={isPro ? 'star' : 'star-o'} size={16} color="#D4A017" />
             </View>
-            <Text style={[ss.rowLabel, { color: labelColor }]}>Subscription</Text>
-            <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+            <Text style={[ss.rowLabel, { color: labelColor }]}>
+              {isPro ? 'Listend Pro' : 'Upgrade to Pro'}
+            </Text>
+            {isPro
+              ? <View style={ss.proBadgeInline}><Text style={ss.proBadgeText}>PRO</Text></View>
+              : <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+            }
           </Pressable>
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
@@ -942,6 +968,18 @@ const ss = StyleSheet.create({
   },
   amLogo: { width: 18, height: 18, borderRadius: 4 },
   aboutText: { color: '#5a4535', fontSize: 12 },
+  proBadgeInline: {
+    backgroundColor: '#D4A017',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  proBadgeText: {
+    color: '#0F0A07',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
 });
 
 
@@ -949,7 +987,10 @@ const ss = StyleSheet.create({
 
 export default function ListendScreen() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
+  const { isPro, proTheme } = usePro();
+  const colors = (isPro && proTheme !== 'default')
+    ? themeToColors(getProTheme(proTheme))
+    : Colors[colorScheme ?? 'dark'];
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const navigation = useNavigation();
@@ -1067,6 +1108,7 @@ export default function ListendScreen() {
         onPressAvgRating={() => setRatingModalVisible(true)}
         isDark={isDark}
         colors={colors}
+        isPro={isPro}
       />
 
       <RatingModal
@@ -1074,6 +1116,7 @@ export default function ListendScreen() {
         onClose={() => setRatingModalVisible(false)}
         avgRating={avgRating}
         distribution={ratingDistribution}
+        tint={colors.tint}
       />
 
       <SettingsSheet
@@ -1088,7 +1131,7 @@ export default function ListendScreen() {
           <Pressable
             onPress={() => setTop5EditMode(v => !v)}
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
-            <Text style={s.editLabel}>{top5EditMode ? 'Done' : 'Edit'}</Text>
+            <Text style={[s.editLabel, { color: colors.tint }]}>{top5EditMode ? 'Done' : 'Edit'}</Text>
           </Pressable>
         </View>
         <DraggableFavRow
