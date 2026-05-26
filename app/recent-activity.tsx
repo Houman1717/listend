@@ -25,6 +25,7 @@ import Colors, { type ColorsShape } from '@/constants/Colors';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
+import ProBadge from '@/components/ProBadge';
 
 // ─── Static metadata ──────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ type FriendItem = {
   name:      string;
   username:  string | null;
   avatarUrl: string | null;
+  isPro?:    boolean;
   dateMs:    number;
   dateLabel: string;
 };
@@ -189,7 +191,7 @@ async function fetchFriendsForUser(uid: string): Promise<FriendItem[]> {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, display_name, username, avatar_url')
+    .select('id, display_name, username, avatar_url, is_pro')
     .in('id', mutualIds);
 
   for (const id of mutualIds) {
@@ -201,6 +203,7 @@ async function fetchFriendsForUser(uid: string): Promise<FriendItem[]> {
       name:      prof?.display_name || prof?.username || 'User',
       username:  prof?.username   ?? null,
       avatarUrl: prof?.avatar_url ?? null,
+      isPro:     !!(prof?.is_pro),
       dateMs:    ms,
       dateLabel: new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     });
@@ -715,7 +718,12 @@ function FriendRow({ item, onPress, colors }: { item: FriendItem; onPress: () =>
       )}
       <View style={s.info}>
         <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-        {item.username ? <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text> : null}
+        {item.username ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
+            {item.isPro && <ProBadge size="xs" />}
+          </View>
+        ) : null}
         <View style={s.meta}>
           <View style={[s.typePill, { borderColor: colors.tint }]}>
             <FontAwesome name="handshake-o" size={9} color={colors.tint} />

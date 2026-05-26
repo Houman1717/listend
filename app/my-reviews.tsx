@@ -26,6 +26,7 @@ import { supabase } from '@/lib/supabase';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
+import ProBadge from '@/components/ProBadge';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
 
@@ -52,7 +53,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LikeState    = { liked: boolean; count: number };
-type LikedReview  = LoggedAlbum & { ownerId: string; username: string; likedAt: string };
+type LikedReview  = LoggedAlbum & { ownerId: string; username: string; isPro?: boolean; likedAt: string };
 
 // ─── Review row ───────────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ function ReviewRow({
   isLiked?: boolean;
   onLike?: () => void;
   byUsername?: string;
+  byUserIsPro?: boolean;
 }) {
   return (
     <Pressable
@@ -97,7 +99,10 @@ function ReviewRow({
           {album.artist} · {album.year}
         </Text>
         {byUsername ? (
-          <Text style={[s.byUser, { color: colors.tint }]} numberOfLines={1}>by @{byUsername}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={[s.byUser, { color: colors.tint }]} numberOfLines={1}>by @{byUsername}</Text>
+            {byUserIsPro && <ProBadge size="xs" />}
+          </View>
         ) : null}
         <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />
         {album.isRelistened && (
@@ -152,6 +157,7 @@ function ReviewDetailModal({
   isDark,
   colors,
   reviewerUsername,
+  reviewerIsPro = false,
   likeState,
   onLike,
   onClose,
@@ -162,6 +168,7 @@ function ReviewDetailModal({
   isDark: boolean;
   colors: ColorsShape;
   reviewerUsername: string;
+  reviewerIsPro?: boolean;
   likeState: LikeState;
   onLike?: () => void;
   onClose: () => void;
@@ -242,7 +249,10 @@ function ReviewDetailModal({
                 <Text style={mrd.avatarLetter}>{reviewerUsername[0].toUpperCase()}</Text>
               </View>
               <View style={{ gap: 2 }}>
-                <Text style={mrd.username}>@{reviewerUsername}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={mrd.username}>@{reviewerUsername}</Text>
+                  {reviewerIsPro && <ProBadge size="xs" />}
+                </View>
                 {dateStr ? (
                   <Text style={[mrd.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
                     Listend {dateStr}
@@ -484,10 +494,13 @@ export default function MyReviewsScreen() {
       const ownerIds = [...byOwner.keys()];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username')
+        .select('id, username, is_pro')
         .in('id', ownerIds);
       const usernameById = new Map<string, string>(
         (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
+      );
+      const isProById = new Map<string, boolean>(
+        (profiles ?? []).map((p: any) => [p.id as string, !!(p.is_pro)])
       );
 
       const allReviews: LikedReview[] = [];
@@ -513,6 +526,7 @@ export default function MyReviewsScreen() {
             coverColor: COVER_COLORS[allReviews.length % COVER_COLORS.length],
             ownerId,
             username:   usernameById.get(ownerId) ?? '',
+            isPro:      isProById.get(ownerId) ?? false,
             likedAt:    likedEntry?.likedAt ?? '',
           });
         }
@@ -622,10 +636,13 @@ export default function MyReviewsScreen() {
       const ownerIds = [...byOwner.keys()];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username')
+        .select('id, username, is_pro')
         .in('id', ownerIds);
       const usernameById = new Map<string, string>(
         (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
+      );
+      const isProById = new Map<string, boolean>(
+        (profiles ?? []).map((p: any) => [p.id as string, !!(p.is_pro)])
       );
 
       const allReviews: LikedReview[] = [];
@@ -651,6 +668,7 @@ export default function MyReviewsScreen() {
             coverColor: COVER_COLORS[allReviews.length % COVER_COLORS.length],
             ownerId,
             username:   usernameById.get(ownerId) ?? '',
+            isPro:      isProById.get(ownerId) ?? false,
             likedAt:    likedEntry?.likedAt ?? '',
           });
         }
@@ -966,6 +984,7 @@ export default function MyReviewsScreen() {
                   colors={colors}
                   isDark={isDark}
                   byUsername={item.username}
+                  byUserIsPro={item.isPro}
                   onPress={() => setSelectedLiked(item)}
                   likeCount={likeState.count}
                   isLiked={likeState.liked}
@@ -1012,6 +1031,7 @@ export default function MyReviewsScreen() {
             isDark={isDark}
             colors={colors}
             reviewerUsername={selectedLiked.username}
+            reviewerIsPro={selectedLiked.isPro}
             likeState={likeState}
             onLike={!viewingOther
               ? () => handleUnlikeLikedReview(selectedLiked)

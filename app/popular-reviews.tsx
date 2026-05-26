@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SpotifyAlbum } from '@/context/SpotifyService';
 import { navigateToProfile } from '@/lib/navigateToProfile';
+import ProBadge from '@/components/ProBadge';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -117,7 +118,10 @@ function ReviewRow({
               : <Text style={s.avatarLetter}>{item.username[0].toUpperCase()}</Text>
             }
           </View>
-          <Text style={[s.username, { color: '#D4A017' }]}>@{item.username}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={[s.username, { color: '#D4A017' }]}>@{item.username}</Text>
+            {item.isPro && <ProBadge size="xs" />}
+          </View>
         </Pressable>
         <View style={s.footerActions}>
           <Pressable

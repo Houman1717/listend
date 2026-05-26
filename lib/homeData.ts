@@ -4,8 +4,10 @@ import { countReviewComments } from '@/lib/reviewComments';
 
 export type PopularReview = {
   id: string;
+  userId: string;
   username: string;
   avatarUrl?: string | null;
+  isPro: boolean;
   albumTitle: string;
   albumArtist: string;
   albumYear: string;
@@ -177,12 +179,12 @@ export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
   const targetIds = (reviewRows as any[]).map(r => `${r.user_id}_${r.spotify_id}`);
 
   const [{ data: profiles }, { data: likeRows }, commentCounts] = await Promise.all([
-    supabase.from('profiles').select('id, username, avatar_url').in('id', userIds),
+    supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds),
     supabase.from('likes').select('target_id').eq('target_type', 'review').in('target_id', targetIds),
     countReviewComments(targetIds),
   ]);
 
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, avatarUrl: p.avatar_url as string | null }]));
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
   const likeCounts = new Map<string, number>();
   for (const l of (likeRows ?? []) as any[]) {
     likeCounts.set(l.target_id, (likeCounts.get(l.target_id) ?? 0) + 1);
@@ -193,8 +195,10 @@ export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
     const prof = profileMap.get(r.user_id);
     return {
       id: targetId,
+      userId: r.user_id,
       username: prof?.username ?? 'user',
       avatarUrl: prof?.avatarUrl ?? null,
+      isPro: prof?.isPro ?? false,
       albumTitle: r.title ?? '',
       albumArtist: r.artist ?? '',
       albumYear: String(r.year ?? ''),

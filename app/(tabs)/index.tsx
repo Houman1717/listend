@@ -35,6 +35,7 @@ import {
   fetchPopularReviewsThisWeek,
 } from '@/lib/homeData';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
+import ProBadge from '@/components/ProBadge';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -46,37 +47,37 @@ const PLACEHOLDER_FRIENDS = [
   {
     id: '1', user: 'alex_m', album: 'After Hours', artist: 'The Weeknd', year: '2020',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/500x500bb.jpg',
-    rating: 9, likeCount: 14, loggedDate: 'May 7, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
+    rating: 9, likeCount: 14, loggedDate: 'May 7, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '', isPro: false,
     review: 'Blinding Lights alone makes this a classic, but the whole album is a cinematic fever dream. The production is immaculate — every synth line feels intentional. Abel at his darkest and most theatrical.',
   },
   {
     id: '2', user: 'sara_k', album: 'folklore', artist: 'Taylor Swift', year: '2020',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/80/dc/b580dca0-349d-036b-e09b-bd849f6affd8/20UMGIM64216.rgb.jpg/500x500bb.jpg',
-    rating: 10, likeCount: 31, loggedDate: 'May 6, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
+    rating: 10, likeCount: 31, loggedDate: 'May 6, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '', isPro: false,
     review: 'This album made me feel things I didn\'t know I needed to feel. The cottagecore aesthetic works perfectly with the stripped-back production. "august" is a masterpiece.',
   },
   {
     id: '3', user: 'jvines', album: 'DAMN.', artist: 'Kendrick Lamar', year: '2017',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/86/c9/bb/86c9bb30-fe3d-442e-33c1-c106c4d23705/17UMGIM88776.rgb.jpg/500x500bb.jpg',
-    rating: 10, likeCount: 47, loggedDate: 'May 5, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
+    rating: 10, likeCount: 47, loggedDate: 'May 5, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '', isPro: false,
     review: null,
   },
   {
     id: '4', user: 'priya_r', album: 'SOS', artist: 'SZA', year: '2022',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/3b/a9/bd3ba9fb-9609-144f-bcfe-ead67b5f6ab3/196589564931.jpg/500x500bb.jpg',
-    rating: 8, likeCount: 9, loggedDate: 'May 5, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
+    rating: 8, likeCount: 9, loggedDate: 'May 5, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '', isPro: false,
     review: 'Long but never boring. SZA somehow makes 23 tracks feel cohesive. Her voice is doing everything.',
   },
   {
     id: '5', user: 'tomfitz', album: 'Random Access Memories', artist: 'Daft Punk', year: '2013',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/500x500bb.jpg',
-    rating: null, likeCount: 5, loggedDate: 'May 4, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
+    rating: null, likeCount: 5, loggedDate: 'May 4, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '', isPro: false,
     review: null,
   },
   {
     id: '6', user: 'nadia_w', album: 'Currents', artist: 'Tame Impala', year: '2015',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/500x500bb.jpg',
-    rating: 9, likeCount: 22, loggedDate: 'May 3, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '',
+    rating: 9, likeCount: 22, loggedDate: 'May 3, 2026', avatarUrl: null as string | null, isReListened: false, albumId: '', isPro: false,
     review: 'Kevin Parker locked himself in a studio and came out with the most immersive headphone album of the decade. "Eventually" breaks my heart every single time.',
   },
 ];
@@ -402,9 +403,12 @@ function PopularReviewCard({
               : <Text style={pr.avatarLetter}>{item.username[0].toUpperCase()}</Text>
             }
           </View>
-          <Text style={[pr.username, { color: '#D4A017' }]} numberOfLines={1}>
-            @{item.username}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
+            <Text style={[pr.username, { color: '#D4A017' }]} numberOfLines={1}>
+              @{item.username}
+            </Text>
+            {item.isPro && <ProBadge size="xs" />}
+          </View>
         </Pressable>
         <View style={pr.footerActions}>
           <Pressable
@@ -514,7 +518,10 @@ function PopularReviewModal({
                   : <Text style={rm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
                 }
               </View>
-              <Text style={rm.username}>@{review.username}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={rm.username}>@{review.username}</Text>
+                {review.isPro && <ProBadge size="xs" />}
+              </View>
             </Pressable>
 
             {/* Full review */}
@@ -657,7 +664,10 @@ function FriendFullRow({
             }
           </View>
           <View>
-            <Text style={flr.username}>@{friend.user}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={flr.username}>@{friend.user}</Text>
+              {friend.isPro && <ProBadge size="xs" />}
+            </View>
             <Text style={[flr.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>Listend {friend.loggedDate}</Text>
           </View>
         </Pressable>
@@ -827,7 +837,10 @@ function FriendReviewModal({
                 }
               </View>
               <View style={{ gap: 1 }}>
-                <Text style={rm.username}>@{friend.user}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={rm.username}>@{friend.user}</Text>
+                  {friend.isPro && <ProBadge size="xs" />}
+                </View>
                 <Text style={[rm.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
                   Listend {friend.loggedDate}
                 </Text>
@@ -1011,9 +1024,9 @@ async function fetchFriendsRecentListened(uid: string): Promise<FriendEntry[]> {
   const friendIds = [...new Set((outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string))];
   if (friendIds.length === 0) return [];
 
-  const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', friendIds);
-  const profileMap = new Map<string, { username: string | null; avatarUrl: string | null }>();
-  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { username: p.username, avatarUrl: p.avatar_url });
+  const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', friendIds);
+  const profileMap = new Map<string, { username: string | null; avatarUrl: string | null; isPro: boolean }>();
+  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { username: p.username, avatarUrl: p.avatar_url, isPro: !!(p.is_pro) });
 
   const [{ data: rows }, { data: reListenRows }] = await Promise.all([
     supabase
@@ -1053,6 +1066,7 @@ async function fetchFriendsRecentListened(uid: string): Promise<FriendEntry[]> {
         isReListened: false,
         albumId: r.spotify_id ?? '',
         review: r.review ?? null,
+        isPro: profile?.isPro ?? false,
       } as FriendEntry,
     });
   }
@@ -1075,6 +1089,7 @@ async function fetchFriendsRecentListened(uid: string): Promise<FriendEntry[]> {
         isReListened: true,
         albumId: r.spotify_id ?? '',
         review: r.review ?? null,
+        isPro: profile?.isPro ?? false,
       } as FriendEntry,
     });
   }

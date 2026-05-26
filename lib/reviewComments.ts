@@ -15,13 +15,13 @@ export async function fetchReviewComments(reviewId: string): Promise<ReviewComme
   const userIds = [...new Set((rows as any[]).map(r => r.user_id as string))];
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url')
+    .select('id, username, avatar_url, is_pro')
     .in('id', userIds);
 
   const profileMap = new Map(
     (profiles ?? []).map((p: any) => [
       p.id as string,
-      { username: p.username as string, avatarUrl: p.avatar_url as string | null },
+      { username: p.username as string, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) },
     ])
   );
 
@@ -31,6 +31,7 @@ export async function fetchReviewComments(reviewId: string): Promise<ReviewComme
     userId:          r.user_id as string,
     username:        profileMap.get(r.user_id)?.username ?? 'user',
     avatarUrl:       profileMap.get(r.user_id)?.avatarUrl ?? null,
+    isPro:           profileMap.get(r.user_id)?.isPro ?? false,
     body:            r.body as string,
     parentCommentId: r.parent_comment_id ?? undefined,
     replyToUsername: null,

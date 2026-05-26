@@ -28,6 +28,7 @@ import { supabase } from '@/lib/supabase';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
+import ProBadge from '@/components/ProBadge';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -107,6 +108,7 @@ type CommunityReview = {
   userId:       string;
   username:     string;
   avatarUrl?:   string | null;
+  isPro?:       boolean;
   rating:       number;
   text?:        string;
   dateStr?:     string;
@@ -122,6 +124,7 @@ type FriendActivity = {
   userId:    string;
   username:  string;
   avatarUrl?: string | null;
+  isPro?:    boolean;
   rating:    number;
   hasReview: boolean;
   review?:   string;
@@ -468,9 +471,12 @@ function AlbumReviewCard({
             }
           </View>
           <View style={{ gap: 3 }}>
-            <Text style={[arc.username, { color: '#D4A017' }]} numberOfLines={1}>
-              @{review.username}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={[arc.username, { color: '#D4A017' }]} numberOfLines={1}>
+                @{review.username}
+              </Text>
+              {review.isPro && <ProBadge size="xs" />}
+            </View>
             {review.rating >= 1 && <VolumeBadge rating={review.rating} isDark={isDark} />}
           </View>
         </Pressable>
@@ -654,7 +660,10 @@ function AlbumSingleReviewModal({
                 <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
               </View>
               <View style={{ gap: 3 }}>
-                <Text style={arm.username}>@{review.username}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={arm.username}>@{review.username}</Text>
+                  {review.isPro && <ProBadge size="xs" />}
+                </View>
                 {review.rating >= 1 && <VolumeBadge rating={review.rating} isDark={isDark} />}
                 <Text style={[arm.dateText, { color: isDark ? '#A08060' : '#6B4C35' }]}>{review.dateStr}</Text>
               </View>
@@ -1052,13 +1061,13 @@ export default function AlbumDetailScreen() {
       const targetIds = rows.map(r => `${r.user_id}_${r.spotify_id}`);
 
       const [{ data: profiles }, commentCounts] = await Promise.all([
-        supabase.from('profiles').select('id, username, avatar_url').in('id', userIds),
+        supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds),
         countReviewComments(targetIds),
       ]);
 
-      const profileMap = new Map<string, { username: string; avatarUrl: string | null }>();
+      const profileMap = new Map<string, { username: string; avatarUrl: string | null; isPro: boolean }>();
       for (const p of (profiles ?? []) as any[]) {
-        profileMap.set(p.id, { username: p.username ?? p.id, avatarUrl: p.avatar_url ?? null });
+        profileMap.set(p.id, { username: p.username ?? p.id, avatarUrl: p.avatar_url ?? null, isPro: !!(p.is_pro) });
       }
 
       setCommunityReviews(rows.map((r: any) => {
@@ -1069,6 +1078,7 @@ export default function AlbumDetailScreen() {
           userId:       r.user_id,
           username:     prof?.username ?? r.user_id,
           avatarUrl:    prof?.avatarUrl ?? null,
+          isPro:        prof?.isPro ?? false,
           rating:       r.rating ?? 0,
           text:         r.review ?? undefined,
           dateStr:      r.listened_at ? formatLoggedDate(r.listened_at) : undefined,
@@ -1163,7 +1173,7 @@ export default function AlbumDetailScreen() {
 
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, avatar_url')
+        .select('id, username, avatar_url, is_pro')
         .in('id', Array.from(allUserIds));
 
       const usernameMap = new Map<string, string>(
@@ -1171,6 +1181,9 @@ export default function AlbumDetailScreen() {
       );
       const avatarMap = new Map<string, string | null>(
         (profiles ?? []).map((p: any) => [p.id, p.avatar_url ?? null])
+      );
+      const isProMap = new Map<string, boolean>(
+        (profiles ?? []).map((p: any) => [p.id, !!(p.is_pro)])
       );
 
       // Build re-listen map: most recent re-listen per user
@@ -1205,6 +1218,7 @@ export default function AlbumDetailScreen() {
           userId:     row.user_id,
           username,
           avatarUrl:  avatarMap.get(row.user_id) ?? null,
+          isPro:      isProMap.get(row.user_id) ?? false,
           rating:     row.rating ?? 0,
           hasReview:  !!row.review,
           review:     row.review ?? undefined,
@@ -1226,6 +1240,7 @@ export default function AlbumDetailScreen() {
           userId:     uid,
           username,
           avatarUrl:  avatarMap.get(uid) ?? null,
+          isPro:      isProMap.get(uid) ?? false,
           rating:     rl.rating,
           hasReview:  !!rl.review,
           review:     rl.review,
@@ -1245,6 +1260,7 @@ export default function AlbumDetailScreen() {
           userId:    row.user_id,
           username,
           avatarUrl: avatarMap.get(row.user_id) ?? null,
+          isPro:     isProMap.get(row.user_id) ?? false,
           rating:    0,
           hasReview: false,
           status:    'wantToListen',
@@ -1683,6 +1699,7 @@ export default function AlbumDetailScreen() {
                       userId:       friend.userId,
                       username:     friend.username,
                       avatarUrl:    friend.avatarUrl ?? undefined,
+                      isPro:        friend.isPro ?? false,
                       rating:       displayRating,
                       text:         displayReview,
                       listenedAt:   displayDate,
@@ -1733,9 +1750,12 @@ export default function AlbumDetailScreen() {
                         )}
                       </View>
                       {/* Username */}
-                      <Text style={[s.friendUsername, { color: colors.subtext }]} numberOfLines={1}>
-                        @{friend.username}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        <Text style={[s.friendUsername, { color: colors.subtext }]} numberOfLines={1}>
+                          @{friend.username}
+                        </Text>
+                        {friend.isPro && <ProBadge size="xs" />}
+                      </View>
                       {/* Status label */}
                       {isWant && (
                         <Text style={[s.friendStatusLabel, { color: mutedText }]}>wants to listen</Text>

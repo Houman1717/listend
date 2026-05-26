@@ -10,6 +10,7 @@ import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import ProBadge from '@/components/ProBadge';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ export type ReviewComment = {
   userId:           string;
   username:         string;
   avatarUrl?:       string | null;
+  isPro?:           boolean;
   body:             string;
   createdAt:        string;
 };
@@ -121,9 +123,12 @@ export function CommentBubble({
       )}
       <View style={cms.commentBody}>
         <View style={cms.commentTopLine}>
-          <Pressable onPress={() => onUsernamePress?.(comment.username)} hitSlop={4} disabled={!onUsernamePress}>
-            <Text style={[cms.commentUsername, { fontSize: usernameSz }]}>@{comment.username}</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+            <Pressable onPress={() => onUsernamePress?.(comment.username)} hitSlop={4} disabled={!onUsernamePress}>
+              <Text style={[cms.commentUsername, { fontSize: usernameSz }]}>@{comment.username}</Text>
+            </Pressable>
+            {comment.isPro && <ProBadge size="xs" />}
+          </View>
           <Text style={[cms.commentDate, { color: colors.subtext, fontSize: dateSz }]}>{comment.createdAt}</Text>
         </View>
         {comment.replyToUsername && (
