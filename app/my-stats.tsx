@@ -2,7 +2,7 @@ import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWind
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, Fragment } from 'react';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Svg, { Circle } from 'react-native-svg';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -612,14 +612,55 @@ const yc = StyleSheet.create({
 
 export default function MyStatsScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme } = usePro();
-  const colors = (isPro && proTheme !== 'default')
-    ? themeToColors(getProTheme(proTheme))
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const params = useLocalSearchParams<{ userId?: string; proTheme?: string; displayName?: string }>();
+  const viewedUserId  = params.userId ?? null;
+
+  // Resolve colors: other-user uses their proTheme param; own view uses own Pro context
+  const activeThemeKey = viewedUserId ? (params.proTheme ?? 'default') : (isPro ? ownProTheme : 'default');
+  const colors = (activeThemeKey && activeThemeKey !== 'default')
+    ? themeToColors(getProTheme(activeThemeKey))
     : Colors[colorScheme ?? 'dark'];
   const isDark = colors.isDark;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { loggedAlbums, isLoaded } = useAlbums();
+  const { loggedAlbums: ownAlbums, isLoaded: ownLoaded } = useAlbums();
+
+  // Other-user album fetch
+  const [otherAlbums,  setOtherAlbums]  = useState<LoggedAlbum[]>([]);
+  const [otherLoaded,  setOtherLoaded]  = useState(false);
+
+  useEffect(() => {
+    if (!viewedUserId) return;
+    setOtherLoaded(false);
+    supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened')
+      .eq('user_id', viewedUserId)
+      .not('listened_at', 'is', null)
+      .order('listened_at', { ascending: false })
+      .then(({ data }) => {
+        const albums: LoggedAlbum[] = (data ?? []).map((row, i) => ({
+          id:            row.spotify_id,
+          title:         row.title        ?? '',
+          artist:        row.artist       ?? '',
+          year:          row.year         ?? 0,
+          rating:        row.rating       ?? 0,
+          dateLogged:    row.listened_at  ?? new Date().toISOString(),
+          artworkUrl:    row.artwork_url  ?? undefined,
+          coverColor:    '#2E2018',
+          durationMs:    row.duration_ms  ?? undefined,
+          reListenCount: row.re_listen_count ?? 0,
+          isRelistened:  row.is_relistened   ?? false,
+          genreTags:     row.genre_tags   ?? [],
+        }));
+        setOtherAlbums(albums);
+        setOtherLoaded(true);
+      });
+  }, [viewedUserId]);
+
+  const loggedAlbums = viewedUserId ? otherAlbums  : ownAlbums;
+  const isLoaded     = viewedUserId ? otherLoaded  : ownLoaded;
 
   const [selectedRating, setSelectedRating]   = useState<number | null>(null);
   const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
@@ -763,62 +804,69 @@ export default function MyStatsScreen() {
     });
   }, [loggedAlbums]);
 
-  // Fetch all re-listen rows for grower/fader computation
+  // Fetch all re-listen rows for grower/fader computation (scoped to viewed user)
   useEffect(() => {
     if (!isLoaded) return;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const uid = session?.user?.id;
-      if (!uid) return;
-      supabase
+    const run = async (uid: string) => {
+      const { data } = await supabase
         .from('re_listens')
         .select('spotify_id, rating, listened_at')
         .eq('user_id', uid)
-        .order('listened_at', { ascending: true })
-        .then(({ data }) => {
-          const map = new Map<string, { rating: number; listenedAt: string }[]>();
-          for (const r of data ?? []) {
-            if (!map.has(r.spotify_id)) map.set(r.spotify_id, []);
-            map.get(r.spotify_id)!.push({ rating: r.rating ?? 0, listenedAt: r.listened_at ?? '' });
-          }
-          setAllReLists(map);
-        });
-    });
-  }, [isLoaded]);
+        .order('listened_at', { ascending: true });
+      const map = new Map<string, { rating: number; listenedAt: string }[]>();
+      for (const r of data ?? []) {
+        if (!map.has(r.spotify_id)) map.set(r.spotify_id, []);
+        map.get(r.spotify_id)!.push({ rating: r.rating ?? 0, listenedAt: r.listened_at ?? '' });
+      }
+      setAllReLists(map);
+    };
+    if (viewedUserId) {
+      run(viewedUserId);
+    } else {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.id) run(session.user.id);
+      });
+    }
+  }, [isLoaded, viewedUserId]);
 
-  // Fetch community averages for all rated albums (excluding own rating)
+  // Fetch community averages for all rated albums (excluding viewed user's own rating)
   useEffect(() => {
     if (!isLoaded) return;
     const ratedAlbums = loggedAlbums.filter(a => a.rating > 0);
     if (ratedAlbums.length === 0) return;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const uid = session?.user?.id;
-      if (!uid) return;
+    const run = async (excludeUid: string) => {
       // Match by title+year (not spotify_id) — different users may have different AM IDs for same album
-      supabase
+      const { data } = await supabase
         .from('user_albums')
         .select('title, year, rating')
         .gt('rating', 0)
-        .neq('user_id', uid)
-        .then(({ data }) => {
-          // Build community map keyed by title_lower::year
-          const communityMap: Record<string, number[]> = {};
-          for (const row of data ?? []) {
-            const key = `${(row.title ?? '').toLowerCase()}::${row.year ?? 0}`;
-            if (!communityMap[key]) communityMap[key] = [];
-            communityMap[key].push(row.rating);
-          }
-          // Match against user's rated albums using same key
-          const avgs: Record<string, { avg: number; count: number }> = {};
-          for (const album of ratedAlbums) {
-            const key = `${album.title.toLowerCase()}::${album.year ?? 0}`;
-            const ratings = communityMap[key];
-            if (!ratings || ratings.length === 0) continue;
-            avgs[album.id] = { avg: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length };
-          }
-          setCommunityAvgs(avgs);
-        });
-    });
-  }, [isLoaded]);
+        .neq('user_id', excludeUid);
+      // Build community map keyed by title_lower::year
+      const communityMap: Record<string, number[]> = {};
+      for (const row of data ?? []) {
+        const key = `${(row.title ?? '').toLowerCase()}::${row.year ?? 0}`;
+        if (!communityMap[key]) communityMap[key] = [];
+        communityMap[key].push(row.rating);
+      }
+      const avgs: Record<string, { avg: number; count: number }> = {};
+      for (const album of ratedAlbums) {
+        const key = `${album.title.toLowerCase()}::${album.year ?? 0}`;
+        const ratings = communityMap[key];
+        if (!ratings || ratings.length === 0) continue;
+        avgs[album.id] = { avg: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length };
+      }
+      setCommunityAvgs(avgs);
+    };
+    if (viewedUserId) {
+      run(viewedUserId);
+    } else {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.id) run(session.user.id);
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, viewedUserId]);
+
 
   // Fetch featured playlist album lists (in parallel, once)
   useEffect(() => {
@@ -863,28 +911,6 @@ export default function MyStatsScreen() {
   const evAvgDelta      = evCount > 0 ? (evSumLatest - evSumFirst) / evCount : 0;
   const evFirstListenAvg = evCount > 0 ? evSumFirst  / evCount : 0;
   const evLongTermAvg    = evCount > 0 ? evSumLatest / evCount : 0;
-
-  // Fetch all re-listen rows for grower/fader computation
-  useEffect(() => {
-    if (!isLoaded) return;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const uid = session?.user?.id;
-      if (!uid) return;
-      supabase
-        .from('re_listens')
-        .select('spotify_id, rating, listened_at')
-        .eq('user_id', uid)
-        .order('listened_at', { ascending: true })
-        .then(({ data }) => {
-          const map = new Map<string, { rating: number; listenedAt: string }[]>();
-          for (const r of data ?? []) {
-            if (!map.has(r.spotify_id)) map.set(r.spotify_id, []);
-            map.get(r.spotify_id)!.push({ rating: r.rating ?? 0, listenedAt: r.listened_at ?? '' });
-          }
-          setAllReLists(map);
-        });
-    });
-  }, [isLoaded]);
 
   // ── Community comparison (rated higher / lower than average) ─────────────
   const MIN_COMMUNITY = 10;
@@ -936,6 +962,7 @@ export default function MyStatsScreen() {
   return (
     <>
       <Stack.Screen options={{
+        title: viewedUserId && params.displayName ? `${params.displayName}'s Stats` : 'My Stats',
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,

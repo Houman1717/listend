@@ -1063,7 +1063,7 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="heart"      label="Liked Artists"   sub="Their favourites"               onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId,                     ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="bar-chart"  label="Stats"           sub="Listening insights"             onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
+            <NavRow icon="bar-chart"  label="Stats"           sub="Listening insights"             onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId, displayName: profile?.display_name ?? profile?.username ?? '',  ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
           </View>
         </>
       )}
