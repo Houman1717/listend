@@ -10,7 +10,7 @@ import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import ProBadge from '@/components/ProBadge';
+import { ProBadge } from '@/components/ProBadge';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

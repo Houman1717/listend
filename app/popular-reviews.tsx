@@ -20,7 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SpotifyAlbum } from '@/context/SpotifyService';
 import { navigateToProfile } from '@/lib/navigateToProfile';
-import ProBadge from '@/components/ProBadge';
+import { ProBadge } from '@/components/ProBadge';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 

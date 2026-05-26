@@ -26,7 +26,7 @@ import { supabase } from '@/lib/supabase';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
-import ProBadge from '@/components/ProBadge';
+import { ProBadge } from '@/components/ProBadge';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
 

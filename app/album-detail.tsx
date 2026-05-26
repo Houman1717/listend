@@ -28,7 +28,7 @@ import { supabase } from '@/lib/supabase';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
-import ProBadge from '@/components/ProBadge';
+import { ProBadge } from '@/components/ProBadge';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 

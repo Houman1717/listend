@@ -25,7 +25,7 @@ import Colors, { type ColorsShape } from '@/constants/Colors';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
-import ProBadge from '@/components/ProBadge';
+import { ProBadge } from '@/components/ProBadge';
 
 // ─── Static metadata ──────────────────────────────────────────────────────────
 

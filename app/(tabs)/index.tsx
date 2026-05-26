@@ -35,7 +35,7 @@ import {
   fetchPopularReviewsThisWeek,
 } from '@/lib/homeData';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
-import ProBadge from '@/components/ProBadge';
+import { ProBadge } from '@/components/ProBadge';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
