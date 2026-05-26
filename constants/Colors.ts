@@ -27,6 +27,7 @@ export type ColorsShape = {
   border: string;
   subtext: string;
   textMuted: string;
+  isDark: boolean;
 };
 
 export default {
@@ -42,6 +43,7 @@ export default {
     border:          '#DDD5C8',
     subtext:         '#6B4C35',
     textMuted:       '#A08060',
+    isDark:          false,
   },
   dark: {
     text:            PALETTE.textPrimary,
@@ -55,5 +57,6 @@ export default {
     border:          PALETTE.border,
     subtext:         PALETTE.textSecondary,
     textMuted:       PALETTE.textMuted,
+    isDark:          true,
   },
 };

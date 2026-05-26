@@ -814,7 +814,7 @@ export default function FlipARecordScreen() {
                 />
                 {isAlreadyLogged && (
                   <View style={sf.loggedBadge}>
-                    <Ionicons name="checkmark" size={13} color="#D4A017" />
+                    <Ionicons name="headset" size={13} color="#D4A017" />
                     <Text style={sf.loggedBadgeText}>Listend</Text>
                   </View>
                 )}
@@ -1042,7 +1042,7 @@ const sf = StyleSheet.create({
   albumCard:   { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   artWrap:     { position: 'relative' },
   artGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 },
-  loggedBadge: { position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1.5, borderColor: '#D4A017', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  loggedBadge: { position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 5 },
   loggedBadgeText: { color: '#D4A017', fontSize: 12, fontWeight: '700' },
 
   infoBlock:  { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 4, gap: 6 },

@@ -72,7 +72,7 @@ export default function WantToListenScreen() {
   const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
     ? themeToColors(getProTheme(_themeKey))
     : Colors[colorScheme ?? 'dark'];
-  const isDark = colorScheme === 'dark';
+  const isDark = colors.isDark;
   const router = useRouter();
   const { wantToListen, removeFromWantToListen, updateDuration } = useAlbums();
   const { user } = useAuth();

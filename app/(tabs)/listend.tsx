@@ -991,7 +991,7 @@ export default function ListendScreen() {
   const colors = (isPro && proTheme !== 'default')
     ? themeToColors(getProTheme(proTheme))
     : Colors[colorScheme ?? 'dark'];
-  const isDark = colorScheme === 'dark';
+  const isDark = colors.isDark;
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -1035,11 +1035,13 @@ export default function ListendScreen() {
     }, [user])
   );
 
-  // Inject bell + hamburger into the tab header
+  // Inject bell + hamburger into the tab header, and sync header bg to the active pro theme
   const openSettings = useCallback(() => setSettingsVisible(true), []);
-  const headerIconColor = isDark ? '#f5e6c8' : '#1A0F0A';
+  const headerIconColor = colors.text;
   useEffect(() => {
     navigation.setOptions({
+      headerStyle: { backgroundColor: colors.background },
+      headerTintColor: colors.text,
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginRight: 16 }}>
           {/* Bell icon with unread badge */}
@@ -1064,7 +1066,7 @@ export default function ListendScreen() {
         </View>
       ),
     });
-  }, [navigation, openSettings, unreadCount, router, headerIconColor]);
+  }, [navigation, openSettings, unreadCount, router, headerIconColor, colors.background, colors.text]);
 
   const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
 

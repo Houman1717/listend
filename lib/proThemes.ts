@@ -1,4 +1,4 @@
-export type ProThemeKey = 'default' | 'ocean' | 'rose' | 'violet' | 'midnight';
+export type ProThemeKey = 'default' | 'ocean' | 'ocean-light' | 'rose' | 'rose-light' | 'violet' | 'violet-light' | 'midnight' | 'midnight-light';
 
 export interface ProTheme {
   key: ProThemeKey;
@@ -12,6 +12,7 @@ export interface ProTheme {
   text: string;
   subtext: string;
   textMuted: string;
+  isDark: boolean;
 }
 
 export const PRO_THEMES: ProTheme[] = [
@@ -27,6 +28,7 @@ export const PRO_THEMES: ProTheme[] = [
     text:       '#F5ECD8',
     subtext:    '#A08060',
     textMuted:  '#6B4C35',
+    isDark:     true,
   },
   {
     key: 'ocean',
@@ -40,6 +42,21 @@ export const PRO_THEMES: ProTheme[] = [
     text:       '#D8EBF5',
     subtext:    '#5A88B0',
     textMuted:  '#3A5878',
+    isDark:     true,
+  },
+  {
+    key: 'ocean-light',
+    name: 'Ocean Light',
+    background: '#EEF4FB',
+    surface:    '#D8E8F5',
+    elevated:   '#C2D8EE',
+    border:     '#A8C8E8',
+    accent:     '#1A6EBE',
+    accentLight:'#4A9EE8',
+    text:       '#040C1C',
+    subtext:    '#1A5080',
+    textMuted:  '#4A78A8',
+    isDark:     false,
   },
   {
     key: 'rose',
@@ -53,6 +70,21 @@ export const PRO_THEMES: ProTheme[] = [
     text:       '#F5D8DF',
     subtext:    '#C06080',
     textMuted:  '#804058',
+    isDark:     true,
+  },
+  {
+    key: 'rose-light',
+    name: 'Rose Light',
+    background: '#FBF0F2',
+    surface:    '#F5D8DF',
+    elevated:   '#EEC0CC',
+    border:     '#E4A8BA',
+    accent:     '#B83050',
+    accentLight:'#E8607A',
+    text:       '#1E0408',
+    subtext:    '#883050',
+    textMuted:  '#C07090',
+    isDark:     false,
   },
   {
     key: 'violet',
@@ -66,6 +98,21 @@ export const PRO_THEMES: ProTheme[] = [
     text:       '#EAD8F5',
     subtext:    '#9060C0',
     textMuted:  '#603880',
+    isDark:     true,
+  },
+  {
+    key: 'violet-light',
+    name: 'Violet Light',
+    background: '#F2EEF9',
+    surface:    '#E2D8F5',
+    elevated:   '#CEC0EC',
+    border:     '#B8A4E0',
+    accent:     '#6030B8',
+    accentLight:'#9B6AE8',
+    text:       '#0C0818',
+    subtext:    '#503090',
+    textMuted:  '#8060C0',
+    isDark:     false,
   },
   {
     key: 'midnight',
@@ -79,6 +126,21 @@ export const PRO_THEMES: ProTheme[] = [
     text:       '#D5F5F2',
     subtext:    '#4EA898',
     textMuted:  '#2E7068',
+    isDark:     true,
+  },
+  {
+    key: 'midnight-light',
+    name: 'Teal Light',
+    background: '#EEF8F7',
+    surface:    '#D2EDE8',
+    elevated:   '#B8E2DC',
+    border:     '#98D2CA',
+    accent:     '#1A8878',
+    accentLight:'#2AB8A8',
+    text:       '#041412',
+    subtext:    '#1A6860',
+    textMuted:  '#3A9888',
+    isDark:     false,
   },
 ];
 
@@ -99,5 +161,6 @@ export function themeToColors(theme: ProTheme) {
     border:          theme.border,
     subtext:         theme.subtext,
     textMuted:       theme.textMuted,
+    isDark:          theme.isDark,
   };
 }

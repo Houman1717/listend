@@ -56,9 +56,7 @@ export function AlbumGridCard({
           </View>
         )}
         {isLogged && (
-          <View style={s.loggedBadge}>
-            <Ionicons name="checkmark" size={9} color="#D4A017" />
-          </View>
+          <Ionicons name="headset" size={12} color="#D4A017" style={s.loggedBadge} />
         )}
       </View>
       <Text style={[s.title, { color: textColor }]} numberOfLines={1}>{album.title}</Text>
@@ -89,5 +87,5 @@ const s = StyleSheet.create({
   title:         { fontSize: 12, fontWeight: '600', marginTop: 2 },
   artist:        { fontSize: 11 },
   placeholderText: { height: 10, borderRadius: 4, marginTop: 2 },
-  loggedBadge: { position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1.5, borderColor: '#D4A017', alignItems: 'center', justifyContent: 'center' },
+  loggedBadge: { position: 'absolute', bottom: 3, right: 3 },
 });

@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 
-type Snapshot = { albums: TopAlbum[]; songs: TopSong[]; artists: TopArtist[] };
+type Snapshot = { albums: (TopAlbum | null)[]; songs: (TopSong | null)[]; artists: (TopArtist | null)[] };
 
 /**
  * Invisible component that syncs the current user's Top 5 albums/songs/artists
@@ -29,7 +29,7 @@ type Snapshot = { albums: TopAlbum[]; songs: TopSong[]; artists: TopArtist[] };
  */
 export function FavoritesSyncer() {
   const { user } = useAuth();
-  const { topAlbums, topSongs, topArtists, isLoaded } = useAlbums();
+  const { topAlbums, topSongs, topArtists, isRemoteLoaded } = useAlbums();
 
   // Debounce writes — wait 800 ms after the last change before hitting Supabase
   const debounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,8 +38,14 @@ export function FavoritesSyncer() {
   // Skip change-logging on the very first sync (initial data load)
   const initializedRef = useRef(false);
 
+  // Reset baseline refs when user changes so a fresh session starts clean
   useEffect(() => {
-    if (!user || !isLoaded) return;
+    initializedRef.current = false;
+    prevRef.current = null;
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || !isRemoteLoaded) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -140,7 +146,7 @@ export function FavoritesSyncer() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [topAlbums, topSongs, topArtists, user?.id, isLoaded]);
+  }, [topAlbums, topSongs, topArtists, user?.id, isRemoteLoaded]);
 
   return null;
 }

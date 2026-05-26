@@ -169,9 +169,7 @@ function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; is
           <ArtFallback size={CARD_SIZE} radius={6} label={item.title} />
         )}
         {isLogged && (
-          <View style={s.loggedBadge}>
-            <Ionicons name="checkmark" size={9} color="#D4A017" />
-          </View>
+          <Ionicons name="headset" size={12} color="#D4A017" style={s.loggedBadge} />
         )}
       </View>
       <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{item.title}</Text>
@@ -624,7 +622,7 @@ const s = StyleSheet.create({
 
   rankBadge: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
   rankText:  { color: '#fff', fontSize: 10, fontWeight: '700' },
-  loggedBadge: { position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1.5, borderColor: '#D4A017', alignItems: 'center', justifyContent: 'center' },
+  loggedBadge: { position: 'absolute', bottom: 3, right: 3 },
 
   placeholderCard:   { width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 },
   artistPlaceholder: { width: ARTIST_SIZE, height: ARTIST_SIZE, borderRadius: ARTIST_SIZE / 2 },

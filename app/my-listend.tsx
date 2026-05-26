@@ -325,7 +325,7 @@ export default function MyListendScreen() {
   const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
     ? themeToColors(getProTheme(_themeKey))
     : Colors[colorScheme ?? 'dark'];
-  const isDark = colorScheme === 'dark';
+  const isDark = colors.isDark;
   const router = useRouter();
   const { loggedAlbums, removeLoggedAlbum, updateDuration, undoLastReListenEntry } = useAlbums();
   const { user } = useAuth();

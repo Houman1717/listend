@@ -138,9 +138,7 @@ export default function DiscoverResultsScreen() {
                     <View style={[s.artwork, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
                   )}
                   {isLogged && (
-                    <View style={s.loggedBadge}>
-                      <Ionicons name="checkmark" size={9} color="#D4A017" />
-                    </View>
+                    <Ionicons name="headset" size={12} color="#D4A017" style={s.loggedBadge} />
                   )}
                 </View>
                 <View style={s.info}>
@@ -176,19 +174,7 @@ const s = StyleSheet.create({
   },
   rank: { width: 22, fontSize: 13, fontWeight: '700', textAlign: 'right' },
   artwork: { width: 52, height: 52, borderRadius: 4, flexShrink: 0 },
-  loggedBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderWidth: 1.5,
-    borderColor: '#D4A017',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  loggedBadge: { position: 'absolute', bottom: 3, right: 3 },
   loggedLabel: { fontSize: 11, fontWeight: '600', color: '#D4A017' },
   info: { flex: 1, gap: 2 },
   title: { fontSize: 15, fontWeight: '600' },

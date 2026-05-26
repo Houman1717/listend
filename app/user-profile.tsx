@@ -585,17 +585,25 @@ export default function UserProfileScreen() {
     load();
   }, [userId, user, navigation]);
 
+  // ── Sync header background to the viewed user's pro theme ────────────────────
+  useEffect(() => {
+    navigation.setOptions({
+      headerStyle: { backgroundColor: colors.background },
+      headerTintColor: colors.text,
+    });
+  }, [colors.background, colors.text]);
+
   // ── Header 3-dot menu button ─────────────────────────────────────────────────
   useEffect(() => {
     if (isOwnProfile || !profile) return;
     navigation.setOptions({
       headerRight: () => (
         <Pressable onPress={handleOptionsMenu} hitSlop={12} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
-          <FontAwesome name="ellipsis-v" size={18} color="#f5e6c8" />
+          <FontAwesome name="ellipsis-v" size={18} color={colors.text} />
         </Pressable>
       ),
     });
-  }, [isOwnProfile, profile, isBlockedByMe]);
+  }, [isOwnProfile, profile, isBlockedByMe, colors.text]);
 
   // ── Follow / Unfollow ────────────────────────────────────────────────────────
   async function handleFollow() {

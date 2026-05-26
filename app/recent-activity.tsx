@@ -909,7 +909,7 @@ export default function RecentActivityScreen() {
   const [selectedReview,       setSelectedReview]       = useState<ActivityItem | null>(null);
   const [reviewLikeState,      setReviewLikeState]      = useState<{ liked: boolean; count: number }>({ liked: false, count: 0 });
   const [reviewUsername,       setReviewUsername]       = useState('');
-  const isDark = colorScheme === 'dark';
+  const isDark = colors.isDark;
 
   useEffect(() => {
     if (!user || viewingOther) return;

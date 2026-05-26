@@ -119,6 +119,7 @@ type AlbumsContextType = {
   addAlbumToPlaylist: (playlistId: string, albumId: string) => void;
   removeAlbumFromPlaylist: (playlistId: string, albumId: string) => void;
   isLoaded: boolean;
+  isRemoteLoaded: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -165,8 +166,9 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   const [wantToListen, setWantToListen] = useState<WantToListenAlbum[]>([]);
   const [playlists,    setPlaylists]    = useState<Playlist[]>([]);
   const [pendingAlbum,  setPendingAlbum]  = useState<PendingAlbum | null>(null);
-  const [isLoaded,      setIsLoaded]      = useState(false);
-  const [reListenMode,  setReListenMode]  = useState(false);
+  const [isLoaded,        setIsLoaded]        = useState(false);
+  const [isRemoteLoaded,  setIsRemoteLoaded]  = useState(false);
+  const [reListenMode,    setReListenMode]    = useState(false);
 
   // ── Load + sync whenever the signed-in user changes ───────────────────────
   // This single effect handles:
@@ -182,6 +184,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     setWantToListen([]);
     setPlaylists([]);
     setIsLoaded(false);
+    setIsRemoteLoaded(false);
 
     if (!user) {
       console.log('[AlbumsContext] no user — state cleared');
@@ -411,6 +414,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           AsyncStorage.setItem(sk(KEY.TOP_SONGS,   uid), JSON.stringify(profData.top_songs   ?? [])).catch(() => {});
           AsyncStorage.setItem(sk(KEY.TOP_ARTISTS, uid), JSON.stringify(profData.top_artists ?? [])).catch(() => {});
         }
+        setIsRemoteLoaded(true);
       }
     })();
 
@@ -969,7 +973,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       addTopArtist, addTopArtistAtSlot, removeTopArtist, reorderTopArtists,
       wantToListen, addToWantToListen, removeFromWantToListen,
       playlists, createPlaylist, deletePlaylist, addAlbumToPlaylist, removeAlbumFromPlaylist,
-      isLoaded,
+      isLoaded, isRemoteLoaded,
     }}>
       {children}
     </AlbumsContext.Provider>

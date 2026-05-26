@@ -184,16 +184,26 @@ const rm = StyleSheet.create({
 
 // ─── Hero Stats ───────────────────────────────────────────────────────────────
 
-function StatRow({ stats }: { stats: { label: string; value: string | number }[] }) {
+function StatRow({
+  stats,
+  textColor = TEXT,
+  subtextColor = SUBTEXT,
+  borderColor = BORDER,
+}: {
+  stats: { label: string; value: string | number }[];
+  textColor?: string;
+  subtextColor?: string;
+  borderColor?: string;
+}) {
   return (
     <View style={hs.row}>
       {stats.map((stat, i) => (
         <Fragment key={stat.label}>
           <View style={hs.box}>
-            <Text style={hs.value}>{stat.value}</Text>
-            <Text style={hs.label}>{stat.label}</Text>
+            <Text style={[hs.value, { color: textColor }]}>{stat.value}</Text>
+            <Text style={[hs.label, { color: subtextColor }]}>{stat.label}</Text>
           </View>
-          {i < stats.length - 1 && <View style={hs.divider} />}
+          {i < stats.length - 1 && <View style={[hs.divider, { backgroundColor: borderColor }]} />}
         </Fragment>
       ))}
     </View>
@@ -215,11 +225,15 @@ function RatingDistribution({
   onRatingPress,
   tint = ACCENT,
   trackColor = BORDER,
+  textColor = TEXT,
+  subtextColor = SUBTEXT,
 }: {
   loggedAlbums: LoggedAlbum[];
   onRatingPress: (rating: number, albums: LoggedAlbum[]) => void;
   tint?: string;
   trackColor?: string;
+  textColor?: string;
+  subtextColor?: string;
 }) {
   const distribution = Array.from({ length: 10 }, (_, i) => ({
     rating: i + 1,
@@ -238,7 +252,7 @@ function RatingDistribution({
             style={({ pressed }) => [rd.row, count > 0 && { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => { if (count > 0) onRatingPress(rating, albums); }}
             disabled={count === 0}>
-            <Text style={rd.ratingLabel}>{rating}</Text>
+            <Text style={[rd.ratingLabel, { color: subtextColor }]}>{rating}</Text>
             <View style={[rd.track, { backgroundColor: trackColor }]}>
               <View style={[rd.fill, {
                 flex: filled,
@@ -247,11 +261,11 @@ function RatingDistribution({
               }]} />
               {filled < 1 && <View style={{ flex: 1 - filled }} />}
             </View>
-            <Text style={rd.countLabel}>{count}</Text>
+            <Text style={[rd.countLabel, { color: textColor }]}>{count}</Text>
           </Pressable>
         );
       })}
-      <Text style={rd.hint}>Tap a bar to see albums</Text>
+      <Text style={[rd.hint, { color: subtextColor }]}>Tap a bar to see albums</Text>
     </View>
   );
 }
@@ -277,6 +291,9 @@ function BarRow({
   onPress,
   tint = ACCENT,
   trackColor = BORDER,
+  textColor = TEXT,
+  subtextColor = SUBTEXT,
+  pillBgColor,
 }: {
   label: string;
   count: number;
@@ -286,6 +303,9 @@ function BarRow({
   onPress?: () => void;
   tint?: string;
   trackColor?: string;
+  textColor?: string;
+  subtextColor?: string;
+  pillBgColor?: string;
 }) {
   const pct = maxCount > 0 ? Math.max(count / maxCount, 0.02) : 0;
   return (
@@ -294,17 +314,17 @@ function BarRow({
       onPress={onPress}
       disabled={!onPress}>
       {pill ? (
-        <View style={br.pill}>
-          <Text style={br.pillText} numberOfLines={1}>{label}</Text>
+        <View style={[br.pill, pillBgColor ? { backgroundColor: pillBgColor } : undefined]}>
+          <Text style={[br.pillText, { color: textColor }]} numberOfLines={1}>{label}</Text>
         </View>
       ) : (
-        <Text style={br.label} numberOfLines={1}>{label}</Text>
+        <Text style={[br.label, { color: textColor }]} numberOfLines={1}>{label}</Text>
       )}
       <View style={[br.track, { backgroundColor: trackColor }]}>
         <View style={[br.fill, { flex: pct, opacity: 0.45 + pct * 0.55, backgroundColor: tint }]} />
         <View style={{ flex: 1 - pct }} />
       </View>
-      <Text style={br.count}>{count}</Text>
+      <Text style={[br.count, { color: subtextColor }]}>{count}</Text>
     </Pressable>
   );
 }
@@ -329,12 +349,16 @@ function ArtistGridCard({
   imageUrl,
   onPress,
   cardW,
+  textColor = TEXT,
+  subtextColor = SUBTEXT,
 }: {
   artist: string;
   label: string;
   imageUrl?: string;
   onPress: () => void;
   cardW: number;
+  textColor?: string;
+  subtextColor?: string;
 }) {
   const imgSize = cardW - 20;
   const initial = artist.trim().charAt(0).toUpperCase();
@@ -355,8 +379,8 @@ function ArtistGridCard({
           <Text style={{ color: '#f5e6c8', fontSize: imgSize * 0.38, fontWeight: '700' }}>{initial}</Text>
         </View>
       )}
-      <Text style={ag.name} numberOfLines={2}>{artist}</Text>
-      <Text style={ag.sub}>{label}</Text>
+      <Text style={[ag.name, { color: textColor }]} numberOfLines={2}>{artist}</Text>
+      <Text style={[ag.sub,  { color: subtextColor }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -423,10 +447,16 @@ function YearChart({
   loggedAlbums,
   onAlbumPress,
   tint = ACCENT,
+  textColor = TEXT,
+  subtextColor = SUBTEXT,
+  borderColor = BORDER,
 }: {
   loggedAlbums: LoggedAlbum[];
   onAlbumPress: (album: LoggedAlbum) => void;
   tint?: string;
+  textColor?: string;
+  subtextColor?: string;
+  borderColor?: string;
 }) {
   const [view,        setView]        = useState<ChartView>('albums');
   const [drillDecade, setDrillDecade] = useState<number | null>(null);
@@ -470,13 +500,13 @@ function YearChart({
           </Pressable>
         ) : <View />}
 
-        <View style={yc.toggle}>
+        <View style={[yc.toggle, { backgroundColor: borderColor }]}>
           {(['albums', 'ratings'] as ChartView[]).map(v => (
             <Pressable
               key={v}
               style={[yc.toggleBtn, view === v && { backgroundColor: tint }]}
               onPress={() => setView(v)}>
-              <Text style={[yc.toggleText, view === v && yc.toggleTextActive]}>
+              <Text style={[yc.toggleText, { color: subtextColor }, view === v && yc.toggleTextActive]}>
                 {v === 'albums' ? 'Albums' : 'Avg Rating'}
               </Text>
             </Pressable>
@@ -489,7 +519,7 @@ function YearChart({
         <View style={[yc.chartWrap, { height: CHART_H + 36 }]}>
           {/* Guide lines */}
           {[0.25, 0.5, 0.75, 1].map(pct => (
-            <View key={pct} style={[yc.guide, { bottom: pct * CHART_H + 28 }]} />
+            <View key={pct} style={[yc.guide, { bottom: pct * CHART_H + 28, backgroundColor: borderColor }]} />
           ))}
 
           {/* Bars */}
@@ -508,11 +538,11 @@ function YearChart({
                 style={({ pressed }) => [yc.col, pressable && pressed && { opacity: 0.6 }]}
                 onPress={() => handleBarPress(bucket)}
                 disabled={!pressable}>
-                <Text style={[yc.valLabel, { opacity: valLabel ? 1 : 0 }]}>{valLabel || '0'}</Text>
+                <Text style={[yc.valLabel, { opacity: valLabel ? 1 : 0, color: textColor }]}>{valLabel || '0'}</Text>
                 <View style={[yc.barArea, { height: CHART_H }]}>
                   <View style={[yc.bar, { height: barH, backgroundColor: tint }]} />
                 </View>
-                <Text style={yc.decLabel}>{bucket.label}</Text>
+                <Text style={[yc.decLabel, { color: subtextColor }]}>{bucket.label}</Text>
               </Pressable>
             );
           })}
@@ -534,10 +564,10 @@ function YearChart({
             </Text>
             <FontAwesome name="chevron-right" size={11} color={tint} />
           </Pressable>
-          <Text style={yc.hint}>Tap a bar to see albums</Text>
+          <Text style={[yc.hint, { color: subtextColor }]}>Tap a bar to see albums</Text>
         </>
       ) : (
-        <Text style={yc.hint}>Tap a decade to explore</Text>
+        <Text style={[yc.hint, { color: subtextColor }]}>Tap a decade to explore</Text>
       )}
     </>
   );
@@ -586,7 +616,7 @@ export default function MyStatsScreen() {
   const colors = (isPro && proTheme !== 'default')
     ? themeToColors(getProTheme(proTheme))
     : Colors[colorScheme ?? 'dark'];
-  const isDark = colorScheme === 'dark';
+  const isDark = colors.isDark;
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { loggedAlbums, isLoaded } = useAlbums();
@@ -932,25 +962,25 @@ export default function MyStatsScreen() {
         {/* ── Hero Stats ────────────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
           <Text style={[s.cardTitle, { color: colors.textMuted, paddingHorizontal: 18, paddingTop: 18, marginBottom: 0 }]}>MY STATS</Text>
-          <StatRow stats={heroStats.slice(0, 3)} />
+          <StatRow stats={heroStats.slice(0, 3)} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: cardBorder, marginHorizontal: 8 }} />
-          <StatRow stats={heroStats.slice(3)} />
+          <StatRow stats={heroStats.slice(3)} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
         </View>
 
         {/* ── Year Chart ────────────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <Text style={[s.cardTitle, { color: colors.textMuted }]}>BY RELEASE YEAR</Text>
-          <YearChart loggedAlbums={loggedAlbums} onAlbumPress={handleAlbumPress} tint={colors.tint} />
+          <YearChart loggedAlbums={loggedAlbums} onAlbumPress={handleAlbumPress} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
         </View>
 
         {/* ── Rating Distribution ────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={s.cardTitleRow}>
             <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>RATING BREAKDOWN</Text>
-            {ratedAlbums.length > 0 && <Text style={s.cardTitleValue}>{avgRating} avg</Text>}
+            {ratedAlbums.length > 0 && <Text style={[s.cardTitleValue, { color: colors.text }]}>{avgRating} avg</Text>}
           </View>
           {ratedAlbums.length > 0 ? (
-            <RatingDistribution loggedAlbums={loggedAlbums} onRatingPress={handleRatingPress} tint={colors.tint} trackColor={cardBorder} />
+            <RatingDistribution loggedAlbums={loggedAlbums} onRatingPress={handleRatingPress} tint={colors.tint} trackColor={cardBorder} textColor={colors.text} subtextColor={colors.subtext} />
           ) : (
             <EmptyState text="Rate some albums to see your breakdown." />
           )}
@@ -1010,10 +1040,10 @@ export default function MyStatsScreen() {
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={s.cardTitleRow}>
             <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>MOST LISTEND ARTISTS</Text>
-            <View style={yc.toggle}>
+            <View style={[yc.toggle, { backgroundColor: colors.border }]}>
               {(['listend', 'rated'] as const).map(v => (
                 <Pressable key={v} onPress={() => setArtistView(v)} style={[yc.toggleBtn, artistView === v && { backgroundColor: colors.tint }]}>
-                  <Text style={[yc.toggleText, artistView === v && yc.toggleTextActive]}>
+                  <Text style={[yc.toggleText, { color: colors.subtext }, artistView === v && yc.toggleTextActive]}>
                     {v === 'listend' ? 'Most Listend' : 'Highest Rated'}
                   </Text>
                 </Pressable>
@@ -1044,6 +1074,8 @@ export default function MyStatsScreen() {
                         label={sub}
                         imageUrl={artistImages[artist]}
                         cardW={cardW}
+                        textColor={colors.text}
+                        subtextColor={colors.subtext}
                         onPress={() => setListModal({
                           title: artist,
                           albums: artistView === 'listend'
@@ -1067,10 +1099,10 @@ export default function MyStatsScreen() {
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={s.cardTitleRow}>
             <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>MOST LISTEND GENRES</Text>
-            <View style={yc.toggle}>
+            <View style={[yc.toggle, { backgroundColor: colors.border }]}>
               {(['listend', 'rated'] as const).map(v => (
                 <Pressable key={v} onPress={() => setGenreView(v)} style={[yc.toggleBtn, genreView === v && { backgroundColor: colors.tint }]}>
-                  <Text style={[yc.toggleText, genreView === v && yc.toggleTextActive]}>
+                  <Text style={[yc.toggleText, { color: colors.subtext }, genreView === v && yc.toggleTextActive]}>
                     {v === 'listend' ? 'Most Listend' : 'Highest Rated'}
                   </Text>
                 </Pressable>
@@ -1090,6 +1122,9 @@ export default function MyStatsScreen() {
                     pill
                     tint={colors.tint}
                     trackColor={cardBorder}
+                    textColor={colors.text}
+                    subtextColor={colors.subtext}
+                    pillBgColor={colors.elevated}
                     onPress={() => setListModal({
                       title: genre,
                       albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre),
@@ -1114,6 +1149,9 @@ export default function MyStatsScreen() {
                     pill
                     tint={colors.tint}
                     trackColor={cardBorder}
+                    textColor={colors.text}
+                    subtextColor={colors.subtext}
+                    pillBgColor={colors.elevated}
                     onPress={() => setListModal({
                       title: genre,
                       albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre && a.rating > 0),
@@ -1136,27 +1174,27 @@ export default function MyStatsScreen() {
             {/* Stats strip */}
             <View style={[rl.strip, { borderColor: cardBorder }]}>
               <View style={rl.cell}>
-                <Text style={rl.val}>{totalReListens}</Text>
-                <Text style={rl.lbl}>Re-Listens</Text>
+                <Text style={[rl.val, { color: colors.text }]}>{totalReListens}</Text>
+                <Text style={[rl.lbl, { color: colors.subtext }]}>Re-Listens</Text>
               </View>
               <View style={[rl.divider, { backgroundColor: cardBorder }]} />
               <View style={rl.cell}>
-                <Text style={[rl.val, { color: evAvgDelta >= 0.5 ? GROW_CLR : evAvgDelta <= -0.5 ? FADE_CLR : SUBTEXT }]}>
+                <Text style={[rl.val, { color: evAvgDelta >= 0.5 ? GROW_CLR : evAvgDelta <= -0.5 ? FADE_CLR : colors.subtext }]}>
                   {evAvgDelta > 0 ? '+' : ''}{evAvgDelta.toFixed(1)}
                 </Text>
-                <Text style={rl.lbl}>Avg Change</Text>
+                <Text style={[rl.lbl, { color: colors.subtext }]}>Avg Change</Text>
               </View>
               <View style={[rl.divider, { backgroundColor: cardBorder }]} />
               <View style={rl.cell}>
-                <Text style={rl.val}>{evFirstListenAvg > 0 ? evFirstListenAvg.toFixed(1) : '—'}</Text>
-                <Text style={rl.lbl}>First Listen</Text>
+                <Text style={[rl.val, { color: colors.text }]}>{evFirstListenAvg > 0 ? evFirstListenAvg.toFixed(1) : '—'}</Text>
+                <Text style={[rl.lbl, { color: colors.subtext }]}>First Listen</Text>
               </View>
               <View style={[rl.divider, { backgroundColor: cardBorder }]} />
               <View style={rl.cell}>
-                <Text style={[rl.val, { color: evLongTermAvg > evFirstListenAvg ? GROW_CLR : evLongTermAvg < evFirstListenAvg ? FADE_CLR : TEXT }]}>
+                <Text style={[rl.val, { color: evLongTermAvg > evFirstListenAvg ? GROW_CLR : evLongTermAvg < evFirstListenAvg ? FADE_CLR : colors.text }]}>
                   {evLongTermAvg > 0 ? evLongTermAvg.toFixed(1) : '—'}
                 </Text>
-                <Text style={rl.lbl}>Long-Term</Text>
+                <Text style={[rl.lbl, { color: colors.subtext }]}>Long-Term</Text>
               </View>
             </View>
 
@@ -1236,9 +1274,9 @@ export default function MyStatsScreen() {
                             router.push({ pathname: '/discover-featured-playlist', params: { id: pl.id, name: pl.name } } as any);
                           }
                         }}>
-                        <ProgressRing done={pl.done} total={pl.total} size={68} tint={colors.tint} trackColor={cardBorder} />
-                        <Text style={pp.name} numberOfLines={2}>{pl.name}</Text>
-                        <Text style={pp.count}>
+                        <ProgressRing done={pl.done} total={pl.total} size={68} tint={colors.tint} trackColor={cardBorder} textColor={colors.text} />
+                        <Text style={[pp.name, { color: colors.text }]} numberOfLines={2}>{pl.name}</Text>
+                        <Text style={[pp.count, { color: colors.subtext }]}>
                           {pl.total > 0 ? `${pl.done} / ${pl.total}` : '—'}
                         </Text>
                       </Pressable>
@@ -1275,12 +1313,14 @@ function ProgressRing({
   size = 72,
   tint = ACCENT,
   trackColor = BORDER,
+  textColor = TEXT,
 }: {
   done: number;
   total: number;
   size?: number;
   tint?: string;
   trackColor?: string;
+  textColor?: string;
 }) {
   const strokeWidth = 6;
   const radius = (size - strokeWidth) / 2;
@@ -1308,7 +1348,7 @@ function ProgressRing({
           origin={`${center}, ${center}`}
         />
       </Svg>
-      <Text style={{ color: TEXT, fontSize: 13, fontWeight: '700' }}>{label}</Text>
+      <Text style={{ color: textColor, fontSize: 13, fontWeight: '700' }}>{label}</Text>
     </View>
   );
 }

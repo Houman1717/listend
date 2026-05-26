@@ -22,7 +22,7 @@ import { useAlbums } from '@/context/AlbumsContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { type ColorsShape } from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 
@@ -35,7 +35,7 @@ const POLL_INTERVAL_MS = 5000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ColorsType = typeof Colors.light;
+type ColorsType = ColorsShape;
 
 type MessageType = 'text' | 'album';
 

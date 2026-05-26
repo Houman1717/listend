@@ -334,7 +334,7 @@ export default function MyReviewsScreen() {
   const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
     ? themeToColors(getProTheme(_themeKey))
     : Colors[colorScheme ?? 'dark'];
-  const isDark = colorScheme === 'dark';
+  const isDark = colors.isDark;
   const router = useRouter();
   const { loggedAlbums, updateDuration } = useAlbums();
   const { user } = useAuth();
