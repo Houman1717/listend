@@ -625,7 +625,7 @@ export default function MyStatsScreen() {
   const isDark = colors.isDark;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { loggedAlbums: ownAlbums, isLoaded: ownLoaded } = useAlbums();
+  const { loggedAlbums: ownAlbums, isLoaded: ownLoaded, topAlbums: myTop5Albums, topArtists: myTop5Artists } = useAlbums();
 
   // Other-user album fetch
   const [otherAlbums,  setOtherAlbums]  = useState<LoggedAlbum[]>([]);
@@ -681,8 +681,13 @@ export default function MyStatsScreen() {
   } | null>(null);
   const [friendAlbums,  setFriendAlbums]  = useState<LoggedAlbum[]>([]);
   const [friendLoading, setFriendLoading] = useState(false);
-  const [sharedModal,   setSharedModal]   = useState<'albums' | 'artists' | null>(null);
-  const [followingList, setFollowingList] = useState<{ id: string; displayName: string; username: string; avatarUrl: string | null; isPro: boolean }[]>([]);
+  const [sharedModal,        setSharedModal]        = useState<'albums' | 'artists' | null>(null);
+  const [followingList,      setFollowingList]      = useState<{ id: string; displayName: string; username: string; avatarUrl: string | null; isPro: boolean }[]>([]);
+  const [friendTop5Albums,   setFriendTop5Albums]   = useState<{ id: string; title: string; artworkUrl?: string }[]>([]);
+  const [friendTop5Artists,  setFriendTop5Artists]  = useState<{ id: string; name: string; artworkUrl?: string }[]>([]);
+  const [friendLikedArtists, setFriendLikedArtists] = useState<{ artistId: string; name: string }[]>([]);
+  const [myLikedArtists,     setMyLikedArtists]     = useState<{ artistId: string; name: string }[]>([]);
+  const [friendReviewCount,  setFriendReviewCount]  = useState(0);
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
@@ -1015,22 +1020,53 @@ export default function MyStatsScreen() {
     });
     if (data.is_pro) {
       setFriendLoading(true);
-      const { data: rows } = await supabase
-        .from('user_albums')
-        .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags')
-        .eq('user_id', data.id)
-        .not('listened_at', 'is', null);
-      setFriendAlbums((rows ?? []).map(r => ({
+      await loadFriendData(data.id);
+      setFriendLoading(false);
+    }
+    setCompareSearching(false);
+  }
+
+  async function loadFriendData(friendId: string) {
+    const [albumsRes, profileRes, likedRes, myLikedRes] = await Promise.allSettled([
+      supabase.from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, review, is_relistened')
+        .eq('user_id', friendId).not('listened_at', 'is', null),
+      supabase.from('profiles')
+        .select('top_albums, top_artists')
+        .eq('id', friendId).single(),
+      supabase.from('liked_artists')
+        .select('artist_id, name').eq('user_id', friendId),
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (!session?.user?.id) return { data: [] };
+        return supabase.from('liked_artists').select('artist_id, name').eq('user_id', session.user.id);
+      }),
+    ]);
+
+    if (albumsRes.status === 'fulfilled' && albumsRes.value.data) {
+      const rows = albumsRes.value.data;
+      setFriendAlbums(rows.map(r => ({
         id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
         year: r.year ?? 0, rating: r.rating ?? 0,
         dateLogged: r.listened_at ?? new Date().toISOString(),
         artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
         durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
-        reListenCount: 0, isRelistened: false,
+        reListenCount: 0, isRelistened: r.is_relistened ?? false,
+        review: r.review ?? undefined,
       })));
-      setFriendLoading(false);
+      setFriendReviewCount(rows.filter(r => r.review).length);
     }
-    setCompareSearching(false);
+    if (profileRes.status === 'fulfilled' && profileRes.value.data) {
+      const p = profileRes.value.data;
+      setFriendTop5Albums((p.top_albums ?? []).filter(Boolean).map((a: any) => ({ id: a.id, title: a.title, artworkUrl: a.artworkUrl })));
+      setFriendTop5Artists((p.top_artists ?? []).filter(Boolean).map((a: any) => ({ id: a.id, name: a.name, artworkUrl: a.artworkUrl })));
+    }
+    if (likedRes.status === 'fulfilled' && likedRes.value.data) {
+      setFriendLikedArtists((likedRes.value.data as any[]).map(r => ({ artistId: r.artist_id, name: r.name })));
+    }
+    if (myLikedRes.status === 'fulfilled') {
+      const res = myLikedRes.value as any;
+      setMyLikedArtists((res.data ?? []).map((r: any) => ({ artistId: r.artist_id, name: r.name })));
+    }
   }
 
   // ── Compare: computed values ──────────────────────────────────────────────
@@ -1062,6 +1098,56 @@ export default function MyStatsScreen() {
     if (genre) friendGenreCounts.set(genre, (friendGenreCounts.get(genre) ?? 0) + 1);
   }
   const friendTopGenres   = [...friendGenreCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  // ── Extra compare stats ───────────────────────────────────────────────────
+  // Era preference
+  const myYears     = ownAlbums.map(a => a.year).filter(y => y > 1900);
+  const friendYears = friendAlbums.map(a => a.year).filter(y => y > 1900);
+  const myAvgEra    = myYears.length > 0 ? Math.round(myYears.reduce((s, y) => s + y, 0) / myYears.length) : null;
+  const friendAvgEra = friendYears.length > 0 ? Math.round(friendYears.reduce((s, y) => s + y, 0) / friendYears.length) : null;
+
+  // Re-listen rate
+  const myRelistenRate     = ownAlbums.length > 0 ? Math.round((ownAlbums.filter(a => a.isRelistened).length / ownAlbums.length) * 100) : 0;
+  const friendRelistenRate = friendAlbums.length > 0 ? Math.round((friendAlbums.filter(a => a.isRelistened).length / friendAlbums.length) * 100) : 0;
+
+  // Most active month
+  function mostActiveMonth(albums: LoggedAlbum[]) {
+    const counts = new Map<string, number>();
+    for (const a of albums) {
+      const d = new Date(a.dateLogged);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    if (counts.size === 0) return '—';
+    const [top] = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const [year, month] = top[0].split('-');
+    return new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
+  }
+  const myActiveMonth     = mostActiveMonth(ownAlbums);
+  const friendActiveMonth = mostActiveMonth(friendAlbums);
+
+  // Review count
+  const myReviewCount = ownAlbums.filter(a => a.review).length;
+
+  // Top 5 overlap
+  const myTop5AlbumIds   = new Set(myTop5Albums.filter(Boolean).map((a: any) => a?.id));
+  const myTop5ArtistIds  = new Set(myTop5Artists.filter(Boolean).map((a: any) => a?.id));
+  const sharedTop5Albums  = friendTop5Albums.filter(a => myTop5AlbumIds.has(a.id));
+  const sharedTop5Artists = friendTop5Artists.filter(a => myTop5ArtistIds.has(a.id));
+
+  // Liked artists in common
+  const myLikedSet      = new Set(myLikedArtists.map(a => a.artistId));
+  const sharedLikedArtists = friendLikedArtists.filter(a => myLikedSet.has(a.artistId));
+
+  // Taste label
+  function tasteLabel(pct: number): { label: string; emoji: string } {
+    if (pct >= 80) return { label: 'Music Twins',      emoji: '🎵' };
+    if (pct >= 60) return { label: 'Genre Siblings',   emoji: '🎸' };
+    if (pct >= 40) return { label: 'Kindred Ears',     emoji: '🎧' };
+    if (pct >= 20) return { label: 'Different Worlds', emoji: '🌍' };
+    return              { label: 'Polar Opposites',    emoji: '🎭' };
+  }
+  const taste = tasteLabel(compatibility);
 
   function handleRatingPress(rating: number, albums: LoggedAlbum[]) {
     setSelectedAlbums(albums);
@@ -1223,22 +1309,14 @@ export default function MyStatsScreen() {
                     key={person.id}
                     onPress={async () => {
                       setCompareError(null);
+                      setFriendAlbums([]);
+                      setFriendTop5Albums([]);
+                      setFriendTop5Artists([]);
+                      setFriendLikedArtists([]);
                       setCompareFriend(person);
                       if (person.isPro) {
                         setFriendLoading(true);
-                        const { data: rows } = await supabase
-                          .from('user_albums')
-                          .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags')
-                          .eq('user_id', person.id)
-                          .not('listened_at', 'is', null);
-                        setFriendAlbums((rows ?? []).map(r => ({
-                          id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
-                          year: r.year ?? 0, rating: r.rating ?? 0,
-                          dateLogged: r.listened_at ?? new Date().toISOString(),
-                          artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
-                          durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
-                          reListenCount: 0, isRelistened: false,
-                        })));
+                        await loadFriendData(person.id);
                         setFriendLoading(false);
                       }
                     }}
@@ -1306,7 +1384,11 @@ export default function MyStatsScreen() {
                     <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', gap: 6 }]}>
                       <Text style={[s.cardTitle, { color: colors.textMuted }]}>COMPATIBILITY</Text>
                       <Text style={{ color: colors.tint, fontSize: 56, fontWeight: '800', letterSpacing: -2 }}>{compatibility}%</Text>
-                      <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontSize: 20 }}>{taste.emoji}</Text>
+                        <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{taste.label}</Text>
+                      </View>
+                      <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center', marginTop: 2 }}>
                         {sharedArtistList.length} shared artists · {sharedAlbumList.length} shared albums
                       </Text>
                     </View>
@@ -1321,10 +1403,14 @@ export default function MyStatsScreen() {
                         <Text style={{ width: 64, color: colors.subtext, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>THEM</Text>
                       </View>
                       {[
-                        { label: 'Albums Logged',   mine: ownAlbums.length,  theirs: friendAlbums.length },
-                        { label: 'Avg Rating',      mine: avgRating,         theirs: friendAvgRating },
-                        { label: 'Listening Hours', mine: totalHours,        theirs: friendHoursVal },
-                        { label: 'Unique Artists',  mine: uniqueArtists,     theirs: friendArtistCount },
+                        { label: 'Albums Logged',   mine: ownAlbums.length,    theirs: friendAlbums.length },
+                        { label: 'Avg Rating',      mine: avgRating,           theirs: friendAvgRating },
+                        { label: 'Listening Hours', mine: totalHours,          theirs: friendHoursVal },
+                        { label: 'Unique Artists',  mine: uniqueArtists,       theirs: friendArtistCount },
+                        { label: 'Reviews Written', mine: myReviewCount,       theirs: friendReviewCount },
+                        { label: 'Re-listen Rate',  mine: `${myRelistenRate}%`,   theirs: `${friendRelistenRate}%` },
+                        { label: 'Avg Era',         mine: myAvgEra ?? '—',    theirs: friendAvgEra ?? '—' },
+                        { label: 'Peak Month',      mine: myActiveMonth,       theirs: friendActiveMonth },
                       ].map((row, i, arr) => (
                         <View key={row.label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: i < arr.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
                           <Text style={{ flex: 1, color: colors.text, fontSize: 14, fontWeight: '600' }}>{row.label}</Text>
@@ -1357,6 +1443,57 @@ export default function MyStatsScreen() {
                       </View>
                       <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
                     </Pressable>
+
+                    {/* Liked artists in common */}
+                    {(myLikedArtists.length > 0 || friendLikedArtists.length > 0) && (
+                      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <Text style={[s.cardTitle, { color: colors.textMuted }]}>LIKED ARTISTS IN COMMON</Text>
+                        {sharedLikedArtists.length === 0 ? (
+                          <Text style={{ color: colors.subtext, fontSize: 14, textAlign: 'center' }}>No shared liked artists yet</Text>
+                        ) : (
+                          <>
+                            <Text style={{ color: colors.tint, fontSize: 28, fontWeight: '800', textAlign: 'center' }}>{sharedLikedArtists.length}</Text>
+                            <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center', marginTop: 2 }}>
+                              {sharedLikedArtists.slice(0, 5).map(a => a.name).join(', ')}{sharedLikedArtists.length > 5 ? ` +${sharedLikedArtists.length - 5} more` : ''}
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Top 5 overlap */}
+                    {(friendTop5Albums.length > 0 || friendTop5Artists.length > 0) && (
+                      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <Text style={[s.cardTitle, { color: colors.textMuted }]}>TOP 5 OVERLAP</Text>
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                          <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+                            <Text style={{ color: colors.tint, fontSize: 28, fontWeight: '800' }}>{sharedTop5Albums.length}</Text>
+                            <Text style={{ color: colors.subtext, fontSize: 12, textAlign: 'center' }}>Albums in both{'\n'}Top 5s</Text>
+                          </View>
+                          <View style={{ width: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+                          <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+                            <Text style={{ color: colors.tint, fontSize: 28, fontWeight: '800' }}>{sharedTop5Artists.length}</Text>
+                            <Text style={{ color: colors.subtext, fontSize: 12, textAlign: 'center' }}>Artists in both{'\n'}Top 5s</Text>
+                          </View>
+                        </View>
+                        {sharedTop5Albums.length > 0 && (
+                          <View style={{ marginTop: 12, gap: 4 }}>
+                            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>SHARED ALBUMS</Text>
+                            {sharedTop5Albums.map(a => (
+                              <Text key={a.id} style={{ color: colors.text, fontSize: 13 }}>• {a.title}</Text>
+                            ))}
+                          </View>
+                        )}
+                        {sharedTop5Artists.length > 0 && (
+                          <View style={{ marginTop: 10, gap: 4 }}>
+                            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>SHARED ARTISTS</Text>
+                            {sharedTop5Artists.map(a => (
+                              <Text key={a.id} style={{ color: colors.text, fontSize: 13 }}>• {a.name}</Text>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
 
                     {/* Genre comparison */}
                     {(topGenres.length > 0 || friendTopGenres.length > 0) && (
