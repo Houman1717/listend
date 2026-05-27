@@ -969,11 +969,13 @@ export default function MyStatsScreen() {
     setCompareError(null);
     setCompareFriend(null);
     setFriendAlbums([]);
-    const { data } = await supabase
+    const pattern = `%${q}%`;
+    const { data: rows } = await supabase
       .from('profiles')
       .select('id, display_name, username, avatar_url, is_pro')
-      .ilike('username', q)
-      .maybeSingle();
+      .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
+      .limit(1);
+    const data = rows?.[0] ?? null;
     if (!data) {
       setCompareError('No user found with that username.');
       setCompareSearching(false);
