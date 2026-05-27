@@ -1141,11 +1141,11 @@ export default function MyStatsScreen() {
 
   // Taste label
   function tasteLabel(pct: number): { label: string; emoji: string } {
-    if (pct >= 80) return { label: 'Music Twins',        emoji: '🎵' };
-    if (pct >= 60) return { label: 'Frequency Matched', emoji: '📻' };
-    if (pct >= 40) return { label: 'Vibe Aligned',      emoji: '🎯' };
-    if (pct >= 20) return { label: 'Different Worlds',  emoji: '🌍' };
-    return              { label: 'Polar Opposites',     emoji: '🎭' };
+    if (pct >= 80) return { label: 'Music Twins',        emoji: '' };
+    if (pct >= 60) return { label: 'Frequency Matched', emoji: '' };
+    if (pct >= 40) return { label: 'Vibe Aligned',      emoji: '' };
+    if (pct >= 20) return { label: 'Different Worlds',  emoji: '' };
+    return              { label: 'Polar Opposites',     emoji: '' };
   }
   const taste = tasteLabel(compatibility);
 
@@ -1384,10 +1384,7 @@ export default function MyStatsScreen() {
                     <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', gap: 6 }]}>
                       <Text style={[s.cardTitle, { color: colors.textMuted }]}>COMPATIBILITY</Text>
                       <Text style={{ color: colors.tint, fontSize: 56, fontWeight: '800', letterSpacing: -2 }}>{compatibility}%</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontSize: 20 }}>{taste.emoji}</Text>
-                        <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{taste.label}</Text>
-                      </View>
+                      <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{taste.label}</Text>
                       <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center', marginTop: 2 }}>
                         {sharedArtistList.length} shared artists · {sharedAlbumList.length} shared albums
                       </Text>
