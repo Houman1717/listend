@@ -229,6 +229,46 @@ app.get('/genres', async (req, res) => {
       });
     }
 
+    // Auto-seed any genres defined in genreData.js that aren't in the DB yet.
+    const missingGenres = Object.keys(GENRE_ALBUMS).filter(g => !grouped[g]);
+    if (missingGenres.length > 0) {
+      console.log('[/genres] auto-seeding missing genres:', missingGenres);
+      // Fire-and-forget: seed in background, don't block this response.
+      (async () => {
+        for (const genre of missingGenres) {
+          const albums = GENRE_ALBUMS[genre];
+          for (let i = 0; i < albums.length; i += 4) {
+            const batch = albums.slice(i, i + 4);
+            await Promise.all(batch.map(async ({ artist, title }) => {
+              try {
+                const q    = encodeURIComponent(`${artist} ${title}`);
+                const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=1`);
+                const item = data.results?.albums?.data?.[0];
+                if (!item) return;
+                const artworkUrl = amArtwork(item.attributes?.artwork);
+                const year       = parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10);
+                await supabase.from('genre_albums').upsert({
+                  genre_label: genre,
+                  spotify_id:  item.id,
+                  title:       item.attributes?.name    ?? title,
+                  artist:      item.attributes?.artistName ?? artist,
+                  artwork_url: artworkUrl,
+                  year,
+                }, { onConflict: 'genre_label,spotify_id', ignoreDuplicates: true });
+              } catch (e) {
+                console.error(`[/genres] auto-seed error ${genre} — ${artist} ${title}:`, e.message);
+              }
+            }));
+            await new Promise(r => setTimeout(r, 500));
+          }
+          console.log(`[/genres] auto-seeded: ${genre}`);
+        }
+        // Bust cache so next request picks up newly seeded genres.
+        cacheClear('genres');
+        await deleteCache('genres');
+      })();
+    }
+
     cacheSet(CACHE_KEY, grouped, TTL_6H);
     await setCache(CACHE_KEY, grouped);
     res.json(grouped);
