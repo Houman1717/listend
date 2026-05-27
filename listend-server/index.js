@@ -2921,4 +2921,48 @@ app.get('/api/stats/artist-images', requireAuth, [
 
 app.listen(PORT, () => {
   console.log(`Listend server listening on port ${PORT}`);
+
+  // Seed any genres in genreData.js that aren't yet in the DB.
+  // Runs once on startup — safe to redeploy, upsert is idempotent.
+  (async () => {
+    try {
+      const { data } = await supabase.from('genre_albums').select('genre_label').limit(1000);
+      const seeded = new Set((data ?? []).map(r => r.genre_label));
+      const missing = Object.keys(GENRE_ALBUMS).filter(g => !seeded.has(g));
+      if (missing.length === 0) return;
+
+      console.log('[startup] seeding missing genres:', missing);
+      for (const genre of missing) {
+        const albums = GENRE_ALBUMS[genre];
+        for (let i = 0; i < albums.length; i += 4) {
+          const batch = albums.slice(i, i + 4);
+          await Promise.all(batch.map(async ({ artist, title }) => {
+            try {
+              const q    = encodeURIComponent(`${artist} ${title}`);
+              const res  = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=1`);
+              const item = res.results?.albums?.data?.[0];
+              if (!item) return;
+              await supabase.from('genre_albums').upsert({
+                genre_label: genre,
+                spotify_id:  item.id,
+                title:       item.attributes?.name ?? title,
+                artist:      item.attributes?.artistName ?? artist,
+                artwork_url: amArtwork(item.attributes?.artwork),
+                year:        parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+              }, { onConflict: 'genre_label,spotify_id', ignoreDuplicates: true });
+            } catch (e) {
+              console.error(`[startup] seed error ${genre} — ${artist} ${title}:`, e.message);
+            }
+          }));
+          await new Promise(r => setTimeout(r, 500));
+        }
+        console.log(`[startup] seeded: ${genre}`);
+      }
+      cacheClear('genres');
+      await deleteCache('genres');
+      console.log('[startup] genre seed complete');
+    } catch (e) {
+      console.error('[startup] genre seed failed:', e.message);
+    }
+  })();
 });
