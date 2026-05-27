@@ -1550,6 +1550,26 @@ export default function MyStatsScreen() {
           <StatRow stats={heroStats.slice(3)} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
         </View>
 
+        {/* ── Year in Review + Monthly Stats cards ──────────────────────── */}
+        {!viewedUserId && (
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Pressable
+              onPress={() => router.push('/year-in-review' as any)}
+              style={({ pressed }) => [s.card, { flex: 1, backgroundColor: cardBg, borderColor: cardBorder, gap: 6, opacity: pressed ? 0.7 : 1 }]}>
+              <FontAwesome name="calendar" size={18} color={colors.tint} />
+              <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 4 }}>Year in Review</Text>
+              <Text style={{ color: colors.subtext, fontSize: 12 }}>Your yearly wrapped</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/month-in-review' as any)}
+              style={({ pressed }) => [s.card, { flex: 1, backgroundColor: cardBg, borderColor: cardBorder, gap: 6, opacity: pressed ? 0.7 : 1 }]}>
+              <FontAwesome name="bar-chart" size={18} color={colors.tint} />
+              <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 4 }}>Monthly Stats</Text>
+              <Text style={{ color: colors.subtext, fontSize: 12 }}>Browse past months</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* ── Year Chart ────────────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <Text style={[s.cardTitle, { color: colors.textMuted }]}>BY RELEASE YEAR</Text>
