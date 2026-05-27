@@ -39,7 +39,10 @@ type EvolutionEntry = {
   delta:        number;
 };
 
-function EvolutionCard({ entry, onPress }: { entry: EvolutionEntry; onPress: () => void }) {
+function EvolutionCard({ entry, onPress, textColor = TEXT, subtextColor = SUBTEXT, surfaceColor = CARD_BG }: {
+  entry: EvolutionEntry; onPress: () => void;
+  textColor?: string; subtextColor?: string; surfaceColor?: string;
+}) {
   const { album, firstRating, latestRating, delta } = entry;
   const isGrow     = delta > 0;
   const deltaColor = isGrow ? GROW_CLR : FADE_CLR;
@@ -49,16 +52,16 @@ function EvolutionCard({ entry, onPress }: { entry: EvolutionEntry; onPress: () 
       {album.artworkUrl ? (
         <ExpoImage source={{ uri: album.artworkUrl }} style={ev.art} contentFit="cover" cachePolicy="disk" />
       ) : (
-        <View style={[ev.art, { backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }]}>
-          <FontAwesome name="music" size={22} color="rgba(255,255,255,0.3)" />
+        <View style={[ev.art, { backgroundColor: surfaceColor, alignItems: 'center', justifyContent: 'center' }]}>
+          <FontAwesome name="music" size={22} color={subtextColor} />
         </View>
       )}
       <View style={[ev.badge, { backgroundColor: deltaColor }]}>
         <Text style={ev.badgeText}>{sign}{delta}</Text>
       </View>
-      <Text style={ev.title} numberOfLines={2}>{album.title}</Text>
+      <Text style={[ev.title, { color: textColor }]} numberOfLines={2}>{album.title}</Text>
       <View style={ev.ratingRow}>
-        <Text style={ev.ratingOld}>{firstRating}</Text>
+        <Text style={[ev.ratingOld, { color: subtextColor }]}>{firstRating}</Text>
         <FontAwesome name={isGrow ? 'arrow-up' : 'arrow-down'} size={10} color={deltaColor} />
         <Text style={[ev.ratingNew, { color: deltaColor }]}>{latestRating}</Text>
       </View>
@@ -94,41 +97,55 @@ function VolumeBadge({ rating, tint = ACCENT }: { rating: number; tint?: string 
 
 // ─── Album List Modal (reused for rating drilldown + year drilldown) ──────────
 
+type ModalColors = {
+  background: string; surface: string; text: string;
+  subtext: string; tint: string; border: string;
+};
+
 function AlbumListModal({
   title,
   albums,
   onClose,
   onAlbumPress,
   onTitlePress,
+  themeColors,
 }: {
   title: string | null;
   albums: LoggedAlbum[];
   onClose: () => void;
   onAlbumPress: (album: LoggedAlbum) => void;
   onTitlePress?: () => void;
+  themeColors?: ModalColors;
 }) {
   const insets  = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const cw      = calcCardWidth(width);
 
+  const bg      = themeColors?.background ?? '#161616';
+  const txt     = themeColors?.text       ?? TEXT;
+  const sub     = themeColors?.subtext    ?? SUBTEXT;
+  const tint    = themeColors?.tint       ?? ACCENT;
+  const border  = themeColors?.border     ?? BORDER;
+  const surface = themeColors?.surface    ?? CARD_BG;
+
   return (
     <Modal visible={title !== null} transparent animationType="slide" onRequestClose={onClose}>
       <View style={rm.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[rm.sheet, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
-          <View style={rm.handle} />
+        <View style={[rm.sheet, { backgroundColor: bg, borderTopColor: border, paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
+          <View style={[rm.handle, { backgroundColor: border }]} />
           <View style={rm.header}>
             <Pressable onPress={onTitlePress} disabled={!onTitlePress} style={{ flex: 1, marginRight: 12 }}>
-              <Text style={[rm.title, onTitlePress && { color: ACCENT }]}>{title}</Text>
+              <Text style={[rm.title, { color: onTitlePress ? tint : txt }]}>{title}</Text>
               {onTitlePress && (
-                <Text style={{ color: SUBTEXT, fontSize: 12, marginTop: 2 }}>View artist profile →</Text>
+                <Text style={{ color: sub, fontSize: 12, marginTop: 2 }}>View artist profile →</Text>
               )}
             </Pressable>
             <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="times" size={16} color={SUBTEXT} />
+              <FontAwesome name="times" size={16} color={sub} />
             </Pressable>
           </View>
-          <Text style={rm.subtitle}>{albums.length} album{albums.length !== 1 ? 's' : ''}</Text>
+          <Text style={[rm.subtitle, { color: sub }]}>{albums.length} album{albums.length !== 1 ? 's' : ''}</Text>
 
           <FlatList
             data={albums}
@@ -150,15 +167,15 @@ function AlbumListModal({
                     transition={200}
                   />
                 ) : (
-                  <View style={[rm.fallback, { width: cw, height: cw }]}>
-                    <FontAwesome name="music" size={cw * 0.28} color="#7a5535" />
+                  <View style={[rm.fallback, { width: cw, height: cw, backgroundColor: surface }]}>
+                    <FontAwesome name="music" size={cw * 0.28} color={sub} />
                   </View>
                 )}
-                <Text style={rm.cardTitle}  numberOfLines={1}>{item.title}</Text>
-                <Text style={rm.cardArtist} numberOfLines={1}>{item.artist}</Text>
+                <Text style={[rm.cardTitle,  { color: txt }]} numberOfLines={1}>{item.title}</Text>
+                <Text style={[rm.cardArtist, { color: sub }]} numberOfLines={1}>{item.artist}</Text>
                 {item.rating > 0 && (
                   <View style={{ marginTop: 3 }}>
-                    <VolumeBadge rating={item.rating} />
+                    <VolumeBadge rating={item.rating} tint={tint} />
                   </View>
                 )}
               </Pressable>
@@ -172,15 +189,15 @@ function AlbumListModal({
 
 const rm = StyleSheet.create({
   overlay:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet:      { backgroundColor: '#161616', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER, maxHeight: '85%' },
-  handle:     { width: 36, height: 4, borderRadius: 2, backgroundColor: '#4a3020', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  sheet:      { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, maxHeight: '85%' },
+  handle:     { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
   header:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
-  title:      { color: TEXT, fontSize: 18, fontWeight: '700' },
-  subtitle:   { color: SUBTEXT, fontSize: 13, paddingHorizontal: 16, marginBottom: 8 },
-  fallback:   { borderRadius: 8, backgroundColor: CARD_BG, justifyContent: 'center', alignItems: 'center' },
-  cardTitle:  { color: TEXT,    fontSize: 12, fontWeight: '600', marginTop: 4 },
-  cardArtist: { color: SUBTEXT, fontSize: 11, marginTop: 1 },
-  cardRating: { color: ACCENT,  fontSize: 11, fontWeight: '700', marginTop: 2 },
+  title:      { fontSize: 18, fontWeight: '700' },
+  subtitle:   { fontSize: 13, paddingHorizontal: 16, marginBottom: 8 },
+  fallback:   { borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  cardTitle:  { fontSize: 12, fontWeight: '600', marginTop: 4 },
+  cardArtist: { fontSize: 11, marginTop: 1 },
+  cardRating: { fontSize: 11, fontWeight: '700', marginTop: 2 },
 });
 
 // ─── Hero Stats ───────────────────────────────────────────────────────────────
@@ -451,6 +468,7 @@ function YearChart({
   textColor = TEXT,
   subtextColor = SUBTEXT,
   borderColor = BORDER,
+  themeColors,
 }: {
   loggedAlbums: LoggedAlbum[];
   onAlbumPress: (album: LoggedAlbum) => void;
@@ -458,6 +476,7 @@ function YearChart({
   textColor?: string;
   subtextColor?: string;
   borderColor?: string;
+  themeColors?: ModalColors;
 }) {
   const [view,        setView]        = useState<ChartView>('albums');
   const [drillDecade, setDrillDecade] = useState<number | null>(null);
@@ -488,6 +507,7 @@ function YearChart({
         albums={modal?.albums ?? []}
         onClose={() => setModal(null)}
         onAlbumPress={(album) => { setModal(null); setTimeout(() => onAlbumPress(album), 300); }}
+        themeColors={themeColors}
       />
 
       {/* Header row: back button + toggle */}
@@ -665,7 +685,6 @@ export default function MyStatsScreen() {
 
   const [selectedRating, setSelectedRating]   = useState<number | null>(null);
   const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
-  const [countryCount,   setCountryCount]     = useState<number | '...' >('...');
   const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
@@ -706,32 +725,63 @@ export default function MyStatsScreen() {
   const totalMs        = loggedAlbums.reduce((sum, a) => sum + (a.durationMs ?? 0), 0);
   const totalHours     = totalMs > 0 ? Math.round(totalMs / 3_600_000) : '—';
 
-  // Current listening streak — consecutive calendar days with at least one log
+  // ── Streak helpers ────────────────────────────────────────────────────────
+  // Build a set of "YYYY-M-D" keys (0-indexed month) for every day with a log
   const listenDayKeys = new Set(
     loggedAlbums.map(a => {
       const d = new Date(a.dateLogged);
       return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     })
   );
+
+  // Convert a set of "YYYY-M-D" keys → sorted timestamps → find the longest run
+  function longestConsecutiveStreak(dayKeys: Set<string>): number {
+    if (dayKeys.size === 0) return 0;
+    const times = [...dayKeys]
+      .map(k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m, d).getTime(); })
+      .sort((a, b) => a - b);
+    let longest = 1, current = 1;
+    for (let i = 1; i < times.length; i++) {
+      if (times[i] - times[i - 1] === 86_400_000) { current++; longest = Math.max(longest, current); }
+      else { current = 1; }
+    }
+    return longest;
+  }
+
+  // Current streak — count back from today
   let streakDays = 0;
   const today = new Date();
   for (let i = 0; i <= 365; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    if (listenDayKeys.has(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`)) {
-      streakDays++;
-    } else {
-      break;
+    if (listenDayKeys.has(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`)) { streakDays++; }
+    else { break; }
+  }
+
+  // Longest streak ever
+  const longestStreak = longestConsecutiveStreak(listenDayKeys);
+
+  // Flip a Record streak — longest consecutive days logging at least one pool album
+  const flipPoolSet = new Set(
+    FLIP_POOL.map(a => `${a.title.toLowerCase()}::${a.artist.toLowerCase()}`)
+  );
+  const flipDayKeys = new Set<string>();
+  for (const a of loggedAlbums) {
+    const key = `${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`;
+    if (flipPoolSet.has(key)) {
+      const d = new Date(a.dateLogged);
+      flipDayKeys.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
     }
   }
+  const flipStreak = longestConsecutiveStreak(flipDayKeys);
 
   const heroStats = [
     { label: 'Albums Logged',   value: loggedAlbums.length },
     { label: 'Listening Hours', value: totalHours },
     { label: 'Unique Artists',  value: uniqueArtists },
-    { label: 'Countries',       value: countryCount },
-    { label: 'Flip Streak',     value: '—' },
-    { label: 'Streak Days',     value: streakDays > 0 ? streakDays : '—' },
+    { label: 'Avg Rating',      value: avgRating },
+    { label: 'Top Flip Streak', value: flipStreak > 0 ? flipStreak : '—' },
+    { label: 'Best Streak',     value: longestStreak > 0 ? longestStreak : '—' },
   ];
 
   // ── Most listend artists ──────────────────────────────────────────────────
@@ -781,23 +831,6 @@ export default function MyStatsScreen() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6);
 
-  // Fetch country count — waits for albums to load, then runs once
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (loggedAlbums.length === 0) { setCountryCount(0); return; }
-    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-    const uniqueArtistList = [...new Set(loggedAlbums.map(a => a.artist).filter(Boolean))].slice(0, 100);
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const token = session?.access_token;
-      if (!token) { setCountryCount(0); return; }
-      fetch(`${API_URL}/api/stats/artist-countries?artists=${encodeURIComponent(uniqueArtistList.join(','))}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => setCountryCount(data?.total ?? 0))
-        .catch(() => setCountryCount(0));
-    });
-  }, [isLoaded]);
 
   // Fetch artist images using the same /search?type=artist call that artist-detail uses
   useEffect(() => {
@@ -1174,6 +1207,7 @@ export default function MyStatsScreen() {
         albums={selectedAlbums}
         onClose={() => setSelectedRating(null)}
         onAlbumPress={handleAlbumPress}
+        themeColors={colors}
       />
       <AlbumListModal
         title={listModal?.title ?? null}
@@ -1181,6 +1215,7 @@ export default function MyStatsScreen() {
         onClose={() => setListModal(null)}
         onAlbumPress={(album) => { setListModal(null); setTimeout(() => handleAlbumPress(album), 300); }}
         onTitlePress={listModal?.onTitlePress}
+        themeColors={colors}
       />
 
       {/* ── Main tab toggle (own stats only) ────────────────────────────── */}
@@ -1558,7 +1593,7 @@ export default function MyStatsScreen() {
               style={({ pressed }) => [s.card, { flex: 1, backgroundColor: cardBg, borderColor: cardBorder, gap: 6, opacity: pressed ? 0.7 : 1 }]}>
               <FontAwesome name="calendar" size={18} color={colors.tint} />
               <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 4 }}>Year in Review</Text>
-              <Text style={{ color: colors.subtext, fontSize: 12 }}>Your yearly wrapped</Text>
+              <Text style={{ color: colors.subtext, fontSize: 12 }}>Deep dive into your year</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push('/month-in-review' as any)}
@@ -1573,7 +1608,7 @@ export default function MyStatsScreen() {
         {/* ── Year Chart ────────────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <Text style={[s.cardTitle, { color: colors.textMuted }]}>BY RELEASE YEAR</Text>
-          <YearChart loggedAlbums={loggedAlbums} onAlbumPress={handleAlbumPress} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
+          <YearChart loggedAlbums={loggedAlbums} onAlbumPress={handleAlbumPress} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} themeColors={colors} />
         </View>
 
         {/* ── Rating Distribution ────────────────────────────────────────── */}
@@ -1817,6 +1852,9 @@ export default function MyStatsScreen() {
                       key={entry.album.id}
                       entry={entry}
                       onPress={() => setListModal({ title: entry.album.title, albums: [entry.album] })}
+                      textColor={colors.text}
+                      subtextColor={colors.subtext}
+                      surfaceColor={colors.surface}
                     />
                   ))}
                 </ScrollView>
@@ -1839,6 +1877,9 @@ export default function MyStatsScreen() {
                       key={entry.album.id}
                       entry={entry}
                       onPress={() => setListModal({ title: entry.album.title, albums: [entry.album] })}
+                      textColor={colors.text}
+                      subtextColor={colors.subtext}
+                      surfaceColor={colors.surface}
                     />
                   ))}
                 </ScrollView>
