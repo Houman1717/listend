@@ -189,9 +189,6 @@ function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index:
         ) : (
           <ArtFallback size={CARD_SIZE} radius={6} label={item.title} />
         )}
-        <View style={s.rankBadge}>
-          <Text style={s.rankText}>#{index + 1}</Text>
-        </View>
       </View>
       <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{item.title}</Text>
       <Text style={[s.cardSub,   { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{item.artist}</Text>
