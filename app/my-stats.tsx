@@ -1141,11 +1141,11 @@ export default function MyStatsScreen() {
 
   // Taste label
   function tasteLabel(pct: number): { label: string; emoji: string } {
-    if (pct >= 80) return { label: 'Music Twins',      emoji: '🎵' };
-    if (pct >= 60) return { label: 'Genre Siblings',   emoji: '🎸' };
-    if (pct >= 40) return { label: 'Kindred Ears',     emoji: '🎧' };
-    if (pct >= 20) return { label: 'Different Worlds', emoji: '🌍' };
-    return              { label: 'Polar Opposites',    emoji: '🎭' };
+    if (pct >= 80) return { label: 'Music Twins',        emoji: '🎵' };
+    if (pct >= 60) return { label: 'Frequency Matched', emoji: '📻' };
+    if (pct >= 40) return { label: 'Vibe Aligned',      emoji: '🎯' };
+    if (pct >= 20) return { label: 'Different Worlds',  emoji: '🌍' };
+    return              { label: 'Polar Opposites',     emoji: '🎭' };
   }
   const taste = tasteLabel(compatibility);
 
