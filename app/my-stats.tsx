@@ -1589,7 +1589,7 @@ export default function MyStatsScreen() {
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Pressable
             onPress={() => router.push(viewedUserId
-              ? { pathname: '/year-in-review', params: { userId: viewedUserId, displayName: params.displayName ?? '' } } as any
+              ? { pathname: '/year-in-review', params: { userId: viewedUserId, displayName: params.displayName ?? '', proTheme: params.proTheme ?? '' } } as any
               : '/year-in-review' as any)}
             style={({ pressed }) => [s.card, { flex: 1, backgroundColor: cardBg, borderColor: cardBorder, gap: 6, opacity: pressed ? 0.7 : 1 }]}>
             <FontAwesome name="calendar" size={18} color={colors.tint} />
@@ -1598,7 +1598,7 @@ export default function MyStatsScreen() {
           </Pressable>
           <Pressable
             onPress={() => router.push(viewedUserId
-              ? { pathname: '/month-in-review', params: { userId: viewedUserId, displayName: params.displayName ?? '' } } as any
+              ? { pathname: '/month-in-review', params: { userId: viewedUserId, displayName: params.displayName ?? '', proTheme: params.proTheme ?? '' } } as any
               : '/month-in-review' as any)}
             style={({ pressed }) => [s.card, { flex: 1, backgroundColor: cardBg, borderColor: cardBorder, gap: 6, opacity: pressed ? 0.7 : 1 }]}>
             <FontAwesome name="bar-chart" size={18} color={colors.tint} />

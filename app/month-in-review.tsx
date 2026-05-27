@@ -247,15 +247,17 @@ function VolumeBadge({ rating, tint = ACCENT }: { rating: number; tint?: string 
 
 export default function MonthInReviewScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme } = usePro();
-  const activeThemeKey = isPro ? proTheme : 'default';
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const params = useLocalSearchParams<{ year?: string; month?: string; userId?: string; displayName?: string; proTheme?: string }>();
+  const viewedUserId = params.userId ?? null;
+  const activeThemeKey = viewedUserId
+    ? (params.proTheme || 'default')
+    : (isPro ? ownProTheme : 'default');
   const colors = (activeThemeKey && activeThemeKey !== 'default')
     ? themeToColors(getProTheme(activeThemeKey))
     : Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ year?: string; month?: string; userId?: string; displayName?: string }>();
-  const viewedUserId = params.userId ?? null;
   const { loggedAlbums: ownAlbums } = useAlbums();
 
   // Fetch other user's albums if viewing someone else
@@ -345,7 +347,7 @@ export default function MonthInReviewScreen() {
       }
       if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
     });
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, loggedAlbums.length]);
   const maxGenre = stats.topGenres[0]?.[1] ?? 1;
   const maxArtist = stats.topArtists[0]?.count ?? 1;
 

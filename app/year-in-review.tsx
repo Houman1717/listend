@@ -408,10 +408,12 @@ function MilestoneCard({ album, label, onPress, colors }: {
 
 export default function YearInReviewScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme } = usePro();
-  const params = useLocalSearchParams<{ userId?: string; displayName?: string }>();
+  const { isPro, proTheme: ownProTheme } = usePro();
+  const params = useLocalSearchParams<{ userId?: string; displayName?: string; proTheme?: string }>();
   const viewedUserId = params.userId ?? null;
-  const activeThemeKey = isPro ? proTheme : 'default';
+  const activeThemeKey = viewedUserId
+    ? (params.proTheme || 'default')
+    : (isPro ? ownProTheme : 'default');
   const colors = (activeThemeKey && activeThemeKey !== 'default')
     ? themeToColors(getProTheme(activeThemeKey))
     : Colors[colorScheme ?? 'dark'];
@@ -642,7 +644,7 @@ export default function YearInReviewScreen() {
                             return (
                               <Pressable
                                 key={i}
-                                onPress={() => count > 0 && router.push({ pathname: '/month-in-review', params: { year: selectedYear, month: i, ...(viewedUserId ? { userId: viewedUserId, displayName: params.displayName ?? '' } : {}) } } as any)}
+                                onPress={() => count > 0 && router.push({ pathname: '/month-in-review', params: { year: selectedYear, month: i, ...(viewedUserId ? { userId: viewedUserId, displayName: params.displayName ?? '', proTheme: params.proTheme ?? '' } : {}) } } as any)}
                                 disabled={count === 0}
                                 style={({ pressed }) => ({ flex: 1, height: BAR_AREA_H, justifyContent: 'flex-end', opacity: pressed ? 0.7 : 1 })}>
                                 <View style={{ height: barH, width: '100%', borderRadius: 4, backgroundColor: isTop ? tint : '#4a3020' }} />
