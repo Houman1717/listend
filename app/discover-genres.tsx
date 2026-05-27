@@ -22,7 +22,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const GENRE_LABELS = [
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Country', 'Electronic',
   'Reggaeton', 'R&B / Soul', 'Jazz', 'Classical', 'Indie / Alternative',
-  'Metal', 'Afrobeats', 'Folk / Singer-Songwriter',
+  'Metal', 'Afrobeats', 'Folk / Singer-Songwriter', 'Blues',
 ];
 
 const GENRE_DISPLAY_NAMES: Record<string, string> = {
