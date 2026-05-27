@@ -202,12 +202,13 @@ app.get('/home', async (req, res) => {
 
 app.get('/genres', async (req, res) => {
   const CACHE_KEY = 'genres';
+  const allGenreKeys = Object.keys(GENRE_ALBUMS);
 
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem && allGenreKeys.every(g => mem[g])) return res.json(mem);
 
   const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (db && allGenreKeys.every(g => db[g])) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const { data, error } = await supabase
