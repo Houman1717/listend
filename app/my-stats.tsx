@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, Fragment } from 'react';
@@ -9,6 +9,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
+import { ProBadge } from '@/components/ProBadge';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
@@ -668,6 +669,19 @@ export default function MyStatsScreen() {
   const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
+
+  // ── Compare tab ───────────────────────────────────────────────────────────
+  const [mainTab,          setMainTab]          = useState<'stats' | 'compare'>('stats');
+  const [compareQuery,     setCompareQuery]     = useState('');
+  const [compareSearching, setCompareSearching] = useState(false);
+  const [compareError,     setCompareError]     = useState<string | null>(null);
+  const [compareFriend,    setCompareFriend]    = useState<{
+    id: string; displayName: string; username: string;
+    avatarUrl: string | null; isPro: boolean;
+  } | null>(null);
+  const [friendAlbums,  setFriendAlbums]  = useState<LoggedAlbum[]>([]);
+  const [friendLoading, setFriendLoading] = useState(false);
+  const [sharedModal,   setSharedModal]   = useState<'albums' | 'artists' | null>(null);
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
@@ -947,6 +961,78 @@ export default function MyStatsScreen() {
     return { ...pl, done, total: albums.length };
   });
 
+  // ── Compare: search friend ────────────────────────────────────────────────
+  async function searchFriend() {
+    const q = compareQuery.trim().replace(/^@/, '');
+    if (!q) return;
+    setCompareSearching(true);
+    setCompareError(null);
+    setCompareFriend(null);
+    setFriendAlbums([]);
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, display_name, username, avatar_url, is_pro')
+      .ilike('username', q)
+      .maybeSingle();
+    if (!data) {
+      setCompareError('No user found with that username.');
+      setCompareSearching(false);
+      return;
+    }
+    setCompareFriend({
+      id: data.id, displayName: data.display_name || data.username || '',
+      username: data.username || '', avatarUrl: data.avatar_url ?? null, isPro: data.is_pro ?? false,
+    });
+    if (data.is_pro) {
+      setFriendLoading(true);
+      const { data: rows } = await supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags')
+        .eq('user_id', data.id)
+        .not('listened_at', 'is', null);
+      setFriendAlbums((rows ?? []).map(r => ({
+        id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
+        year: r.year ?? 0, rating: r.rating ?? 0,
+        dateLogged: r.listened_at ?? new Date().toISOString(),
+        artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
+        durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
+        reListenCount: 0, isRelistened: false,
+      })));
+      setFriendLoading(false);
+    }
+    setCompareSearching(false);
+  }
+
+  // ── Compare: computed values ──────────────────────────────────────────────
+  const myAlbumIdSet     = new Set(ownAlbums.map(a => a.id));
+  const friendAlbumIdSet = new Set(friendAlbums.map(a => a.id));
+  const sharedAlbumList  = friendAlbums.filter(a => myAlbumIdSet.has(a.id));
+  const unionAlbumCount  = new Set([...myAlbumIdSet, ...friendAlbumIdSet]).size;
+  const albumScore       = unionAlbumCount > 0 ? sharedAlbumList.length / unionAlbumCount : 0;
+
+  const myArtistSet      = new Set(ownAlbums.map(a => a.artist.toLowerCase().trim()));
+  const friendArtistSet  = new Set(friendAlbums.map(a => a.artist.toLowerCase().trim()));
+  const sharedArtistList = [...myArtistSet].filter(a => friendArtistSet.has(a)).sort();
+  const unionArtistCount = new Set([...myArtistSet, ...friendArtistSet]).size;
+  const artistScore      = unionArtistCount > 0 ? sharedArtistList.length / unionArtistCount : 0;
+  const compatibility    = Math.round((artistScore * 0.6 + albumScore * 0.4) * 100);
+
+  // Friend hero stats
+  const friendRated     = friendAlbums.filter(a => a.rating > 0);
+  const friendAvgRating = friendRated.length > 0
+    ? (friendRated.reduce((s, a) => s + a.rating, 0) / friendRated.length).toFixed(1) : '—';
+  const friendHours     = friendAlbums.reduce((s, a) => s + (a.durationMs ?? 0), 0);
+  const friendHoursVal  = friendHours > 0 ? Math.round(friendHours / 3_600_000) : '—';
+  const friendArtistCount = new Set(friendAlbums.map(a => a.artist)).size;
+
+  // Friend top genres
+  const friendGenreCounts = new Map<string, number>();
+  for (const album of friendAlbums) {
+    const genre = (album.genreTags ?? []).find(t => MAIN_GENRES.has(t));
+    if (genre) friendGenreCounts.set(genre, (friendGenreCounts.get(genre) ?? 0) + 1);
+  }
+  const friendTopGenres   = [...friendGenreCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+
   function handleRatingPress(rating: number, albums: LoggedAlbum[]) {
     setSelectedAlbums(albums);
     setSelectedRating(rating);
@@ -981,6 +1067,258 @@ export default function MyStatsScreen() {
         onTitlePress={listModal?.onTitlePress}
       />
 
+      {/* ── Main tab toggle (own stats only) ────────────────────────────── */}
+      {!viewedUserId && (
+        <View style={{ flexDirection: 'row', backgroundColor: colors.background, paddingHorizontal: 20, paddingVertical: 10, gap: 8 }}>
+          {(['stats', 'compare'] as const).map(t => (
+            <Pressable
+              key={t}
+              onPress={() => setMainTab(t)}
+              style={{
+                flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center',
+                backgroundColor: mainTab === t ? colors.tint : colors.surface,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: mainTab === t ? colors.tint : colors.border,
+              }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: mainTab === t ? '#fff' : colors.subtext }}>
+                {t === 'stats' ? 'My Stats' : 'Compare'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* ── Compare tab ──────────────────────────────────────────────────── */}
+      {mainTab === 'compare' && !viewedUserId && (
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <ScrollView
+            style={[s.container, { backgroundColor: colors.background }]}
+            contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 48 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled">
+
+            {/* Shared Albums Modal */}
+            <Modal visible={sharedModal === 'albums'} animationType="slide" onRequestClose={() => setSharedModal(null)}>
+              <View style={{ flex: 1, backgroundColor: colors.background }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingTop: insets.top + 16 }}>
+                  <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{sharedAlbumList.length} Albums in Common</Text>
+                  <Pressable onPress={() => setSharedModal(null)}><FontAwesome name="times" size={20} color={colors.subtext} /></Pressable>
+                </View>
+                <FlatList
+                  data={sharedAlbumList}
+                  keyExtractor={a => a.id}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40, gap: 12 }}
+                  renderItem={({ item }) => {
+                    const myEntry = ownAlbums.find(a => a.id === item.id);
+                    return (
+                      <Pressable
+                        onPress={() => { setSharedModal(null); setTimeout(() => handleAlbumPress(item), 300); }}
+                        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, opacity: pressed ? 0.7 : 1 })}>
+                        {item.artworkUrl
+                          ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: 48, height: 48, borderRadius: 6 }} contentFit="cover" />
+                          : <View style={{ width: 48, height: 48, borderRadius: 6, backgroundColor: CARD_BG }} />}
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>{item.title}</Text>
+                          <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{item.artist}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                          {myEntry?.rating ? <Text style={{ color: ACCENT, fontSize: 12, fontWeight: '700' }}>You: {myEntry.rating}</Text> : null}
+                          {item.rating ? <Text style={{ color: colors.subtext, fontSize: 12, fontWeight: '600' }}>Them: {item.rating}</Text> : null}
+                        </View>
+                      </Pressable>
+                    );
+                  }}
+                />
+              </View>
+            </Modal>
+
+            {/* Shared Artists Modal */}
+            <Modal visible={sharedModal === 'artists'} animationType="slide" onRequestClose={() => setSharedModal(null)}>
+              <View style={{ flex: 1, backgroundColor: colors.background }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingTop: insets.top + 16 }}>
+                  <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{sharedArtistList.length} Artists in Common</Text>
+                  <Pressable onPress={() => setSharedModal(null)}><FontAwesome name="times" size={20} color={colors.subtext} /></Pressable>
+                </View>
+                <FlatList
+                  data={sharedArtistList}
+                  keyExtractor={a => a}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40, gap: 8 }}
+                  renderItem={({ item: artist }) => {
+                    const myCount = ownAlbums.filter(a => a.artist.toLowerCase().trim() === artist).length;
+                    const theirCount = friendAlbums.filter(a => a.artist.toLowerCase().trim() === artist).length;
+                    const displayName = ownAlbums.find(a => a.artist.toLowerCase().trim() === artist)?.artist ?? artist;
+                    return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+                        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', flex: 1 }} numberOfLines={1}>{displayName}</Text>
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                          <Text style={{ color: ACCENT, fontSize: 12, fontWeight: '700' }}>You: {myCount}</Text>
+                          <Text style={{ color: colors.subtext, fontSize: 12, fontWeight: '600' }}>Them: {theirCount}</Text>
+                        </View>
+                      </View>
+                    );
+                  }}
+                />
+              </View>
+            </Modal>
+
+            {/* Search bar */}
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+              <TextInput
+                style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 11, color: colors.text, fontSize: 15 }}
+                placeholder="Search by @username"
+                placeholderTextColor={colors.subtext}
+                value={compareQuery}
+                onChangeText={setCompareQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                onSubmitEditing={searchFriend}
+              />
+              <Pressable
+                onPress={searchFriend}
+                style={({ pressed }) => ({ backgroundColor: colors.tint, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, opacity: pressed ? 0.7 : 1 })}>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Search</Text>
+              </Pressable>
+            </View>
+
+            {compareSearching && <ActivityIndicator color={colors.tint} style={{ marginTop: 20 }} />}
+            {compareError && <Text style={{ color: colors.subtext, fontSize: 14, textAlign: 'center', marginTop: 20 }}>{compareError}</Text>}
+
+            {/* Friend found but not Pro */}
+            {compareFriend && !compareFriend.isPro && (
+              <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', gap: 8 }]}>
+                {compareFriend.avatarUrl
+                  ? <ExpoImage source={{ uri: compareFriend.avatarUrl }} style={{ width: 56, height: 56, borderRadius: 28 }} contentFit="cover" />
+                  : <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}><FontAwesome name="user" size={24} color={SUBTEXT} /></View>}
+                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{compareFriend.displayName}</Text>
+                <Text style={{ color: colors.subtext, fontSize: 13 }}>@{compareFriend.username}</Text>
+                <View style={{ marginTop: 8, backgroundColor: colors.background, borderRadius: 10, padding: 14, alignItems: 'center', gap: 4 }}>
+                  <Text style={{ color: ACCENT, fontSize: 15, fontWeight: '700' }}>Pro required</Text>
+                  <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center', lineHeight: 18 }}>This user doesn't have Pro — their stats aren't available for comparison.</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Friend found and is Pro */}
+            {compareFriend?.isPro && (
+              <>
+                {/* Friend profile card */}
+                <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', gap: 6 }]}>
+                  {compareFriend.avatarUrl
+                    ? <ExpoImage source={{ uri: compareFriend.avatarUrl }} style={{ width: 64, height: 64, borderRadius: 32 }} contentFit="cover" />
+                    : <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}><FontAwesome name="user" size={28} color={SUBTEXT} /></View>}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{compareFriend.displayName}</Text>
+                    <ProBadge />
+                  </View>
+                  <Text style={{ color: colors.subtext, fontSize: 13 }}>@{compareFriend.username}</Text>
+                </View>
+
+                {friendLoading
+                  ? <ActivityIndicator color={colors.tint} style={{ marginTop: 20 }} />
+                  : (
+                  <>
+                    {/* Compatibility score */}
+                    <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', gap: 6 }]}>
+                      <Text style={[s.cardTitle, { color: colors.textMuted }]}>COMPATIBILITY</Text>
+                      <Text style={{ color: colors.tint, fontSize: 56, fontWeight: '800', letterSpacing: -2 }}>{compatibility}%</Text>
+                      <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center' }}>
+                        {sharedArtistList.length} shared artists · {sharedAlbumList.length} shared albums
+                      </Text>
+                    </View>
+
+                    {/* Side-by-side stats */}
+                    <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: 'hidden' }]}>
+                      <Text style={[s.cardTitle, { color: colors.textMuted, paddingHorizontal: 18, paddingTop: 18, marginBottom: 0 }]}>STATS COMPARISON</Text>
+                      {/* Header row */}
+                      <View style={{ flexDirection: 'row', paddingHorizontal: 18, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+                        <Text style={{ flex: 1, color: colors.subtext, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>STAT</Text>
+                        <Text style={{ width: 64, color: ACCENT, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>YOU</Text>
+                        <Text style={{ width: 64, color: colors.subtext, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>THEM</Text>
+                      </View>
+                      {[
+                        { label: 'Albums Logged',   mine: ownAlbums.length,  theirs: friendAlbums.length },
+                        { label: 'Avg Rating',      mine: avgRating,         theirs: friendAvgRating },
+                        { label: 'Listening Hours', mine: totalHours,        theirs: friendHoursVal },
+                        { label: 'Unique Artists',  mine: uniqueArtists,     theirs: friendArtistCount },
+                      ].map((row, i, arr) => (
+                        <View key={row.label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: i < arr.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
+                          <Text style={{ flex: 1, color: colors.text, fontSize: 14, fontWeight: '600' }}>{row.label}</Text>
+                          <Text style={{ width: 64, color: ACCENT, fontSize: 15, fontWeight: '800', textAlign: 'center' }}>{row.mine}</Text>
+                          <Text style={{ width: 64, color: colors.subtext, fontSize: 15, fontWeight: '700', textAlign: 'center' }}>{row.theirs}</Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    {/* Shared albums row */}
+                    <Pressable
+                      onPress={() => setSharedModal('albums')}
+                      style={({ pressed }) => [s.card, { backgroundColor: colors.surface, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
+                      <FontAwesome name="music" size={16} color={colors.tint} style={{ marginRight: 12 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{sharedAlbumList.length} Albums in Common</Text>
+                        <Text style={{ color: colors.subtext, fontSize: 12, marginTop: 2 }}>Tap to see them with ratings</Text>
+                      </View>
+                      <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
+                    </Pressable>
+
+                    {/* Shared artists row */}
+                    <Pressable
+                      onPress={() => setSharedModal('artists')}
+                      style={({ pressed }) => [s.card, { backgroundColor: colors.surface, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
+                      <FontAwesome name="headphones" size={16} color={colors.tint} style={{ marginRight: 12 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{sharedArtistList.length} Artists in Common</Text>
+                        <Text style={{ color: colors.subtext, fontSize: 12, marginTop: 2 }}>Tap to see your overlap</Text>
+                      </View>
+                      <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
+                    </Pressable>
+
+                    {/* Genre comparison */}
+                    {(topGenres.length > 0 || friendTopGenres.length > 0) && (
+                      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <Text style={[s.cardTitle, { color: colors.textMuted }]}>TOP GENRES</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginBottom: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.tint }} />
+                            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '600' }}>YOU</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.subtext }} />
+                            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '600' }}>THEM</Text>
+                          </View>
+                        </View>
+                        {(() => {
+                          const allGenres = [...new Set([...topGenres.map(([g]) => g), ...friendTopGenres.map(([g]) => g)])].slice(0, 8);
+                          const myMap = new Map(topGenres);
+                          const theirMap = new Map(friendTopGenres);
+                          const maxVal = Math.max(...allGenres.map(g => Math.max(myMap.get(g) ?? 0, theirMap.get(g) ?? 0)), 1);
+                          return allGenres.map(genre => (
+                            <View key={genre} style={{ marginBottom: 10 }}>
+                              <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>{genre}</Text>
+                              <View style={{ gap: 3 }}>
+                                <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden' }}>
+                                  <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.tint, width: `${((myMap.get(genre) ?? 0) / maxVal) * 100}%` }} />
+                                </View>
+                                <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden' }}>
+                                  <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.subtext, width: `${((theirMap.get(genre) ?? 0) / maxVal) * 100}%` }} />
+                                </View>
+                              </View>
+                            </View>
+                          ));
+                        })()}
+                      </View>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
+
+      {/* ── My Stats tab ─────────────────────────────────────────────────── */}
+      {(mainTab === 'stats' || viewedUserId) && (
       <ScrollView
         style={[s.container, { backgroundColor: colors.background }]}
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
@@ -1316,6 +1654,7 @@ export default function MyStatsScreen() {
         </View>
 
       </ScrollView>
+      )}
     </>
   );
 }
