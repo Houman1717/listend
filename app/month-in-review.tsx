@@ -11,6 +11,7 @@ import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
+import { supabase } from '@/lib/supabase';
 
 const CARD_BG = '#2E2018';
 const BORDER  = '#2a1e14';
@@ -253,8 +254,36 @@ export default function MonthInReviewScreen() {
     : Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ year?: string; month?: string }>();
-  const { loggedAlbums } = useAlbums();
+  const params = useLocalSearchParams<{ year?: string; month?: string; userId?: string; displayName?: string }>();
+  const viewedUserId = params.userId ?? null;
+  const { loggedAlbums: ownAlbums } = useAlbums();
+
+  // Fetch other user's albums if viewing someone else
+  const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
+  const [otherLoaded, setOtherLoaded] = useState(false);
+  useEffect(() => {
+    if (!viewedUserId) return;
+    setOtherLoaded(false);
+    supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened')
+      .eq('user_id', viewedUserId)
+      .not('listened_at', 'is', null)
+      .order('listened_at', { ascending: false })
+      .then(({ data }) => {
+        setOtherAlbums((data ?? []).map(r => ({
+          id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
+          year: r.year ?? 0, rating: r.rating ?? 0,
+          dateLogged: r.listened_at ?? new Date().toISOString(),
+          artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
+          durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
+          reListenCount: r.re_listen_count ?? 0, isRelistened: r.is_relistened ?? false,
+        })));
+        setOtherLoaded(true);
+      });
+  }, [viewedUserId]);
+
+  const loggedAlbums = viewedUserId ? otherAlbums : ownAlbums;
 
   const { width: screenWidth } = useWindowDimensions();
   const cardBg = colors.surface;
@@ -327,7 +356,7 @@ export default function MonthInReviewScreen() {
   return (
     <>
       <Stack.Screen options={{
-        title: 'Monthly Stats',
+        title: viewedUserId && params.displayName ? `${params.displayName}'s Monthly Stats` : 'Monthly Stats',
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,
@@ -346,7 +375,11 @@ export default function MonthInReviewScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 48, gap: 16 }}
         showsVerticalScrollIndicator={false}>
 
-        {monthsWithData.length === 0 ? (
+        {viewedUserId && !otherLoaded ? (
+          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+            <Text style={{ color: sub, fontSize: 15 }}>Loading...</Text>
+          </View>
+        ) : monthsWithData.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 60 }}>
             <Text style={{ color: sub, fontSize: 15 }}>No listening history yet.</Text>
           </View>

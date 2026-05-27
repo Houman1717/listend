@@ -3,7 +3,7 @@ import {
   StyleSheet, View, Text, ScrollView, Pressable, FlatList,
   Modal, useWindowDimensions,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -13,6 +13,7 @@ import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
+import { supabase } from '@/lib/supabase';
 
 // ─── Style constants (match my-stats.tsx) ─────────────────────────────────────
 
@@ -408,14 +409,43 @@ function MilestoneCard({ album, label, onPress, colors }: {
 export default function YearInReviewScreen() {
   const colorScheme = useColorScheme();
   const { isPro, proTheme } = usePro();
+  const params = useLocalSearchParams<{ userId?: string; displayName?: string }>();
+  const viewedUserId = params.userId ?? null;
   const activeThemeKey = isPro ? proTheme : 'default';
   const colors = (activeThemeKey && activeThemeKey !== 'default')
     ? themeToColors(getProTheme(activeThemeKey))
     : Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { loggedAlbums } = useAlbums();
+  const { loggedAlbums: ownAlbums } = useAlbums();
   const { width: screenWidth } = useWindowDimensions();
+
+  // Fetch other user's albums if viewing someone else
+  const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
+  const [otherLoaded, setOtherLoaded] = useState(false);
+  useEffect(() => {
+    if (!viewedUserId) return;
+    setOtherLoaded(false);
+    supabase
+      .from('user_albums')
+      .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened')
+      .eq('user_id', viewedUserId)
+      .not('listened_at', 'is', null)
+      .order('listened_at', { ascending: false })
+      .then(({ data }) => {
+        setOtherAlbums((data ?? []).map(r => ({
+          id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
+          year: r.year ?? 0, rating: r.rating ?? 0,
+          dateLogged: r.listened_at ?? new Date().toISOString(),
+          artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
+          durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
+          reListenCount: r.re_listen_count ?? 0, isRelistened: r.is_relistened ?? false,
+        })));
+        setOtherLoaded(true);
+      });
+  }, [viewedUserId]);
+
+  const loggedAlbums = viewedUserId ? otherAlbums : ownAlbums;
 
   const cardBg = colors.surface;
   const cardBorder = colors.border;
@@ -505,7 +535,7 @@ export default function YearInReviewScreen() {
   return (
     <>
       <Stack.Screen options={{
-        title: 'Year in Review',
+        title: viewedUserId && params.displayName ? `${params.displayName}'s Year in Review` : 'Year in Review',
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,
@@ -525,7 +555,11 @@ export default function YearInReviewScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 48, gap: 16 }}
         showsVerticalScrollIndicator={false}>
 
-        {availYears.length === 0 ? (
+        {viewedUserId && !otherLoaded ? (
+          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+            <Text style={{ color: sub, fontSize: 15 }}>Loading...</Text>
+          </View>
+        ) : availYears.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 60 }}>
             <Text style={{ color: sub, fontSize: 15 }}>No listening history yet.</Text>
           </View>
@@ -608,7 +642,7 @@ export default function YearInReviewScreen() {
                             return (
                               <Pressable
                                 key={i}
-                                onPress={() => count > 0 && router.push({ pathname: '/month-in-review', params: { year: selectedYear, month: i } } as any)}
+                                onPress={() => count > 0 && router.push({ pathname: '/month-in-review', params: { year: selectedYear, month: i, ...(viewedUserId ? { userId: viewedUserId, displayName: params.displayName ?? '' } : {}) } } as any)}
                                 disabled={count === 0}
                                 style={({ pressed }) => ({ flex: 1, height: BAR_AREA_H, justifyContent: 'flex-end', opacity: pressed ? 0.7 : 1 })}>
                                 <View style={{ height: barH, width: '100%', borderRadius: 4, backgroundColor: isTop ? tint : '#4a3020' }} />
