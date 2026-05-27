@@ -682,6 +682,7 @@ export default function MyStatsScreen() {
   const [friendAlbums,  setFriendAlbums]  = useState<LoggedAlbum[]>([]);
   const [friendLoading, setFriendLoading] = useState(false);
   const [sharedModal,   setSharedModal]   = useState<'albums' | 'artists' | null>(null);
+  const [followingList, setFollowingList] = useState<{ id: string; displayName: string; username: string; avatarUrl: string | null; isPro: boolean }[]>([]);
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
@@ -961,6 +962,33 @@ export default function MyStatsScreen() {
     return { ...pl, done, total: albums.length };
   });
 
+  // ── Compare: load following list when tab opens ───────────────────────────
+  useEffect(() => {
+    if (mainTab !== 'compare' || viewedUserId || followingList.length > 0) return;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const uid = session?.user?.id;
+      if (!uid) return;
+      const { data } = await supabase
+        .from('follows')
+        .select('following_id, profiles!follows_following_id_fkey(id, display_name, username, avatar_url, is_pro)')
+        .eq('follower_id', uid)
+        .limit(50);
+      if (!data) return;
+      setFollowingList(
+        (data as any[])
+          .map(r => r.profiles)
+          .filter(Boolean)
+          .map((p: any) => ({
+            id: p.id,
+            displayName: p.display_name || p.username || '',
+            username: p.username || '',
+            avatarUrl: p.avatar_url ?? null,
+            isPro: p.is_pro ?? false,
+          }))
+      );
+    });
+  }, [mainTab]);
+
   // ── Compare: search friend ────────────────────────────────────────────────
   async function searchFriend() {
     const q = compareQuery.trim().replace(/^@/, '');
@@ -1185,6 +1213,60 @@ export default function MyStatsScreen() {
 
             {compareSearching && <ActivityIndicator color={colors.tint} style={{ marginTop: 20 }} />}
             {compareError && <Text style={{ color: colors.subtext, fontSize: 14, textAlign: 'center', marginTop: 20 }}>{compareError}</Text>}
+
+            {/* Following list — shown when no search has been made yet */}
+            {!compareFriend && !compareSearching && !compareError && followingList.length > 0 && (
+              <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: 'hidden' }]}>
+                <Text style={[s.cardTitle, { color: colors.textMuted, paddingHorizontal: 18, paddingTop: 16, marginBottom: 0 }]}>PEOPLE YOU FOLLOW</Text>
+                {followingList.map((person, i) => (
+                  <Pressable
+                    key={person.id}
+                    onPress={async () => {
+                      setCompareError(null);
+                      setCompareFriend(person);
+                      if (person.isPro) {
+                        setFriendLoading(true);
+                        const { data: rows } = await supabase
+                          .from('user_albums')
+                          .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags')
+                          .eq('user_id', person.id)
+                          .not('listened_at', 'is', null);
+                        setFriendAlbums((rows ?? []).map(r => ({
+                          id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
+                          year: r.year ?? 0, rating: r.rating ?? 0,
+                          dateLogged: r.listened_at ?? new Date().toISOString(),
+                          artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
+                          durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
+                          reListenCount: 0, isRelistened: false,
+                        })));
+                        setFriendLoading(false);
+                      }
+                    }}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      paddingHorizontal: 18, paddingVertical: 12, opacity: pressed ? 0.7 : 1,
+                      borderTopWidth: i === 0 ? StyleSheet.hairlineWidth : 0,
+                      borderTopColor: colors.border,
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: colors.border,
+                    })}>
+                    {person.avatarUrl
+                      ? <ExpoImage source={{ uri: person.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+                      : <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}>
+                          <FontAwesome name="user" size={18} color={SUBTEXT} />
+                        </View>}
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{person.displayName}</Text>
+                        {person.isPro && <ProBadge size="xs" />}
+                      </View>
+                      {person.username ? <Text style={{ color: colors.subtext, fontSize: 12 }}>@{person.username}</Text> : null}
+                    </View>
+                    <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
 
             {/* Friend found but not Pro */}
             {compareFriend && !compareFriend.isPro && (
