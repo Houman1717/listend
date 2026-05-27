@@ -20,9 +20,9 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 // ─── Display order for genre sections ────────────────────────────────────────
 
 const GENRE_LABELS = [
-  'Hip-Hop / Rap', 'Pop', 'Rock', 'Country', 'Electronic',
-  'Reggaeton', 'R&B / Soul', 'Jazz', 'Classical', 'Indie / Alternative',
-  'Metal', 'Afrobeats', 'Folk / Singer-Songwriter', 'Blues',
+  'Pop', 'Hip-Hop / Rap', 'R&B / Soul', 'Rock', 'Electronic',
+  'Reggaeton', 'Indie / Alternative', 'Country', 'Metal',
+  'Afrobeats', 'Jazz', 'Folk / Singer-Songwriter', 'Classical', 'Blues',
 ];
 
 const GENRE_DISPLAY_NAMES: Record<string, string> = {

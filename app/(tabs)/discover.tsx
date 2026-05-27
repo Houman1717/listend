@@ -50,9 +50,9 @@ interface FeaturedPlaylist {
 
 const DECADES = ['2020s', '2010s', '2000s', '1990s', '1980s', '1970s', '1960s', '1950s'];
 const GENRES = [
-  'Hip-Hop / Rap', 'Pop', 'Rock', 'Country', 'Electronic',
-  'Reggaeton', 'R&B / Soul', 'Jazz', 'Classical', 'Indie / Alternative',
-  'Metal', 'Afrobeats', 'Folk / Singer-Songwriter', 'Blues',
+  'Pop', 'Hip-Hop / Rap', 'R&B / Soul', 'Rock', 'Electronic',
+  'Reggaeton', 'Indie / Alternative', 'Country', 'Metal',
+  'Afrobeats', 'Jazz', 'Folk / Singer-Songwriter', 'Classical', 'Blues',
 ];
 
 const GENRE_DISPLAY_NAMES: Record<string, string> = {
