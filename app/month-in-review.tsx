@@ -12,6 +12,7 @@ import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
+import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 
 const CARD_BG = '#2E2018';
 const BORDER  = '#2a1e14';
@@ -176,9 +177,10 @@ function RatingDistribution({ albums, onRatingPress, tint = ACCENT, textColor = 
 
 // ─── Album list modal ─────────────────────────────────────────────────────────
 
-function AlbumListModal({ title, albums, onClose, onAlbumPress, themeColors }: {
+function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, themeColors }: {
   title: string | null; albums: LoggedAlbum[];
   onClose: () => void; onAlbumPress: (a: LoggedAlbum) => void;
+  onReviewPress?: (a: LoggedAlbum) => void;
   themeColors?: { background: string; surface: string; text: string; subtext: string; tint: string; border: string };
 }) {
   const insets = useSafeAreaInsets();
@@ -221,7 +223,17 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, themeColors }: {
                     </View>}
                 <Text style={{ color: txt, fontSize: 12, fontWeight: '600', marginTop: 4 }} numberOfLines={1}>{item.title}</Text>
                 <Text style={{ color: sub, fontSize: 11, marginTop: 1 }} numberOfLines={1}>{item.artist}</Text>
-                {item.rating > 0 && <VolumeBadge rating={item.rating} tint={tint} />}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  {item.rating > 0 && <VolumeBadge rating={item.rating} tint={tint} />}
+                  {onReviewPress && (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={e => { e.stopPropagation?.(); onReviewPress(item); }}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                      <FontAwesome name="quote-left" size={10} color={tint} />
+                    </Pressable>
+                  )}
+                </View>
               </Pressable>
             )}
           />
@@ -321,6 +333,8 @@ export default function MonthInReviewScreen() {
   const [highestRatedView, setHighestRatedView] = useState<'thisYear' | 'previous'>('thisYear');
   const [artistView, setArtistView] = useState<'listend' | 'rated'>('listend');
   const [modal, setModal] = useState<{ title: string; albums: LoggedAlbum[] } | null>(null);
+  const [reviewAlbum, setReviewAlbum] = useState<LoggedAlbum | null>(null);
+  const [ownUsername, setOwnUsername] = useState('');
   const [artistImages, setArtistImages] = useState<Record<string, string>>({});
 
   const monthAlbums = loggedAlbums.filter(a => {
@@ -356,6 +370,15 @@ export default function MonthInReviewScreen() {
   const maxGenre = stats.topGenres[0]?.[1] ?? 1;
   const maxArtist = stats.topArtists[0]?.count ?? 1;
 
+  useEffect(() => {
+    if (viewedUserId) return;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user?.id) return;
+      const { data } = await supabase.from('profiles').select('username').eq('id', session.user.id).single();
+      if (data?.username) setOwnUsername(data.username);
+    });
+  }, [viewedUserId]);
+
   function goToAlbum(a: LoggedAlbum) {
     router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year), artworkUrl: a.artworkUrl ?? '' } } as any);
   }
@@ -374,8 +397,20 @@ export default function MonthInReviewScreen() {
         albums={modal?.albums ?? []}
         onClose={() => setModal(null)}
         onAlbumPress={a => { setModal(null); setTimeout(() => goToAlbum(a), 300); }}
+        onReviewPress={modal?.title?.includes('Review') ? a => { setModal(null); setTimeout(() => setReviewAlbum(a), 300); } : undefined}
         themeColors={colors}
       />
+
+      {reviewAlbum && (
+        <AlbumReviewModal
+          album={reviewAlbum}
+          username={viewedUserId ? (params.displayName ?? '') : ownUsername}
+          onClose={() => setReviewAlbum(null)}
+          onAlbumPress={() => { setReviewAlbum(null); setTimeout(() => goToAlbum(reviewAlbum), 300); }}
+          isDark={colorScheme === 'dark'}
+          colors={colors}
+        />
+      )}
 
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}

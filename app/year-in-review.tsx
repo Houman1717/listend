@@ -14,6 +14,7 @@ import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
+import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 
 // ─── Style constants (match my-stats.tsx) ─────────────────────────────────────
 
@@ -301,9 +302,10 @@ function PieChart({ aCount, bCount, aColor, bColor, size = 110 }: {
 
 // ─── Album list modal ─────────────────────────────────────────────────────────
 
-function AlbumListModal({ title, albums, onClose, onAlbumPress, onTitlePress, themeColors }: {
+function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, onTitlePress, themeColors }: {
   title: string | null; albums: LoggedAlbum[];
   onClose: () => void; onAlbumPress: (a: LoggedAlbum) => void;
+  onReviewPress?: (a: LoggedAlbum) => void;
   onTitlePress?: () => void;
   themeColors?: { background: string; surface: string; text: string; subtext: string; tint: string; border: string };
 }) {
@@ -353,7 +355,17 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, onTitlePress, th
                     </View>}
                 <Text style={{ color: txt, fontSize: 12, fontWeight: '600', marginTop: 4 }} numberOfLines={1}>{item.title}</Text>
                 <Text style={{ color: sub, fontSize: 11, marginTop: 1 }} numberOfLines={1}>{item.artist}</Text>
-                {item.rating > 0 && <VolumeBadge rating={item.rating} tint={tint} />}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  {item.rating > 0 && <VolumeBadge rating={item.rating} tint={tint} />}
+                  {onReviewPress && (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={e => { e.stopPropagation?.(); onReviewPress(item); }}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                      <FontAwesome name="quote-left" size={10} color={tint} />
+                    </Pressable>
+                  )}
+                </View>
               </Pressable>
             )}
           />
@@ -468,6 +480,8 @@ export default function YearInReviewScreen() {
   const [artistView, setArtistView] = useState<'listend' | 'rated'>('listend');
   const [highestRatedView, setHighestRatedView] = useState<'thisYear' | 'previous'>('thisYear');
   const [modal, setModal] = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
+  const [reviewAlbum, setReviewAlbum] = useState<LoggedAlbum | null>(null);
+  const [ownUsername, setOwnUsername] = useState('');
   const [artistImages, setArtistImages] = useState<Record<string, string>>({});
 
   const yearAlbums = loggedAlbums.filter(a => new Date(a.dateLogged).getFullYear() === selectedYear);
@@ -497,6 +511,16 @@ export default function YearInReviewScreen() {
       if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
     });
   }, [selectedYear, loggedAlbums.length]);
+
+  // Fetch own username for review modal
+  useEffect(() => {
+    if (viewedUserId) return;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user?.id) return;
+      const { data } = await supabase.from('profiles').select('username').eq('id', session.user.id).single();
+      if (data?.username) setOwnUsername(data.username);
+    });
+  }, [viewedUserId]);
 
   // All-time avg
   const allRated = loggedAlbums.filter(a => a.rating > 0);
@@ -551,9 +575,21 @@ export default function YearInReviewScreen() {
         albums={modal?.albums ?? []}
         onClose={() => setModal(null)}
         onAlbumPress={a => { setModal(null); setTimeout(() => goToAlbum(a), 300); }}
+        onReviewPress={modal?.title?.includes('Review') ? a => { setModal(null); setTimeout(() => setReviewAlbum(a), 300); } : undefined}
         onTitlePress={modal?.onTitlePress}
         themeColors={colors}
       />
+
+      {reviewAlbum && (
+        <AlbumReviewModal
+          album={reviewAlbum}
+          username={viewedUserId ? (params.displayName ?? '') : ownUsername}
+          onClose={() => setReviewAlbum(null)}
+          onAlbumPress={() => { setReviewAlbum(null); setTimeout(() => goToAlbum(reviewAlbum), 300); }}
+          isDark={colorScheme === 'dark'}
+          colors={colors}
+        />
+      )}
 
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
