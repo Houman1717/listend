@@ -102,15 +102,15 @@ function RatingModal({
   onClose,
   avgRating,
   distribution,
+  colors,
 }: {
   visible: boolean;
   onClose: () => void;
   avgRating: string;
   distribution: RatingDist[];
+  colors: ColorsShape;
 }) {
-  const colorScheme = useColorScheme();
-  const colors      = Colors[colorScheme ?? 'light'];
-  const maxCount    = Math.max(...distribution.map(d => d.count), 1);
+  const maxCount = Math.max(...distribution.map(d => d.count), 1);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -125,7 +125,7 @@ function RatingModal({
             </Pressable>
           </View>
           <View style={[rm.avgBlock, { borderBottomColor: colors.border }]}>
-            <Text style={rm.avgValue}>{avgRating}</Text>
+            <Text style={[rm.avgValue, { color: colors.tint }]}>{avgRating}</Text>
             <Text style={[rm.avgLabel, { color: colors.subtext }]}>average rating</Text>
           </View>
           <View style={rm.distBlock}>
@@ -138,6 +138,7 @@ function RatingModal({
                   <View style={[rm.barTrack, { backgroundColor: colors.border }]}>
                     <View style={[rm.barFilled, {
                       flex: filled,
+                      backgroundColor: colors.tint,
                       opacity: 0.4 + (count / maxCount) * 0.6,
                     }]} />
                     {empty > 0 && <View style={{ flex: empty }} />}
@@ -904,14 +905,14 @@ export default function UserProfileScreen() {
           <View style={[s.statsRow, { backgroundColor: colors.surface }]}>
             <Pressable
               style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
-              onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId, username: profile?.username ?? '' } })}>
+              onPress={() => router.push({ pathname: '/my-listend', params: { userId: viewedUserId, username: profile?.username ?? '', ...(navProTheme && { proTheme: navProTheme }) } })}>
               <Text style={[s.statValue, { color: colors.text }]}>{albumCount}</Text>
               <Text style={[s.statLabel, { color: colors.subtext }]}>Albums</Text>
             </Pressable>
             <View style={[s.statDivider, { backgroundColor: colors.border }]} />
             <Pressable
               style={({ pressed }) => [s.statBox, { opacity: pressed ? 0.7 : 1 }]}
-              onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId } })}>
+              onPress={() => router.push({ pathname: '/sessions', params: { userId: viewedUserId, ...(navProTheme && { proTheme: navProTheme }) } })}>
               <Text style={[s.statValue, { color: colors.text }]}>{thisYearCount}</Text>
               <Text style={[s.statLabel, { color: colors.subtext }]}>This Year</Text>
             </Pressable>
@@ -932,6 +933,7 @@ export default function UserProfileScreen() {
         onClose={() => setRatingModalVisible(false)}
         avgRating={avgRating}
         distribution={ratingDist}
+        colors={colors}
       />
 
       {!isPrivateWall && (
@@ -1273,18 +1275,14 @@ const rm = StyleSheet.create({
     fontSize: 17, fontWeight: '700', letterSpacing: -0.2,
     textAlign: 'center',
   },
-  avgBlock: {
-    alignItems: 'center', paddingVertical: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 20,
-  },
-  avgValue: { color: ACCENT, fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
+  avgBlock: { alignItems: 'center', paddingVertical: 20, borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 20 },
+  avgValue: { fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
   avgLabel: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
-  distBlock: { gap: 10 },
+  distBlock: { gap: 10, paddingBottom: 8 },
   distRow:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
   distRating:{ fontSize: 13, fontWeight: '600', width: 24, textAlign: 'right' },
   barTrack:  { flex: 1, flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', marginHorizontal: 8 },
-  barFilled: { height: 6, backgroundColor: ACCENT, borderRadius: 3 },
+  barFilled: { height: 6, borderRadius: 3 },
   distCount: { fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
 });
 

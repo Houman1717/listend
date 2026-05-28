@@ -478,6 +478,7 @@ export default function YearInReviewScreen() {
   const [modal, setModal] = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
   const [reviewAlbum, setReviewAlbum] = useState<LoggedAlbum | null>(null);
   const [ownUsername, setOwnUsername] = useState('');
+  const [ownAvatarUrl, setOwnAvatarUrl] = useState<string | null>(null);
   const [artistImages, setArtistImages] = useState<Record<string, string>>({});
 
   const yearAlbums = loggedAlbums.filter(a => new Date(a.dateLogged).getFullYear() === selectedYear);
@@ -513,8 +514,9 @@ export default function YearInReviewScreen() {
     if (viewedUserId) return;
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user?.id) return;
-      const { data } = await supabase.from('profiles').select('username').eq('id', session.user.id).single();
+      const { data } = await supabase.from('profiles').select('username, avatar_url').eq('id', session.user.id).single();
       if (data?.username) setOwnUsername(data.username);
+      if (data?.avatar_url) setOwnAvatarUrl(data.avatar_url);
     });
   }, [viewedUserId]);
 
@@ -580,6 +582,7 @@ export default function YearInReviewScreen() {
         <AlbumReviewModal
           album={reviewAlbum}
           username={viewedUserId ? (params.displayName ?? '') : ownUsername}
+          avatarUrl={viewedUserId ? null : ownAvatarUrl}
           onClose={() => setReviewAlbum(null)}
           onAlbumPress={() => { setReviewAlbum(null); setTimeout(() => goToAlbum(reviewAlbum), 300); }}
           isDark={colorScheme === 'dark'}

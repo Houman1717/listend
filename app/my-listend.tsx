@@ -142,17 +142,21 @@ export default function MyListendScreen() {
   // Review modal state
   const [selectedAlbum,  setSelectedAlbum]  = useState<LoggedAlbum | null>(null);
   const [profileUsername, setProfileUsername] = useState<string>(paramUsername ?? '');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
-  // Fetch the profile username for author row in the modal
+  // Fetch the profile username + avatar for author row in the modal
   useEffect(() => {
     const uid = viewingOther || user?.id;
-    if (!uid || profileUsername) return;
+    if (!uid) return;
     supabase
       .from('profiles')
-      .select('username')
+      .select('username, avatar_url')
       .eq('id', uid)
       .single()
-      .then(({ data }) => { if (data?.username) setProfileUsername(data.username); });
+      .then(({ data }) => {
+        if (data?.username) setProfileUsername(data.username);
+        if (data?.avatar_url) setProfileAvatarUrl(data.avatar_url);
+      });
   }, [viewingOther, user?.id]);
 
   useEffect(() => {
@@ -333,6 +337,7 @@ export default function MyListendScreen() {
         <AlbumReviewModal
           album={selectedAlbum}
           username={profileUsername}
+          avatarUrl={profileAvatarUrl}
           onClose={() => setSelectedAlbum(null)}
           onAlbumPress={() => {
             const a = selectedAlbum;

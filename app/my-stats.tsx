@@ -1,7 +1,7 @@
 import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, Fragment, useMemo } from 'react';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Svg, { Circle } from 'react-native-svg';
@@ -14,6 +14,7 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 import { FLIP_POOL } from '@/constants/FlipPool';
+import { useFlip } from '@/context/FlipContext';
 
 const MAIN_GENRES = new Set([
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
@@ -200,6 +201,77 @@ const rm = StyleSheet.create({
   cardRating: { fontSize: 11, fontWeight: '700', marginTop: 2 },
 });
 
+// ─── Artist List Modal ────────────────────────────────────────────────────────
+
+function ArtistListModal({
+  visible,
+  albums,
+  onClose,
+  onArtistPress,
+  themeColors,
+}: {
+  visible: boolean;
+  albums: LoggedAlbum[];
+  onClose: () => void;
+  onArtistPress: (artist: string, artistAlbums: LoggedAlbum[]) => void;
+  themeColors?: ModalColors;
+}) {
+  const insets = useSafeAreaInsets();
+  const bg     = themeColors?.background ?? '#161616';
+  const txt    = themeColors?.text       ?? TEXT;
+  const sub    = themeColors?.subtext    ?? SUBTEXT;
+  const border = themeColors?.border     ?? BORDER;
+  const tint   = themeColors?.tint       ?? ACCENT;
+
+  const artists = useMemo(() => {
+    const map = new Map<string, LoggedAlbum[]>();
+    for (const a of albums) {
+      const name = a.artist || 'Unknown';
+      if (!map.has(name)) map.set(name, []);
+      map.get(name)!.push(a);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  }, [albums]);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={rm.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[rm.sheet, { backgroundColor: bg, borderTopColor: border, paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
+          <View style={[rm.handle, { backgroundColor: border }]} />
+          <View style={rm.header}>
+            <Text style={[rm.title, { color: txt, flex: 1 }]}>Unique Artists</Text>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="times" size={16} color={sub} />
+            </Pressable>
+          </View>
+          <Text style={[rm.subtitle, { color: sub }]}>{artists.length} artist{artists.length !== 1 ? 's' : ''}</Text>
+          <FlatList
+            data={artists}
+            keyExtractor={([name]) => name}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 }}
+            renderItem={({ item: [name, artistAlbums] }) => (
+              <Pressable
+                onPress={() => { onClose(); setTimeout(() => onArtistPress(name, artistAlbums), 300); }}
+                style={({ pressed }) => [{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border,
+                  opacity: pressed ? 0.6 : 1,
+                }]}>
+                <Text style={{ color: txt, fontSize: 15, fontWeight: '600', flex: 1 }} numberOfLines={1}>{name}</Text>
+                <Text style={{ color: sub, fontSize: 13 }}>{artistAlbums.length} album{artistAlbums.length !== 1 ? 's' : ''}</Text>
+                <FontAwesome name="chevron-right" size={11} color={sub} style={{ marginLeft: 10 }} />
+              </Pressable>
+            )}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Hero Stats ───────────────────────────────────────────────────────────────
 
 function StatRow({
@@ -208,7 +280,7 @@ function StatRow({
   subtextColor = SUBTEXT,
   borderColor = BORDER,
 }: {
-  stats: { label: string; value: string | number }[];
+  stats: { label: string; value: string | number; onPress?: () => void }[];
   textColor?: string;
   subtextColor?: string;
   borderColor?: string;
@@ -217,10 +289,13 @@ function StatRow({
     <View style={hs.row}>
       {stats.map((stat, i) => (
         <Fragment key={stat.label}>
-          <View style={hs.box}>
+          <Pressable
+            style={({ pressed }) => [hs.box, stat.onPress && pressed && { opacity: 0.6 }]}
+            onPress={stat.onPress}
+            disabled={!stat.onPress}>
             <Text style={[hs.value, { color: textColor }]}>{stat.value}</Text>
             <Text style={[hs.label, { color: subtextColor }]}>{stat.label}</Text>
-          </View>
+          </Pressable>
           {i < stats.length - 1 && <View style={[hs.divider, { backgroundColor: borderColor }]} />}
         </Fragment>
       ))}
@@ -646,6 +721,7 @@ export default function MyStatsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { loggedAlbums: ownAlbums, isLoaded: ownLoaded, topAlbums: myTop5Albums, topArtists: myTop5Artists } = useAlbums();
+  const { history: flipHistory } = useFlip();
 
   // Other-user album fetch
   const [otherAlbums,  setOtherAlbums]  = useState<LoggedAlbum[]>([]);
@@ -714,6 +790,7 @@ export default function MyStatsScreen() {
   const [genreAlbums,    setGenreAlbums]      = useState<Record<string, { title: string; artist: string }[]>>({});
   const [decadeAlbums,   setDecadeAlbums]     = useState<Record<string, { title: string; artist: string }[]>>({});
   const [showAllPlaylists, setShowAllPlaylists] = useState(false);
+  const [artistModalOpen,  setArtistModalOpen]  = useState(false);
   const { width: screenWidth } = useWindowDimensions();
 
   const cardBg  = colors.surface;
@@ -764,24 +841,21 @@ export default function MyStatsScreen() {
   // Longest streak ever
   const longestStreak = longestConsecutiveStreak(listenDayKeys);
 
-  // Flip a Record streak — longest consecutive days logging at least one pool album
-  const flipPoolSet = new Set(
-    FLIP_POOL.map(a => `${a.title.toLowerCase()}::${a.artist.toLowerCase()}`)
-  );
-  const flipDayKeys = new Set<string>();
-  for (const a of loggedAlbums) {
-    const key = `${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`;
-    if (flipPoolSet.has(key)) {
-      const d = new Date(a.dateLogged);
-      flipDayKeys.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+  // Flip a Record streak — longest consecutive logged run across all history
+  const flipStreak = (() => {
+    let best = 0, current = 0;
+    for (const r of flipHistory) {
+      if (r.status === 'pending') continue;
+      if (r.status === 'logged') { current++; if (current > best) best = current; }
+      else current = 0;
     }
-  }
-  const flipStreak = longestConsecutiveStreak(flipDayKeys);
+    return best;
+  })();
 
   const heroStats = [
-    { label: 'Albums Logged',   value: loggedAlbums.length },
+    { label: 'Albums Logged',   value: loggedAlbums.length, onPress: loggedAlbums.length > 0 ? () => setListModal({ title: 'Albums Logged', albums: loggedAlbums }) : undefined },
     { label: 'Listening Hours', value: totalHours },
-    { label: 'Unique Artists',  value: uniqueArtists },
+    { label: 'Unique Artists',  value: uniqueArtists, onPress: uniqueArtists > 0 ? () => setArtistModalOpen(true) : undefined },
     { label: 'Avg Rating',      value: avgRating },
     { label: 'Top Flip Streak', value: flipStreak > 0 ? flipStreak : '—' },
     { label: 'Best Streak',     value: longestStreak > 0 ? longestStreak : '—' },
@@ -1252,6 +1326,13 @@ export default function MyStatsScreen() {
         onClose={() => setListModal(null)}
         onAlbumPress={(album) => { setListModal(null); setTimeout(() => handleAlbumPress(album), 300); }}
         onTitlePress={listModal?.onTitlePress}
+        themeColors={colors}
+      />
+      <ArtistListModal
+        visible={artistModalOpen}
+        albums={loggedAlbums}
+        onClose={() => setArtistModalOpen(false)}
+        onArtistPress={(artist, artistAlbums) => setListModal({ title: artist, albums: artistAlbums })}
         themeColors={colors}
       />
 

@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ProBadge } from '@/components/ProBadge';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ type UserRow = {
   display_name: string | null;
   username: string | null;
   avatar_url: string | null;
+  is_pro: boolean;
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -63,7 +65,7 @@ export default function FollowersFollowingScreen() {
       if (type === 'followers') {
         const { data, error } = await supabase
           .from('follows')
-          .select('profile:profiles!follower_id(id, display_name, username, avatar_url)')
+          .select('profile:profiles!follower_id(id, display_name, username, avatar_url, is_pro)')
           .eq('following_id', userId);
 
         if (error) {
@@ -79,7 +81,7 @@ export default function FollowersFollowingScreen() {
       } else {
         const { data, error } = await supabase
           .from('follows')
-          .select('profile:profiles!following_id(id, display_name, username, avatar_url)')
+          .select('profile:profiles!following_id(id, display_name, username, avatar_url, is_pro)')
           .eq('follower_id', userId);
 
         if (error) {
@@ -143,7 +145,10 @@ export default function FollowersFollowingScreen() {
               </View>
             )}
             <View style={s.textWrap}>
-              <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={[s.name, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{name}</Text>
+                {item.is_pro && <ProBadge />}
+              </View>
               {item.username ? (
                 <Text style={[s.username, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
               ) : null}

@@ -98,9 +98,9 @@ export default function DMConversationScreen() {
   // Other user's reviews for album messages (keyed by album id, with title+artist fallback key)
   const [otherUserReviews, setOtherUserReviews] = useState<Record<string, { rating?: number; review?: string }>>({});
 
-  const listRef        = useRef<FlatList<Message>>(null);
-  const pollTimer      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const albumDebounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listRef       = useRef<FlatList<Message>>(null);
+  const pollTimer     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const albumDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Set header title to other user's name ───────────────────────────────────
   useEffect(() => {
@@ -143,13 +143,6 @@ export default function DMConversationScreen() {
     fetchOtherUserReviews();
   }, [otherUserId]);
 
-  // ── Scroll to bottom when keyboard opens so messages stay visible ─────────────
-  useEffect(() => {
-    const sub = Keyboard.addListener('keyboardDidShow', () => {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-    });
-    return () => sub.remove();
-  }, []);
 
   async function fetchMessages() {
     if (!user || !otherUserId) return;
@@ -294,12 +287,6 @@ export default function DMConversationScreen() {
     }
   }
 
-  // ── Scroll to bottom when messages change ───────────────────────────────────
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 60);
-    }
-  }, [messages]);
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -320,13 +307,16 @@ export default function DMConversationScreen() {
       {/* ── Message list ───────────────────────────────────────────────────── */}
       <FlatList
         ref={listRef}
-        data={messages}
+        data={[...messages].reverse()}
         keyExtractor={m => m.id}
         contentContainerStyle={s.listContent}
         showsVerticalScrollIndicator={false}
+        inverted
         renderItem={({ item, index }) => {
-          const isMe = item.sender_id === user?.id;
-          const prevMsg = messages[index - 1];
+          const reversedMsgs = [...messages].reverse();
+          const isMe    = item.sender_id === user?.id;
+          // index+1 in the reversed array = the chronologically older message
+          const prevMsg = reversedMsgs[index + 1] as Message | undefined;
           const showDate =
             !prevMsg ||
             new Date(item.created_at).toDateString() !==
@@ -334,13 +324,6 @@ export default function DMConversationScreen() {
 
           return (
             <>
-              {showDate && (
-                <Text style={[s.dateSeparator, { color: colors.subtext }]}>
-                  {new Date(item.created_at).toLocaleDateString([], {
-                    weekday: 'long', month: 'short', day: 'numeric',
-                  })}
-                </Text>
-              )}
               {item.type === 'album' && item.album_data ? (
                 <AlbumCard
                   album={item.album_data}
@@ -352,10 +335,8 @@ export default function DMConversationScreen() {
                     const ad = item.album_data!;
                     const fallbackKey = `${ad.title.toLowerCase()}::${ad.artist.toLowerCase()}`;
                     if (isMe) {
-                      // I'm the sender — show other user's review in recipient slot
                       return otherUserReviews[ad.id] ?? otherUserReviews[fallbackKey];
                     } else {
-                      // I'm the recipient — show my own review in recipient slot
                       return (
                         loggedAlbums.find(a => a.id === ad.id)
                         ?? loggedAlbums.find(a =>
@@ -380,6 +361,14 @@ export default function DMConversationScreen() {
                 />
               ) : (
                 <TextBubble text={item.content ?? ''} isMe={isMe} time={item.created_at} colors={colors} />
+              )}
+              {/* In an inverted list, rendering AFTER the bubble puts it visually ABOVE */}
+              {showDate && (
+                <Text style={[s.dateSeparator, { color: colors.subtext }]}>
+                  {new Date(item.created_at).toLocaleDateString([], {
+                    weekday: 'long', month: 'short', day: 'numeric',
+                  })}
+                </Text>
               )}
             </>
           );
@@ -573,44 +562,46 @@ function AlbumCard({
           <FontAwesome name="chevron-right" size={11} color={colors.subtext} style={{ alignSelf: 'center', marginLeft: 4 }} />
         </View>
 
-        {/* Divider */}
-        <View style={[b.reviewDivider, { backgroundColor: colors.border }]} />
+        {/* Only show review section if at least one person has logged it */}
+        {(senderRating || senderReview || recipientRating || recipientReview) && (
+          <>
+            <View style={[b.reviewDivider, { backgroundColor: colors.border }]} />
 
-        {/* Sender review */}
-        <View style={b.reviewSection}>
-          <View style={b.reviewSectionHeader}>
-            <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{senderLabel}</Text>
-            {senderRating ? (
-              <View style={[b.ratingBadge, { backgroundColor: colors.tint }]}>
-                <FontAwesome name="volume-up" size={8} color="#fff" />
-                <Text style={b.ratingBadgeText}>{senderRating}</Text>
+            {(senderRating || senderReview) && (
+              <View style={b.reviewSection}>
+                <View style={b.reviewSectionHeader}>
+                  <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{senderLabel}</Text>
+                  {senderRating ? (
+                    <View style={[b.ratingBadge, { backgroundColor: colors.tint }]}>
+                      <FontAwesome name="volume-up" size={8} color="#fff" />
+                      <Text style={b.ratingBadgeText}>{senderRating}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {senderReview ? (
+                  <Text style={[b.reviewText, { color: colors.subtext }]} numberOfLines={2}>"{senderReview}"</Text>
+                ) : null}
               </View>
-            ) : null}
-          </View>
-          {senderReview ? (
-            <Text style={[b.reviewText, { color: colors.subtext }]} numberOfLines={2}>"{senderReview}"</Text>
-          ) : (
-            <Text style={[b.reviewPlaceholder, { color: colors.textMuted }]}>No review yet</Text>
-          )}
-        </View>
+            )}
 
-        {/* Recipient review */}
-        <View style={b.reviewSection}>
-          <View style={b.reviewSectionHeader}>
-            <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{recipientLabel}</Text>
-            {recipientRating ? (
-              <View style={[b.ratingBadge, { backgroundColor: colors.tint }]}>
-                <FontAwesome name="volume-up" size={8} color="#fff" />
-                <Text style={b.ratingBadgeText}>{recipientRating}</Text>
+            {(recipientRating || recipientReview) && (
+              <View style={b.reviewSection}>
+                <View style={b.reviewSectionHeader}>
+                  <Text style={[b.reviewSectionLabel, { color: colors.subtext }]}>{recipientLabel}</Text>
+                  {recipientRating ? (
+                    <View style={[b.ratingBadge, { backgroundColor: colors.tint }]}>
+                      <FontAwesome name="volume-up" size={8} color="#fff" />
+                      <Text style={b.ratingBadgeText}>{recipientRating}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {recipientReview ? (
+                  <Text style={[b.reviewText, { color: colors.subtext }]} numberOfLines={2}>"{recipientReview}"</Text>
+                ) : null}
               </View>
-            ) : null}
-          </View>
-          {recipientReview ? (
-            <Text style={[b.reviewText, { color: colors.subtext }]} numberOfLines={2}>"{recipientReview}"</Text>
-          ) : (
-            <Text style={[b.reviewPlaceholder, { color: colors.textMuted }]}>No review yet</Text>
-          )}
-        </View>
+            )}
+          </>
+        )}
 
       </Pressable>
     </View>

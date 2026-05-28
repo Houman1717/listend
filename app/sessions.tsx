@@ -94,6 +94,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
 function AlbumReviewModal({
   album,
   username,
+  avatarUrl,
   isDark,
   colors,
   onClose,
@@ -102,6 +103,7 @@ function AlbumReviewModal({
 }: {
   album: LoggedAlbum;
   username: string;
+  avatarUrl?: string | null;
   isDark: boolean;
   colors: any;
   onClose: () => void;
@@ -183,9 +185,13 @@ function AlbumReviewModal({
 
             {/* Author + date */}
             <Pressable style={rm.authorRow} onPress={onUsernamePress} disabled={!onUsernamePress}>
-              <View style={[rm.avatar, { backgroundColor: avatarColor(username || '?') }]}>
-                <Text style={rm.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
-              </View>
+              {avatarUrl ? (
+                <ExpoImage source={{ uri: avatarUrl }} style={rm.avatar} contentFit="cover" cachePolicy="disk" />
+              ) : (
+                <View style={[rm.avatar, { backgroundColor: avatarColor(username || '?') }]}>
+                  <Text style={rm.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
+                </View>
+              )}
               <View style={{ gap: 1 }}>
                 <Text style={[rm.username, { color: colors.tint }]}>@{username || '…'}</Text>
                 {dateStr ? (
@@ -434,16 +440,20 @@ export default function SessionsScreen() {
   // Review modal state
   const [selectedAlbum,   setSelectedAlbum]   = useState<LoggedAlbum | null>(null);
   const [profileUsername, setProfileUsername] = useState('');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const uid = viewingOther || user?.id;
-    if (!uid || profileUsername) return;
+    if (!uid) return;
     supabase
       .from('profiles')
-      .select('username')
+      .select('username, avatar_url')
       .eq('id', uid)
       .single()
-      .then(({ data }) => { if (data?.username) setProfileUsername(data.username); });
+      .then(({ data }) => {
+        if (data?.username) setProfileUsername(data.username);
+        if (data?.avatar_url) setProfileAvatarUrl(data.avatar_url);
+      });
   }, [viewingOther, user?.id]);
 
   function handleAlbumPress(album: LoggedAlbum) {
@@ -693,6 +703,7 @@ export default function SessionsScreen() {
         <AlbumReviewModal
           album={selectedAlbum}
           username={profileUsername}
+          avatarUrl={profileAvatarUrl}
           isDark={isDark}
           colors={colors}
           onClose={() => setSelectedAlbum(null)}

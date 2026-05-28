@@ -28,6 +28,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
 export function AlbumReviewModal({
   album,
   username,
+  avatarUrl,
   onClose,
   onAlbumPress,
   onUsernamePress,
@@ -39,6 +40,7 @@ export function AlbumReviewModal({
 }: {
   album: LoggedAlbum;
   username: string;
+  avatarUrl?: string | null;
   onClose: () => void;
   onAlbumPress: () => void;
   onUsernamePress?: (username: string) => void;
@@ -132,9 +134,13 @@ export function AlbumReviewModal({
               style={s.authorRow}
               onPress={() => onUsernamePress?.(username)}
               disabled={!onUsernamePress}>
-              <View style={[s.avatar, { backgroundColor: avatarColor(username || '?') }]}>
-                <Text style={s.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
-              </View>
+              {avatarUrl ? (
+                <ExpoImage source={{ uri: avatarUrl }} style={s.avatar} contentFit="cover" cachePolicy="disk" />
+              ) : (
+                <View style={[s.avatar, { backgroundColor: avatarColor(username || '?') }]}>
+                  <Text style={s.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
+                </View>
+              )}
               <View style={{ gap: 1 }}>
                 <Text style={[s.username, { color: colors.tint }]}>@{username || '…'}</Text>
                 {dateStr ? (

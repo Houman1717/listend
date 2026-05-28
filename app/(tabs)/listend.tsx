@@ -47,37 +47,30 @@ function RatingModal({
   onClose,
   avgRating,
   distribution,
-  tint = ACCENT,
+  colors,
 }: {
   visible: boolean;
   onClose: () => void;
   avgRating: string;
   distribution: { rating: number; count: number }[];
-  tint?: string;
+  colors: ReturnType<typeof themeToColors>;
 }) {
   const maxCount = Math.max(...distribution.map(d => d.count), 1);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      {/*
-        Single flex:1 container fills the whole modal overlay and gives every
-        descendant a resolved width to work against — this is what makes
-        flex:1 on barTrack (and percentage widths on barFill) work correctly.
-        justifyContent:'flex-end' pushes the sheet to the bottom.
-        The backdrop sits as absoluteFill behind the sheet.
-      */}
       <View style={rm.container}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <SafeAreaView style={rm.sheet}>
-          <View style={rm.handle} />
+        <SafeAreaView style={[rm.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <View style={[rm.handle, { backgroundColor: colors.border }]} />
           <View style={rm.header}>
-            <Text style={rm.headerTitle}>Rating Breakdown</Text>
+            <Text style={[rm.headerTitle, { color: colors.text }]}>Rating Breakdown</Text>
             <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="times" size={16} color={SUBTEXT} />
+              <FontAwesome name="times" size={16} color={colors.subtext} />
             </Pressable>
           </View>
-          <View style={rm.avgBlock}>
-            <Text style={[rm.avgValue, { color: tint }]}>{avgRating}</Text>
-            <Text style={rm.avgLabel}>average rating</Text>
+          <View style={[rm.avgBlock, { borderBottomColor: colors.border }]}>
+            <Text style={[rm.avgValue, { color: colors.tint }]}>{avgRating}</Text>
+            <Text style={[rm.avgLabel, { color: colors.subtext }]}>average rating</Text>
           </View>
           <View style={rm.distBlock}>
             {[...distribution].reverse().map(({ rating, count }) => {
@@ -85,16 +78,16 @@ function RatingModal({
               const empty  = 1 - filled;
               return (
                 <View key={rating} style={rm.distRow}>
-                  <Text style={rm.distRating}>{rating}</Text>
-                  <View style={rm.barTrack}>
+                  <Text style={[rm.distRating, { color: colors.subtext }]}>{rating}</Text>
+                  <View style={[rm.barTrack, { backgroundColor: colors.border }]}>
                     <View style={[rm.barFilled, {
                       flex: filled,
                       opacity: 0.4 + (count / maxCount) * 0.6,
-                      backgroundColor: tint,
+                      backgroundColor: colors.tint,
                     }]} />
                     {empty > 0 && <View style={{ flex: empty }} />}
                   </View>
-                  <Text style={rm.distCount}>{count}</Text>
+                  <Text style={[rm.distCount, { color: colors.text }]}>{count}</Text>
                 </View>
               );
             })}
@@ -1118,7 +1111,7 @@ export default function ListendScreen() {
         onClose={() => setRatingModalVisible(false)}
         avgRating={avgRating}
         distribution={ratingDistribution}
-        tint={colors.tint}
+        colors={colors}
       />
 
       <SettingsSheet
