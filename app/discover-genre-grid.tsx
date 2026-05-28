@@ -14,6 +14,7 @@ import Colors from '@/constants/Colors';
 import { SpotifyAlbum } from '@/context/SpotifyService';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
 import { useAlbums } from '@/context/AlbumsContext';
+import { navigateToAlbum } from '@/lib/navigateToAlbum';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -57,7 +58,11 @@ export default function GenreGridScreen() {
   const cw = cardWidth(width);
 
   const { loggedAlbums } = useAlbums();
-  const loggedIds = new Set(loggedAlbums.map((a) => a.id));
+  const loggedIds   = new Set(loggedAlbums.map((a) => a.id));
+  const norm        = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const loggedKeys  = new Set(loggedAlbums.map((a) => `${norm(a.title)}::${norm(a.artist)}`));
+  const isLogged    = (album: SpotifyAlbum) =>
+    loggedIds.has(album.id) || loggedKeys.has(`${norm(album.title)}::${norm(album.artist)}`);
 
   const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(() => cache[genre ?? ''] ?? []);
   const [loading, setLoading] = useState(!cache[genre ?? '']);
@@ -76,15 +81,12 @@ export default function GenreGridScreen() {
   }, [genre]);
 
   function handlePress(album: SpotifyAlbum) {
-    router.push({
-      pathname: '/album-detail',
-      params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },
-    });
+    navigateToAlbum(router, album);
   }
 
   const padded = Array.from({ length: TOTAL }, (_, i) => albums[i] ?? null) as (SpotifyAlbum | null)[];
 
-  const loggedInGrid = albums.filter(a => loggedIds.has(a.id)).length;
+  const loggedInGrid = albums.filter(a => isLogged(a)).length;
   const listenedPct  = albums.length > 0 ? Math.round(loggedInGrid / albums.length * 100) : 0;
 
   return (
@@ -122,7 +124,7 @@ export default function GenreGridScreen() {
                   textColor={colors.text}
                   subColor={colors.subtext}
                   isDark={isDark}
-                  isLogged={loggedIds.has(item.id)}
+                  isLogged={isLogged(item)}
                 />
               ) : (
                 <AlbumGridCardPlaceholder key={`placeholder-${i}`} width={cw} isDark={isDark} />

@@ -9,6 +9,7 @@ import { SpotifyAlbum } from '@/context/SpotifyService';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
 import { supabase } from '@/lib/supabase';
+import { navigateToAlbum } from '@/lib/navigateToAlbum';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const PLACEHOLDER_COUNT = 12;
@@ -25,7 +26,11 @@ export default function FeaturedPlaylistScreen() {
     id: string; name: string; emoji: string; description: string; artworkUrlsJson: string;
   }>();
   const { loggedAlbums } = useAlbums();
-  const loggedIds = new Set(loggedAlbums.map(a => a.id));
+  const loggedIds   = new Set(loggedAlbums.map(a => a.id));
+  const norm        = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const loggedKeys  = new Set(loggedAlbums.map(a => `${norm(a.title)}::${norm(a.artist)}`));
+  const isLogged    = (album: SpotifyAlbum) =>
+    loggedIds.has(album.id) || loggedKeys.has(`${norm(album.title)}::${norm(album.artist)}`);
   const { isLiked, toggleLike } = useLikedFeaturedPlaylists();
 
   const [albums, setAlbums] = useState<SpotifyAlbum[]>([]);
@@ -60,7 +65,7 @@ export default function FeaturedPlaylistScreen() {
     setPlaylistLikeCount(prev => prev === null ? null : liked ? Math.max(0, prev - 1) : prev + 1);
   }, [id, name, emoji, description, artworkUrlsJson, toggleLike]);
 
-  const loggedInPlaylist = albums.filter(a => loggedIds.has(a.id)).length;
+  const loggedInPlaylist = albums.filter(a => isLogged(a)).length;
   const listenedPct = albums.length > 0 ? Math.round(loggedInPlaylist / albums.length * 100) : 0;
 
   return (
@@ -114,15 +119,10 @@ export default function FeaturedPlaylistScreen() {
                   album={album}
                   width={cw}
                   isDark={isDark}
-                  isLogged={loggedIds.has(album.id)}
+                  isLogged={isLogged(album)}
                   textColor={colors.text}
                   subColor={isDark ? '#a07850' : '#7a5535'}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/album-detail',
-                      params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },
-                    } as any)
-                  }
+                  onPress={() => navigateToAlbum(router, album)}
                 />
               ))
           }
