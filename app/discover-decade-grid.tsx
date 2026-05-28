@@ -5,7 +5,9 @@ import {
   ScrollView,
   ActivityIndicator,
   useWindowDimensions,
+  Text,
 } from 'react-native';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -82,6 +84,9 @@ export default function DecadeGridScreen() {
 
   const padded = Array.from({ length: TOTAL }, (_, i) => albums[i] ?? null) as (SpotifyAlbum | null)[];
 
+  const loggedInGrid = albums.filter(a => loggedIds.has(a.id)).length;
+  const listenedPct  = albums.length > 0 ? Math.round(loggedInGrid / albums.length * 100) : 0;
+
   return (
     <>
       <Stack.Screen options={{ title: decade ?? 'Decade' }} />
@@ -95,6 +100,17 @@ export default function DecadeGridScreen() {
           style={{ flex: 1, backgroundColor: colors.background }}
           contentContainerStyle={s.gridWrap}
           showsVerticalScrollIndicator={false}>
+
+          <View style={s.statsHeader}>
+            <View style={s.listenedRow}>
+              <FontAwesome name="headphones" size={13} color="#D4A017" />
+              <Text style={s.listenedPct}>{listenedPct}%</Text>
+            </View>
+            <Text style={[s.listenedSub, { color: isDark ? '#a07850' : '#7a5535' }]}>
+              {loggedInGrid} of {albums.length} albums listened
+            </Text>
+          </View>
+
           <View style={s.grid}>
             {padded.map((item, i) =>
               item ? (
@@ -122,7 +138,11 @@ export default function DecadeGridScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  gridWrap: { padding: PADDING, paddingBottom: 48 },
-  grid:     { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  centered:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  gridWrap:    { padding: PADDING, paddingBottom: 48 },
+  grid:        { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  statsHeader: { alignItems: 'center', paddingTop: 8, paddingBottom: 16, gap: 4 },
+  listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  listenedPct: { color: '#D4A017', fontSize: 15, fontWeight: '700' },
+  listenedSub: { fontSize: 13 },
 });
