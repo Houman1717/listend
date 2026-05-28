@@ -358,7 +358,10 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, o
                     </View>}
                 <Text style={{ color: txt, fontSize: 12, fontWeight: '600', marginTop: 4 }} numberOfLines={1}>{item.title}</Text>
                 <Text style={{ color: sub, fontSize: 11, marginTop: 1 }} numberOfLines={1}>{item.artist}</Text>
-                {item.rating > 0 && <View style={{ marginTop: 4 }}><VolumeBadge rating={item.rating} tint={tint} /></View>}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  {item.rating > 0 && <VolumeBadge rating={item.rating} tint={tint} />}
+                  {onReviewPress && <FontAwesome name="quote-left" size={10} color={tint} />}
+                </View>
               </Pressable>
             )}
           />
