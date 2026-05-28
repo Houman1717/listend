@@ -105,8 +105,10 @@ function computeMonthStats(albums: LoggedAlbum[], selectedYear: number) {
   const highestRatedThisYear = buildTop(albums.filter(a => a.year === selectedYear));
   const highestRatedPrevious = buildTop(albums.filter(a => a.year < selectedYear));
 
+  const reviewCount = albums.filter(a => a.review && a.review.trim().length > 0).length;
+
   return {
-    avgRating, hours, artistCount: artistSet.size,
+    avgRating, hours, artistCount: artistSet.size, reviewCount,
     topArtists, topArtistsByRating, topGenres, firstAlbum, lastAlbum, dowCounts,
     highestRatedThisYear, highestRatedPrevious,
   };
@@ -115,17 +117,20 @@ function computeMonthStats(albums: LoggedAlbum[], selectedYear: number) {
 // ─── StatRow ─────────────────────────────────────────────────────────────────
 
 function StatRow({ stats, textColor = TEXT, subtextColor = SUBTEXT, borderColor = BORDER }: {
-  stats: { label: string; value: string | number }[];
+  stats: { label: string; value: string | number; onPress?: () => void }[];
   textColor?: string; subtextColor?: string; borderColor?: string;
 }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8 }}>
       {stats.map((stat, i) => (
         <Fragment key={stat.label}>
-          <View style={{ flex: 1, alignItems: 'center', gap: 3 }}>
+          <Pressable
+            style={({ pressed }) => ({ flex: 1, alignItems: 'center', gap: 3, opacity: stat.onPress && pressed ? 0.6 : 1 })}
+            onPress={stat.onPress}
+            disabled={!stat.onPress}>
             <Text style={{ color: textColor, fontSize: 20, fontWeight: '700' }}>{stat.value}</Text>
             <Text style={{ color: subtextColor, fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.8, textAlign: 'center' }}>{stat.label}</Text>
-          </View>
+          </Pressable>
           {i < stats.length - 1 && <View style={{ width: StyleSheet.hairlineWidth, height: 32, backgroundColor: borderColor }} />}
         </Fragment>
       ))}
@@ -430,9 +435,9 @@ export default function MonthInReviewScreen() {
                 <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
                   <StatRow
                     stats={[
+                      { label: 'Albums', value: monthAlbums.length, onPress: monthAlbums.length > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Albums`, albums: monthAlbums }) : undefined },
+                      { label: 'Reviews', value: stats.reviewCount || '—', onPress: stats.reviewCount > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Reviews`, albums: monthAlbums.filter(a => a.review && a.review.trim().length > 0) }) : undefined },
                       { label: 'Hours', value: stats.hours || '—' },
-                      { label: 'Artists', value: stats.artistCount },
-                      { label: 'Avg Rating', value: stats.avgRating },
                     ]}
                     textColor={txt} subtextColor={sub} borderColor={cardBorder}
                   />

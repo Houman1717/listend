@@ -144,17 +144,20 @@ function computeYearStats(albums: LoggedAlbum[]) {
 // ─── StatRow ─────────────────────────────────────────────────────────────────
 
 function StatRow({ stats, textColor = TEXT, subtextColor = SUBTEXT, borderColor = BORDER }: {
-  stats: { label: string; value: string | number }[];
+  stats: { label: string; value: string | number; onPress?: () => void }[];
   textColor?: string; subtextColor?: string; borderColor?: string;
 }) {
   return (
     <View style={hs.row}>
       {stats.map((stat, i) => (
         <Fragment key={stat.label}>
-          <View style={hs.box}>
+          <Pressable
+            style={({ pressed }) => [hs.box, stat.onPress && { opacity: pressed ? 0.6 : 1 }]}
+            onPress={stat.onPress}
+            disabled={!stat.onPress}>
             <Text style={[hs.value, { color: textColor }]}>{stat.value}</Text>
             <Text style={[hs.lbl, { color: subtextColor }]}>{stat.label}</Text>
-          </View>
+          </Pressable>
           {i < stats.length - 1 && <View style={[hs.divider, { backgroundColor: borderColor }]} />}
         </Fragment>
       ))}
@@ -603,8 +606,8 @@ export default function YearInReviewScreen() {
                 <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
                   <StatRow
                     stats={[
-                      { label: 'Albums', value: yearAlbums.length },
-                      { label: 'Reviews', value: stats.reviewCount || '—' },
+                      { label: 'Albums', value: yearAlbums.length, onPress: yearAlbums.length > 0 ? () => setModal({ title: `${selectedYear} Albums`, albums: yearAlbums }) : undefined },
+                      { label: 'Reviews', value: stats.reviewCount || '—', onPress: stats.reviewCount > 0 ? () => setModal({ title: `${selectedYear} Reviews`, albums: yearAlbums.filter(a => a.review && a.review.trim().length > 0) }) : undefined },
                       { label: 'Hours', value: stats.hours || '—' },
                     ]}
                     textColor={txt}
