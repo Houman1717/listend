@@ -15,6 +15,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
@@ -74,6 +75,7 @@ export default function DMConversationScreen() {
     ? themeToColors(getProTheme(proTheme))
     : Colors[colorScheme ?? 'dark'] as typeof Colors.dark;
   const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   const { userId: otherUserId } = useLocalSearchParams<{ userId: string }>();
   const { user }   = useAuth();
@@ -385,7 +387,7 @@ export default function DMConversationScreen() {
       />
 
       {/* ── Input bar ──────────────────────────────────────────────────────── */}
-      <View style={[s.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+      <View style={[s.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: 10 + insets.bottom }]}>
         <Pressable
           style={({ pressed }) => [s.albumBtn, {
             backgroundColor: colors.elevated,
