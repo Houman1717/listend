@@ -347,7 +347,10 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, o
             renderItem={({ item }) => (
               <Pressable
                 style={({ pressed }) => [{ width: cw, opacity: pressed ? 0.7 : 1 }]}
-                onPress={() => { onClose(); setTimeout(() => onAlbumPress(item), 300); }}>
+                onPress={() => {
+                  if (onReviewPress) { onReviewPress(item); }
+                  else { onClose(); setTimeout(() => onAlbumPress(item), 300); }
+                }}>
                 {item.artworkUrl
                   ? <ExpoImage source={{ uri: item.artworkUrl }} style={{ width: cw, height: cw, borderRadius: 8 }} contentFit="cover" cachePolicy="disk" />
                   : <View style={{ width: cw, height: cw, borderRadius: 8, backgroundColor: surface, justifyContent: 'center', alignItems: 'center' }}>
@@ -355,17 +358,7 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, o
                     </View>}
                 <Text style={{ color: txt, fontSize: 12, fontWeight: '600', marginTop: 4 }} numberOfLines={1}>{item.title}</Text>
                 <Text style={{ color: sub, fontSize: 11, marginTop: 1 }} numberOfLines={1}>{item.artist}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                  {item.rating > 0 && <VolumeBadge rating={item.rating} tint={tint} />}
-                  {onReviewPress && (
-                    <Pressable
-                      hitSlop={8}
-                      onPress={e => { e.stopPropagation?.(); onReviewPress(item); }}
-                      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
-                      <FontAwesome name="quote-left" size={10} color={tint} />
-                    </Pressable>
-                  )}
-                </View>
+                {item.rating > 0 && <View style={{ marginTop: 4 }}><VolumeBadge rating={item.rating} tint={tint} /></View>}
               </Pressable>
             )}
           />
@@ -575,7 +568,7 @@ export default function YearInReviewScreen() {
         albums={modal?.albums ?? []}
         onClose={() => setModal(null)}
         onAlbumPress={a => { setModal(null); setTimeout(() => goToAlbum(a), 300); }}
-        onReviewPress={modal?.title?.includes('Review') ? a => { setModal(null); setTimeout(() => setReviewAlbum(a), 300); } : undefined}
+        onReviewPress={modal?.title?.includes('Review') ? a => { setModal(null); setReviewAlbum(a); } : undefined}
         onTitlePress={modal?.onTitlePress}
         themeColors={colors}
       />
