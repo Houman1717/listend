@@ -2613,21 +2613,28 @@ app.post('/api/delete-cover', requireAuth, [
 // ── Featured Playlists ────────────────────────────────────────────────────────
 
 // Search Apple Music for a single album by artist + title. Returns a SpotifyAlbum-compatible object.
-async function searchAMAlbum(artist, title) {
+async function searchAMAlbum(artist, title, attempt = 0) {
   const term = encodeURIComponent(`${title} ${artist}`);
+  const fallback = { id: `fp-${artist}-${title}`.replace(/\s+/g, '-').toLowerCase(), title, artist, year: 0, artworkUrl: '' };
   try {
     const data = await amFetch(`/catalog/us/search?types=albums&term=${term}&limit=1`);
     const item = data?.results?.albums?.data?.[0];
-    if (!item) return { id: `fp-${artist}-${title}`.replace(/\s+/g, '-').toLowerCase(), title, artist, year: 0, artworkUrl: '' };
+    if (!item) {
+      if (attempt < 2) { await new Promise(r => setTimeout(r, 600 * (attempt + 1))); return searchAMAlbum(artist, title, attempt + 1); }
+      return fallback;
+    }
+    const artworkUrl = amArtwork(item.attributes?.artwork);
+    if (!artworkUrl && attempt < 2) { await new Promise(r => setTimeout(r, 600 * (attempt + 1))); return searchAMAlbum(artist, title, attempt + 1); }
     return {
       id: item.id,
       title: item.attributes?.name ?? title,
       artist: item.attributes?.artistName ?? artist,
       year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
-      artworkUrl: amArtwork(item.attributes?.artwork),
+      artworkUrl,
     };
   } catch {
-    return { id: `fp-${artist}-${title}`.replace(/\s+/g, '-').toLowerCase(), title, artist, year: 0, artworkUrl: '' };
+    if (attempt < 2) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); return searchAMAlbum(artist, title, attempt + 1); }
+    return fallback;
   }
 }
 
@@ -2642,11 +2649,12 @@ function dedupeAlbums(albums) {
 }
 
 // Fetch with limited concurrency to avoid Apple Music rate limiting.
-async function fetchConcurrent(items, fn, limit = 12) {
+async function fetchConcurrent(items, fn, limit = 5) {
   const results = [];
   for (let i = 0; i < items.length; i += limit) {
     const batch = items.slice(i, i + limit);
     results.push(...await Promise.all(batch.map(fn)));
+    if (i + limit < items.length) await new Promise(r => setTimeout(r, 250));
   }
   return results;
 }
@@ -2668,7 +2676,7 @@ async function getPlaylistArtwork(id) {
 
 // GET /api/featured-playlists — returns all 8 playlists with metadata + 4 artwork URLs each
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta:v5';
+  const CACHE_KEY = 'featured-playlists:meta:v6';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -2700,12 +2708,26 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:v5:${id}`;
+  const CACHE_KEY = `featured-playlist:v6:${id}`;
   try {
     const mem = cacheGet(CACHE_KEY);
-    if (mem) return res.json(mem);
+    if (mem) {
+      // Serve from memory cache but evict if artwork is missing so next request re-fetches
+      const missingCount = mem.filter(a => !a.artworkUrl).length;
+      if (missingCount > 0) {
+        cacheClear(CACHE_KEY);
+        deleteCache(CACHE_KEY).catch(() => {});
+      } else {
+        return res.json(mem);
+      }
+    }
     const db = await getCached(CACHE_KEY, TTL_24H);
-    if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+    if (db) {
+      const missingCount = db.filter(a => !a.artworkUrl).length;
+      if (missingCount === 0) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+      // Cached data has missing artwork — fall through to re-fetch fresh
+      console.log(`[featured-playlist:${id}] ${missingCount} albums missing artwork in cache, re-fetching`);
+    }
 
     let albums;
     if (id === 'all-time-classics') {
@@ -2724,7 +2746,22 @@ app.get('/api/featured-playlists/:id', [
     } else {
       const list = PLAYLIST_ALBUMS[id];
       if (!list) return res.status(404).json({ error: 'Playlist not found' });
-      albums = dedupeAlbums(await fetchConcurrent(list, ({ artist, title }) => searchAMAlbum(artist, title), 12));
+      albums = dedupeAlbums(await fetchConcurrent(list, ({ artist, title }) => searchAMAlbum(artist, title)));
+
+      // Sequential fallback pass for any albums that still have no artwork
+      const missing = albums.filter(a => !a.artworkUrl);
+      if (missing.length > 0) {
+        console.log(`[featured-playlist:${id}] retrying ${missing.length} albums without artwork sequentially`);
+        const retried = new Map();
+        for (const a of missing) {
+          const fresh = await searchAMAlbum(a.artist, a.title);
+          if (fresh.artworkUrl) retried.set(a.id, fresh);
+          await new Promise(r => setTimeout(r, 300));
+        }
+        if (retried.size > 0) {
+          albums = albums.map(a => retried.has(a.id) ? retried.get(a.id) : a);
+        }
+      }
     }
 
     cacheSet(CACHE_KEY, albums, TTL_6H);
