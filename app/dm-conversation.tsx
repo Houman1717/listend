@@ -242,8 +242,8 @@ export default function DMConversationScreen() {
         );
     const albumDataWithRating = {
       ...album,
-      ...(loggedEntry && loggedEntry.rating > 0 ? { sender_rating: loggedEntry.rating } : {}),
-      ...(loggedEntry?.review ? { sender_review: loggedEntry.review } : {}),
+      ...(loggedEntry && (loggedEntry.lastRating ?? loggedEntry.rating) > 0 ? { sender_rating: loggedEntry.lastRating ?? loggedEntry.rating } : {}),
+      ...(loggedEntry && (loggedEntry.lastReview ?? loggedEntry.review) ? { sender_review: loggedEntry.lastReview ?? loggedEntry.review } : {}),
     };
 
     const { error } = await supabase.from('messages').insert({
