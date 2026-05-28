@@ -3002,4 +3002,57 @@ app.listen(PORT, () => {
       console.error('[startup] genre seed failed:', e.message);
     }
   })();
+
+  // Pre-warm featured playlist caches so first user load is instant.
+  (async () => {
+    try {
+      const ids = FEATURED_PLAYLIST_META.map(m => m.id);
+      for (const id of ids) {
+        const CACHE_KEY = `featured-playlist:v6:${id}`;
+        const mem = cacheGet(CACHE_KEY);
+        if (mem && mem.every(a => a.artworkUrl)) continue;
+        const db = await getCached(CACHE_KEY, TTL_24H);
+        if (db && db.every(a => a.artworkUrl)) { cacheSet(CACHE_KEY, db, TTL_6H); continue; }
+
+        console.log(`[startup] pre-warming playlist: ${id}`);
+        let albums;
+        if (id === 'all-time-classics') {
+          const resp = await fetch(`https://api.music.apple.com/v1/catalog/us/albums?ids=${CLASSIC_IDS}`, {
+            headers: { Authorization: `Bearer ${generateAppleToken()}` },
+          });
+          if (!resp.ok) { console.warn(`[startup] all-time-classics AM fetch → ${resp.status}`); continue; }
+          const data = await resp.json();
+          albums = dedupeAlbums((data.data ?? []).map(item => ({
+            id: item.id,
+            title: item.attributes?.name ?? '',
+            artist: item.attributes?.artistName ?? '',
+            year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+            artworkUrl: amArtwork(item.attributes?.artwork),
+          })));
+        } else {
+          const list = PLAYLIST_ALBUMS[id];
+          if (!list) continue;
+          albums = dedupeAlbums(await fetchConcurrent(list, ({ artist, title }) => searchAMAlbum(artist, title)));
+          const missing = albums.filter(a => !a.artworkUrl);
+          if (missing.length > 0) {
+            console.log(`[startup:${id}] retrying ${missing.length} albums sequentially`);
+            const retried = new Map();
+            for (const a of missing) {
+              const fresh = await searchAMAlbum(a.artist, a.title);
+              if (fresh.artworkUrl) retried.set(a.id, fresh);
+              await new Promise(r => setTimeout(r, 300));
+            }
+            if (retried.size > 0) albums = albums.map(a => retried.has(a.id) ? retried.get(a.id) : a);
+          }
+        }
+        cacheSet(CACHE_KEY, albums, TTL_6H);
+        await setCache(CACHE_KEY, albums);
+        console.log(`[startup] cached playlist: ${id} (${albums.length} albums, ${albums.filter(a => a.artworkUrl).length} with artwork)`);
+        await new Promise(r => setTimeout(r, 500));
+      }
+      console.log('[startup] featured playlist pre-warm complete');
+    } catch (e) {
+      console.error('[startup] featured playlist pre-warm failed:', e.message);
+    }
+  })();
 });
