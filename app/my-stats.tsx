@@ -711,6 +711,9 @@ export default function MyStatsScreen() {
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
   const [playlistAlbums, setPlaylistAlbums]   = useState<Record<string, { title: string; artist: string }[]>>({});
+  const [genreAlbums,    setGenreAlbums]      = useState<Record<string, { title: string; artist: string }[]>>({});
+  const [decadeAlbums,   setDecadeAlbums]     = useState<Record<string, { title: string; artist: string }[]>>({});
+  const [showAllPlaylists, setShowAllPlaylists] = useState(false);
   const { width: screenWidth } = useWindowDimensions();
 
   const cardBg  = colors.surface;
@@ -941,6 +944,24 @@ export default function MyStatsScreen() {
     });
   }, []);
 
+  // Fetch genre album lists (once)
+  useEffect(() => {
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+    fetch(`${API_URL}/genres`)
+      .then(r => r.ok ? r.json() : {})
+      .then((data: Record<string, { title: string; artist: string }[]>) => setGenreAlbums(data))
+      .catch(() => {});
+  }, []);
+
+  // Fetch decade album lists (once)
+  useEffect(() => {
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+    fetch(`${API_URL}/decades`)
+      .then(r => r.ok ? r.json() : {})
+      .then((data: Record<string, { title: string; artist: string }[]>) => setDecadeAlbums(data))
+      .catch(() => {});
+  }, []);
+
   // ── Re-Listend evolution (growers / faders) ───────────────────────────────
   const reListenedAlbums = loggedAlbums.filter(a => a.isRelistened);
   const totalReListens   = reListenedAlbums.reduce((s, a) => s + (a.reListenCount ?? 0), 0);
@@ -991,14 +1012,30 @@ export default function MyStatsScreen() {
     a => loggedSet.has(`${a.title.toLowerCase()}::${a.artist.toLowerCase()}`)
   ).length;
 
-  const playlistProgress = FEATURED_PLAYLISTS.map(pl => {
-    if (pl.id === 'flip-a-record') return { ...pl, done: flipDone, total: flipTotal };
-    const albums = playlistAlbums[pl.id] ?? [];
-    const done = albums.filter(
-      a => loggedSet.has(`${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
-    ).length;
-    return { ...pl, done, total: albums.length };
-  });
+  const playlistProgress = [
+    ...FEATURED_PLAYLISTS.map(pl => {
+      if (pl.id === 'flip-a-record') return { ...pl, kind: 'featured' as const, done: flipDone, total: flipTotal };
+      const albums = playlistAlbums[pl.id] ?? [];
+      const done = albums.filter(
+        a => loggedSet.has(`${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
+      ).length;
+      return { ...pl, kind: 'featured' as const, done, total: albums.length };
+    }),
+    ...GENRE_LABELS.map(label => {
+      const albums = genreAlbums[label] ?? [];
+      const done = albums.filter(
+        a => loggedSet.has(`${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
+      ).length;
+      return { id: label, name: label, kind: 'genre' as const, done, total: albums.length };
+    }),
+    ...DECADE_LABELS.map(label => {
+      const albums = decadeAlbums[label] ?? [];
+      const done = albums.filter(
+        a => loggedSet.has(`${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
+      ).length;
+      return { id: label, name: label, kind: 'decade' as const, done, total: albums.length };
+    }),
+  ];
 
   // ── Compare: load following list when tab opens ───────────────────────────
   useEffect(() => {
@@ -1901,9 +1938,11 @@ export default function MyStatsScreen() {
             const COL = 3;
             const RING_GAP = 12;
             const cellW = Math.floor((screenWidth - 40 - 36 - RING_GAP * (COL - 1)) / COL);
+            const INITIAL_ROWS = 3;
+            const visible = showAllPlaylists ? playlistProgress : playlistProgress.slice(0, INITIAL_ROWS * COL);
             const rows: typeof playlistProgress[] = [];
-            for (let i = 0; i < playlistProgress.length; i += COL) {
-              rows.push(playlistProgress.slice(i, i + COL));
+            for (let i = 0; i < visible.length; i += COL) {
+              rows.push(visible.slice(i, i + COL));
             }
             return (
               <View style={{ gap: 20 }}>
@@ -1916,6 +1955,10 @@ export default function MyStatsScreen() {
                         onPress={() => {
                           if (pl.id === 'flip-a-record') {
                             router.push('/flip-a-record' as any);
+                          } else if (pl.kind === 'genre') {
+                            router.push({ pathname: '/discover-genre-grid', params: { genre: pl.id } } as any);
+                          } else if (pl.kind === 'decade') {
+                            router.push({ pathname: '/discover-decade-grid', params: { decade: pl.id } } as any);
                           } else {
                             router.push({ pathname: '/discover-featured-playlist', params: { id: pl.id, name: pl.name } } as any);
                           }
@@ -1929,6 +1972,15 @@ export default function MyStatsScreen() {
                     ))}
                   </View>
                 ))}
+                {playlistProgress.length > INITIAL_ROWS * COL && (
+                  <Pressable
+                    onPress={() => setShowAllPlaylists(v => !v)}
+                    style={({ pressed }) => ({ alignItems: 'center', paddingVertical: 4, opacity: pressed ? 0.6 : 1 })}>
+                    <Text style={{ color: colors.tint, fontSize: 14, fontWeight: '600' }}>
+                      {showAllPlaylists ? 'See less' : `See all ${playlistProgress.length} playlists`}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             );
           })()}
@@ -1941,6 +1993,14 @@ export default function MyStatsScreen() {
 }
 
 // ─── Playlist Progress ────────────────────────────────────────────────────────
+
+const GENRE_LABELS = [
+  'Hip-Hop / Rap', 'Pop', 'Rock', 'Reggaeton', 'Afrobeats',
+  'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
+  'Country', 'Jazz', 'Classical', 'Blues', 'Folk / Singer-Songwriter',
+];
+
+const DECADE_LABELS = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];
 
 const FEATURED_PLAYLISTS = [
   { id: 'flip-a-record',    name: 'Flip a Record'    },
