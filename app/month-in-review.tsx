@@ -561,9 +561,7 @@ export default function MonthInReviewScreen() {
                                 const bgColor = INITIAL_COLORS[artist.charCodeAt(0) % INITIAL_COLORS.length];
                                 const sublabel = artistView === 'rated' && avg !== null
                                   ? `avg ${(avg as number).toFixed(1)}`
-                                  : avg !== null
-                                    ? `${count} album${count !== 1 ? 's' : ''} · ${(avg as number).toFixed(1)}`
-                                    : `${count} album${count !== 1 ? 's' : ''}`;
+                                  : `${count} album${count !== 1 ? 's' : ''}`;
                                 return (
                                   <Pressable
                                     key={artist}
