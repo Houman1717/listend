@@ -26,6 +26,8 @@ export type LoggedAlbum = {
   artworkUrl?: string;
   coverColor: string;
   durationMs?: number;
+  communityAvgRating?: number;
+  communityRatingCount?: number;
   reListenCount?: number;
   isRelistened?: boolean;
   lastListenedAt?: string;

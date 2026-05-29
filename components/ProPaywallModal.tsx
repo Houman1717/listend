@@ -25,9 +25,11 @@ const STAT_CARDS = [
 ];
 
 const FEATURES = [
-  { icon: 'paint-brush', label: 'Custom Profile Themes',  sub: 'Give your profile a unique look that visitors can see' },
+  { icon: 'list',         label: 'Unlimited Playlists',   sub: 'Create as many playlists as you like — free accounts are limited to 3' },
+  { icon: 'random',       label: 'Flip Every Hour',       sub: 'Flip a Record every hour — free accounts are limited to once every 12 hours' },
+  { icon: 'paint-brush',  label: 'Custom Profile Themes', sub: 'Give your profile a unique look that visitors can see' },
   { icon: 'checkmark-circle', label: 'Pro Verified Tick', sub: 'Gold verified badge next to your name on every review', isIonicon: true },
-  { icon: 'bolt',        label: 'More Coming Soon',       sub: 'Priority access to every future Pro perk'             },
+  { icon: 'bolt',         label: 'More Coming Soon',      sub: 'Priority access to every future Pro perk'             },
 ];
 
 export function ProPaywallModal() {
@@ -66,7 +68,7 @@ export function ProPaywallModal() {
                 </View>
                 <Text style={s.statsFeatureTitle}>My Stats</Text>
                 <Text style={s.statsFeatureSub}>
-                  Your full listening history, decoded. See every genre you've explored, every decade
+                  Your full listening history, broken down. See every genre you've explored, every decade
                   you've obsessed over, how your taste stacks up against the community, and the real
                   story behind your listening — all in one beautifully designed dashboard.
                 </Text>

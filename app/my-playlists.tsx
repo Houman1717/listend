@@ -341,7 +341,7 @@ async function buildLikedEntries(
 
 export default function MyPlaylistsScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme: ownProTheme } = usePro();
+  const { isPro, proTheme: ownProTheme, showPaywall } = usePro();
   const { userId: paramUserId, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
   const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
   const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
@@ -669,12 +669,22 @@ export default function MyPlaylistsScreen() {
 
       {/* New Playlist button — own user, My Playlists tab only */}
       {!viewingOther && activeTab === 'mine' && (
-        <Pressable
-          onPress={() => setShowNewPlaylist(true)}
-          style={({ pressed }) => [s.newBtn, { opacity: pressed ? 0.7 : 1 }]}>
-          <FontAwesome name="plus" size={13} color={colors.tint} />
-          <Text style={[s.newBtnText, { color: colors.tint }]}>New Playlist</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, marginTop: 14, marginBottom: 4 }}>
+          <Pressable
+            onPress={() => {
+              if (!isPro && playlists.length >= 3) { showPaywall(); return; }
+              setShowNewPlaylist(true);
+            }}
+            style={({ pressed }) => [s.newBtn, { marginHorizontal: 0, marginTop: 0, marginBottom: 0, opacity: pressed ? 0.7 : 1 }]}>
+            <FontAwesome name="plus" size={13} color={colors.tint} />
+            <Text style={[s.newBtnText, { color: colors.tint }]}>New Playlist</Text>
+          </Pressable>
+          {!isPro && (
+            <Text style={{ fontSize: 12, color: colors.subtext }}>
+              {playlists.length}/3 free
+            </Text>
+          )}
+        </View>
       )}
 
       {/* Search bar — toggled by magnifying glass */}

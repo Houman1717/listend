@@ -23,8 +23,14 @@ export async function navigateToAlbum(router: Router, album: AlbumNavInput) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const nt = norm(album.title);
+        const na = norm(album.artist);
+        // 1. Title + artist exact match
         const match =
-          data.find((a: any) => norm(a.title ?? '') === norm(album.title)) ??
+          data.find((a: any) => norm(a.title ?? '') === nt && norm(a.artist ?? '') === na) ??
+          // 2. Title match only (artist might differ slightly e.g. "feat." stripped)
+          data.find((a: any) => norm(a.title ?? '') === nt) ??
+          // 3. First result
           data[0];
         if (match?.id) {
           router.push({

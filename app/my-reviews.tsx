@@ -66,6 +66,7 @@ function ReviewRow({
   isLiked = false,
   onLike,
   byUsername,
+  byUserIsPro,
 }: {
   album: LoggedAlbum;
   colors: ColorsShape;

@@ -708,7 +708,7 @@ const yc = StyleSheet.create({
 
 export default function MyStatsScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme: ownProTheme } = usePro();
+  const { isPro, proTheme: ownProTheme, showPaywall } = usePro();
   const params = useLocalSearchParams<{ userId?: string; proTheme?: string; displayName?: string }>();
   const viewedUserId  = params.userId ?? null;
 
@@ -1303,6 +1303,40 @@ export default function MyStatsScreen() {
       pathname: '/album-detail',
       params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year ?? ''), artworkUrl: album.artworkUrl ?? '' },
     } as any);
+  }
+
+  // ── Pro gate — own stats only ─────────────────────────────────────────────
+  if (!viewedUserId && !isPro) {
+    return (
+      <>
+        <Stack.Screen options={{
+          title: 'My Stats',
+          headerStyle: { backgroundColor: Colors[colorScheme ?? 'dark'].background },
+          headerTintColor: Colors[colorScheme ?? 'dark'].text,
+          headerShadowVisible: false,
+        }} />
+        <View style={{ flex: 1, backgroundColor: Colors[colorScheme ?? 'dark'].background, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20 }}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#2A1E00', borderWidth: 1.5, borderColor: '#D4A017', alignItems: 'center', justifyContent: 'center' }}>
+            <FontAwesome name="lock" size={28} color="#D4A017" />
+          </View>
+          <Text style={{ color: Colors[colorScheme ?? 'dark'].text, fontSize: 22, fontWeight: '800', textAlign: 'center', letterSpacing: -0.3 }}>
+            My Stats is a Pro Feature
+          </Text>
+          <Text style={{ color: '#A08060', fontSize: 14, textAlign: 'center', lineHeight: 21 }}>
+            Unlock your full listening history — genre breakdowns, decade distribution, community comparisons, re-listen streaks, and more.
+          </Text>
+          <Pressable
+            onPress={showPaywall}
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1, borderRadius: 14, overflow: 'hidden', alignSelf: 'stretch' })}>
+            <View style={{ backgroundColor: '#D4A017', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}>
+              <Text style={{ color: '#0F0A07', fontSize: 16, fontWeight: '800', letterSpacing: 0.2 }}>
+                Unlock with Pro
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+      </>
+    );
   }
 
   return (

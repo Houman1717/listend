@@ -254,6 +254,7 @@ export default function WantToListenScreen() {
         onClose={() => setSheetOpen(false)}
         isDark={isDark}
         tint={colors.tint}
+        excludeKeys={['my_rating_high', 'my_rating_low']}
       />
     </View>
   );

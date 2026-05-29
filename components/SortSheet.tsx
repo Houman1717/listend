@@ -37,7 +37,7 @@ const SORT_GROUPS: SortGroup[] = [
   { label: 'Average Rating', a: { key: 'avg_rating_high',   label: 'High'     }, b: { key: 'avg_rating_low',   label: 'Low'      } },
   { label: 'My Rating',      a: { key: 'my_rating_high',    label: 'High'     }, b: { key: 'my_rating_low',    label: 'Low'      } },
   { label: 'Release Date',   a: { key: 'release_new',       label: 'Newest'   }, b: { key: 'release_old',      label: 'Oldest'   } },
-  { label: 'No. of Ratings', a: { key: 'num_ratings_high',  label: 'Most'     }, b: { key: 'num_ratings_low',  label: 'Fewest'   } },
+  { label: 'Popularity',     a: { key: 'num_ratings_high',  label: 'Most'     }, b: { key: 'num_ratings_low',  label: 'Least'    } },
   { label: 'Duration',       a: { key: 'duration_long',     label: 'Longest'  }, b: { key: 'duration_short',   label: 'Shortest' } },
 ];
 
@@ -63,38 +63,66 @@ export function applySort<T extends {
   lastListenedAt?: string;
   dateAdded?: string;
   durationMs?: number;
+  communityAvgRating?: number;
+  communityRatingCount?: number;
 }>(arr: T[], key: SortKey): T[] {
   const a = [...arr];
-  const dateOf       = (x: T) => x.lastListenedAt ?? x.dateLogged ?? x.dateAdded ?? '';
-  const ratingOf     = (x: T) => (x as any).lastRating ?? x.rating ?? 0;
-  // Albums without a cached duration sort to the end regardless of direction
-  const durationOf   = (x: T) => x.durationMs ?? -1;
+  const dateOf   = (x: T) => x.lastListenedAt ?? x.dateLogged ?? x.dateAdded ?? '';
+  const myRating = (x: T) => (x as any).lastRating ?? x.rating ?? 0;
+  // Duration: treat 0 (no tracklist data) same as undefined — sort to end
+  const durationOf = (x: T) => (x.durationMs && x.durationMs > 0) ? x.durationMs : null;
 
   switch (key) {
-    case 'date_new':          return a.sort((x, y) => dateOf(y).localeCompare(dateOf(x)));
-    case 'date_old':          return a.sort((x, y) => dateOf(x).localeCompare(dateOf(y)));
-    case 'artist_az':         return a.sort((x, y) => x.artist.localeCompare(y.artist));
-    case 'artist_za':         return a.sort((x, y) => y.artist.localeCompare(x.artist));
-    case 'title_az':          return a.sort((x, y) => x.title.localeCompare(y.title));
-    case 'title_za':          return a.sort((x, y) => y.title.localeCompare(x.title));
-    // Average Rating: community data not yet available — fallback to own rating
-    case 'avg_rating_high':   return a.sort((x, y) => ratingOf(y) - ratingOf(x));
-    case 'avg_rating_low':    return a.sort((x, y) => ratingOf(x) - ratingOf(y));
-    case 'my_rating_high':    return a.sort((x, y) => ratingOf(y) - ratingOf(x));
-    case 'my_rating_low':     return a.sort((x, y) => ratingOf(x) - ratingOf(y));
-    case 'release_new':       return a.sort((x, y) => y.year - x.year);
-    case 'release_old':       return a.sort((x, y) => x.year - y.year);
-    // No. of Ratings: backend data not yet in local model — maintains current order
-    case 'num_ratings_high':
-    case 'num_ratings_low':   return a;
-    // Duration: sorted by cached durationMs; albums not yet opened sort to the end
-    case 'duration_long':     return a.sort((x, y) => durationOf(y) - durationOf(x));
-    case 'duration_short':    return a.sort((x, y) => {
-      const dx = x.durationMs ?? Number.MAX_SAFE_INTEGER;
-      const dy = y.durationMs ?? Number.MAX_SAFE_INTEGER;
+    case 'date_new':        return a.sort((x, y) => dateOf(y).localeCompare(dateOf(x)));
+    case 'date_old':        return a.sort((x, y) => dateOf(x).localeCompare(dateOf(y)));
+    case 'artist_az':       return a.sort((x, y) => x.artist.localeCompare(y.artist));
+    case 'artist_za':       return a.sort((x, y) => y.artist.localeCompare(x.artist));
+    case 'title_az':        return a.sort((x, y) => x.title.localeCompare(y.title));
+    case 'title_za':        return a.sort((x, y) => y.title.localeCompare(x.title));
+    case 'release_new':     return a.sort((x, y) => y.year - x.year);
+    case 'release_old':     return a.sort((x, y) => x.year - y.year);
+
+    // Community average rating — falls back to 0 if not yet fetched
+    case 'avg_rating_high': return a.sort((x, y) => (y.communityAvgRating ?? 0) - (x.communityAvgRating ?? 0));
+    case 'avg_rating_low':  return a.sort((x, y) => (x.communityAvgRating ?? 0) - (y.communityAvgRating ?? 0));
+
+    // My rating — unrated albums (0) always sort to the end
+    case 'my_rating_high':  return a.sort((x, y) => myRating(y) - myRating(x));
+    case 'my_rating_low':   return a.sort((x, y) => {
+      const rx = myRating(x), ry = myRating(y);
+      if (rx === 0 && ry === 0) return 0;
+      if (rx === 0) return 1;  // x unrated → goes after y
+      if (ry === 0) return -1; // y unrated → goes after x
+      return rx - ry;
+    });
+
+    // Popularity — sort by community rating count; 0 goes to end
+    case 'num_ratings_high': return a.sort((x, y) => (y.communityRatingCount ?? 0) - (x.communityRatingCount ?? 0));
+    case 'num_ratings_low':  return a.sort((x, y) => {
+      const cx = x.communityRatingCount ?? 0, cy = y.communityRatingCount ?? 0;
+      if (cx === 0 && cy === 0) return 0;
+      if (cx === 0) return 1;
+      if (cy === 0) return -1;
+      return cx - cy;
+    });
+
+    // Duration — albums with no tracklist data sort to the end
+    case 'duration_long':  return a.sort((x, y) => {
+      const dx = durationOf(x), dy = durationOf(y);
+      if (dx === null && dy === null) return 0;
+      if (dx === null) return 1;
+      if (dy === null) return -1;
+      return dy - dx;
+    });
+    case 'duration_short': return a.sort((x, y) => {
+      const dx = durationOf(x), dy = durationOf(y);
+      if (dx === null && dy === null) return 0;
+      if (dx === null) return 1;
+      if (dy === null) return -1;
       return dx - dy;
     });
-    default:                  return a;
+
+    default: return a;
   }
 }
 
@@ -169,6 +197,7 @@ export function SortSheet({
   onClose,
   isDark,
   tint = '#D4A017',
+  excludeKeys = [],
 }: {
   visible: boolean;
   activeKey: SortKey;
@@ -176,6 +205,7 @@ export function SortSheet({
   onClose: () => void;
   isDark: boolean;
   tint?: string;
+  excludeKeys?: SortKey[];
 }) {
   const bg      = isDark ? '#1c1410' : '#fff';
   const text    = isDark ? '#f5e6c8' : '#1A0F0A';
@@ -199,7 +229,7 @@ export function SortSheet({
         <Text style={[ss.title, { color: text }]}>Sort By</Text>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ss.content}>
-          {SORT_GROUPS.map((group) => (
+          {SORT_GROUPS.filter(g => !excludeKeys.includes(g.a.key) && !excludeKeys.includes(g.b.key)).map((group) => (
             <View key={group.label} style={[ss.row, { borderBottomColor: border }]}>
               <Text style={[ss.groupLabel, { color: subtext }]}>{group.label}</Text>
               <View style={ss.btnPair}>

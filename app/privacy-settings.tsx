@@ -9,12 +9,14 @@ import {
   Alert,
 } from 'react-native';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 
 const ACCENT  = '#D4A017';
 
@@ -24,15 +26,20 @@ export default function PrivacySettingsScreen() {
   const isDark      = colorScheme === 'dark';
   const router      = useRouter();
   const { user }    = useAuth();
+  const { isPro, proTheme } = usePro();
+  const proColors = (isPro && proTheme !== 'default') ? themeToColors(getProTheme(proTheme)) : null;
 
   const [isPrivate,  setIsPrivate]  = useState(false);
   const [allowDms,   setAllowDms]   = useState(true);
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState<'private' | 'dms' | null>(null);
 
-  const sepColor  = isDark ? '#2a1e14' : '#e8e8e8';
-  const rowBg     = isDark ? '#1c1410' : '#fff';
-  const sectionBg = isDark ? '#0F0A07' : '#f5f5f5';
+  const sepColor  = proColors ? proColors.border     : isDark ? '#2a1e14' : '#e8e8e8';
+  const rowBg     = proColors ? proColors.surface    : isDark ? '#1c1410' : '#fff';
+  const sectionBg = proColors ? proColors.background : isDark ? '#0F0A07' : '#f5f5f5';
+  const textColor = proColors ? proColors.text       : colors.text;
+  const subColor  = proColors ? proColors.subtext    : colors.subtext;
+  const accent    = proColors ? proColors.tint       : ACCENT;
 
   useEffect(() => {
     if (!user?.id) return;
@@ -85,25 +92,31 @@ export default function PrivacySettingsScreen() {
 
   if (loading) {
     return (
-      <View style={[s.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={ACCENT} />
+      <View style={[s.center, { backgroundColor: sectionBg }]}>
+        <ActivityIndicator color={accent} />
       </View>
     );
   }
 
   return (
+    <>
+    <Stack.Screen options={{
+      headerStyle: { backgroundColor: sectionBg },
+      headerTintColor: textColor,
+      headerShadowVisible: false,
+    }} />
     <ScrollView style={[s.container, { backgroundColor: sectionBg }]} contentContainerStyle={s.content}>
 
       {/* Account Privacy */}
-      <Text style={[s.sectionLabel, { color: colors.subtext }]}>ACCOUNT</Text>
+      <Text style={[s.sectionLabel, { color: subColor }]}>ACCOUNT</Text>
       <View style={[s.card, { backgroundColor: rowBg, borderColor: sepColor }]}>
 
         <View style={s.row}>
           <View style={s.rowLeft}>
-            <FontAwesome name="lock" size={16} color={ACCENT} style={s.icon} />
+            <FontAwesome name="lock" size={16} color={accent} style={s.icon} />
             <View style={s.rowText}>
-              <Text style={[s.rowTitle, { color: colors.text }]}>Private Account</Text>
-              <Text style={[s.rowSub, { color: colors.subtext }]}>
+              <Text style={[s.rowTitle, { color: textColor }]}>Private Account</Text>
+              <Text style={[s.rowSub, { color: subColor }]}>
                 Only approved followers can see your library, reviews, and playlists.
               </Text>
             </View>
@@ -112,7 +125,7 @@ export default function PrivacySettingsScreen() {
             value={isPrivate}
             onValueChange={togglePrivate}
             disabled={saving === 'private'}
-            trackColor={{ false: isDark ? '#3a2818' : '#d0d0d0', true: ACCENT }}
+            trackColor={{ false: isDark ? '#3a2818' : '#d0d0d0', true: accent }}
             thumbColor="#fff"
           />
         </View>
@@ -121,10 +134,10 @@ export default function PrivacySettingsScreen() {
 
         <View style={s.row}>
           <View style={s.rowLeft}>
-            <FontAwesome name="comment-o" size={16} color={ACCENT} style={s.icon} />
+            <FontAwesome name="comment-o" size={16} color={accent} style={s.icon} />
             <View style={s.rowText}>
-              <Text style={[s.rowTitle, { color: colors.text }]}>Allow Direct Messages</Text>
-              <Text style={[s.rowSub, { color: colors.subtext }]}>
+              <Text style={[s.rowTitle, { color: textColor }]}>Allow Direct Messages</Text>
+              <Text style={[s.rowSub, { color: subColor }]}>
                 When off, no one can send you a DM.
               </Text>
             </View>
@@ -133,7 +146,7 @@ export default function PrivacySettingsScreen() {
             value={allowDms}
             onValueChange={toggleAllowDms}
             disabled={saving === 'dms'}
-            trackColor={{ false: isDark ? '#3a2818' : '#d0d0d0', true: ACCENT }}
+            trackColor={{ false: isDark ? '#3a2818' : '#d0d0d0', true: accent }}
             thumbColor="#fff"
           />
         </View>
@@ -141,20 +154,21 @@ export default function PrivacySettingsScreen() {
       </View>
 
       {/* Blocked Users */}
-      <Text style={[s.sectionLabel, { color: colors.subtext }]}>BLOCKING</Text>
+      <Text style={[s.sectionLabel, { color: subColor }]}>BLOCKING</Text>
       <View style={[s.card, { backgroundColor: rowBg, borderColor: sepColor }]}>
         <Pressable
           style={({ pressed }) => [s.row, s.rowTappable, { opacity: pressed ? 0.6 : 1 }]}
           onPress={() => router.push('/blocked-users')}>
           <View style={s.rowLeft}>
-            <FontAwesome name="ban" size={16} color={ACCENT} style={s.icon} />
-            <Text style={[s.rowTitle, { color: colors.text }]}>Blocked Users</Text>
+            <FontAwesome name="ban" size={16} color={accent} style={s.icon} />
+            <Text style={[s.rowTitle, { color: textColor }]}>Blocked Users</Text>
           </View>
-          <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
+          <FontAwesome name="chevron-right" size={13} color={subColor} />
         </Pressable>
       </View>
 
     </ScrollView>
+    </>
   );
 }
 

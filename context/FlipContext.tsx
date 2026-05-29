@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
+import { usePro } from '@/context/ProContext';
 import { FLIP_POOL } from '@/constants/FlipPool';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -36,7 +37,8 @@ type FlipContextType = {
 // Storage key is user-scoped so switching accounts never shares flip history.
 const flipKey = (uid: string) => `@listend:flipData_v1_${uid}`;
 
-const COOLDOWN_MS  = 1 * 60 * 1000; // TEMP: 1 min for testing — change back to 12 * 60 * 60 * 1000 for production
+const COOLDOWN_MS_FREE = 12 * 60 * 60 * 1000; // 12 hours for free users
+const COOLDOWN_MS_PRO  =  1 * 60 * 60 * 1000; //  1 hour  for pro users
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,7 @@ const FlipContext = createContext<FlipContextType | null>(null);
 export function FlipProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { loggedAlbums } = useAlbums();
+  const { isPro } = usePro();
 
   const [history, setHistory]           = useState<FlippedRecord[]>([]);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
@@ -68,8 +71,7 @@ export function FlipProvider({ children }: { children: ReactNode }) {
         if (raw) {
           const data = JSON.parse(raw);
           setHistory(data.history ?? []);
-          // DEV: always start with fresh cooldown so testing isn't blocked
-          // by a stale timestamp written when COOLDOWN_MS was 12 h.
+          // Pro users have no cooldown; ignore any stored timestamp.
           setCooldownUntil(__DEV__ ? null : (data.cooldownUntil ?? null));
         }
       })
@@ -129,7 +131,7 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     };
 
     setHistory(prev => [record, ...prev]);
-    setCooldownUntil(now + COOLDOWN_MS);
+    setCooldownUntil(now + (isPro ? COOLDOWN_MS_PRO : COOLDOWN_MS_FREE));
   }
 
   function markLogged(id: string) {

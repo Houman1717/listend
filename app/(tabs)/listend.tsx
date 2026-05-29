@@ -700,14 +700,20 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   const router = useRouter();
   const { signOut, user } = useAuth();
   const { preference, setPreference } = useTheme();
-  const { isPro, showPaywall } = usePro();
+  const { isPro, showPaywall, proTheme: activeProTheme } = usePro();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const sheetBg   = isDark ? '#161616' : '#ffffff';
-  const labelColor = isDark ? '#f5e6c8' : '#1A0F0A';
-  const sepColor   = isDark ? '#2a1e14' : '#e8e8e8';
-  const segBg      = isDark ? '#2a1e14' : '#e8e8e8';
-  const segTextColor = isDark ? '#6B4C35' : '#7a5535';
+
+  const proColors = (isPro && activeProTheme !== 'default')
+    ? themeToColors(getProTheme(activeProTheme))
+    : null;
+
+  const sheetBg      = proColors ? proColors.surface    : isDark ? '#161616' : '#ffffff';
+  const labelColor   = proColors ? proColors.text       : isDark ? '#f5e6c8' : '#1A0F0A';
+  const sepColor     = proColors ? proColors.border     : isDark ? '#2a1e14' : '#e8e8e8';
+  const segBg        = proColors ? proColors.elevated   : isDark ? '#2a1e14' : '#e8e8e8';
+  const segTextColor = proColors ? proColors.subtext    : isDark ? '#6B4C35' : '#7a5535';
+  const accentColor  = proColors ? proColors.tint       : '#D4A017';
 
   const insets = useSafeAreaInsets();
   const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
@@ -773,17 +779,17 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <SafeAreaView style={[ss.sheet, { backgroundColor: sheetBg, borderTopColor: sepColor }]}>
           {/* Drag handle */}
-          <View style={[ss.handle, { backgroundColor: isDark ? '#4a3020' : '#d0d0d0' }]} />
+          <View style={[ss.handle, { backgroundColor: proColors ? proColors.border : isDark ? '#4a3020' : '#d0d0d0' }]} />
 
           {/* Edit Profile */}
           <Pressable
             style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
             onPress={() => { onClose(); router.push('/edit-profile'); }}>
             <View style={ss.iconWrap}>
-              <FontAwesome name="user-o" size={16} color="#D4A017" />
+              <FontAwesome name="user-o" size={16} color={accentColor} />
             </View>
             <Text style={[ss.rowLabel, { color: labelColor }]}>Edit Profile</Text>
-            <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+            <FontAwesome name="chevron-right" size={13} color={segTextColor} />
           </Pressable>
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
@@ -793,10 +799,10 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
             onPress={() => { onClose(); router.push('/privacy-settings'); }}>
             <View style={ss.iconWrap}>
-              <FontAwesome name="lock" size={16} color="#D4A017" />
+              <FontAwesome name="lock" size={16} color={accentColor} />
             </View>
             <Text style={[ss.rowLabel, { color: labelColor }]}>Privacy</Text>
-            <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+            <FontAwesome name="chevron-right" size={13} color={segTextColor} />
           </Pressable>
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
@@ -813,14 +819,14 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
               }
             }}>
             <View style={ss.iconWrap}>
-              <FontAwesome name={isPro ? 'star' : 'star-o'} size={16} color="#D4A017" />
+              <FontAwesome name={isPro ? 'star' : 'star-o'} size={16} color={accentColor} />
             </View>
             <Text style={[ss.rowLabel, { color: labelColor }]}>
               {isPro ? 'Listend Pro' : 'Upgrade to Pro'}
             </Text>
             {isPro
-              ? <View style={ss.proBadgeInline}><Text style={ss.proBadgeText}>PRO</Text></View>
-              : <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+              ? <View style={[ss.proBadgeInline, { backgroundColor: accentColor }]}><Text style={ss.proBadgeText}>PRO</Text></View>
+              : <FontAwesome name="chevron-right" size={13} color={segTextColor} />
             }
           </Pressable>
 
@@ -829,10 +835,10 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
           {/* Help & Feedback */}
           <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
             <View style={ss.iconWrap}>
-              <FontAwesome name="question-circle-o" size={16} color="#D4A017" />
+              <FontAwesome name="question-circle-o" size={16} color={accentColor} />
             </View>
             <Text style={[ss.rowLabel, { color: labelColor }]}>Help &amp; Feedback</Text>
-            <FontAwesome name="chevron-right" size={13} color={SUBTEXT} />
+            <FontAwesome name="chevron-right" size={13} color={segTextColor} />
           </Pressable>
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
@@ -840,14 +846,14 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
           {/* Dark Mode */}
           <View style={ss.row}>
             <View style={ss.iconWrap}>
-              <FontAwesome name="moon-o" size={16} color="#D4A017" />
+              <FontAwesome name="moon-o" size={16} color={accentColor} />
             </View>
             <Text style={[ss.rowLabel, { color: labelColor }]}>Dark Mode</Text>
             <View style={[ss.segmented, { backgroundColor: segBg }]}>
               {THEME_OPTIONS.map(opt => (
                 <Pressable
                   key={opt.value}
-                  style={[ss.segment, preference === opt.value && ss.segmentActive]}
+                  style={[ss.segment, preference === opt.value && [ss.segmentActive, { backgroundColor: accentColor }]]}
                   onPress={() => setPreference(opt.value)}>
                   <Text style={[ss.segmentText, { color: segTextColor }, preference === opt.value && ss.segmentTextActive]}>
                     {opt.label}
@@ -888,7 +894,7 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
               style={ss.amLogo}
               contentFit="contain"
             />
-            <Text style={ss.aboutText}>Music data provided by Apple Music</Text>
+            <Text style={[ss.aboutText, { color: segTextColor }]}>Music data provided by Apple Music</Text>
           </View>
         </SafeAreaView>
       </View>
@@ -980,7 +986,7 @@ const ss = StyleSheet.create({
 
 export default function ListendScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme } = usePro();
+  const { isPro, proTheme, showPaywall } = usePro();
   const colors = (isPro && proTheme !== 'default')
     ? themeToColors(getProTheme(proTheme))
     : Colors[colorScheme ?? 'dark'];
@@ -1227,7 +1233,7 @@ export default function ListendScreen() {
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                                                                    onPress={() => router.push('/dms')} badge={unreadDMCount} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="bar-chart"  label="My Stats"        sub="Your listening insights"                                                     onPress={() => router.push('/my-stats')} />
+        <NavRow colors={colors} icon="bar-chart"  label="My Stats"        sub="Your listening insights"                                                     onPress={() => isPro ? router.push('/my-stats') : showPaywall()} />
       </View>
 
     </ScrollView>

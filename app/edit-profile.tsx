@@ -20,6 +20,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/context/ThemeContext';
+import { usePro } from '@/context/ProContext';
+import { getProTheme, themeToColors } from '@/lib/proThemes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -122,13 +124,16 @@ export default function EditProfileScreen() {
   const { user }   = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { isPro, proTheme } = usePro();
+  const proColors = (isPro && proTheme !== 'default') ? themeToColors(getProTheme(proTheme)) : null;
 
-  // Dynamic colors
-  const bg      = isDark ? DARK_BG   : '#FAF7F4';
-  const cardBg  = isDark ? CARD_BG   : '#FFFFFF';
-  const border  = isDark ? BORDER    : '#e8ddd0';
-  const text    = isDark ? TEXT      : '#1A0F0A';
-  const subtext = isDark ? SUBTEXT   : '#7a5c3a';
+  // Dynamic colors — pro theme overrides dark/light defaults
+  const bg      = proColors ? proColors.background : isDark ? DARK_BG  : '#FAF7F4';
+  const cardBg  = proColors ? proColors.surface    : isDark ? CARD_BG  : '#FFFFFF';
+  const border  = proColors ? proColors.border     : isDark ? BORDER   : '#e8ddd0';
+  const text    = proColors ? proColors.text       : isDark ? TEXT     : '#1A0F0A';
+  const subtext = proColors ? proColors.subtext    : isDark ? SUBTEXT  : '#7a5c3a';
+  const accent  = proColors ? proColors.tint       : ACCENT;
 
   // Form state
   const [displayName, setDisplayName] = useState('');
@@ -141,7 +146,6 @@ export default function EditProfileScreen() {
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [website, setWebsite] = useState('');
   const [saving,  setSaving]  = useState(false);
   const [toast,   setToast]   = useState(false);
 
@@ -224,20 +228,23 @@ export default function EditProfileScreen() {
   // ── Inject Save button into header ───────────────────────────────────────
   useEffect(() => {
     navigation.setOptions({
+      headerStyle: { backgroundColor: bg },
+      headerTintColor: text,
+      headerShadowVisible: false,
       headerRight: () =>
         saving ? (
-          <ActivityIndicator color={ACCENT} style={{ marginRight: 16 }} />
+          <ActivityIndicator color={accent} style={{ marginRight: 16 }} />
         ) : (
           <Pressable
             onPress={handleSave}
             hitSlop={10}
             style={{ paddingHorizontal: 16 }}
           >
-            <Text style={{ color: ACCENT, fontSize: 16, fontWeight: '700' }}>Save</Text>
+            <Text style={{ color: accent, fontSize: 16, fontWeight: '700' }}>Save</Text>
           </Pressable>
         ),
     });
-  }, [navigation, handleSave, saving]);
+  }, [navigation, handleSave, saving, bg, text, accent]);
 
   // ── Image pickers ─────────────────────────────────────────────────────────
   async function onPickAvatar() {
@@ -249,7 +256,7 @@ export default function EditProfileScreen() {
   if (loading) {
     return (
       <View style={[s.center, { backgroundColor: bg }]}>
-        <ActivityIndicator color={ACCENT} size="large" />
+        <ActivityIndicator color={accent} size="large" />
       </View>
     );
   }
@@ -279,10 +286,10 @@ export default function EditProfileScreen() {
                 <ExpoImage source={{ uri: avatarUri }} style={s.avatarImg} contentFit="cover" cachePolicy="disk" />
               ) : (
                 <View style={[s.avatarPlaceholder, { backgroundColor: isDark ? '#2a1e14' : '#e8ddd0' }]}>
-                  <Text style={s.avatarInitial}>{avatarInitial}</Text>
+                  <Text style={[s.avatarInitial, { color: accent }]}>{avatarInitial}</Text>
                 </View>
               )}
-              <View style={s.avatarEditBadge}>
+              <View style={[s.avatarEditBadge, { backgroundColor: accent }]}>
                 <FontAwesome name="camera" size={10} color="#fff" />
               </View>
             </Pressable>
@@ -338,20 +345,6 @@ export default function EditProfileScreen() {
               />
             </View>
 
-            {/* Links section */}
-            <Text style={[s.label, { color: subtext, marginTop: 8, marginBottom: 12 }]}>LINKS</Text>
-
-            <View style={[s.linkGroup, { backgroundColor: cardBg, borderColor: border }]}>
-              <LinkInput
-                icon="globe"
-                placeholder="Website URL"
-                value={website}
-                onChangeText={setWebsite}
-                textColor={text}
-                iconColor={subtext}
-              />
-
-            </View>
 
           </View>
 
@@ -366,52 +359,6 @@ export default function EditProfileScreen() {
 
 // ─── Link input row ───────────────────────────────────────────────────────────
 
-function LinkInput({
-  icon,
-  placeholder,
-  value,
-  onChangeText,
-  textColor,
-  iconColor,
-}: {
-  icon: React.ComponentProps<typeof FontAwesome>['name'];
-  placeholder: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  textColor: string;
-  iconColor: string;
-}) {
-  return (
-    <View style={li.row}>
-      <FontAwesome name={icon} size={16} color={iconColor} style={li.icon} />
-      <TextInput
-        style={[li.input, { color: textColor }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={iconColor}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-      />
-    </View>
-  );
-}
-
-const li = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 2,
-  },
-  icon: { width: 22, textAlign: 'center', marginRight: 12 },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    paddingVertical: 12,
-  },
-});
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
