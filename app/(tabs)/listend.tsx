@@ -26,6 +26,9 @@ import { useLikedArtists } from '@/context/LikedArtistsContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { AlbumReviewModal } from '@/components/AlbumReviewModal';
+import { LoggedAlbum } from '@/context/AlbumsContext';
+import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { usePro } from '@/context/ProContext';
 import { ProBadge } from '@/components/ProBadge';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
@@ -843,6 +846,17 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
+          {/* Rate Us */}
+          <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="star-o" size={16} color={accentColor} />
+            </View>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>Rate Us on the App Store</Text>
+            <FontAwesome name="chevron-right" size={13} color={segTextColor} />
+          </Pressable>
+
+          <View style={[ss.separator, { backgroundColor: sepColor }]} />
+
           {/* Dark Mode */}
           <View style={ss.row}>
             <View style={ss.iconWrap}>
@@ -1001,6 +1015,7 @@ export default function ListendScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [top5EditMode, setTop5EditMode] = useState(false);
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
+  const [selectedTopAlbum, setSelectedTopAlbum] = useState<LoggedAlbum | null>(null);
 
   // Profile data — re-fetched each time the tab comes into focus
   // so updates from edit-profile are reflected immediately
@@ -1086,6 +1101,7 @@ export default function ListendScreen() {
       onClose={() => setActiveSong(null)}
       onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
       onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
+      colors={(isPro && proTheme !== 'default') ? colors : undefined}
     />
     <ScrollView
       style={[s.container, { backgroundColor: colors.background }]}
@@ -1150,7 +1166,14 @@ export default function ListendScreen() {
             if (top5EditMode) {
               if (!a) router.push({ pathname: '/pick-item', params: { type: 'album', slotIndex: String(i) } });
             } else {
-              if (a) router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl } });
+              if (a) {
+                const logged = loggedAlbums.find(la => la.id === a.id);
+                if (logged) {
+                  setSelectedTopAlbum(logged);
+                } else {
+                  navigateToAlbum(router, { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl });
+                }
+              }
             }
           }}
         />
@@ -1237,6 +1260,23 @@ export default function ListendScreen() {
       </View>
 
     </ScrollView>
+
+    {selectedTopAlbum && (
+      <AlbumReviewModal
+        album={selectedTopAlbum}
+        username={profileUsername}
+        avatarUrl={profileAvatarUrl}
+        onClose={() => setSelectedTopAlbum(null)}
+        onAlbumPress={() => {
+          const a = selectedTopAlbum;
+          setSelectedTopAlbum(null);
+          navigateToAlbum(router, a);
+        }}
+        isDark={isDark}
+        colors={colors}
+        isOwner
+      />
+    )}
     </>
   );
 }

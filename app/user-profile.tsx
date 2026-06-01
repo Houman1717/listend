@@ -26,6 +26,8 @@ import Colors, { type ColorsShape } from '@/constants/Colors';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { ProBadge } from '@/components/ProBadge';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
+import { AlbumReviewModal } from '@/components/AlbumReviewModal';
+import { LoggedAlbum } from '@/context/AlbumsContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -472,6 +474,8 @@ export default function UserProfileScreen() {
   const [reviewCount,   setReviewCount]   = useState(0);
   const [wantCount,     setWantCount]     = useState(0);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [userAlbums, setUserAlbums] = useState<any[]>([]);
+  const [selectedTopAlbum, setSelectedTopAlbum] = useState<LoggedAlbum | null>(null);
 
   // ── Load all data ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -551,6 +555,7 @@ export default function UserProfileScreen() {
           .order('listened_at', { ascending: false });
 
         if (userAlbums) {
+          setUserAlbums(userAlbums);
           const thisYear = new Date().getFullYear();
           const withRating = userAlbums.filter((a: any) => a.rating > 0);
           setAlbumCount(userAlbums.length);
@@ -813,6 +818,7 @@ export default function UserProfileScreen() {
       onClose={() => setActiveSong(null)}
       onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
       onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
+      colors={(profile?.is_pro && profile.pro_theme && profile.pro_theme !== 'default') ? colors : undefined}
     />
     <ScrollView
       style={[s.container, { backgroundColor: colors.background }]}
@@ -975,7 +981,24 @@ export default function UserProfileScreen() {
                   <FavSlotReadOnly
                     key={i}
                     item={a ? { artworkUrl: a.artworkUrl, title: a.title } : undefined}
-                    onPress={a ? () => navigateToAlbum(router, { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl }) : undefined}
+                    onPress={a ? () => {
+                      const found = userAlbums.find((ua: any) => ua.spotify_id === a.id);
+                      if (found) {
+                        setSelectedTopAlbum({
+                          id: found.spotify_id,
+                          title: found.title,
+                          artist: found.artist,
+                          year: found.year,
+                          rating: found.rating ?? 0,
+                          review: found.review ?? '',
+                          dateLogged: found.listened_at ?? '',
+                          artworkUrl: found.artwork_url ?? a.artworkUrl,
+                          coverColor: '#2a1e14',
+                        });
+                      } else {
+                        navigateToAlbum(router, { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl });
+                      }
+                    } : undefined}
                     colors={colors}
                   />
                 );
@@ -1078,6 +1101,23 @@ export default function UserProfileScreen() {
       />
 
     </ScrollView>
+
+    {selectedTopAlbum && (
+      <AlbumReviewModal
+        album={selectedTopAlbum}
+        username={profile?.username ?? ''}
+        avatarUrl={profile?.avatar_url}
+        onClose={() => setSelectedTopAlbum(null)}
+        onAlbumPress={() => {
+          const a = selectedTopAlbum;
+          setSelectedTopAlbum(null);
+          navigateToAlbum(router, a);
+        }}
+        isDark={colorScheme === 'dark'}
+        colors={colors}
+        isOwner={false}
+      />
+    )}
     </>
   );
 }
