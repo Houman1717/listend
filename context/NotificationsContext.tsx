@@ -63,7 +63,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
     const uid = user.id;
     fetchUnreadCount(uid);
-    registerPushToken(uid).catch(() => {}); // best-effort; never crash the app
+    registerPushToken(uid).catch((e) => console.log('[Push] registration error:', e?.message ?? e));
 
     // Realtime: bump badge whenever a new notification arrives
     const channel = supabase
