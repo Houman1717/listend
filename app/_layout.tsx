@@ -4,6 +4,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
@@ -88,6 +89,23 @@ function AuthGate() {
       router.replace('/(tabs)');
     }
   }, [session, loading, segments]);
+
+  // Navigate to the right screen when user taps a push notification
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as any;
+      if (!data?.type) return;
+      if (data.type === 'message') {
+        router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
+      } else if (data.type === 'like_review' && data.targetId) {
+        const albumId = data.targetId.split('_')[1];
+        router.push({ pathname: '/album-detail', params: { id: albumId } } as any);
+      } else {
+        router.push({ pathname: '/user-profile', params: { userId: data.actorId } });
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   return null;
 }

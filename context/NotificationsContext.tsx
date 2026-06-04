@@ -1,6 +1,17 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import * as Notifications from 'expo-notifications';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
+import { registerPushToken } from '@/lib/registerPushToken';
+
+// Show alerts + play sound when a push arrives while the app is foregrounded
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 type NotificationsContextType = {
   unreadCount: number;
@@ -52,6 +63,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
     const uid = user.id;
     fetchUnreadCount(uid);
+    registerPushToken(uid).catch(() => {}); // best-effort; never crash the app
 
     // Realtime: bump badge whenever a new notification arrives
     const channel = supabase

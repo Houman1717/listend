@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { query, param, body, validationResult } = require('express-validator');
 const cron = require('node-cron');
 const supabase = require('./db');
+const { sendPush } = require('./sendPush');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
@@ -2952,6 +2953,54 @@ app.get('/api/stats/artist-images', requireAuth, [
   const images = {};
   for (const [name, url] of pairs) { if (url) images[name] = url; }
   res.json({ images });
+});
+
+// ── Push notification webhook (called by Supabase Database Webhook on notifications INSERT) ───
+
+const PUSH_TITLES = {
+  follow:        'New follower',
+  message:       'New message',
+  like_review:   'Someone liked your review',
+  like_playlist: 'Someone liked your playlist',
+};
+
+const PUSH_BODIES = {
+  follow:        name => `${name} started following you`,
+  message:       name => `${name} sent you a message`,
+  like_review:   name => `${name} liked your review`,
+  like_playlist: name => `${name} liked your playlist`,
+};
+
+app.post('/api/webhook/notification', async (req, res) => {
+  // Supabase sends the webhook secret in a header so only it can call this
+  if (req.headers['x-webhook-secret'] !== process.env.WEBHOOK_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const row = req.body?.record;
+    if (!row) return res.json({ ok: true });
+
+    const { user_id, type, actor_id, target_id } = row;
+    if (!user_id || !type || !actor_id) return res.json({ ok: true });
+
+    // Look up actor's display name
+    const { data: actor } = await supabase
+      .from('profiles')
+      .select('display_name, username')
+      .eq('id', actor_id)
+      .single();
+
+    const name = actor?.display_name || actor?.username || 'Someone';
+    const title = PUSH_TITLES[type] ?? 'New notification';
+    const body  = (PUSH_BODIES[type] ?? (() => name))(name);
+
+    await sendPush(user_id, title, body, { type, actorId: actor_id, targetId: target_id });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[webhook/notification]', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
