@@ -18,6 +18,7 @@ import { LikedArtistsProvider } from '@/context/LikedArtistsContext';
 import { LikedFeaturedPlaylistsProvider } from '@/context/LikedFeaturedPlaylistsContext';
 import { FavoritesSyncer } from '@/components/FavoritesSyncer';
 import { ProProvider } from '@/context/ProContext';
+import { RevenueCatProvider } from '@/context/RevenueCatContext';
 import { ProPaywallModal } from '@/components/ProPaywallModal';
 import { configureGoogleSignIn } from '@/lib/auth/googleAuth';
 
@@ -105,6 +106,7 @@ function ThemedApp() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <AuthProvider>
+    <RevenueCatProvider>
     <ProProvider>
     <NotificationsProvider>
     <AlbumsProvider>
@@ -170,6 +172,7 @@ function ThemedApp() {
     </AlbumsProvider>
     </NotificationsProvider>
     </ProProvider>
+    </RevenueCatProvider>
     </AuthProvider>
     </GestureHandlerRootView>
   );

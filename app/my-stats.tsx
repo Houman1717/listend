@@ -4,7 +4,6 @@ import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, Fragment, useMemo } from 'react';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Svg, { Circle } from 'react-native-svg';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -2078,7 +2077,7 @@ export default function MyStatsScreen() {
                             router.push({ pathname: '/discover-featured-playlist', params: { id: pl.id, name: pl.name } } as any);
                           }
                         }}>
-                        <ProgressRing done={pl.done} total={pl.total} size={68} tint={colors.tint} trackColor={cardBorder} textColor={colors.text} />
+                        <ProgressRing done={pl.done} total={pl.total} size={68} tint={colors.tint} trackColor={cardBorder} textColor={colors.text} bgColor={cardBg} />
                         <Text style={[pp.name, { color: colors.text }]} numberOfLines={2}>{pl.name}</Text>
                         <Text style={[pp.count, { color: colors.subtext }]}>
                           {pl.total > 0 ? `${pl.done} / ${pl.total}` : '—'}
@@ -2136,6 +2135,7 @@ function ProgressRing({
   tint = ACCENT,
   trackColor = BORDER,
   textColor = TEXT,
+  bgColor = CARD_BG,
 }: {
   done: number;
   total: number;
@@ -2143,33 +2143,57 @@ function ProgressRing({
   tint?: string;
   trackColor?: string;
   textColor?: string;
+  bgColor?: string;
 }) {
   const strokeWidth = 6;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
   const pct = total > 0 ? done / total : 0;
-  const dash = circumference * pct;
-  const gap = circumference - dash;
-  const center = size / 2;
+  const fillDeg = pct * 360;
+  const r = size / 2;
+  const innerR = r - strokeWidth;
   const label = total > 0 ? `${Math.round(pct * 100)}%` : '0%';
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        {/* Track */}
-        <Circle
-          cx={center} cy={center} r={radius}
-          stroke={trackColor} strokeWidth={strokeWidth} fill="none"
-        />
-        {/* Progress */}
-        <Circle
-          cx={center} cy={center} r={radius}
-          stroke={tint} strokeWidth={strokeWidth} fill="none"
-          strokeDasharray={`${dash} ${gap}`}
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${center}, ${center}`}
-        />
-      </Svg>
+      {/* Track disc */}
+      <View style={{ position: 'absolute', width: size, height: size, borderRadius: r, backgroundColor: trackColor }} />
+      {/* Accent fill — solid half-discs pivoted at circle center */}
+      <View style={{ position: 'absolute', width: size, height: size, borderRadius: r, overflow: 'hidden' }}>
+        {/* Right half-disc: covers 0–180° of fill, pivot at circle center (left edge) */}
+        <View style={{ position: 'absolute', left: r, top: 0, width: r, height: size, overflow: 'hidden' }}>
+          <View style={{
+            position: 'absolute', left: 0, top: 0,
+            width: r, height: size,
+            borderTopRightRadius: r, borderBottomRightRadius: r,
+            backgroundColor: tint,
+            transform: [
+              { translateX: -(r / 2) },
+              { rotate: `${Math.min(fillDeg, 180) - 180}deg` },
+              { translateX: r / 2 },
+            ],
+          }} />
+        </View>
+        {/* Left half-disc: covers 180–360° of fill, pivot at circle center (right edge) */}
+        {fillDeg > 180 && (
+          <View style={{ position: 'absolute', left: 0, top: 0, width: r, height: size, overflow: 'hidden' }}>
+            <View style={{
+              position: 'absolute', left: 0, top: 0,
+              width: r, height: size,
+              borderTopLeftRadius: r, borderBottomLeftRadius: r,
+              backgroundColor: tint,
+              transform: [
+                { translateX: r / 2 },
+                { rotate: `${360 - fillDeg}deg` },
+                { translateX: -(r / 2) },
+              ],
+            }} />
+          </View>
+        )}
+      </View>
+      {/* Centre punch-out to create ring appearance */}
+      <View style={{
+        position: 'absolute',
+        width: innerR * 2, height: innerR * 2, borderRadius: innerR,
+        backgroundColor: bgColor,
+      }} />
       <Text style={{ color: textColor, fontSize: 13, fontWeight: '700' }}>{label}</Text>
     </View>
   );

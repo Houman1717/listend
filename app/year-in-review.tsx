@@ -7,7 +7,6 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Svg, { Circle, Path } from 'react-native-svg';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -259,6 +258,10 @@ function ArtistGridCard({ artist, label, imageUrl, onPress, cardW, textColor = T
 }
 
 // ─── Solid pie chart ──────────────────────────────────────────────────────────
+// Pure-RN implementation using the two-half-disc rotation trick (no react-native-svg).
+// Each half-disc rotates around the circle's center point, which works because
+// the disc is sized = full circle and positioned so its center aligns with the
+// circle's center, meaning React Native's default center-based transform is correct.
 
 function PieChart({ aCount, bCount, aColor, bColor, size = 110 }: {
   aCount: number; bCount: number;
@@ -268,35 +271,41 @@ function PieChart({ aCount, bCount, aColor, bColor, size = 110 }: {
   const total = aCount + bCount;
   const aPct = total > 0 ? aCount / total : 0;
   const r = size / 2;
-  const cx = r;
-  const cy = r;
-
-  // Start from the top (–90°) going clockwise
-  const startAngle = -Math.PI / 2;
-  const sweepAngle = aPct * 2 * Math.PI;
-  const endAngle   = startAngle + sweepAngle;
-
-  const x1 = cx + r * Math.cos(startAngle);
-  const y1 = cy + r * Math.sin(startAngle);
-  const x2 = cx + r * Math.cos(endAngle);
-  const y2 = cy + r * Math.sin(endAngle);
-
-  const largeArc = aPct > 0.5 ? 1 : 0;
-
-  // Accent wedge (slice A)
-  const slicePath = aPct >= 1
-    ? `M ${cx} ${cy} m -${r} 0 a ${r} ${r} 0 1 1 ${r * 2} 0 a ${r} ${r} 0 1 1 -${r * 2} 0`
-    : aPct <= 0
-    ? ''
-    : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+  const fillDeg = aPct * 360;
 
   return (
-    <Svg width={size} height={size}>
-      {/* Full background circle */}
-      <Circle cx={cx} cy={cy} r={r} fill={bColor} />
-      {/* Accent slice on top */}
-      {slicePath ? <Path d={slicePath} fill={aColor} /> : null}
-    </Svg>
+    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: bColor, overflow: 'hidden' }}>
+      {/* Right half-disc: covers 0–180°, pivot at circle center (left edge of disc) */}
+      <View style={{ position: 'absolute', left: r, top: 0, width: r, height: size, overflow: 'hidden' }}>
+        <View style={{
+          position: 'absolute', left: 0, top: 0,
+          width: r, height: size,
+          borderTopRightRadius: r, borderBottomRightRadius: r,
+          backgroundColor: aColor,
+          transform: [
+            { translateX: -(r / 2) },
+            { rotate: `${Math.min(fillDeg, 180) - 180}deg` },
+            { translateX: r / 2 },
+          ],
+        }} />
+      </View>
+      {/* Left half-disc: covers 180–360°, pivot at circle center (right edge of disc) */}
+      {fillDeg > 180 && (
+        <View style={{ position: 'absolute', left: 0, top: 0, width: r, height: size, overflow: 'hidden' }}>
+          <View style={{
+            position: 'absolute', left: 0, top: 0,
+            width: r, height: size,
+            borderTopLeftRadius: r, borderBottomLeftRadius: r,
+            backgroundColor: aColor,
+            transform: [
+              { translateX: r / 2 },
+              { rotate: `${360 - fillDeg}deg` },
+              { translateX: -(r / 2) },
+            ],
+          }} />
+        </View>
+      )}
+    </View>
   );
 }
 
