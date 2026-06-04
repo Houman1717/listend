@@ -2,6 +2,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import React from 'react';
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -16,7 +17,11 @@ import {
 
 function GoogleG({ size = 18 }: { size?: number }) {
   return (
-    <Text style={{ fontSize: size, fontWeight: '700', color: '#4285F4', lineHeight: size + 2 }}>G</Text>
+    <Image
+      source={require('../assets/images/google-g.png')}
+      style={{ width: size, height: size }}
+      resizeMode="contain"
+    />
   );
 }
 
