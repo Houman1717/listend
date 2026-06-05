@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { usePro } from '@/context/ProContext';
 import { FLIP_POOL } from '@/constants/FlipPool';
+import { scheduleFlipCooldownNotification, cancelFlipCooldownNotification } from '@/lib/flipNotification';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,7 +73,12 @@ export function FlipProvider({ children }: { children: ReactNode }) {
           const data = JSON.parse(raw);
           setHistory(data.history ?? []);
           // Pro users have no cooldown; ignore any stored timestamp.
-          setCooldownUntil(__DEV__ ? null : (data.cooldownUntil ?? null));
+          const stored: number | null = __DEV__ ? null : (data.cooldownUntil ?? null);
+          setCooldownUntil(stored);
+          // Cancel stale notification if cooldown has already passed
+          if (!stored || stored < Date.now()) {
+            cancelFlipCooldownNotification().catch(() => {});
+          }
         }
       })
       .catch(() => {})
@@ -130,8 +136,12 @@ export function FlipProvider({ children }: { children: ReactNode }) {
       status:      'pending',
     };
 
+    const cooldownUntilMs = now + (isPro ? COOLDOWN_MS_PRO : COOLDOWN_MS_FREE);
     setHistory(prev => [record, ...prev]);
-    setCooldownUntil(now + (isPro ? COOLDOWN_MS_PRO : COOLDOWN_MS_FREE));
+    setCooldownUntil(cooldownUntilMs);
+    if (!__DEV__) {
+      scheduleFlipCooldownNotification(cooldownUntilMs).catch(() => {});
+    }
   }
 
   function markLogged(id: string) {
