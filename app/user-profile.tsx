@@ -24,6 +24,7 @@ import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
+import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
@@ -672,6 +673,7 @@ export default function UserProfileScreen() {
         profile?.display_name || profile?.username || 'User',
         undefined,
         [
+          { text: 'Report User', onPress: () => reportContent({ contentType: 'user', contentId: viewedUserId, reportedUser: viewedUserId, label: 'user' }) },
           { text: 'Block User', style: 'destructive', onPress: () => confirmBlock(currentUserId) },
           { text: 'Cancel', style: 'cancel' },
         ]
@@ -1116,6 +1118,12 @@ export default function UserProfileScreen() {
         isDark={colorScheme === 'dark'}
         colors={colors}
         isOwner={false}
+        onReport={() => reportContent({
+          contentType: 'review',
+          contentId: `${viewedUserId}_${selectedTopAlbum.id}`,
+          reportedUser: viewedUserId,
+          label: 'review',
+        })}
       />
     )}
     </>

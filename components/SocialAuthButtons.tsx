@@ -71,7 +71,10 @@ export function AppleAuthButton() {
             return;
           }
           console.error('Apple sign-in error:', err);
-          Alert.alert('Sign-in failed', 'Apple sign-in could not be completed.');
+          const detail =
+            (err as any)?.message ??
+            (typeof err === 'string' ? err : 'Unknown error');
+          Alert.alert('Sign-in failed', `Apple sign-in could not be completed.\n\n${detail}`);
         }
       }}
     />

@@ -37,6 +37,7 @@ export function AlbumReviewModal({
   isOwner = false,
   onUndoReListen,
   onDelete,
+  onReport,
 }: {
   album: LoggedAlbum;
   username: string;
@@ -49,6 +50,7 @@ export function AlbumReviewModal({
   isOwner?: boolean;
   onUndoReListen?: () => void;
   onDelete?: () => void;
+  onReport?: () => void;
 }) {
   const [liked,            setLiked]            = useState(false);
   const [likeCount,        setLikeCount]        = useState(0);
@@ -94,7 +96,13 @@ export function AlbumReviewModal({
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[s.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            <View style={{ width: 24 }} />
+            {!isOwner && onReport ? (
+              <Pressable onPress={onReport} hitSlop={12}>
+                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+              </Pressable>
+            ) : (
+              <View style={{ width: 24 }} />
+            )}
           </View>
 
           <ScrollView

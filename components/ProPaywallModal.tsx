@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -295,6 +296,17 @@ export function ProPaywallModal() {
               </View>
             )}
 
+            {/* ── Legal links (required by App Store guideline 3.1.2) ── */}
+            <View style={s.legalRow}>
+              <Pressable onPress={() => Linking.openURL('https://houman1717.github.io/listend-policys/privacy.html')}>
+                <Text style={[s.legalLink, { color: c.textDim }]}>Privacy Policy</Text>
+              </Pressable>
+              <Text style={[s.legalSep, { color: c.textDimmer }]}>·</Text>
+              <Pressable onPress={() => Linking.openURL('https://houman1717.github.io/listend-policys/terms.html')}>
+                <Text style={[s.legalLink, { color: c.textDim }]}>Terms of Use</Text>
+              </Pressable>
+            </View>
+
             <Pressable
               onPress={hidePaywall}
               style={[s.dismissBtn, { paddingTop: packages.length > 0 ? 0 : 16 }]}>
@@ -568,4 +580,15 @@ const s = StyleSheet.create({
     paddingVertical: 16,
   },
   dismissText: { fontSize: 14 },
+
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  legalLink: { fontSize: 12, textDecorationLine: 'underline' },
+  legalSep:  { fontSize: 12 },
 });

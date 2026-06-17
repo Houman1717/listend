@@ -27,6 +27,7 @@ import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { navigateToProfile } from '@/lib/navigateToProfile';
+import { reportContent } from '@/lib/reports';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -383,6 +384,12 @@ export default function MyListendScreen() {
           isDark={isDark}
           colors={colors}
           isOwner={!viewingOther}
+          onReport={viewingOther ? () => reportContent({
+            contentType: 'review',
+            contentId: `${viewingOther}_${selectedAlbum.id}`,
+            reportedUser: viewingOther,
+            label: 'review',
+          }) : undefined}
           onDelete={() => {
             const id = selectedAlbum.id;
             setSelectedAlbum(null);

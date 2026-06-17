@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
+import { LegalConsent } from '@/components/LegalConsent';
 
 const ACCENT = '#D4A017';
 
@@ -129,6 +130,8 @@ export default function SignUpScreen() {
         </View>
 
         <SocialAuthButtons />
+
+        <LegalConsent verb="signing up" color={colors.subtext} />
 
         <Pressable onPress={() => router.back()} style={s.switchRow}>
           <Text style={[s.switchText, { color: colors.subtext }]}>Already have an account? </Text>

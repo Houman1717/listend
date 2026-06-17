@@ -24,6 +24,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
+import { reportContent } from '@/lib/reports';
 import { supabase } from '@/lib/supabase';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
@@ -571,6 +572,7 @@ function AlbumSingleReviewModal({
   onAddComment,
   onClose,
   onUsernamePress,
+  onReport,
   isDark,
   colors,
 }: {
@@ -588,6 +590,7 @@ function AlbumSingleReviewModal({
   onAddComment: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
   onClose: () => void;
   onUsernamePress?: (username: string) => void;
+  onReport?: () => void;
   isDark: boolean;
   colors: { text: string; subtext: string; background: string };
 }) {
@@ -626,7 +629,13 @@ function AlbumSingleReviewModal({
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[arm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            <View style={{ width: 24 }} />
+            {onReport ? (
+              <Pressable onPress={onReport} hitSlop={12}>
+                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+              </Pressable>
+            ) : (
+              <View style={{ width: 24 }} />
+            )}
           </View>
 
           <ScrollView
@@ -1889,6 +1898,12 @@ export default function AlbumDetailScreen() {
           onToggleComments={() => setSingleReviewCommentsOpen(prev => !prev)}
           onAddComment={(body, parentId, u, rtu, av) => handleAddComment(expandedAlbumReview.id, body, parentId, u, rtu, av)}
           onClose={() => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); }}
+          onReport={expandedAlbumReview.userId !== user?.id ? () => reportContent({
+            contentType: 'review',
+            contentId: expandedAlbumReview.id,
+            reportedUser: expandedAlbumReview.userId,
+            label: 'review',
+          }) : undefined}
           onUsernamePress={(username) => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); navigateToProfile(username, router); }}
           isDark={isDark}
           colors={colors}

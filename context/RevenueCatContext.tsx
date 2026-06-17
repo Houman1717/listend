@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import Purchases, { CustomerInfo, LOG_LEVEL, Offerings, PurchasesPackage } from 'react-native-purchases';
 import { useAuth } from './AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
 const PRO_ENTITLEMENT_ID = 'pro';
@@ -43,11 +44,24 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     setIsLoading(false);
   }, []);
 
-  // Sync entitlements whenever customer info changes
+  // Sync entitlements whenever customer info changes — also writes to Supabase
+  // so ProContext (which reads profiles.is_pro) stays in sync.
   const syncCustomerInfo = useCallback((info: CustomerInfo) => {
     const active = info.entitlements.active;
-    setIsPro(PRO_ENTITLEMENT_ID in active);
-  }, []);
+    const proActive = PRO_ENTITLEMENT_ID in active;
+    setIsPro(proActive);
+
+    // Mirror to Supabase so the rest of the app (ProContext, other-user views) reflects reality
+    if (user?.id) {
+      supabase
+        .from('profiles')
+        .update({ is_pro: proActive })
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) console.warn('[RevenueCat] Supabase is_pro sync error:', error.message);
+        });
+    }
+  }, [user?.id]);
 
   // Fetch offerings on mount
   useEffect(() => {
@@ -58,8 +72,9 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
 
   // Listen for real-time entitlement changes (e.g. subscription expires mid-session)
   useEffect(() => {
+    if (!REVENUECAT_IOS_KEY) return;
     const listener = Purchases.addCustomerInfoUpdateListener(syncCustomerInfo);
-    return () => listener.remove();
+    return () => listener?.remove();
   }, [syncCustomerInfo]);
 
   // Log in / log out with Supabase user ID

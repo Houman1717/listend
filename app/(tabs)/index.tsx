@@ -26,6 +26,7 @@ import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { navigateToProfile } from '@/lib/navigateToProfile';
+import { reportContent } from '@/lib/reports';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import {
   PopularReview,
@@ -448,6 +449,7 @@ function PopularReviewModal({
   onClose,
   onAlbumPress,
   onUsernamePress,
+  onReport,
   liked,
   onLike,
   isDark,
@@ -461,6 +463,7 @@ function PopularReviewModal({
   onClose: () => void;
   onAlbumPress: () => void;
   onUsernamePress?: (username: string) => void;
+  onReport?: () => void;
   liked: boolean;
   onLike: () => void;
   isDark: boolean;
@@ -483,7 +486,13 @@ function PopularReviewModal({
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            <View style={{ width: 24 }} />
+            {onReport ? (
+              <Pressable onPress={onReport} hitSlop={12}>
+                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+              </Pressable>
+            ) : (
+              <View style={{ width: 24 }} />
+            )}
           </View>
 
           <ScrollView
@@ -766,6 +775,7 @@ function FriendReviewModal({
   onClose,
   onAlbumPress,
   onUsernamePress,
+  onReport,
 }: {
   friend: FriendEntry;
   comments: ReviewComment[];
@@ -777,6 +787,7 @@ function FriendReviewModal({
   onClose: () => void;
   onAlbumPress: () => void;
   onUsernamePress?: (username: string) => void;
+  onReport?: () => void;
 }) {
   const [commentsExpanded, setCommentsExpanded] = useState(false);
 
@@ -796,7 +807,13 @@ function FriendReviewModal({
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Listen</Text>
-            <View style={{ width: 24 }} />
+            {onReport ? (
+              <Pressable onPress={onReport} hitSlop={12}>
+                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+              </Pressable>
+            ) : (
+              <View style={{ width: 24 }} />
+            )}
           </View>
 
           <ScrollView
@@ -1703,6 +1720,12 @@ export default function HomeScreen() {
             navigateToAlbum(router, { id: expandedFriend.albumId, title: expandedFriend.album, artist: expandedFriend.artist, year: expandedFriend.year, artworkUrl: expandedFriend.artworkUrl });
           }}
           onUsernamePress={(username) => { setExpandedFriend(null); navigateToProfile(username, router); }}
+          onReport={(() => {
+            const fid = expandedFriend.id;
+            const reportedUser = fid.startsWith('relisten_') ? fid.split('_')[1] : fid.split('_')[0];
+            if (reportedUser === user?.id) return undefined;
+            return () => reportContent({ contentType: 'review', contentId: fid, reportedUser, label: 'review' });
+          })()}
         />
       )}
 
@@ -1732,6 +1755,12 @@ export default function HomeScreen() {
           liked={likedReviews.has(expandedReview.id)}
           onLike={() => handleLikeReview(expandedReview.id)}
           onUsernamePress={(username) => { setExpandedReview(null); setExpandedCommentsId(null); navigateToProfile(username, router); }}
+          onReport={expandedReview.userId !== user?.id ? () => reportContent({
+            contentType: 'review',
+            contentId: expandedReview.id,
+            reportedUser: expandedReview.userId,
+            label: 'review',
+          }) : undefined}
           isDark={isDark}
           colors={colors}
         />

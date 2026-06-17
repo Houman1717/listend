@@ -26,6 +26,7 @@ import { supabase } from '@/lib/supabase';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
+import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
@@ -164,6 +165,7 @@ function ReviewDetailModal({
   onClose,
   onAlbumPress,
   onUsernamePress,
+  onReport,
 }: {
   album: LoggedAlbum;
   isDark: boolean;
@@ -175,6 +177,7 @@ function ReviewDetailModal({
   onClose: () => void;
   onAlbumPress: () => void;
   onUsernamePress?: (username: string) => void;
+  onReport?: () => void;
 }) {
   const router = useRouter();
   const [commentsExpanded, setCommentsExpanded] = useState(false);
@@ -211,7 +214,13 @@ function ReviewDetailModal({
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[mrd.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            <View style={{ width: 24 }} />
+            {onReport ? (
+              <Pressable onPress={onReport} hitSlop={12}>
+                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+              </Pressable>
+            ) : (
+              <View style={{ width: 24 }} />
+            )}
           </View>
 
           <ScrollView
@@ -1019,6 +1028,12 @@ export default function MyReviewsScreen() {
               router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl ?? '' } });
             }}
             onUsernamePress={viewingOther ? (username) => { setSelectedReview(null); navigateToProfile(username, router); } : undefined}
+            onReport={viewingOther ? () => reportContent({
+              contentType: 'review',
+              contentId: `${ownerId}_${selectedReview.id}`,
+              reportedUser: ownerId,
+              label: 'review',
+            }) : undefined}
           />
         );
       })()}
@@ -1045,6 +1060,12 @@ export default function MyReviewsScreen() {
               router.push({ pathname: '/album-detail', params: { id: a.id, title: a.title, artist: a.artist, year: String(a.year ?? ''), artworkUrl: a.artworkUrl ?? '' } });
             }}
             onUsernamePress={(username) => { setSelectedLiked(null); navigateToProfile(username, router); }}
+            onReport={selectedLiked.ownerId !== user?.id ? () => reportContent({
+              contentType: 'review',
+              contentId: `${selectedLiked.ownerId}_${selectedLiked.id}`,
+              reportedUser: selectedLiked.ownerId,
+              label: 'review',
+            }) : undefined}
           />
         );
       })()}

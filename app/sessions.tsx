@@ -21,6 +21,7 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
+import { reportContent } from '@/lib/reports';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
@@ -100,6 +101,7 @@ function AlbumReviewModal({
   onClose,
   onAlbumPress,
   onUsernamePress,
+  onReport,
 }: {
   album: LoggedAlbum;
   username: string;
@@ -109,6 +111,7 @@ function AlbumReviewModal({
   onClose: () => void;
   onAlbumPress: () => void;
   onUsernamePress?: () => void;
+  onReport?: () => void;
 }) {
   const [liked,            setLiked]            = useState(false);
   const [likeCount,        setLikeCount]        = useState(0);
@@ -148,7 +151,13 @@ function AlbumReviewModal({
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            <View style={{ width: 24 }} />
+            {onReport ? (
+              <Pressable onPress={onReport} hitSlop={12}>
+                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+              </Pressable>
+            ) : (
+              <View style={{ width: 24 }} />
+            )}
           </View>
 
           <ScrollView
@@ -716,6 +725,12 @@ export default function SessionsScreen() {
             setSelectedAlbum(null);
             router.push({ pathname: '/user-profile', params: { userId: viewingOther } });
           } : undefined}
+          onReport={viewingOther ? () => reportContent({
+            contentType: 'review',
+            contentId: `${viewingOther}_${selectedAlbum.id}`,
+            reportedUser: viewingOther,
+            label: 'review',
+          }) : undefined}
         />
       )}
     </>
