@@ -28,7 +28,18 @@ export async function signInWithGoogle(): Promise<void> {
 
   if (result.type !== 'success') return; // user cancelled — swallow silently
 
-  const { error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
+  // Pull the PKCE auth code out of the redirect URL — exchangeCodeForSession
+  // expects the code itself, not the full URL.
+  const { queryParams } = Linking.parse(result.url);
+  if (queryParams?.error_description) {
+    throw new Error(String(queryParams.error_description));
+  }
+  const code = queryParams?.code;
+  if (!code || typeof code !== 'string') {
+    throw new Error('Google sign-in: no authorization code returned');
+  }
+
+  const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
   if (sessionError) throw sessionError;
 }
 

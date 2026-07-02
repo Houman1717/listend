@@ -9,13 +9,17 @@ async function ensureProfile(user: User) {
   const suffix = user.id.replace(/-/g, '').slice(-12);
   const fallbackUsername = emailPrefix ? `${emailPrefix}_${suffix}` : `user_${suffix}`;
 
+  // Prefer the username the user chose at email signup (stashed in metadata);
+  // fall back to a generated handle for OAuth (Google/Apple) sign-ups.
+  const username: string = meta.username ?? fallbackUsername;
+
   const displayName: string =
-    meta.full_name ?? meta.name ?? meta.display_name ?? fallbackUsername;
+    meta.display_name ?? meta.full_name ?? meta.name ?? username;
 
   await supabase.from('profiles').upsert(
     {
       id:           user.id,
-      username:     fallbackUsername,
+      username,
       display_name: displayName,
       avatar_url:   meta.avatar_url ?? meta.picture ?? null,
     },
@@ -54,12 +58,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      if (event === 'SIGNED_OUT') {
         setSession(null);
-      } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-        setSession(session);
       } else {
         setSession(session);
+        // OAuth (Google/Apple) sign-ups don't create a profiles row the way the
+        // email signup screen does — make sure one exists on every fresh sign-in.
+        if (event === 'SIGNED_IN' && session?.user) {
+          ensureProfile(session.user).catch((e) =>
+            console.warn('[Auth] ensureProfile error:', e)
+          );
+        }
       }
     });
 

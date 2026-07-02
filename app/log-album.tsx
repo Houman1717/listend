@@ -16,6 +16,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
+import { capture } from '@/lib/analytics';
 
 const RATING_LABELS: Record<number, string> = {
   1:  'Skip',
@@ -131,6 +132,10 @@ export default function LogAlbumScreen() {
   if (!pendingAlbum) return null;
 
   function handleLog() {
+    capture('album_logged', {
+      rating: rating > 0 ? rating : undefined,
+      has_review: review.trim().length > 0,
+    });
     logAlbum(rating, review);
     router.dismiss();
   }

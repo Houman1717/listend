@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import type { ProThemeKey } from '@/lib/proThemes';
+import { capture } from '@/lib/analytics';
 
 interface ProContextValue {
   isPro: boolean;
@@ -62,7 +63,7 @@ export function ProProvider({ children }: { children: React.ReactNode }) {
       proTheme,
       setProTheme,
       paywallVisible,
-      showPaywall:  () => setPaywallVisible(true),
+      showPaywall:  () => { capture('paywall_shown'); setPaywallVisible(true); },
       hidePaywall:  () => setPaywallVisible(false),
       refreshPro:   loadPro,
     }}>

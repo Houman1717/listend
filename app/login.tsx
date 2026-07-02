@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -28,6 +29,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSignIn() {
     if (!email.trim() || !password) {
@@ -67,19 +69,31 @@ export default function LoginScreen() {
             keyboardType="email-address"
             textContentType="emailAddress"
           />
-          <TextInput
-            style={[s.input, {
-              backgroundColor: colors.surface,
-              borderColor:     colors.border,
-              color:           colors.text,
-            }]}
-            placeholder="Password"
-            placeholderTextColor={colors.subtext}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            textContentType="password"
-          />
+          <View style={s.pwWrap}>
+            <TextInput
+              style={[s.input, s.pwInput, {
+                backgroundColor: colors.surface,
+                borderColor:     colors.border,
+                color:           colors.text,
+              }]}
+              placeholder="Password"
+              placeholderTextColor={colors.subtext}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              textContentType="password"
+            />
+            <Pressable
+              style={s.eyeBtn}
+              onPress={() => setShowPassword((v) => !v)}
+              hitSlop={8}>
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.subtext}
+              />
+            </Pressable>
+          </View>
 
           <Pressable
             style={({ pressed }) => [s.btn, { backgroundColor: ACCENT, opacity: pressed ? 0.85 : 1 }]}
@@ -134,6 +148,17 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
+  },
+  pwWrap: { width: '100%', justifyContent: 'center' },
+  pwInput: { paddingRight: 48 },
+  eyeBtn: {
+    position: 'absolute',
+    right: 6,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
   },
   btn: {
     borderRadius: 12,

@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -17,6 +18,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { LegalConsent } from '@/components/LegalConsent';
+import { capture } from '@/lib/analytics';
 
 const ACCENT = '#D4A017';
 
@@ -25,10 +27,12 @@ export default function SignUpScreen() {
   const colors      = Colors[colorScheme ?? 'dark'];
 
   const router = useRouter();
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [email, setEmail]               = useState('');
+  const [password, setPassword]         = useState('');
+  const [username, setUsername]         = useState('');
+  const [loading, setLoading]           = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   async function handleSignUp() {
     if (!email.trim() || !password || !username.trim()) {
@@ -37,9 +41,14 @@ export default function SignUpScreen() {
     }
     setLoading(true);
 
+    const trimmedName = username.trim();
+
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      // Stash the chosen username in user metadata so it survives email
+      // confirmation — ensureProfile (AuthContext) reads it on first sign-in.
+      options: { data: { username: trimmedName, display_name: trimmedName } },
     });
 
     if (error) {
@@ -50,16 +59,22 @@ export default function SignUpScreen() {
 
     const userId = data.user?.id;
     if (userId) {
+      // Best-effort immediate insert (works when email confirmation is off and a
+      // session exists). When confirmation is on this no-ops; ensureProfile picks
+      // it up from metadata on first sign-in instead.
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert({ id: userId, username: username.trim(), display_name: username.trim() });
+        .insert({ id: userId, username: trimmedName, display_name: trimmedName });
 
       if (profileError) {
         console.warn('[SignUp] profile insert error:', profileError.message);
       }
+
+      capture('sign_up', { method: 'email' });
     }
 
     setLoading(false);
+    setAwaitingConfirmation(true);
   }
 
   return (
@@ -69,74 +84,109 @@ export default function SignUpScreen() {
 
       <View style={s.inner}>
         <Image source={require('@/assets/images/listend-logo.png')} style={s.logo} />
-        <Text style={[s.subtitle, { color: colors.subtext }]}>Create your account</Text>
 
-        <View style={s.form}>
-          <TextInput
-            style={[s.input, {
-              backgroundColor: colors.surface,
-              borderColor:     colors.border,
-              color:           colors.text,
-            }]}
-            placeholder="Username"
-            placeholderTextColor={colors.subtext}
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-            textContentType="username"
-          />
-          <TextInput
-            style={[s.input, {
-              backgroundColor: colors.surface,
-              borderColor:     colors.border,
-              color:           colors.text,
-            }]}
-            placeholder="Email"
-            placeholderTextColor={colors.subtext}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-          />
-          <TextInput
-            style={[s.input, {
-              backgroundColor: colors.surface,
-              borderColor:     colors.border,
-              color:           colors.text,
-            }]}
-            placeholder="Password"
-            placeholderTextColor={colors.subtext}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            textContentType="newPassword"
-          />
+        {awaitingConfirmation ? (
+          <View style={s.confirmBox}>
+            <Ionicons name="mail-unread-outline" size={52} color={ACCENT} style={{ marginBottom: 16 }} />
+            <Text style={[s.confirmTitle, { color: colors.text }]}>Check your email</Text>
+            <Text style={[s.confirmText, { color: colors.subtext }]}>
+              We've sent a confirmation link to{' '}
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{email.trim()}</Text>.
+              {'\n'}Tap it to verify your account, then sign in.
+            </Text>
+            <Pressable
+              style={({ pressed }) => [s.btn, { backgroundColor: ACCENT, opacity: pressed ? 0.85 : 1, width: '100%' }]}
+              onPress={() => router.back()}>
+              <Text style={s.btnText}>Back to Sign In</Text>
+            </Pressable>
+            <Text style={[s.confirmHint, { color: colors.subtext }]}>
+              Didn't get it? Check your spam folder.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Text style={[s.subtitle, { color: colors.subtext }]}>Create your account</Text>
 
-          <Pressable
-            style={({ pressed }) => [s.btn, { backgroundColor: ACCENT, opacity: pressed ? 0.85 : 1 }]}
-            onPress={handleSignUp}
-            disabled={loading}>
-            {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={s.btnText}>Sign Up</Text>}
-          </Pressable>
-        </View>
+            <View style={s.form}>
+              <TextInput
+                style={[s.input, {
+                  backgroundColor: colors.surface,
+                  borderColor:     colors.border,
+                  color:           colors.text,
+                }]}
+                placeholder="Username"
+                placeholderTextColor={colors.subtext}
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                textContentType="username"
+              />
+              <TextInput
+                style={[s.input, {
+                  backgroundColor: colors.surface,
+                  borderColor:     colors.border,
+                  color:           colors.text,
+                }]}
+                placeholder="Email"
+                placeholderTextColor={colors.subtext}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                textContentType="emailAddress"
+              />
+              <View style={s.pwWrap}>
+                <TextInput
+                  style={[s.input, s.pwInput, {
+                    backgroundColor: colors.surface,
+                    borderColor:     colors.border,
+                    color:           colors.text,
+                  }]}
+                  placeholder="Password"
+                  placeholderTextColor={colors.subtext}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  textContentType="newPassword"
+                />
+                <Pressable
+                  style={s.eyeBtn}
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={8}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.subtext}
+                  />
+                </Pressable>
+              </View>
 
-        <View style={s.dividerRow}>
-          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
-          <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
-          <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
-        </View>
+              <Pressable
+                style={({ pressed }) => [s.btn, { backgroundColor: ACCENT, opacity: pressed ? 0.85 : 1 }]}
+                onPress={handleSignUp}
+                disabled={loading}>
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.btnText}>Sign Up</Text>}
+              </Pressable>
+            </View>
 
-        <SocialAuthButtons />
+            <View style={s.dividerRow}>
+              <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+              <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
+              <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
+            </View>
 
-        <LegalConsent verb="signing up" color={colors.subtext} />
+            <SocialAuthButtons />
 
-        <Pressable onPress={() => router.back()} style={s.switchRow}>
-          <Text style={[s.switchText, { color: colors.subtext }]}>Already have an account? </Text>
-          <Text style={[s.switchText, { color: ACCENT }]}>Sign In</Text>
-        </Pressable>
+            <LegalConsent verb="signing up" color={colors.subtext} />
+
+            <Pressable onPress={() => router.back()} style={s.switchRow}>
+              <Text style={[s.switchText, { color: colors.subtext }]}>Already have an account? </Text>
+              <Text style={[s.switchText, { color: ACCENT }]}>Sign In</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -167,6 +217,17 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
   },
+  pwWrap: { width: '100%', justifyContent: 'center' },
+  pwInput: { paddingRight: 48 },
+  eyeBtn: {
+    position: 'absolute',
+    right: 6,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
   btn: {
     borderRadius: 12,
     paddingVertical: 15,
@@ -185,4 +246,14 @@ const s = StyleSheet.create({
   dividerLabel: { fontSize: 13 },
   switchRow:  { flexDirection: 'row', marginTop: 20 },
   switchText: { fontSize: 14 },
+
+  // Email-confirmation screen
+  confirmBox: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  confirmTitle: { fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginBottom: 10 },
+  confirmText:  { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  confirmHint:  { fontSize: 13, textAlign: 'center', marginTop: 16 },
 });

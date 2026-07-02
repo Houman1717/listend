@@ -5,6 +5,7 @@ import { useAlbums } from '@/context/AlbumsContext';
 import { usePro } from '@/context/ProContext';
 import { FLIP_POOL } from '@/constants/FlipPool';
 import { scheduleFlipCooldownNotification, cancelFlipCooldownNotification } from '@/lib/flipNotification';
+import { capture } from '@/lib/analytics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -124,6 +125,7 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     if (available.length === 0) return;
 
     const album = available[Math.floor(Math.random() * available.length)];
+    capture('flip', { genre: album.genre, year: album.year });
     const now = Date.now();
     const record: FlippedRecord = {
       id:          album.id,

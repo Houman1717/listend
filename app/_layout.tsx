@@ -6,8 +6,10 @@ import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
+import { PostHogProvider } from 'posthog-react-native';
+import { posthog, identifyUser, resetAnalytics } from '@/lib/analytics';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { ThemeProvider } from '@/context/ThemeContext';
@@ -110,6 +112,30 @@ function AuthGate() {
   return null;
 }
 
+// Ties PostHog events to the logged-in user; resets on logout.
+function AnalyticsIdentity() {
+  const { user } = useAuth();
+  const prevId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (user?.id) {
+      identifyUser(user.id, { email: user.email ?? undefined });
+      prevId.current = user.id;
+    } else if (prevId.current) {
+      resetAnalytics();
+      prevId.current = null;
+    }
+  }, [user?.id]);
+
+  return null;
+}
+
+// Enables PostHog autocapture (screens, taps, sessions). No-ops if no key set.
+function AnalyticsProvider({ children }: { children: React.ReactNode }) {
+  if (!posthog) return <>{children}</>;
+  return <PostHogProvider client={posthog} autocapture>{children}</PostHogProvider>;
+}
+
 function RootLayoutNav() {
   return (
     <ThemeProvider>
@@ -123,6 +149,7 @@ function ThemedApp() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+    <AnalyticsProvider>
     <AuthProvider>
     <RevenueCatProvider>
     <ProProvider>
@@ -133,6 +160,7 @@ function ThemedApp() {
     <FlipProvider>
       <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AuthGate />
+        <AnalyticsIdentity />
         <FavoritesSyncer />
         <OfflineBanner />
         <ProPaywallModal />
@@ -192,6 +220,7 @@ function ThemedApp() {
     </ProProvider>
     </RevenueCatProvider>
     </AuthProvider>
+    </AnalyticsProvider>
     </GestureHandlerRootView>
   );
 }
