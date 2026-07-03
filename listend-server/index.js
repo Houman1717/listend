@@ -2787,35 +2787,55 @@ app.get('/apple-token', requireAuth, (req, res) => {
 app.delete('/api/user/delete-account', requireAuth, async (req, res) => {
   const userId = req.user.id;
 
-  const tables = [
-    'top5_changes',
-    'want_to_listen',
-    'notifications',
-    'messages',
-    'follows',
-    'likes',
-    'playlist_albums',
-    'playlists',
-    'user_albums',
-    'profiles',
-  ];
-
-  for (const table of tables) {
-    const col = table === 'messages' ? 'sender_id' : 'user_id';
-    const { error } = await supabase.from(table).delete().eq(col, userId);
-    if (error) {
-      console.error(`[delete-account] failed on ${table}:`, error.message);
-      return res.status(500).json({ error: `Failed to delete data from ${table}` });
+  // playlist_albums has no user_id column — remove them via the user's
+  // playlists first (before the playlists rows themselves are deleted).
+  const { data: userPlaylists, error: plReadErr } = await supabase
+    .from('playlists').select('id').eq('user_id', userId);
+  if (plReadErr) {
+    console.error('[delete-account] failed reading playlists:', plReadErr.message);
+    return res.status(500).json({ error: 'Failed to delete data from playlists' });
+  }
+  const playlistIds = (userPlaylists ?? []).map((p) => p.id);
+  if (playlistIds.length) {
+    const { error: paErr } = await supabase
+      .from('playlist_albums').delete().in('playlist_id', playlistIds);
+    if (paErr) {
+      console.error('[delete-account] failed on playlist_albums:', paErr.message);
+      return res.status(500).json({ error: 'Failed to delete data from playlist_albums' });
     }
   }
 
-  // messages also has a receiver_id side — clean that up too
-  const { error: rcvErr } = await supabase.from('messages').delete().eq('receiver_id', userId);
-  if (rcvErr) console.warn('[delete-account] receiver_id cleanup warning:', rcvErr.message);
+  // Each table paired with the column that references this user. Tables use
+  // different column names, so they can't share a single `user_id` assumption.
+  const deletions = [
+    { table: 'top5_changes',    col: 'user_id' },
+    { table: 'want_to_listen',  col: 'user_id' },
+    { table: 're_listens',      col: 'user_id' },
+    { table: 'flip_records',    col: 'user_id' },
+    { table: 'review_comments', col: 'user_id' },
+    { table: 'liked_artists',   col: 'user_id' },
+    { table: 'content_reports', col: 'reported_user' },
+    { table: 'content_reports', col: 'reporter_id' },
+    { table: 'notifications',   col: 'user_id' },
+    { table: 'notifications',   col: 'actor_id' },
+    { table: 'messages',        col: 'sender_id' },
+    { table: 'messages',        col: 'receiver_id' },
+    { table: 'follows',         col: 'follower_id' },
+    { table: 'follows',         col: 'following_id' },
+    { table: 'likes',           col: 'user_id' },
+    { table: 'likes',           col: 'target_owner_id' },
+    { table: 'playlists',       col: 'user_id' },
+    { table: 'user_albums',     col: 'user_id' },
+    { table: 'profiles',        col: 'id' },
+  ];
 
-  // follows also has a follower_id side
-  const { error: followerErr } = await supabase.from('follows').delete().eq('follower_id', userId);
-  if (followerErr) console.warn('[delete-account] follower_id cleanup warning:', followerErr.message);
+  for (const { table, col } of deletions) {
+    const { error } = await supabase.from(table).delete().eq(col, userId);
+    if (error) {
+      console.error(`[delete-account] failed on ${table}.${col}:`, error.message);
+      return res.status(500).json({ error: `Failed to delete data from ${table}` });
+    }
+  }
 
   // Delete the auth user — requires service role key
   const { error: authErr } = await supabase.auth.admin.deleteUser(userId);
