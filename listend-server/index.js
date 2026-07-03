@@ -1749,13 +1749,13 @@ app.get('/genius/credits', [
   }
 });
 
-// ── GET /spotify/album/:id/tracks ────────────────────────────────────────────
+// ── GET /catalog/album/:id/tracks ────────────────────────────────────────────
 // Returns the full tracklist for an album.
 
-// ── GET /spotify/track/:id ────────────────────────────────────────────────────
+// ── GET /catalog/track/:id ────────────────────────────────────────────────────
 // Returns a single track's release date and basic info.
 
-app.get('/spotify/track/:id', [
+app.get('/catalog/track/:id', [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
@@ -1763,7 +1763,7 @@ app.get('/spotify/track/:id', [
   if (!id || id === 'undefined') {
     return res.status(400).json({ error: 'track id is required' });
   }
-  const CACHE_KEY = `spotify_track_${id}`;
+  const CACHE_KEY = `catalog_track_${id}`;
 
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(mem);
@@ -1787,17 +1787,17 @@ app.get('/spotify/track/:id', [
     await setCache(CACHE_KEY, payload);
     res.json(payload);
   } catch (err) {
-    console.error('[/spotify/track]', err.message ?? err);
+    console.error('[/catalog/track]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.get('/spotify/album/:id/tracks', [
+app.get('/catalog/album/:id/tracks', [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `spotify_album_tracks_${id}`;
+  const CACHE_KEY = `catalog_album_tracks_${id}`;
 
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(mem);
@@ -1818,23 +1818,21 @@ app.get('/spotify/album/:id/tracks', [
     await setCache(CACHE_KEY, tracks);
     res.json(tracks);
   } catch (err) {
-    console.error('[/spotify/album/tracks]', err.message ?? err);
+    console.error('[/catalog/album/tracks]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// ── GET /spotify/artist/:id/top-tracks ────────────────────────────────────────
-// Workaround for dev-mode 403 on /artists/{id}/top-tracks:
-// 1. Resolve artist name via Spotify GET /artists/{id}
-// 2. Fetch top tracks from Last.fm artist.gettoptracks
+// ── GET /catalog/artist/:id/top-tracks ────────────────────────────────────────
+// Returns an artist's top songs via Apple Music's top-songs view.
 
-app.get('/spotify/artist/:id/top-tracks', [
+app.get('/catalog/artist/:id/top-tracks', [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
   const { id } = req.params;
   const bust = req.query.bust === '1';
-  console.log(`[/spotify/artist/top-tracks] ── START id="${id}" bust=${bust}`);
+  console.log(`[/catalog/artist/top-tracks] ── START id="${id}" bust=${bust}`);
 
   if (!id || id === 'undefined') {
     return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
@@ -1845,17 +1843,17 @@ app.get('/spotify/artist/:id/top-tracks', [
   try {
     if (!bust) {
       const mem = cacheGet(CACHE_KEY);
-      if (mem) { console.log('[/spotify/artist/top-tracks] cache hit (memory)'); return res.json(mem); }
+      if (mem) { console.log('[/catalog/artist/top-tracks] cache hit (memory)'); return res.json(mem); }
 
       const db = await getCached(CACHE_KEY, TTL_24H);
-      if (db) { console.log('[/spotify/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+      if (db) { console.log('[/catalog/artist/top-tracks] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
     }
 
     // Fetch top songs directly from Apple Music — artwork and duration included
-    console.log(`[/spotify/artist/top-tracks] fetching AM top-songs for artist id="${id}"`);
+    console.log(`[/catalog/artist/top-tracks] fetching AM top-songs for artist id="${id}"`);
     const amData = await amFetch(`/catalog/us/artists/${id}?views=top-songs`);
     const rawSongs = amData.data?.[0]?.views?.['top-songs']?.data ?? [];
-    console.log(`[/spotify/artist/top-tracks] AM returned ${rawSongs.length} songs`);
+    console.log(`[/catalog/artist/top-tracks] AM returned ${rawSongs.length} songs`);
 
     const tracks = rawSongs.slice(0, 5).map((s, i) => {
       const attr = s.attributes ?? {};
@@ -1875,43 +1873,42 @@ app.get('/spotify/artist/:id/top-tracks', [
       };
     });
 
-    console.log(`[/spotify/artist/top-tracks] success — ${tracks.length} tracks`);
+    console.log(`[/catalog/artist/top-tracks] success — ${tracks.length} tracks`);
     cacheSet(CACHE_KEY, tracks, TTL_6H);
     await setCache(CACHE_KEY, tracks);
     res.json(tracks);
   } catch (err) {
     const msg = err.message ?? String(err);
-    console.error('[/spotify/artist/top-tracks] ERROR:', msg);
-    console.error('[/spotify/artist/top-tracks] STACK:', err.stack);
+    console.error('[/catalog/artist/top-tracks] ERROR:', msg);
+    console.error('[/catalog/artist/top-tracks] STACK:', err.stack);
     res.status(500).json({ error: msg });
   }
 });
 
-// ── GET /spotify/artist/:id/albums ────────────────────────────────────────────
+// ── GET /catalog/artist/:id/albums ────────────────────────────────────────────
 // Returns discography grouped by type: { albums, singles, compilations }.
-// Uses /artists/{id}/albums which is available in Spotify dev mode.
 
-app.get('/spotify/artist/:id/albums', [
+app.get('/catalog/artist/:id/albums', [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
   const { id } = req.params;
   const bust = req.query.bust === '1';
-  console.log(`[/spotify/artist/albums] ── START id="${id}" bust=${bust}`);
+  console.log(`[/catalog/artist/albums] ── START id="${id}" bust=${bust}`);
 
   if (!id || id === 'undefined') {
     return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
   }
 
-  const CACHE_KEY = `spotify_artist_albums_${id}`;
+  const CACHE_KEY = `catalog_artist_albums_${id}`;
 
   try {
     if (!bust) {
       const mem = cacheGet(CACHE_KEY);
-      if (mem) { console.log('[/spotify/artist/albums] cache hit (memory)'); return res.json(mem); }
+      if (mem) { console.log('[/catalog/artist/albums] cache hit (memory)'); return res.json(mem); }
 
       const db = await getCached(CACHE_KEY, TTL_24H);
-      if (db) { console.log('[/spotify/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+      if (db) { console.log('[/catalog/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
     }
 
     const toItem = item => {
@@ -1969,25 +1966,25 @@ app.get('/spotify/artist/:id/albums', [
     let page = 0;
     const PAGE_CAP = 5;
     while (nextPath && page < PAGE_CAP) {
-      console.log(`[/spotify/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
+      console.log(`[/catalog/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
       try {
         const data = await amFetch(nextPath);
         if (page === 0 && data.data?.length) {
           data.data.slice(0, 3).forEach((item, i) => {
             const a = item.attributes ?? {};
-            console.log(`[/spotify/artist/albums] item[${i}] attrs: name="${a.name}" isSingle=${a.isSingle} isCompilation=${a.isCompilation} trackCount=${a.trackCount} albumType="${a.albumType}" url="${a.url}"`);
+            console.log(`[/catalog/artist/albums] item[${i}] attrs: name="${a.name}" isSingle=${a.isSingle} isCompilation=${a.isCompilation} trackCount=${a.trackCount} albumType="${a.albumType}" url="${a.url}"`);
           });
         }
         allItems = allItems.concat((data.data ?? []).map(toItem));
         nextPath = data.next ? data.next.replace('/v1', '') : null;
       } catch (pageErr) {
-        console.warn(`[/spotify/artist/albums] page ${page + 1} failed, stopping pagination:`, pageErr.message);
+        console.warn(`[/catalog/artist/albums] page ${page + 1} failed, stopping pagination:`, pageErr.message);
         nextPath = null;
       }
       page++;
     }
 
-    console.log(`[/spotify/artist/albums] ALL titles fetched (${allItems.length}):`, allItems.map(i => `"${i.title}" isSingle=${i.isSingle} isCompilation=${i.isCompilation} trackCount=${i.trackCount}`));
+    console.log(`[/catalog/artist/albums] ALL titles fetched (${allItems.length}):`, allItems.map(i => `"${i.title}" isSingle=${i.isSingle} isCompilation=${i.isCompilation} trackCount=${i.trackCount}`));
 
     // Global singles exclusion — runs before tab categorisation
     const isSingleRelease = item =>
@@ -1995,7 +1992,7 @@ app.get('/spotify/artist/:id/albums', [
       item.trackCount === 1 ||
       /\s*-\s*single\b/i.test(item.title);
     const nonSingles = allItems.filter(item => !isSingleRelease(item));
-    console.log(`[/spotify/artist/albums] ${allItems.length} total → ${nonSingles.length} after singles exclusion`);
+    console.log(`[/catalog/artist/albums] ${allItems.length} total → ${nonSingles.length} after singles exclusion`);
 
     // Bucket items into 4 tab categories
     const buckets = { albums: [], epsAndMixtapes: [], collections: [], live: [] };
@@ -2033,23 +2030,23 @@ app.get('/spotify/artist/:id/albums', [
       live:           dedupBucket(buckets.live),
     };
 
-    console.log(`[/spotify/artist/albums] success — albums:${grouped.albums.length} eps:${grouped.epsAndMixtapes.length} collections:${grouped.collections.length} live:${grouped.live.length}`);
+    console.log(`[/catalog/artist/albums] success — albums:${grouped.albums.length} eps:${grouped.epsAndMixtapes.length} collections:${grouped.collections.length} live:${grouped.live.length}`);
     cacheSet(CACHE_KEY, grouped, TTL_6H);
     await setCache(CACHE_KEY, grouped);
     res.json(grouped);
   } catch (err) {
     const msg = err.message ?? String(err);
-    console.error('[/spotify/artist/albums] ERROR:', msg);
-    console.error('[/spotify/artist/albums] STACK:', err.stack);
+    console.error('[/catalog/artist/albums] ERROR:', msg);
+    console.error('[/catalog/artist/albums] STACK:', err.stack);
     res.status(500).json({ error: msg });
   }
 });
 
-// ── GET /spotify/recommendations — ?trackIds=id1&trackIds=id2&excludeAlbumId=id ─
+// ── GET /catalog/recommendations — ?trackIds=id1&trackIds=id2&excludeAlbumId=id ─
 // Uses Apple Music search on each seed track ID to find related albums.
 // Returns [] silently on failure so the frontend simply hides the section.
 
-app.get('/spotify/recommendations', [
+app.get('/catalog/recommendations', [
   query('trackIds').optional().customSanitizer(v =>
     (Array.isArray(v) ? v : [v]).map(s => String(s ?? '').trim()).filter(s => /^[a-zA-Z0-9_-]+$/.test(s)).slice(0, 2)
   ),
@@ -2062,13 +2059,13 @@ app.get('/spotify/recommendations', [
 
   if (!trackIds.length) return res.status(400).json({ error: 'trackIds required' });
 
-  const CACHE_KEY = `spotify_recs_${trackIds.join('_')}_excl_${excludeAlbumId}`;
+  const CACHE_KEY = `catalog_recs_${trackIds.join('_')}_excl_${excludeAlbumId}`;
 
   const mem = cacheGet(CACHE_KEY);
-  if (mem) { console.log('[/spotify/recommendations] cache hit (memory)'); return res.json(mem); }
+  if (mem) { console.log('[/catalog/recommendations] cache hit (memory)'); return res.json(mem); }
 
   const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db) { console.log('[/spotify/recommendations] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (db) { console.log('[/catalog/recommendations] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     // Resolve each seed track ID to a title via Apple Music, then search for related albums
@@ -2094,17 +2091,17 @@ app.get('/spotify/recommendations', [
           });
         }
       } catch (e) {
-        console.warn(`[/spotify/recommendations] lookup failed for trackId=${trackId}:`, e.message);
+        console.warn(`[/catalog/recommendations] lookup failed for trackId=${trackId}:`, e.message);
       }
     }
 
     const result = albums.slice(0, 8);
-    console.log(`[/spotify/recommendations] returning ${result.length} albums`);
+    console.log(`[/catalog/recommendations] returning ${result.length} albums`);
     cacheSet(CACHE_KEY, result, TTL_6H);
     await setCache(CACHE_KEY, result);
     res.json(result);
   } catch (err) {
-    console.warn('[/spotify/recommendations] failed:', err.message ?? err);
+    console.warn('[/catalog/recommendations] failed:', err.message ?? err);
     res.json([]);
   }
 });
@@ -2124,7 +2121,7 @@ app.get('/api/album-durations', [
   const result = {};
 
   await Promise.all(ids.map(async (id) => {
-    const CACHE_KEY = `spotify_album_tracks_${id}`;
+    const CACHE_KEY = `catalog_album_tracks_${id}`;
     let tracks = cacheGet(CACHE_KEY);
     if (!tracks) tracks = await getCached(CACHE_KEY, TTL_24H);
     if (!tracks) {
@@ -2296,9 +2293,9 @@ app.get('/api/admin/purge-home-cache', requireAdmin, async (req, res) => {
 app.get('/api/admin/purge-artist-album-cache', requireAdmin, async (req, res) => {
   try {
     for (const key of memCache.keys()) {
-      if (key.startsWith('spotify_artist_albums_')) memCache.delete(key);
+      if (key.startsWith('catalog_artist_albums_')) memCache.delete(key);
     }
-    await deleteCachePrefix('spotify_artist_albums_');
+    await deleteCachePrefix('catalog_artist_albums_');
     console.log('[/api/admin/purge-artist-album-cache] done.');
     res.json({ success: true });
   } catch (err) {
@@ -2613,7 +2610,7 @@ app.post('/api/delete-cover', requireAuth, [
 
 // ── Featured Playlists ────────────────────────────────────────────────────────
 
-// Search Apple Music for a single album by artist + title. Returns a SpotifyAlbum-compatible object.
+// Search Apple Music for a single album by artist + title. Returns a CatalogAlbum-compatible object.
 async function searchAMAlbum(artist, title, attempt = 0) {
   const term = encodeURIComponent(`${title} ${artist}`);
   const fallback = { id: `fp-${artist}-${title}`.replace(/\s+/g, '-').toLowerCase(), title, artist, year: 0, artworkUrl: '' };

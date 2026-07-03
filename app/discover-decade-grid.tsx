@@ -11,7 +11,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
 import { useAlbums } from '@/context/AlbumsContext';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
@@ -22,7 +22,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Module-level cache + shared fetch promise ────────────────────────────────
 
-const cache: Record<string, SpotifyAlbum[]> = {};
+const cache: Record<string, CatalogAlbum[]> = {};
 let loadPromise: Promise<void> | null = null;
 
 function loadDecades(): Promise<void> {
@@ -32,7 +32,7 @@ function loadDecades(): Promise<void> {
   loadPromise = (async () => {
     const res = await fetch(`${API_URL}/decades`);
     if (!res.ok) throw new Error(`/decades → ${res.status}`);
-    const data: Record<string, SpotifyAlbum[]> = await res.json();
+    const data: Record<string, CatalogAlbum[]> = await res.json();
     for (const [k, v] of Object.entries(data)) cache[k] = v;
   })().catch((err) => {
     console.error('[DecadeGrid] loadDecades failed:', err?.message ?? err);
@@ -61,10 +61,10 @@ export default function DecadeGridScreen() {
   const loggedIds   = new Set(loggedAlbums.map((a) => a.id));
   const norm        = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const loggedKeys  = new Set(loggedAlbums.map((a) => `${norm(a.title)}::${norm(a.artist)}`));
-  const isLogged    = (album: SpotifyAlbum) =>
+  const isLogged    = (album: CatalogAlbum) =>
     loggedIds.has(album.id) || loggedKeys.has(`${norm(album.title)}::${norm(album.artist)}`);
 
-  const [albums,  setAlbums]  = useState<SpotifyAlbum[]>(() => cache[decade ?? ''] ?? []);
+  const [albums,  setAlbums]  = useState<CatalogAlbum[]>(() => cache[decade ?? ''] ?? []);
   const [loading, setLoading] = useState(!cache[decade ?? '']);
 
   useEffect(() => {
@@ -80,11 +80,11 @@ export default function DecadeGridScreen() {
     });
   }, [decade]);
 
-  function handlePress(album: SpotifyAlbum) {
+  function handlePress(album: CatalogAlbum) {
     navigateToAlbum(router, album);
   }
 
-  const padded = Array.from({ length: TOTAL }, (_, i) => albums[i] ?? null) as (SpotifyAlbum | null)[];
+  const padded = Array.from({ length: TOTAL }, (_, i) => albums[i] ?? null) as (CatalogAlbum | null)[];
 
   const loggedInGrid = albums.filter(a => isLogged(a)).length;
   const listenedPct  = albums.length > 0 ? Math.round(loggedInGrid / albums.length * 100) : 0;

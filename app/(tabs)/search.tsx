@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, PendingAlbum, WantToListenAlbum } from '@/context/AlbumsContext';
-import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
@@ -50,9 +50,9 @@ type PlaylistSearchResult = {
 };
 
 type ResultItem =
-  | (SpotifyAlbum  & { kind: 'album'  })
-  | (SpotifyTrack  & { kind: 'song'   })
-  | (SpotifyArtist & { kind: 'artist' });
+  | (CatalogAlbum  & { kind: 'album'  })
+  | (CatalogTrack  & { kind: 'song'   })
+  | (CatalogArtist & { kind: 'artist' });
 
 // A recent-search entry stores the full item so we can show artwork + subtitle.
 type RecentItem = {
@@ -100,9 +100,9 @@ async function searchBackend(tab: SearchTab, query: string): Promise<ResultItem[
   if (!res.ok) throw new Error(`/search → ${res.status}`);
   const data = await res.json();
 
-  if (tab === 'albums')  return (data as SpotifyAlbum[]).map(a => ({ kind: 'album'  as const, ...a }));
-  if (tab === 'songs')   return (data as SpotifyTrack[]).map(t => ({ kind: 'song'   as const, ...t }));
-  return                        (data as SpotifyArtist[]).map(a => ({ kind: 'artist' as const, ...a }));
+  if (tab === 'albums')  return (data as CatalogAlbum[]).map(a => ({ kind: 'album'  as const, ...a }));
+  if (tab === 'songs')   return (data as CatalogTrack[]).map(t => ({ kind: 'song'   as const, ...t }));
+  return                        (data as CatalogArtist[]).map(a => ({ kind: 'artist' as const, ...a }));
 }
 
 async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
@@ -233,7 +233,7 @@ function resultToRecentItem(item: ResultItem): RecentItem {
 function AlbumRow({
   item, isDark, colors, isBookmarked, isLogged, onView, onLog, onBookmark, onSaveRecent,
 }: {
-  item: SpotifyAlbum & { kind: 'album' };
+  item: CatalogAlbum & { kind: 'album' };
   isDark: boolean;
   colors: typeof Colors.light;
   isBookmarked: boolean;
@@ -283,7 +283,7 @@ function AlbumRow({
 }
 
 function SongRow({ item, isDark, colors, onSaveRecent, onPress }: {
-  item: SpotifyTrack & { kind: 'song' };
+  item: CatalogTrack & { kind: 'song' };
   isDark: boolean;
   colors: typeof Colors.light;
   onSaveRecent: () => void;
@@ -313,7 +313,7 @@ function SongRow({ item, isDark, colors, onSaveRecent, onPress }: {
 }
 
 function ArtistRow({ item, isDark, colors, onPress, onSaveRecent }: {
-  item: SpotifyArtist & { kind: 'artist' };
+  item: CatalogArtist & { kind: 'artist' };
   isDark: boolean;
   colors: typeof Colors.light;
   onPress: () => void;
@@ -753,14 +753,14 @@ export default function SearchScreen() {
     }
   }
 
-  function handleLogAlbum(item: SpotifyAlbum) {
+  function handleLogAlbum(item: CatalogAlbum) {
     router.push({
       pathname: '/album-detail',
       params: { id: item.id, title: item.title, artist: item.artist, year: String(item.year), artworkUrl: item.artworkUrl },
     });
   }
 
-  function handleLogDirect(item: SpotifyAlbum) {
+  function handleLogDirect(item: CatalogAlbum) {
     const pending: PendingAlbum = {
       spotifyId: item.id,
       title: item.title,
@@ -772,7 +772,7 @@ export default function SearchScreen() {
     router.push('/log-album');
   }
 
-  function handleToggleBookmark(item: SpotifyAlbum) {
+  function handleToggleBookmark(item: CatalogAlbum) {
     if (wantToListen.find((a) => a.id === item.id)) {
       removeFromWantToListen(item.id);
     } else {

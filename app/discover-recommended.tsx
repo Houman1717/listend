@@ -4,7 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 import { discoverSections } from '@/context/discoverSections';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -18,13 +18,13 @@ export default function DiscoverRecommendedScreen() {
   const router = useRouter();
   const cw = cardWidth(width);
 
-  const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => discoverSections.recommended);
+  const [albums, setAlbums] = useState<CatalogAlbum[]>(() => discoverSections.recommended);
 
   useEffect(() => {
     if (albums.length > 0) return;
     fetch(`${API_URL}/discover/recommended`)
       .then(r => r.json())
-      .then((data: SpotifyAlbum[]) => { discoverSections.recommended = data; setAlbums(data); })
+      .then((data: CatalogAlbum[]) => { discoverSections.recommended = data; setAlbums(data); })
       .catch(console.error);
   }, []);
 

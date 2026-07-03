@@ -67,29 +67,33 @@ export function SongInfoModal({
   const [fetchedDate,       setFetchedDate]       = useState<string>('');
   const [fetchedAlbumId,    setFetchedAlbumId]    = useState<string>('');
   const [fetchedAlbumTitle, setFetchedAlbumTitle] = useState<string>('');
+  const [fetchedArtist,     setFetchedArtist]     = useState<string>('');
 
   useEffect(() => {
     setFetchedDate('');
     setFetchedAlbumId('');
     setFetchedAlbumTitle('');
+    setFetchedArtist('');
     if (!song) return;
-    if ((song.releaseDate && song.albumId && song.albumTitle) || !song.id) return;
+    if ((song.releaseDate && song.albumId && song.albumTitle && song.artist) || !song.id) return;
     let cancelled = false;
-    fetch(`${API_URL}/spotify/track/${song.id}`)
+    fetch(`${API_URL}/catalog/track/${song.id}`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (cancelled) return;
         if (data?.releaseDate) setFetchedDate(data.releaseDate);
         if (data?.albumId)     setFetchedAlbumId(data.albumId);
         if (data?.albumTitle)  setFetchedAlbumTitle(data.albumTitle);
+        if (data?.artist)      setFetchedArtist(data.artist);
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [song?.id, song?.releaseDate, song?.albumId, song?.albumTitle]);
+  }, [song?.id, song?.releaseDate, song?.albumId, song?.albumTitle, song?.artist]);
 
   const displayDate       = formatReleaseDate(song?.releaseDate || fetchedDate || '');
   const displayAlbumId    = song?.albumId    || fetchedAlbumId;
   const displayAlbumTitle = song?.albumTitle || fetchedAlbumTitle;
+  const displayArtist     = song?.artist     || fetchedArtist;
 
   return (
     <Modal
@@ -134,7 +138,7 @@ export function SongInfoModal({
                 onAlbumPress?.({
                   id:         displayAlbumId,
                   title:      displayAlbumTitle,
-                  artist:     song?.artist ?? '',
+                  artist:     displayArtist,
                   year:       (song?.releaseDate || fetchedDate || '').slice(0, 4),
                   artworkUrl: song?.artworkUrl ?? '',
                 });
@@ -152,14 +156,14 @@ export function SongInfoModal({
             <Pressable
               hitSlop={8}
               onPress={() => {
-                if (!song?.artist) return;
+                if (!displayArtist) return;
                 onClose();
-                onArtistPress?.(song.artist);
+                onArtistPress?.(displayArtist);
               }}
               style={s.artistRow}
             >
               <Text style={[s.artist, { color: colorsProp ? colorsProp.tint : '#D4A017' }]} numberOfLines={1}>
-                {song?.artist}
+                {displayArtist}
               </Text>
               <FontAwesome name="chevron-right" size={10} color={colorsProp ? colorsProp.tint : '#D4A017'} />
             </Pressable>

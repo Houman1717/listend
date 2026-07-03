@@ -52,7 +52,7 @@ type LastfmArtist = {
   similar: { name: string; url: string; imageUrl: string | null }[];
 };
 
-type SpotifyTrack = {
+type CatalogTrack = {
   number: number;
   id: string;
   title: string;
@@ -61,7 +61,7 @@ type SpotifyTrack = {
   durationMs: number;
 };
 
-type SpotifyAlbum = {
+type CatalogAlbum = {
   id: string;
   title: string;
   artworkUrl: string;
@@ -73,11 +73,11 @@ type SpotifyAlbum = {
   url?: string;
 };
 
-type SpotifyDiscography = {
-  albums: SpotifyAlbum[];
-  epsAndMixtapes: SpotifyAlbum[];
-  collections: SpotifyAlbum[];
-  live: SpotifyAlbum[];
+type CatalogDiscography = {
+  albums: CatalogAlbum[];
+  epsAndMixtapes: CatalogAlbum[];
+  collections: CatalogAlbum[];
+  live: CatalogAlbum[];
 };
 
 const DISC_TABS = [
@@ -97,7 +97,7 @@ function SectionHeader({ label, color }: { label: string; color: string }) {
 function TrackRow({
   track, index, borderColor, textColor, subColor,
 }: {
-  track: SpotifyTrack;
+  track: CatalogTrack;
   index: number;
   borderColor: string;
   textColor: string;
@@ -144,12 +144,12 @@ export default function ArtistDetailScreen() {
   const [lastfmLoading, setLastfmLoading] = useState(true);
   const [lastfmError, setLastfmError]     = useState('');
 
-  // Spotify state
-  const [topTracks, setTopTracks]         = useState<SpotifyTrack[] | null>(null);
+  // Catalog state
+  const [topTracks, setTopTracks]         = useState<CatalogTrack[] | null>(null);
   const [tracksLoading, setTracksLoading] = useState(true);
   const [tracksError, setTracksError]     = useState('');
 
-  const [discography, setDiscography]     = useState<SpotifyDiscography | null>(null);
+  const [discography, setDiscography]     = useState<CatalogDiscography | null>(null);
   const [albumsLoading, setAlbumsLoading] = useState(true);
   const [albumsError, setAlbumsError]     = useState('');
 
@@ -173,16 +173,16 @@ export default function ArtistDetailScreen() {
   const { loggedAlbums }               = useAlbums();
 
   // Prevent double-firing if effect runs twice (Strict Mode / nav back)
-  const spotifyFetched = useRef(false);
+  const catalogFetched = useRef(false);
 
   // ── Listened % — derived from already-fetched discography + logged albums ────
   const albumsOnly   = discography?.albums ?? [];
   const totalAlbums  = albumsOnly.length;
-  const listenedCount = totalAlbums === 0 ? 0 : albumsOnly.filter(spotifyAlbum => {
+  const listenedCount = totalAlbums === 0 ? 0 : albumsOnly.filter(catalogAlbum => {
     const artistLower = artistName.toLowerCase();
     return loggedAlbums.some(logged =>
-      logged.id === spotifyAlbum.id ||
-      (logged.title.toLowerCase() === spotifyAlbum.title.toLowerCase() &&
+      logged.id === catalogAlbum.id ||
+      (logged.title.toLowerCase() === catalogAlbum.title.toLowerCase() &&
        logged.artist.toLowerCase() === artistLower)
     );
   }).length;
@@ -224,14 +224,14 @@ export default function ArtistDetailScreen() {
     return () => { cancelled = true; };
   }, [artistName]);
 
-  // ── Resolve ID then fetch Spotify data (sequential, single effect) ─────────
+  // ── Resolve ID then fetch catalog data (sequential, single effect) ─────────
   useEffect(() => {
     if (!artistName) return;
     let cancelled = false;
-    spotifyFetched.current = false;
+    catalogFetched.current = false;
 
-    async function loadSpotifyData() {
-      // ── Step 1: resolve Spotify artist ID ───────────────────────────────────
+    async function loadCatalogData() {
+      // ── Step 1: resolve catalog artist ID ───────────────────────────────────
       let artistId = paramId;
 
       if (!artistId) {
@@ -264,12 +264,12 @@ export default function ArtistDetailScreen() {
       }
 
       if (cancelled || !artistId) return;
-      if (spotifyFetched.current) return;
-      spotifyFetched.current = true;
+      if (catalogFetched.current) return;
+      catalogFetched.current = true;
 
       // ── Step 2: fetch top-tracks and albums in parallel ──────────────────────
-      const tracksUrl = `${API_URL}/spotify/artist/${artistId}/top-tracks`;
-      const albumsUrl = `${API_URL}/spotify/artist/${artistId}/albums`;
+      const tracksUrl = `${API_URL}/catalog/artist/${artistId}/top-tracks`;
+      const albumsUrl = `${API_URL}/catalog/artist/${artistId}/albums`;
       console.log('[artist-detail] fetching top-tracks:', tracksUrl);
       console.log('[artist-detail] fetching albums:    ', albumsUrl);
 
@@ -297,7 +297,7 @@ export default function ArtistDetailScreen() {
           return r.ok ? r.json() : r.json().then(b => Promise.reject(`HTTP ${r.status}: ${JSON.stringify(b)}`));
         })
         .then(data => {
-          const disc: SpotifyDiscography = {
+          const disc: CatalogDiscography = {
             albums:         Array.isArray(data?.albums)         ? data.albums         : [],
             epsAndMixtapes: Array.isArray(data?.epsAndMixtapes) ? data.epsAndMixtapes : [],
             collections:    Array.isArray(data?.collections)    ? data.collections    : [],
@@ -314,7 +314,7 @@ export default function ArtistDetailScreen() {
         .finally(() => { if (!cancelled) setAlbumsLoading(false); });
     }
 
-    loadSpotifyData();
+    loadCatalogData();
     return () => { cancelled = true; };
   }, [artistName, paramId]); // paramId is stable from route; artistName drives re-run when pushing a new artist
 
@@ -334,14 +334,14 @@ export default function ArtistDetailScreen() {
     showToast(!liked ? 'Artist liked' : 'Artist removed');
   }
 
-  function handleAlbumPress(album: SpotifyAlbum) {
+  function handleAlbumPress(album: CatalogAlbum) {
     router.push({
       pathname: '/album-detail',
       params: { id: album.id, title: album.title, artist: artistName, year: String(album.year), artworkUrl: album.artworkUrl },
     });
   }
 
-  function renderAlbumRow(items: SpotifyAlbum[]) {
+  function renderAlbumRow(items: CatalogAlbum[]) {
     if (!items.length) return null;
     return (
       <ScrollView

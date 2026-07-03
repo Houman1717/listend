@@ -4,7 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
-import { SpotifyTrack } from '@/context/SpotifyService';
+import { CatalogTrack } from '@/context/CatalogService';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { discoverSections } from '@/context/discoverSections';
 
@@ -19,7 +19,7 @@ export default function DiscoverTopSongsScreen() {
   const router = useRouter();
   const cw = cardWidth(width);
 
-  const [songs, setSongs] = useState<SpotifyTrack[]>(() => discoverSections.topSongs);
+  const [songs, setSongs] = useState<CatalogTrack[]>(() => discoverSections.topSongs);
   const [loading, setLoading] = useState(discoverSections.topSongs.length === 0);
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
@@ -27,7 +27,7 @@ export default function DiscoverTopSongsScreen() {
     if (songs.length > 0) return;
     fetch(`${API_URL}/discover/top-songs`)
       .then(r => r.json())
-      .then((data: SpotifyTrack[]) => {
+      .then((data: CatalogTrack[]) => {
         discoverSections.topSongs = data;
         setSongs(data);
       })

@@ -5,7 +5,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
 import { supabase } from '@/lib/supabase';
@@ -29,18 +29,18 @@ export default function FeaturedPlaylistScreen() {
   const loggedIds   = new Set(loggedAlbums.map(a => a.id));
   const norm        = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const loggedKeys  = new Set(loggedAlbums.map(a => `${norm(a.title)}::${norm(a.artist)}`));
-  const isLogged    = (album: SpotifyAlbum) =>
+  const isLogged    = (album: CatalogAlbum) =>
     loggedIds.has(album.id) || loggedKeys.has(`${norm(album.title)}::${norm(album.artist)}`);
   const { isLiked, toggleLike } = useLikedFeaturedPlaylists();
 
-  const [albums, setAlbums] = useState<SpotifyAlbum[]>([]);
+  const [albums, setAlbums] = useState<CatalogAlbum[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
     fetch(`${API_URL}/api/featured-playlists/${id}`)
       .then(r => r.json())
-      .then((data: SpotifyAlbum[]) => { setAlbums(data); setLoading(false); })
+      .then((data: CatalogAlbum[]) => { setAlbums(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [id]);
 

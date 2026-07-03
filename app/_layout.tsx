@@ -76,7 +76,7 @@ export default function RootLayout() {
 
 // Watches auth state and redirects to login or app accordingly.
 function AuthGate() {
-  const { session, loading } = useAuth();
+  const { session, loading, needsOnboarding, clearNeedsOnboarding } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -89,8 +89,12 @@ function AuthGate() {
       router.replace('/login');
     } else if (session && inAuthScreen) {
       router.replace('/(tabs)');
+      if (needsOnboarding) {
+        router.push('/edit-profile');
+        clearNeedsOnboarding();
+      }
     }
-  }, [session, loading, segments]);
+  }, [session, loading, segments, needsOnboarding]);
 
   // Navigate to the right screen when user taps a push notification
   useEffect(() => {

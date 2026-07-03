@@ -8,6 +8,8 @@ import {
   Dimensions,
   Modal,
   SafeAreaView,
+  Linking,
+  Platform,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -836,7 +838,9 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
           {/* Help & Feedback */}
-          <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => Linking.openURL('https://listend.uk/feedback')}>
             <View style={ss.iconWrap}>
               <FontAwesome name="question-circle-o" size={16} color={accentColor} />
             </View>
@@ -847,7 +851,14 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
           {/* Rate Us */}
-          <Pressable style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}>
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => {
+              const url = Platform.OS === 'ios'
+                ? 'https://apps.apple.com/app/id6768100093?action=write-review'
+                : 'market://details?id=com.houman.listend';
+              Linking.openURL(url);
+            }}>
             <View style={ss.iconWrap}>
               <FontAwesome name="star-o" size={16} color={accentColor} />
             </View>

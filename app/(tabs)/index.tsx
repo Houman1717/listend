@@ -19,7 +19,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useAlbums } from '@/context/AlbumsContext';
@@ -103,15 +103,15 @@ const FRIEND_COMMENTS: ReviewComment[] = [
 // ─── Module-level cache — persists across navigations ─────────────────────────
 
 const cache: {
-  albums?:         SpotifyAlbum[];
-  songs?:          SpotifyTrack[];
-  artists?:        SpotifyArtist[];
+  albums?:         CatalogAlbum[];
+  songs?:          CatalogTrack[];
+  artists?:        CatalogArtist[];
   popularReviews?: PopularReview[];
 } = {};
 
 // ─── Fetcher ──────────────────────────────────────────────────────────────────
 
-async function fetchHome(): Promise<{ albums: SpotifyAlbum[]; songs: SpotifyTrack[]; artists: SpotifyArtist[] }> {
+async function fetchHome(): Promise<{ albums: CatalogAlbum[]; songs: CatalogTrack[]; artists: CatalogArtist[] }> {
   const res = await fetch(`${API_URL}/home`);
   if (!res.ok) throw new Error(`/home → ${res.status}`);
   return res.json();
@@ -277,7 +277,7 @@ function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumbe
 
 // ─── Album card ───────────────────────────────────────────────────────────────
 
-function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; isDark: boolean; isLogged?: boolean; onPress: () => void }) {
+function AlbumCard({ item, isDark, isLogged, onPress }: { item: CatalogAlbum; isDark: boolean; isLogged?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ALBUM_CARD, opacity: pressed ? 0.7 : 1 }]}>
       <View>
@@ -298,7 +298,7 @@ function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; is
 
 // ─── Song card ────────────────────────────────────────────────────────────────
 
-function SongCard({ item, isDark, onPress }: { item: SpotifyTrack; isDark: boolean; onPress: () => void }) {
+function SongCard({ item, isDark, onPress }: { item: CatalogTrack; isDark: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: SONG_CARD, opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
@@ -314,7 +314,7 @@ function SongCard({ item, isDark, onPress }: { item: SpotifyTrack; isDark: boole
 
 // ─── Artist card (circular) ───────────────────────────────────────────────────
 
-function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: boolean; onPress: () => void }) {
+function ArtistCard({ item, isDark, onPress }: { item: CatalogArtist; isDark: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ARTIST_CARD, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
@@ -449,6 +449,7 @@ function PopularReviewModal({
   onClose,
   onAlbumPress,
   onUsernamePress,
+  onAuthorPress,
   onReport,
   liked,
   onLike,
@@ -463,6 +464,7 @@ function PopularReviewModal({
   onClose: () => void;
   onAlbumPress: () => void;
   onUsernamePress?: (username: string) => void;
+  onAuthorPress?: (userId: string) => void;
   onReport?: () => void;
   liked: boolean;
   onLike: () => void;
@@ -519,8 +521,8 @@ function PopularReviewModal({
             {/* Author */}
             <Pressable
               style={rm.authorRow}
-              onPress={() => { onClose(); onUsernamePress?.(review.username); }}
-              disabled={!onUsernamePress}>
+              onPress={() => { onClose(); onAuthorPress?.(review.userId); }}
+              disabled={!onAuthorPress}>
               <View style={[rm.avatar, { backgroundColor: avatarColor(review.username), overflow: 'hidden' }]}>
                 {review.avatarUrl
                   ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
@@ -1224,9 +1226,9 @@ export default function HomeScreen() {
   const { loggedAlbums } = useAlbums();
   const loggedIds = new Set(loggedAlbums.map((a) => a.id));
 
-  const [albums,         setAlbums]         = useState<SpotifyAlbum[]>(cache.albums         ?? []);
-  const [songs,          setSongs]          = useState<SpotifyTrack[]>(cache.songs          ?? []);
-  const [artists,        setArtists]        = useState<SpotifyArtist[]>(cache.artists       ?? []);
+  const [albums,         setAlbums]         = useState<CatalogAlbum[]>(cache.albums         ?? []);
+  const [songs,          setSongs]          = useState<CatalogTrack[]>(cache.songs          ?? []);
+  const [artists,        setArtists]        = useState<CatalogArtist[]>(cache.artists       ?? []);
   const [popularReviews, setPopularReviews] = useState<PopularReview[]>(cache.popularReviews ?? []);
   const [loading,        setLoading]        = useState(!cache.albums);
   const [friendsListened,        setFriendsListened]        = useState<FriendEntry[]>([]);
@@ -1435,21 +1437,21 @@ export default function HomeScreen() {
     }
   }
 
-  function handleAlbumPress(item: SpotifyAlbum) {
+  function handleAlbumPress(item: CatalogAlbum) {
     router.push({
       pathname: '/album-detail',
       params: { id: item.id, title: item.title, artist: item.artist, year: String(item.year), artworkUrl: item.artworkUrl },
     });
   }
 
-  function handleArtistPress(item: SpotifyArtist) {
+  function handleArtistPress(item: CatalogArtist) {
     router.push({
       pathname: '/artist-detail',
       params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl },
     });
   }
 
-  function handleSongPress(item: SpotifyTrack) {
+  function handleSongPress(item: CatalogTrack) {
     setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate });
   }
 
@@ -1507,7 +1509,7 @@ export default function HomeScreen() {
               commentCount={commentsMap.has(item.id) ? (commentsMap.get(item.id)?.length ?? 0) : item.commentCount}
               isDark={isDark}
               colors={colors}
-              onUsernamePress={() => navigateToProfile(item.username, router)}
+              onUsernamePress={() => router.push({ pathname: '/user-profile', params: { userId: item.userId } } as any)}
             />
           )}
           ListFooterComponent={
@@ -1755,6 +1757,7 @@ export default function HomeScreen() {
           liked={likedReviews.has(expandedReview.id)}
           onLike={() => handleLikeReview(expandedReview.id)}
           onUsernamePress={(username) => { setExpandedReview(null); setExpandedCommentsId(null); navigateToProfile(username, router); }}
+          onAuthorPress={(userId) => { setExpandedReview(null); setExpandedCommentsId(null); router.push({ pathname: '/user-profile', params: { userId } } as any); }}
           onReport={expandedReview.userId !== user?.id ? () => reportContent({
             contentType: 'review',
             contentId: expandedReview.id,

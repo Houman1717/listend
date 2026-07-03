@@ -11,7 +11,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ const GENRE_DISPLAY_NAMES: Record<string, string> = {
 
 // ─── Module-level cache + shared fetch promise ────────────────────────────────
 
-const cache: Record<string, SpotifyAlbum[]> = {};
+const cache: Record<string, CatalogAlbum[]> = {};
 let loadPromise: Promise<void> | null = null;
 
 function loadGenres(): Promise<void> {
@@ -41,7 +41,7 @@ function loadGenres(): Promise<void> {
   loadPromise = (async () => {
     const res = await fetch(`${API_URL}/genres`);
     if (!res.ok) throw new Error(`/genres → ${res.status}`);
-    const data: Record<string, SpotifyAlbum[]> = await res.json();
+    const data: Record<string, CatalogAlbum[]> = await res.json();
     for (const [label, albums] of Object.entries(data)) {
       cache[label] = albums;
     }
@@ -62,7 +62,7 @@ function AlbumCard({
   onPress,
   isDark,
 }: {
-  album: SpotifyAlbum;
+  album: CatalogAlbum;
   onPress: () => void;
   isDark: boolean;
 }) {
@@ -94,11 +94,11 @@ function GenreSection({
   isDark,
 }: {
   label: string;
-  onAlbumPress: (album: SpotifyAlbum) => void;
+  onAlbumPress: (album: CatalogAlbum) => void;
   colors: any;
   isDark: boolean;
 }) {
-  const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => cache[label] ?? []);
+  const [albums, setAlbums] = useState<CatalogAlbum[]>(() => cache[label] ?? []);
   const [loading, setLoading] = useState(!cache[label]);
 
   useEffect(() => {
@@ -151,7 +151,7 @@ export default function DiscoverGenresScreen() {
     loadGenres(); // prefetch all genres on mount
   }, []);
 
-  function handleAlbumPress(album: SpotifyAlbum) {
+  function handleAlbumPress(album: CatalogAlbum) {
     router.push({
       pathname: '/album-detail',
       params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },

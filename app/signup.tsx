@@ -57,24 +57,20 @@ export default function SignUpScreen() {
       return;
     }
 
-    const userId = data.user?.id;
-    if (userId) {
-      // Best-effort immediate insert (works when email confirmation is off and a
-      // session exists). When confirmation is on this no-ops; ensureProfile picks
-      // it up from metadata on first sign-in instead.
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({ id: userId, username: trimmedName, display_name: trimmedName });
-
-      if (profileError) {
-        console.warn('[SignUp] profile insert error:', profileError.message);
-      }
-
+    if (data.user) {
       capture('sign_up', { method: 'email' });
     }
 
     setLoading(false);
-    setAwaitingConfirmation(true);
+
+    // Email confirmation is currently off, so signUp() already returns a live
+    // session — ensureProfile (AuthContext) creates the profiles row on the
+    // resulting SIGNED_IN event and AuthGate redirects into the app. Only
+    // show the "check your email" screen if a session wasn't issued (i.e.
+    // confirmation is required).
+    if (!data.session) {
+      setAwaitingConfirmation(true);
+    }
   }
 
   return (

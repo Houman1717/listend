@@ -4,7 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 import { discoverSections } from '@/context/discoverSections';
 import { useAlbums } from '@/context/AlbumsContext';
 
@@ -22,13 +22,13 @@ export default function DiscoverTopRatedScreen() {
   const { loggedAlbums } = useAlbums();
   const loggedIds = new Set(loggedAlbums.map((a) => a.id));
 
-  const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => discoverSections.topRated);
+  const [albums, setAlbums] = useState<CatalogAlbum[]>(() => discoverSections.topRated);
 
   useEffect(() => {
     if (albums.length > 0) return;
     fetch(`${API_URL}/discover/top-rated`)
       .then(r => r.json())
-      .then((data: SpotifyAlbum[]) => { discoverSections.topRated = data; setAlbums(data); })
+      .then((data: CatalogAlbum[]) => { discoverSections.topRated = data; setAlbums(data); })
       .catch(console.error);
   }, []);
 

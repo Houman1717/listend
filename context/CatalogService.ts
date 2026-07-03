@@ -1,8 +1,8 @@
 // ─── Shared data types ─────────────────────────────────────────────────────────
-// All Spotify data now flows through the Railway backend.
+// All catalog data now flows through the Railway backend, backed by Apple Music.
 // These types describe the normalized shape the backend returns.
 
-export type SpotifyAlbum = {
+export type CatalogAlbum = {
   id: string;
   title: string;
   artist: string;
@@ -10,7 +10,7 @@ export type SpotifyAlbum = {
   artworkUrl: string;
 };
 
-export type SpotifyTrack = {
+export type CatalogTrack = {
   id: string;
   title: string;
   artist: string;
@@ -18,7 +18,7 @@ export type SpotifyTrack = {
   releaseDate?: string;
 };
 
-export type SpotifyArtist = {
+export type CatalogArtist = {
   id: string;
   name: string;
   genre: string;

@@ -4,7 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 import { discoverSections } from '@/context/discoverSections';
 import { useAlbums } from '@/context/AlbumsContext';
 
@@ -22,13 +22,13 @@ export default function DiscoverAllTimeClassicsScreen() {
   const { loggedAlbums } = useAlbums();
   const loggedIds = new Set(loggedAlbums.map((a) => a.id));
 
-  const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => discoverSections.classics);
+  const [albums, setAlbums] = useState<CatalogAlbum[]>(() => discoverSections.classics);
 
   useEffect(() => {
     if (albums.length > 0) return;
     fetch(`${API_URL}/discover/classics`)
       .then(r => r.json())
-      .then((data: SpotifyAlbum[]) => { discoverSections.classics = data; setAlbums(data); })
+      .then((data: CatalogAlbum[]) => { discoverSections.classics = data; setAlbums(data); })
       .catch(console.error);
   }, []);
 

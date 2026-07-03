@@ -16,11 +16,11 @@ import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
-async function searchAlbums(query: string): Promise<SpotifyAlbum[]> {
+async function searchAlbums(query: string): Promise<CatalogAlbum[]> {
   const q = encodeURIComponent(query.trim());
   const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
   if (!res.ok) throw new Error(`/search → ${res.status}`);
@@ -36,7 +36,7 @@ function AlbumRow({
   isDark,
   colors,
 }: {
-  item: SpotifyAlbum;
+  item: CatalogAlbum;
   inPlaylist: boolean;
   onAdd: () => void;
   isDark: boolean;
@@ -86,7 +86,7 @@ export default function PlaylistAddAlbumsScreen() {
   const playlist = playlists.find((p) => p.id === playlistId);
 
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SpotifyAlbum[]>([]);
+  const [results, setResults] = useState<CatalogAlbum[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   // Track albums added this session so the checkmark appears instantly
@@ -127,7 +127,7 @@ export default function PlaylistAddAlbumsScreen() {
     setSearched(false);
   }
 
-  function handleAdd(album: SpotifyAlbum) {
+  function handleAdd(album: CatalogAlbum) {
     if (!playlist) return;
     addAlbumToPlaylist(playlist.id, album.id);
     setAddedIds((prev) => new Set([...prev, album.id]));

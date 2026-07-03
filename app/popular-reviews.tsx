@@ -18,7 +18,7 @@ import { ReviewComment, CommentsSection, avatarColor } from '@/components/Review
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { ProBadge } from '@/components/ProBadge';
 
@@ -264,7 +264,7 @@ export default function PopularReviewsScreen() {
       const q = encodeURIComponent(`${title} ${artist}`);
       const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
       if (res.ok) {
-        const data: SpotifyAlbum[] = await res.json();
+        const data: CatalogAlbum[] = await res.json();
         const match = data[0];
         if (match) {
           router.push({ pathname: '/album-detail', params: { id: match.id, title: match.title, artist: match.artist, year: String(match.year), artworkUrl: match.artworkUrl } });

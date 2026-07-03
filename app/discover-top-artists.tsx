@@ -4,7 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { SpotifyArtist } from '@/context/SpotifyService';
+import { CatalogArtist } from '@/context/CatalogService';
 import { discoverSections } from '@/context/discoverSections';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -20,14 +20,14 @@ export default function DiscoverTopArtistsScreen() {
 
   const cardSize = (width - 32 - GAP * (COLS - 1)) / COLS;
 
-  const [artists, setArtists] = useState<SpotifyArtist[]>(() => discoverSections.topArtists);
+  const [artists, setArtists] = useState<CatalogArtist[]>(() => discoverSections.topArtists);
   const [loading, setLoading] = useState(discoverSections.topArtists.length === 0);
 
   useEffect(() => {
     if (artists.length > 0) return;
     fetch(`${API_URL}/discover/top-artists`)
       .then(r => r.json())
-      .then((data: SpotifyArtist[]) => {
+      .then((data: CatalogArtist[]) => {
         discoverSections.topArtists = data;
         setArtists(data);
       })

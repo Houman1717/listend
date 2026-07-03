@@ -13,7 +13,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 import { useAlbums } from '@/context/AlbumsContext';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Fetch strategies ─────────────────────────────────────────────────────────
 
-async function fetchForCategory(category: string, value?: string): Promise<SpotifyAlbum[]> {
+async function fetchForCategory(category: string, value?: string): Promise<CatalogAlbum[]> {
   switch (category) {
     case 'new-releases': {
       const res = await fetch(`${API_URL}/discover/new-releases`);
@@ -42,13 +42,13 @@ async function fetchForCategory(category: string, value?: string): Promise<Spoti
     case 'genre': {
       const res = await fetch(`${API_URL}/genres`);
       if (!res.ok) throw new Error(`/genres → ${res.status}`);
-      const data: Record<string, SpotifyAlbum[]> = await res.json();
+      const data: Record<string, CatalogAlbum[]> = await res.json();
       return data[value ?? ''] ?? [];
     }
     case 'decade': {
       const res = await fetch(`${API_URL}/decades`);
       if (!res.ok) throw new Error(`/decades → ${res.status}`);
-      const data: Record<string, SpotifyAlbum[]> = await res.json();
+      const data: Record<string, CatalogAlbum[]> = await res.json();
       return data[value ?? ''] ?? [];
     }
     default:
@@ -70,7 +70,7 @@ export default function DiscoverResultsScreen() {
     title: string;
   }>();
 
-  const [albums, setAlbums] = useState<SpotifyAlbum[]>([]);
+  const [albums, setAlbums] = useState<CatalogAlbum[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -83,7 +83,7 @@ export default function DiscoverResultsScreen() {
       .finally(() => setLoading(false));
   }, [category, value]);
 
-  function handleLog(album: SpotifyAlbum) {
+  function handleLog(album: CatalogAlbum) {
     router.push({
       pathname: '/album-detail',
       params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl },

@@ -1,13 +1,13 @@
-import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from './SpotifyService';
+import { CatalogAlbum, CatalogTrack, CatalogArtist } from './CatalogService';
 
 export const discoverSections: {
-  newReleases: SpotifyAlbum[];
-  popular: SpotifyAlbum[];
-  comingSoon: SpotifyAlbum[];
-  classics: SpotifyAlbum[];
-  topRated: SpotifyAlbum[];
-  topArtists: SpotifyArtist[];
-  topSongs: SpotifyTrack[];
+  newReleases: CatalogAlbum[];
+  popular: CatalogAlbum[];
+  comingSoon: CatalogAlbum[];
+  classics: CatalogAlbum[];
+  topRated: CatalogAlbum[];
+  topArtists: CatalogArtist[];
+  topSongs: CatalogTrack[];
 } = {
   newReleases: [],
   popular: [],

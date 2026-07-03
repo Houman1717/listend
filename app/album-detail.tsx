@@ -414,6 +414,7 @@ function AlbumReviewCard({
   onLike,
   onPress,
   onUsernamePress,
+  onAuthorPress,
   isDark,
   colors,
   borderColor,
@@ -433,6 +434,7 @@ function AlbumReviewCard({
   onLike: () => void;
   onPress?: () => void;
   onUsernamePress?: (username: string) => void;
+  onAuthorPress?: (userId: string) => void;
   isDark: boolean;
   colors: { text: string; subtext: string; background: string };
   borderColor: string;
@@ -463,7 +465,7 @@ function AlbumReviewCard({
       <View style={s.reviewCardHeader}>
         <Pressable
           style={[arc.userRow, { alignItems: 'flex-start' }]}
-          onPress={isOwn ? undefined : () => onUsernamePress?.(review.username)}
+          onPress={isOwn ? undefined : () => onAuthorPress?.(review.userId)}
           hitSlop={6}>
           <View style={[arc.avatar, { backgroundColor: isOwn ? '#D4A017' : avatarColor(review.username), overflow: 'hidden' }]}>
             {review.avatarUrl && !isOwn
@@ -572,6 +574,7 @@ function AlbumSingleReviewModal({
   onAddComment,
   onClose,
   onUsernamePress,
+  onAuthorPress,
   onReport,
   isDark,
   colors,
@@ -590,6 +593,7 @@ function AlbumSingleReviewModal({
   onAddComment: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
   onClose: () => void;
   onUsernamePress?: (username: string) => void;
+  onAuthorPress?: (userId: string) => void;
   onReport?: () => void;
   isDark: boolean;
   colors: { text: string; subtext: string; background: string };
@@ -663,8 +667,8 @@ function AlbumSingleReviewModal({
             {/* Author + date + rating */}
             <Pressable
               style={arm.authorRow}
-              onPress={() => { onClose(); onUsernamePress?.(review.username); }}
-              disabled={!onUsernamePress}>
+              onPress={() => { onClose(); onAuthorPress?.(review.userId); }}
+              disabled={!onAuthorPress}>
               <View style={[arm.avatar, { backgroundColor: avatarColor(review.username) }]}>
                 <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
               </View>
@@ -966,7 +970,7 @@ export default function AlbumDetailScreen() {
     if (!albumId) return;
     let cancelled = false;
 
-    fetch(`${API_URL}/spotify/album/${albumId}/tracks`)
+    fetch(`${API_URL}/catalog/album/${albumId}/tracks`)
       .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
       .then((data: Track[]) => {
         if (cancelled) return;
@@ -1029,7 +1033,7 @@ export default function AlbumDetailScreen() {
     if (!tracks || tracks.length === 0 || !albumId) return;
     let cancelled = false;
     const seedIds = tracks.slice(0, 2).map(t => `trackIds=${encodeURIComponent(t.id)}`).join('&');
-    fetch(`${API_URL}/spotify/recommendations?${seedIds}&excludeAlbumId=${encodeURIComponent(albumId)}`)
+    fetch(`${API_URL}/catalog/recommendations?${seedIds}&excludeAlbumId=${encodeURIComponent(albumId)}`)
       .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
       .then(data => { if (!cancelled && Array.isArray(data) && data.length > 0) setSimilar(data); })
       .catch(err => console.warn('[album-detail] recommendations error:', err));
@@ -1656,6 +1660,7 @@ export default function AlbumDetailScreen() {
                 onLike={() => handleToggleLike(item)}
                 onPress={() => handleReviewCardPress(item)}
                 onUsernamePress={(username) => navigateToProfile(username, router)}
+                onAuthorPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } } as any)}
                 onCommentCountPress={() => handleReviewCommentCountPress(item)}
                 commentCount={commentsMap.has(item.id) ? (commentsMap.get(item.id)?.length ?? 0) : item.commentCount}
                 currentLikeCount={reviewLikesMap.get(item.id)?.count ?? item.likeCount}
@@ -1905,6 +1910,7 @@ export default function AlbumDetailScreen() {
             label: 'review',
           }) : undefined}
           onUsernamePress={(username) => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); navigateToProfile(username, router); }}
+          onAuthorPress={(userId) => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); router.push({ pathname: '/user-profile', params: { userId } } as any); }}
           isDark={isDark}
           colors={colors}
         />
@@ -1977,6 +1983,7 @@ export default function AlbumDetailScreen() {
                 liked={reviewLikesMap.get(r.id)?.liked ?? false}
                 onLike={() => handleToggleLike(r)}
                 onUsernamePress={() => { setShowAllReviews(false); navigateToProfile(r.username, router); }}
+                onAuthorPress={(userId) => { setShowAllReviews(false); router.push({ pathname: '/user-profile', params: { userId } } as any); }}
                 onCommentCountPress={() => handleToggleComments(r.id)}
                 commentCount={commentsMap.has(r.id) ? (commentsMap.get(r.id)?.length ?? 0) : r.commentCount}
                 currentLikeCount={reviewLikesMap.get(r.id)?.count ?? r.likeCount}

@@ -4,7 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
-import { SpotifyAlbum } from '@/context/SpotifyService';
+import { CatalogAlbum } from '@/context/CatalogService';
 import { discoverSections } from '@/context/discoverSections';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -18,13 +18,13 @@ export default function DiscoverComingSoonScreen() {
   const router = useRouter();
   const cw = cardWidth(width);
 
-  const [albums, setAlbums] = useState<SpotifyAlbum[]>(() => discoverSections.comingSoon);
+  const [albums, setAlbums] = useState<CatalogAlbum[]>(() => discoverSections.comingSoon);
 
   useEffect(() => {
     if (albums.length > 0) return;
     fetch(`${API_URL}/discover/coming-soon`)
       .then(r => r.json())
-      .then((data: SpotifyAlbum[]) => { discoverSections.comingSoon = data; setAlbums(data); })
+      .then((data: CatalogAlbum[]) => { discoverSections.comingSoon = data; setAlbums(data); })
       .catch(console.error);
   }, []);
 

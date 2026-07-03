@@ -14,7 +14,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { discoverSections } from '@/context/discoverSections';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useAlbums } from '@/context/AlbumsContext';
@@ -60,8 +60,8 @@ const GENRE_DISPLAY_NAMES: Record<string, string> = {
 };
 
 async function fetchSections(): Promise<void> {
-  const safe = (p: Promise<SpotifyAlbum[]>) => p.catch(() => [] as SpotifyAlbum[]);
-  const fetchJson = (path: string): Promise<SpotifyAlbum[]> =>
+  const safe = (p: Promise<CatalogAlbum[]>) => p.catch(() => [] as CatalogAlbum[]);
+  const fetchJson = (path: string): Promise<CatalogAlbum[]> =>
     fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
 
   const fetchTyped = <T,>(path: string): Promise<T[]> =>
@@ -71,8 +71,8 @@ async function fetchSections(): Promise<void> {
     safe(fetchJson('/discover/new-releases')),
     safe(fetchJson('/discover/popular')),
     safe(fetchJson('/discover/top-rated')),
-    fetchTyped<SpotifyArtist>('/discover/top-artists').catch(() => [] as SpotifyArtist[]),
-    fetchTyped<SpotifyTrack>('/discover/top-songs').catch(() => [] as SpotifyTrack[]),
+    fetchTyped<CatalogArtist>('/discover/top-artists').catch(() => [] as CatalogArtist[]),
+    fetchTyped<CatalogTrack>('/discover/top-songs').catch(() => [] as CatalogTrack[]),
   ]);
 
   discoverSections.newReleases  = newReleases;
@@ -157,7 +157,7 @@ function ArtFallback({ size, radius, label }: { size: number; radius: number; la
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
-function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; isDark: boolean; isLogged?: boolean; onPress?: () => void }) {
+function AlbumCard({ item, isDark, isLogged, onPress }: { item: CatalogAlbum; isDark: boolean; isLogged?: boolean; onPress?: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: CARD_SIZE, opacity: pressed ? 0.7 : 1 }]}>
       <View>
@@ -178,7 +178,7 @@ function AlbumCard({ item, isDark, isLogged, onPress }: { item: SpotifyAlbum; is
   );
 }
 
-function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index: number; isDark: boolean; onPress: () => void }) {
+function SongCard({ item, index, isDark, onPress }: { item: CatalogTrack; index: number; isDark: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: CARD_SIZE, opacity: pressed ? 0.7 : 1 }]}>
       <View>
@@ -196,7 +196,7 @@ function SongCard({ item, index, isDark, onPress }: { item: SpotifyTrack; index:
   );
 }
 
-function ArtistCard({ item, isDark, onPress }: { item: SpotifyArtist; isDark: boolean; onPress: () => void }) {
+function ArtistCard({ item, isDark, onPress }: { item: CatalogArtist; isDark: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, { width: ARTIST_SIZE, alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
       {item.artworkUrl ? (
@@ -261,10 +261,10 @@ function AlbumRow({
   onAlbumPress,
   onSeeMore,
 }: {
-  data: SpotifyAlbum[];
+  data: CatalogAlbum[];
   isDark: boolean;
   loggedIds: Set<string>;
-  onAlbumPress: (album: SpotifyAlbum) => void;
+  onAlbumPress: (album: CatalogAlbum) => void;
   onSeeMore: () => void;
 }) {
   if (data.length === 0) return <PlaceholderRow isDark={isDark} onSeeMore={onSeeMore} />;
@@ -380,11 +380,11 @@ export default function DiscoverScreen() {
   const { loggedAlbums } = useAlbums();
   const loggedIds = new Set(loggedAlbums.map((a) => a.id));
 
-  const [newReleases,  setNewReleases]  = useState<SpotifyAlbum[]>(discoverSections.newReleases);
-  const [popular,      setPopular]      = useState<SpotifyAlbum[]>(discoverSections.popular);
-  const [topRated,     setTopRated]     = useState<SpotifyAlbum[]>(discoverSections.topRated);
-  const [topArtists,   setTopArtists]   = useState<SpotifyArtist[]>(discoverSections.topArtists);
-  const [topSongs,     setTopSongs]     = useState<SpotifyTrack[]>(discoverSections.topSongs);
+  const [newReleases,  setNewReleases]  = useState<CatalogAlbum[]>(discoverSections.newReleases);
+  const [popular,      setPopular]      = useState<CatalogAlbum[]>(discoverSections.popular);
+  const [topRated,     setTopRated]     = useState<CatalogAlbum[]>(discoverSections.topRated);
+  const [topArtists,   setTopArtists]   = useState<CatalogArtist[]>(discoverSections.topArtists);
+  const [topSongs,     setTopSongs]     = useState<CatalogTrack[]>(discoverSections.topSongs);
   const [featuredPlaylists, setFeaturedPlaylists] = useState<FeaturedPlaylist[]>([]);
   const [featuredLoading,   setFeaturedLoading]   = useState(true);
 
@@ -415,7 +415,7 @@ export default function DiscoverScreen() {
     }, [])
   );
 
-  function goToAlbum(album: SpotifyAlbum) {
+  function goToAlbum(album: CatalogAlbum) {
     router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl } } as any);
   }
 

@@ -83,6 +83,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id]);
 
+  // Keep the OS home-screen badge in sync with the real unread count —
+  // shouldSetBadge in the notification handler only lets iOS increment it on
+  // delivery, it never decrements on its own when notifications are read.
+  useEffect(() => {
+    Notifications.setBadgeCountAsync(unreadCount).catch(() => {});
+  }, [unreadCount]);
+
   async function markAllRead() {
     if (!user) return;
     await supabase

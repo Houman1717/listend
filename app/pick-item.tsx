@@ -13,13 +13,13 @@ import { useState, useRef, useCallback } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
-import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
-type ResultItem = SpotifyAlbum | SpotifyTrack | SpotifyArtist;
+type ResultItem = CatalogAlbum | CatalogTrack | CatalogArtist;
 
 export default function PickItemScreen() {
   const colorScheme = useColorScheme();
@@ -64,17 +64,17 @@ export default function PickItemScreen() {
   function handleSelect(item: ResultItem) {
     const slot = slotIndex !== undefined ? parseInt(slotIndex, 10) : -1;
     if (isAlbum) {
-      const a = item as SpotifyAlbum;
+      const a = item as CatalogAlbum;
       const album: TopAlbum = { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl };
       if (replaceId) removeTopAlbum(replaceId);
       if (slot >= 0) addTopAlbumAtSlot(slot, album); else addTopAlbum(album);
     } else if (isArtist) {
-      const a = item as SpotifyArtist;
+      const a = item as CatalogArtist;
       const artist: TopArtist = { id: a.id, name: a.name, artworkUrl: a.artworkUrl };
       if (replaceId) removeTopArtist(replaceId);
       if (slot >= 0) addTopArtistAtSlot(slot, artist); else addTopArtist(artist);
     } else {
-      const t = item as SpotifyTrack;
+      const t = item as CatalogTrack;
       const song: TopSong = { id: t.id, title: t.title, artist: t.artist, artworkUrl: t.artworkUrl, releaseDate: t.releaseDate };
       if (replaceId) removeTopSong(replaceId);
       if (slot >= 0) addTopSongAtSlot(slot, song); else addTopSong(song);
@@ -129,15 +129,15 @@ export default function PickItemScreen() {
         renderItem={({ item }) => {
           const isArtistItem = isArtist;
           const title = isArtistItem
-            ? (item as SpotifyArtist).name
+            ? (item as CatalogArtist).name
             : isAlbum
-            ? (item as SpotifyAlbum).title
-            : (item as SpotifyTrack).title;
+            ? (item as CatalogAlbum).title
+            : (item as CatalogTrack).title;
           const sub = isArtistItem
-            ? (item as SpotifyArtist).genre
+            ? (item as CatalogArtist).genre
             : isAlbum
-            ? `${(item as SpotifyAlbum).artist} · ${(item as SpotifyAlbum).year || ''}`
-            : (item as SpotifyTrack).artist;
+            ? `${(item as CatalogAlbum).artist} · ${(item as CatalogAlbum).year || ''}`
+            : (item as CatalogTrack).artist;
           const artworkRadius = isArtistItem ? 26 : 4;
           return (
             <Pressable

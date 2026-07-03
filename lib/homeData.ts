@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { SpotifyAlbum, SpotifyTrack, SpotifyArtist } from '@/context/SpotifyService';
+import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { countReviewComments } from '@/lib/reviewComments';
 
 export type PopularReview = {
@@ -22,7 +22,7 @@ function weekAgo(): string {
   return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 }
 
-export async function fetchTopAlbumsThisWeek(): Promise<SpotifyAlbum[]> {
+export async function fetchTopAlbumsThisWeek(): Promise<CatalogAlbum[]> {
   const { data } = await supabase
     .from('user_albums')
     .select('spotify_id, title, artist, year, artwork_url')
@@ -31,7 +31,7 @@ export async function fetchTopAlbumsThisWeek(): Promise<SpotifyAlbum[]> {
 
   if (!data?.length) return [];
 
-  const counts = new Map<string, { album: SpotifyAlbum; count: number }>();
+  const counts = new Map<string, { album: CatalogAlbum; count: number }>();
   for (const r of data as any[]) {
     if (!r.spotify_id) continue;
     const e = counts.get(r.spotify_id);
@@ -45,7 +45,7 @@ export async function fetchTopAlbumsThisWeek(): Promise<SpotifyAlbum[]> {
   return Array.from(counts.values()).sort((a, b) => b.count - a.count).map(e => e.album);
 }
 
-export async function fetchTopSongsThisWeek(): Promise<SpotifyTrack[]> {
+export async function fetchTopSongsThisWeek(): Promise<CatalogTrack[]> {
   const { data } = await supabase
     .from('top5_changes')
     .select('item_id, item_name, item_image_url')
@@ -55,7 +55,7 @@ export async function fetchTopSongsThisWeek(): Promise<SpotifyTrack[]> {
 
   if (!data?.length) return [];
 
-  const counts = new Map<string, { track: SpotifyTrack; count: number }>();
+  const counts = new Map<string, { track: CatalogTrack; count: number }>();
   for (const r of data as any[]) {
     if (!r.item_id) continue;
     const e = counts.get(r.item_id);
@@ -69,7 +69,7 @@ export async function fetchTopSongsThisWeek(): Promise<SpotifyTrack[]> {
   return Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.track);
 }
 
-export async function fetchTopArtistsThisWeek(): Promise<SpotifyArtist[]> {
+export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
   const since = weekAgo();
   const [{ data: likedRows }, { data: top5Rows }, { data: albumRows }] = await Promise.all([
     supabase.from('liked_artists').select('artist_id, name, artwork_url').gte('created_at', since).limit(300),
@@ -77,7 +77,7 @@ export async function fetchTopArtistsThisWeek(): Promise<SpotifyArtist[]> {
     supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).gte('listened_at', since).limit(500),
   ]);
 
-  const counts = new Map<string, { artist: SpotifyArtist; count: number }>();
+  const counts = new Map<string, { artist: CatalogArtist; count: number }>();
 
   for (const r of (likedRows ?? []) as any[]) {
     if (!r.artist_id) continue;
@@ -102,7 +102,7 @@ export async function fetchTopArtistsThisWeek(): Promise<SpotifyArtist[]> {
   // Secondary dedup by name — sort high→low first so the dominant entry wins,
   // then merge lower-count duplicates in, picking the best artworkUrl from any version.
   const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
-  const byName = new Map<string, { artist: SpotifyArtist; count: number }>();
+  const byName = new Map<string, { artist: CatalogArtist; count: number }>();
   for (const entry of sorted) {
     const key = entry.artist.name.toLowerCase().trim();
     if (!key) continue;
