@@ -104,11 +104,15 @@ async function uploadViaBackend(
   endpoint: 'upload-avatar' | 'upload-cover',
   userId: string,
   base64: string,
+  token: string,
 ): Promise<string> {
   const url = `${API_URL}/api/${endpoint}`;
   const res = await fetch(url, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type':  'application/json',
+      Authorization:   `Bearer ${token}`,
+    },
     body:    JSON.stringify({ user_id: userId, image_base64: base64 }),
   });
   const json = await res.json();
@@ -190,7 +194,7 @@ export default function EditProfileScreen() {
 
       let finalAvatarUrl = avatarUri;
       if (avatarBase64) {
-        finalAvatarUrl = await uploadViaBackend('upload-avatar', user.id, avatarBase64);
+        finalAvatarUrl = await uploadViaBackend('upload-avatar', user.id, avatarBase64, session.access_token);
       }
 
       const { error } = await supabase
