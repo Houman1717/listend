@@ -1755,7 +1755,7 @@ app.get('/genius/credits', [
 // ── GET /catalog/track/:id ────────────────────────────────────────────────────
 // Returns a single track's release date and basic info.
 
-app.get('/catalog/track/:id', [
+app.get(['/catalog/track/:id', '/spotify/track/:id'], [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
@@ -1792,7 +1792,7 @@ app.get('/catalog/track/:id', [
   }
 });
 
-app.get('/catalog/album/:id/tracks', [
+app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
@@ -1826,7 +1826,7 @@ app.get('/catalog/album/:id/tracks', [
 // ── GET /catalog/artist/:id/top-tracks ────────────────────────────────────────
 // Returns an artist's top songs via Apple Music's top-songs view.
 
-app.get('/catalog/artist/:id/top-tracks', [
+app.get(['/catalog/artist/:id/top-tracks', '/spotify/artist/:id/top-tracks'], [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
@@ -1888,7 +1888,7 @@ app.get('/catalog/artist/:id/top-tracks', [
 // ── GET /catalog/artist/:id/albums ────────────────────────────────────────────
 // Returns discography grouped by type: { albums, singles, compilations }.
 
-app.get('/catalog/artist/:id/albums', [
+app.get(['/catalog/artist/:id/albums', '/spotify/artist/:id/albums'], [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
@@ -2046,7 +2046,7 @@ app.get('/catalog/artist/:id/albums', [
 // Uses Apple Music search on each seed track ID to find related albums.
 // Returns [] silently on failure so the frontend simply hides the section.
 
-app.get('/catalog/recommendations', [
+app.get(['/catalog/recommendations', '/spotify/recommendations'], [
   query('trackIds').optional().customSanitizer(v =>
     (Array.isArray(v) ? v : [v]).map(s => String(s ?? '').trim()).filter(s => /^[a-zA-Z0-9_-]+$/.test(s)).slice(0, 2)
   ),
