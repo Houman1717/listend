@@ -30,7 +30,7 @@ async function ensureProfile(user: User): Promise<boolean> {
 
   // Only fill in the missing username (and other fields if this is a brand
   // new row) — don't clobber anything a bare pre-existing row already had.
-  await supabase.from('profiles').upsert(
+  const { error: upsertErr } = await supabase.from('profiles').upsert(
     {
       id:           user.id,
       username,
@@ -39,6 +39,10 @@ async function ensureProfile(user: User): Promise<boolean> {
     },
     { onConflict: 'id' }
   );
+  if (upsertErr) {
+    console.error('[ensureProfile] upsert error:', upsertErr.message);
+    return false;
+  }
   return true;
 }
 
@@ -84,7 +88,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         // OAuth (Google/Apple) sign-ups don't create a profiles row the way the
         // email signup screen does — make sure one exists on every fresh sign-in.
-        if (event === 'SIGNED_IN' && session?.user) {
+        // Also runs on INITIAL_SESSION (a normal app reopen with an already-logged-in
+        // session, not just a fresh SIGNED_IN) so an account still missing a
+        // username gets self-healed and redirected to edit-profile without the
+        // user needing to sign out and back in.
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
           ensureProfile(session.user)
             .then((isNew) => { if (isNew) setNeedsOnboarding(true); })
             .catch((e) => console.warn('[Auth] ensureProfile error:', e));
