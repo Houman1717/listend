@@ -2525,12 +2525,24 @@ app.get('/api/admin/check-merge-conflict', requireAdmin, [
     // also need re-pointing during an actual merge.
     const targetsA = (rowsA ?? []).map(r => `${r.user_id}_${idA}`);
     const targetsB = (rowsB ?? []).map(r => `${r.user_id}_${idB}`);
-    const [{ data: likesA }, { data: likesB }, { data: commentsA }, { data: commentsB }] = await Promise.all([
-      supabase.from('likes').select('id').eq('target_type', 'review').in('target_id', targetsA),
-      supabase.from('likes').select('id').eq('target_type', 'review').in('target_id', targetsB),
-      supabase.from('review_comments').select('id').in('review_id', targetsA),
-      supabase.from('review_comments').select('id').in('review_id', targetsB),
+    const [
+      { data: likesA }, { data: likesB },
+      { data: commentsA }, { data: commentsB },
+      { data: reListensA }, { data: reListensB },
+      { data: wantA }, { data: wantB },
+    ] = await Promise.all([
+      supabase.from('likes').select('id, user_id').eq('target_type', 'review').in('target_id', targetsA),
+      supabase.from('likes').select('id, user_id').eq('target_type', 'review').in('target_id', targetsB),
+      supabase.from('review_comments').select('id, user_id').in('review_id', targetsA),
+      supabase.from('review_comments').select('id, user_id').in('review_id', targetsB),
+      supabase.from('re_listens').select('id, user_id, rating, listened_at').eq('spotify_id', idA),
+      supabase.from('re_listens').select('id, user_id, rating, listened_at').eq('spotify_id', idB),
+      supabase.from('want_to_listen').select('id, user_id').eq('spotify_id', idA),
+      supabase.from('want_to_listen').select('id, user_id').eq('spotify_id', idB),
     ]);
+
+    const reListenOverlap = (reListensA ?? []).filter(a => (reListensB ?? []).some(b => b.user_id === a.user_id));
+    const wantOverlap     = (wantA ?? []).filter(a => (wantB ?? []).some(b => b.user_id === a.user_id));
 
     res.json({
       idA,
@@ -2543,6 +2555,12 @@ app.get('/api/admin/check-merge-conflict', requireAdmin, [
       likesOnB: likesB?.length ?? 0,
       commentsOnA: commentsA?.length ?? 0,
       commentsOnB: commentsB?.length ?? 0,
+      reListensOnA: reListensA?.length ?? 0,
+      reListensOnB: reListensB?.length ?? 0,
+      reListenOverlapCount: reListenOverlap.length,
+      wantToListenOnA: wantA?.length ?? 0,
+      wantToListenOnB: wantB?.length ?? 0,
+      wantToListenOverlapCount: wantOverlap.length,
     });
   } catch (err) {
     console.error('[/api/admin/check-merge-conflict]', err.message ?? err);
