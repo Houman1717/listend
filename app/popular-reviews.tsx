@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -176,6 +176,7 @@ export default function PopularReviewsScreen() {
 
   const [reviews,      setReviews]      = useState<PopularReview[]>([]);
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
+  const pendingLikeToggles = useRef<Set<string>>(new Set());
   const [commentsMap,  setCommentsMap]  = useState<Map<string, ReviewComment[]>>(new Map());
 
   useEffect(() => {
@@ -194,24 +195,39 @@ export default function PopularReviewsScreen() {
 
   function handleLike(id: string) {
     if (!user) return;
+    if (pendingLikeToggles.current.has(id)) return; // ignore taps while the previous toggle is still in flight
+    pendingLikeToggles.current.add(id);
+
     const wasLiked = likedReviews.has(id);
     setLikedReviews(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+    const done = () => pendingLikeToggles.current.delete(id);
     if (wasLiked) {
       supabase.from('likes').delete()
         .eq('user_id', user.id).eq('target_type', 'review').eq('target_id', id)
         .then(({ error }) => {
           if (error) setLikedReviews(prev => { const n = new Set(prev); n.add(id); return n; });
-        });
+        })
+        .then(done);
     } else {
+      const ownerId = id.split('_')[0];
       supabase.from('likes').insert({
-        user_id: user.id, target_type: 'review', target_id: id, target_owner_id: id.split('_')[0],
+        user_id: user.id, target_type: 'review', target_id: id, target_owner_id: ownerId,
       }).then(({ error }) => {
-        if (error) setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
-      });
+        if (error) {
+          setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
+        } else if (ownerId !== user.id) {
+          supabase.from('notifications').insert({
+            user_id: ownerId, type: 'like_review', actor_id: user.id, target_id: id,
+          }).then(({ error: notifErr }) => {
+            if (notifErr) console.error('[handleLike] notification error:', notifErr.message);
+          });
+        }
+      })
+      .then(done);
     }
   }
 

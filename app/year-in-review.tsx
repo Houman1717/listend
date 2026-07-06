@@ -486,6 +486,7 @@ export default function YearInReviewScreen() {
   const [highestRatedView, setHighestRatedView] = useState<'thisYear' | 'previous'>('thisYear');
   const [modal, setModal] = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
   const [reviewAlbum, setReviewAlbum] = useState<LoggedAlbum | null>(null);
+  const [ownUserId, setOwnUserId] = useState<string | null>(null);
   const [ownUsername, setOwnUsername] = useState('');
   const [ownAvatarUrl, setOwnAvatarUrl] = useState<string | null>(null);
   const [artistImages, setArtistImages] = useState<Record<string, string>>({});
@@ -523,6 +524,7 @@ export default function YearInReviewScreen() {
     if (viewedUserId) return;
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user?.id) return;
+      setOwnUserId(session.user.id);
       const { data } = await supabase.from('profiles').select('username, avatar_url').eq('id', session.user.id).single();
       if (data?.username) setOwnUsername(data.username);
       if (data?.avatar_url) setOwnAvatarUrl(data.avatar_url);
@@ -590,6 +592,7 @@ export default function YearInReviewScreen() {
       {reviewAlbum && (
         <AlbumReviewModal
           album={reviewAlbum}
+          reviewUserId={viewedUserId ?? ownUserId ?? ''}
           username={viewedUserId ? (params.displayName ?? '') : ownUsername}
           avatarUrl={viewedUserId ? null : ownAvatarUrl}
           onClose={() => setReviewAlbum(null)}

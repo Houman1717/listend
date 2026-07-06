@@ -4,10 +4,13 @@ import {
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { LoggedAlbum } from '@/context/AlbumsContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 
 function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
   const inactive = isDark ? '#2a1e14' : '#e0e0e0';
@@ -27,6 +30,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
 
 export function AlbumReviewModal({
   album,
+  reviewUserId,
   username,
   avatarUrl,
   onClose,
@@ -40,6 +44,7 @@ export function AlbumReviewModal({
   onReport,
 }: {
   album: LoggedAlbum;
+  reviewUserId: string;
   username: string;
   avatarUrl?: string | null;
   onClose: () => void;
@@ -52,10 +57,14 @@ export function AlbumReviewModal({
   onDelete?: () => void;
   onReport?: () => void;
 }) {
+  const { user } = useAuth();
+  const targetId = `${reviewUserId}_${album.id}`;
+
   const [liked,            setLiked]            = useState(false);
   const [likeCount,        setLikeCount]        = useState(0);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [localComments,    setLocalComments]    = useState<ReviewComment[]>([]);
+  const pendingLikeToggle = useRef(false);
 
   const insets = useSafeAreaInsets();
   const border = isDark ? '#2a1e14' : '#e5e5e5';
@@ -63,16 +72,64 @@ export function AlbumReviewModal({
     ? new Date(album.dateLogged).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '';
 
-  function handleLike() {
-    setLiked(prev => !prev);
-    setLikeCount(prev => liked ? prev - 1 : prev + 1);
+  // Fetch the real like count/state and real comments — this modal previously
+  // faked both with local-only state that never touched the database, so likes
+  // shown here never matched the real count shown elsewhere (e.g. Home), and
+  // comments added here silently vanished on close since they were never saved.
+  useEffect(() => {
+    supabase
+      .from('likes')
+      .select('user_id')
+      .eq('target_type', 'review')
+      .eq('target_id', targetId)
+      .then(({ data }) => {
+        const rows = (data ?? []) as any[];
+        setLikeCount(rows.length);
+        setLiked(!!user?.id && rows.some(r => r.user_id === user.id));
+      });
+
+    fetchReviewComments(targetId).then(setLocalComments);
+  }, [targetId, user?.id]);
+
+  async function handleLike() {
+    if (!user?.id || pendingLikeToggle.current) return;
+    pendingLikeToggle.current = true;
+
+    const wasLiked = liked;
+    setLiked(!wasLiked);
+    setLikeCount(prev => wasLiked ? Math.max(0, prev - 1) : prev + 1);
+
+    try {
+      if (wasLiked) {
+        const { error } = await supabase.from('likes').delete()
+          .eq('user_id', user.id).eq('target_type', 'review').eq('target_id', targetId);
+        if (error) { setLiked(true); setLikeCount(prev => prev + 1); }
+      } else {
+        const { error } = await supabase.from('likes').insert({
+          user_id: user.id, target_type: 'review', target_id: targetId, target_owner_id: reviewUserId,
+        });
+        if (error) {
+          setLiked(false); setLikeCount(prev => Math.max(0, prev - 1));
+        } else if (reviewUserId !== user.id) {
+          supabase.from('notifications').insert({
+            user_id: reviewUserId, type: 'like_review', actor_id: user.id, target_id: targetId,
+          }).then(({ error: notifErr }) => {
+            if (notifErr) console.error('[AlbumReviewModal] notification error:', notifErr.message);
+          });
+        }
+      }
+    } finally {
+      pendingLikeToggle.current = false;
+    }
   }
 
   function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+    if (!user?.id) return;
+    const tempId = `mlc_${Date.now()}`;
     const c: ReviewComment = {
-      id:              `mlc_${Date.now()}`,
-      reviewId:        album.id,
-      userId:          'me',
+      id:              tempId,
+      reviewId:        targetId,
+      userId:          user.id,
       username:        commenterUsername ?? username,
       avatarUrl:       avatarUrl ?? null,
       body,
@@ -81,6 +138,11 @@ export function AlbumReviewModal({
       createdAt:       'just now',
     };
     setLocalComments(prev => [...prev, c]);
+    insertReviewComment(targetId, user.id, body, parentId ?? null).then(realId => {
+      if (realId) {
+        setLocalComments(prev => prev.map(item => item.id === tempId ? { ...item, id: realId } : item));
+      }
+    });
   }
 
   return (

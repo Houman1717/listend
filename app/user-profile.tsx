@@ -491,7 +491,7 @@ export default function UserProfileScreen() {
           .from('profiles')
           .select('id, display_name, username, bio, avatar_url, is_private, allow_dms, is_pro, pro_theme')
           .eq('id', viewedUserId)
-          .single();
+          .maybeSingle();
 
         if (profErr) console.error('[UserProfile] profile fetch error:', profErr);
         if (prof) {
@@ -499,7 +499,7 @@ export default function UserProfileScreen() {
             .from('profiles')
             .select('top_albums, top_songs, top_artists')
             .eq('id', viewedUserId)
-            .single();
+            .maybeSingle();
 
           setProfile({
             ...prof,
@@ -1090,7 +1090,7 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="heart"      label="Liked Artists"   sub="Their favourites"               onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId,                     ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="bar-chart"  label="Stats"           sub="Listening insights"             onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId, displayName: profile?.display_name ?? profile?.username ?? '',  ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
+            <NavRow icon="bar-chart"  label="Stats"           sub="Listening insights"             onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId, displayName: profile?.display_name ?? profile?.username ?? '', viewedIsPro: profile?.is_pro ? '1' : '0', ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
           </View>
         </>
       )}
@@ -1107,6 +1107,7 @@ export default function UserProfileScreen() {
     {selectedTopAlbum && (
       <AlbumReviewModal
         album={selectedTopAlbum}
+        reviewUserId={viewedUserId}
         username={profile?.username ?? ''}
         avatarUrl={profile?.avatar_url}
         onClose={() => setSelectedTopAlbum(null)}

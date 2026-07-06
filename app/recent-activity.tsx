@@ -15,7 +15,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
@@ -916,6 +916,7 @@ export default function RecentActivityScreen() {
   const [loadingOther,         setLoadingOther]         = useState(false);
   const [selectedReview,       setSelectedReview]       = useState<ActivityItem | null>(null);
   const [reviewLikeState,      setReviewLikeState]      = useState<{ liked: boolean; count: number }>({ liked: false, count: 0 });
+  const pendingLikeToggle = useRef(false);
   const [reviewUsername,       setReviewUsername]       = useState('');
   const isDark = colors.isDark;
 
@@ -1256,14 +1257,27 @@ export default function RecentActivityScreen() {
           reviewerUsername={reviewUsername}
           likeState={reviewLikeState}
           onLike={viewingOther ? async () => {
+            if (pendingLikeToggle.current) return;
+            pendingLikeToggle.current = true;
             const ownerId = viewingOther;
             const targetId = `${ownerId}_${selectedReview.id}`;
             const current = reviewLikeState;
             setReviewLikeState({ liked: !current.liked, count: Math.max(0, current.liked ? current.count - 1 : current.count + 1) });
-            if (current.liked) {
-              await supabase.from('likes').delete().eq('user_id', user!.id).eq('target_type', 'review').eq('target_id', targetId);
-            } else {
-              await supabase.from('likes').insert({ user_id: user!.id, target_type: 'review', target_id: targetId, target_owner_id: ownerId });
+            try {
+              if (current.liked) {
+                await supabase.from('likes').delete().eq('user_id', user!.id).eq('target_type', 'review').eq('target_id', targetId);
+              } else {
+                const { error } = await supabase.from('likes').insert({ user_id: user!.id, target_type: 'review', target_id: targetId, target_owner_id: ownerId });
+                if (!error && ownerId !== user!.id) {
+                  supabase.from('notifications').insert({
+                    user_id: ownerId, type: 'like_review', actor_id: user!.id, target_id: targetId,
+                  }).then(({ error: notifErr }) => {
+                    if (notifErr) console.error('[recent-activity] notification error:', notifErr.message);
+                  });
+                }
+              }
+            } finally {
+              pendingLikeToggle.current = false;
             }
           } : undefined}
           onClose={() => setSelectedReview(null)}

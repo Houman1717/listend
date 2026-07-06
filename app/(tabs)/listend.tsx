@@ -1275,6 +1275,7 @@ export default function ListendScreen() {
     {selectedTopAlbum && (
       <AlbumReviewModal
         album={selectedTopAlbum}
+        reviewUserId={user!.id}
         username={profileUsername}
         avatarUrl={profileAvatarUrl}
         onClose={() => setSelectedTopAlbum(null)}

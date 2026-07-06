@@ -4,10 +4,7 @@ import {
   Text,
   Pressable,
   ScrollView,
-  Modal,
   Platform,
-  SafeAreaView,
-  KeyboardAvoidingView,
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -24,7 +21,7 @@ import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { reportContent } from '@/lib/reports';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTH_NAMES = [
@@ -89,208 +86,6 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
     </View>
   );
 }
-
-// ─── Review modal (matches my-listend AlbumReviewModal) ───────────────────────
-
-function AlbumReviewModal({
-  album,
-  username,
-  avatarUrl,
-  isDark,
-  colors,
-  onClose,
-  onAlbumPress,
-  onUsernamePress,
-  onReport,
-}: {
-  album: LoggedAlbum;
-  username: string;
-  avatarUrl?: string | null;
-  isDark: boolean;
-  colors: any;
-  onClose: () => void;
-  onAlbumPress: () => void;
-  onUsernamePress?: () => void;
-  onReport?: () => void;
-}) {
-  const [liked,            setLiked]            = useState(false);
-  const [likeCount,        setLikeCount]        = useState(0);
-  const [commentsExpanded, setCommentsExpanded] = useState(false);
-  const [localComments,    setLocalComments]    = useState<ReviewComment[]>([]);
-
-  const border  = isDark ? '#2a1e14' : '#e5e5e5';
-  const dateStr = album.dateLogged
-    ? new Date(album.dateLogged).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-    : '';
-
-  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
-    const c: ReviewComment = {
-      id:              `sc_${Date.now()}`,
-      reviewId:        album.id,
-      userId:          'me',
-      username:        commenterUsername ?? username,
-      avatarUrl:       avatarUrl ?? null,
-      body,
-      parentCommentId: parentId ?? undefined,
-      replyToUsername: replyToUsername ?? null,
-      createdAt:       'just now',
-    };
-    setLocalComments(prev => [...prev, c]);
-  }
-
-  return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }}>
-
-          {/* Header */}
-          <View style={[rm.header, { borderBottomColor: border }]}>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
-            </Pressable>
-            <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            {onReport ? (
-              <Pressable onPress={onReport} hitSlop={12}>
-                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
-              </Pressable>
-            ) : (
-              <View style={{ width: 24 }} />
-            )}
-          </View>
-
-          <ScrollView
-            contentContainerStyle={[rm.body, { paddingBottom: 40 }]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-
-            {/* Album row */}
-            <Pressable
-              onPress={onAlbumPress}
-              style={({ pressed }) => [rm.albumRow, { opacity: pressed ? 0.7 : 1 }]}>
-              {album.artworkUrl ? (
-                <ExpoImage source={{ uri: album.artworkUrl }} style={rm.art} contentFit="cover" cachePolicy="disk" />
-              ) : (
-                <View style={[rm.art, { backgroundColor: album.coverColor, justifyContent: 'center', alignItems: 'center' }]}>
-                  <FontAwesome name="music" size={20} color="rgba(255,255,255,0.4)" />
-                </View>
-              )}
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={[rm.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>{album.title}</Text>
-                <Text style={[rm.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]}>
-                  {album.artist}{album.year > 0 ? ` · ${album.year}` : ''}
-                </Text>
-                {(album.lastRating ?? album.rating) > 0 && (
-                  <View style={rm.ratingRow}>
-                    <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />
-                  </View>
-                )}
-                {album.isRelistened && (
-                  <FontAwesome name="repeat" size={9} color={colors.tint} style={{ marginTop: 2 }} />
-                )}
-              </View>
-            </Pressable>
-
-            {/* Author + date */}
-            <Pressable style={rm.authorRow} onPress={onUsernamePress} disabled={!onUsernamePress}>
-              {avatarUrl ? (
-                <ExpoImage source={{ uri: avatarUrl }} style={rm.avatar} contentFit="cover" cachePolicy="disk" />
-              ) : (
-                <View style={[rm.avatar, { backgroundColor: avatarColor(username || '?') }]}>
-                  <Text style={rm.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
-                </View>
-              )}
-              <View style={{ gap: 1 }}>
-                <Text style={[rm.username, { color: colors.tint }]}>@{username || '…'}</Text>
-                {dateStr ? (
-                  <Text style={[rm.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
-                    {(album as any).isReListenEvent ? 'Re-listend' : 'Listend'} {dateStr}
-                  </Text>
-                ) : null}
-              </View>
-            </Pressable>
-
-            {/* Review text — each entry shows its own review for that specific listen */}
-            {album.review ? (
-              <Text style={[rm.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
-                "{album.review}"
-              </Text>
-            ) : (
-              <Text style={[rm.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
-                No written review.
-              </Text>
-            )}
-
-            {/* Like + comment toggle */}
-            <View style={[rm.likeCommentRow, { borderColor: border }]}>
-              <Pressable onPress={() => { setLiked(p => !p); setLikeCount(p => liked ? p - 1 : p + 1); }} hitSlop={8} style={rm.likeBtn}>
-                <FontAwesome
-                  name={liked ? 'heart' : 'heart-o'}
-                  size={15}
-                  color={liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35')}
-                />
-                <Text style={[rm.likeCount, { color: liked ? '#D4A017' : (isDark ? '#A08060' : '#6B4C35') }]}>
-                  {likeCount}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setCommentsExpanded(p => !p)}
-                hitSlop={8}
-                style={[rm.commentsToggle, { borderColor: border, flex: 1, marginBottom: 0 }]}>
-                <FontAwesome
-                  name="comment-o"
-                  size={13}
-                  color={commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060')}
-                />
-                <Text style={[rm.commentsToggleText, { color: commentsExpanded ? '#D4A017' : (isDark ? '#6B4C35' : '#A08060') }]}>
-                  {localComments.length === 0 ? 'No comments yet' : `${localComments.length} comment${localComments.length !== 1 ? 's' : ''}`}
-                </Text>
-                <FontAwesome
-                  name={commentsExpanded ? 'chevron-up' : 'chevron-down'}
-                  size={10}
-                  color={isDark ? '#6B4C35' : '#A08060'}
-                  style={{ marginLeft: 'auto' }}
-                />
-              </Pressable>
-            </View>
-
-            {commentsExpanded && (
-              <CommentsSection
-                comments={localComments}
-                isDark={isDark}
-                colors={colors}
-                onAddComment={handleAddComment}
-              />
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-const rm = StyleSheet.create({
-  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 16, fontWeight: '700' },
-  body:        { paddingHorizontal: 20, paddingTop: 20, gap: 20 },
-  albumRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-  art:         { width: 72, height: 72, borderRadius: 8, flexShrink: 0 },
-  albumTitle:  { fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
-  albumArtist: { fontSize: 13 },
-  ratingRow:   { marginTop: 2 },
-  authorRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  avatar:      { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  avatarLetter:{ color: '#fff', fontSize: 14, fontWeight: '700' },
-  username:    { color: '#D4A017', fontSize: 13, fontWeight: '600' },
-  listenedDate:{ fontSize: 12 },
-  reviewText:  { fontSize: 15, lineHeight: 22, fontStyle: 'italic' },
-  likeCommentRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
-  likeBtn:          { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 4 },
-  likeCount:        { fontSize: 13, fontWeight: '600' },
-  commentsToggle:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10 },
-  commentsToggleText: { fontSize: 12, flex: 1 },
-});
 
 export default function SessionsScreen() {
   const colorScheme = useColorScheme();
@@ -711,6 +506,7 @@ export default function SessionsScreen() {
       {selectedAlbum && (
         <AlbumReviewModal
           album={selectedAlbum}
+          reviewUserId={viewingOther || user!.id}
           username={profileUsername}
           avatarUrl={profileAvatarUrl}
           isDark={isDark}

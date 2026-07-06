@@ -1302,10 +1302,19 @@ export default function HomeScreen() {
         })
         .then(done);
     } else {
+      const ownerId = id.split('_')[0];
       supabase.from('likes').insert({
-        user_id: user.id, target_type: 'review', target_id: id, target_owner_id: id.split('_')[0],
+        user_id: user.id, target_type: 'review', target_id: id, target_owner_id: ownerId,
       }).then(({ error }) => {
-        if (error) setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
+        if (error) {
+          setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
+        } else if (ownerId !== user.id) {
+          supabase.from('notifications').insert({
+            user_id: ownerId, type: 'like_review', actor_id: user.id, target_id: id,
+          }).then(({ error: notifErr }) => {
+            if (notifErr) console.error('[handleLikeReview] notification error:', notifErr.message);
+          });
+        }
       })
       .then(done);
     }

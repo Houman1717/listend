@@ -370,6 +370,7 @@ export default function MyListendScreen() {
       {selectedAlbum && (
         <AlbumReviewModal
           album={selectedAlbum}
+          reviewUserId={viewingOther || user!.id}
           username={profileUsername}
           avatarUrl={profileAvatarUrl}
           onClose={() => setSelectedAlbum(null)}
