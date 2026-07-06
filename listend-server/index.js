@@ -2979,6 +2979,8 @@ const PUSH_TITLES = {
   message:       'New message',
   like_review:   'Someone liked your review',
   like_playlist: 'Someone liked your playlist',
+  comment:       'New comment',
+  comment_reply: 'New reply',
 };
 
 const PUSH_BODIES = {
@@ -2986,6 +2988,8 @@ const PUSH_BODIES = {
   message:       name => `${name} sent you a message`,
   like_review:   name => `${name} liked your review`,
   like_playlist: name => `${name} liked your playlist`,
+  comment:       name => `${name} commented on your review`,
+  comment_reply: name => `${name} replied to your comment`,
 };
 
 app.post('/api/webhook/notification', async (req, res) => {

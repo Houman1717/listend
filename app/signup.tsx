@@ -41,14 +41,16 @@ export default function SignUpScreen() {
     }
     setLoading(true);
 
-    const trimmedName = username.trim();
+    const trimmedUsername = username.trim();
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       // Stash the chosen username in user metadata so it survives email
-      // confirmation — ensureProfile (AuthContext) reads it on first sign-in.
-      options: { data: { username: trimmedName, display_name: trimmedName } },
+      // confirmation — ensureProfile (AuthContext) reads it on first sign-in,
+      // falling back to the username for display_name too (set properly on
+      // the mandatory edit-profile screen that follows right after).
+      options: { data: { username: trimmedUsername } },
     });
 
     if (error) {

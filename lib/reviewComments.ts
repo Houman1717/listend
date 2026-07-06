@@ -52,7 +52,39 @@ export async function insertReviewComment(
     .select('id')
     .single();
   if (error) { console.error('[insertReviewComment]', error.message); return null; }
+
+  notifyForComment(reviewId, userId, validParent).catch(e =>
+    console.error('[insertReviewComment] notify error:', e)
+  );
+
   return (data as any)?.id ?? null;
+}
+
+// Notifies the parent comment's author on a reply, or the review's owner on a
+// top-level comment. Never notifies someone about their own action.
+async function notifyForComment(reviewId: string, actorId: string, parentCommentId: string | null) {
+  let recipientId: string | null = null;
+
+  if (parentCommentId) {
+    const { data: parent } = await supabase
+      .from('review_comments')
+      .select('user_id')
+      .eq('id', parentCommentId)
+      .maybeSingle();
+    recipientId = parent?.user_id ?? null;
+  } else {
+    recipientId = reviewId.split('_')[0] || null;
+  }
+
+  if (!recipientId || recipientId === actorId) return;
+
+  const { error } = await supabase.from('notifications').insert({
+    user_id:   recipientId,
+    type:      parentCommentId ? 'comment_reply' : 'comment',
+    actor_id:  actorId,
+    target_id: reviewId,
+  });
+  if (error) console.error('[notifyForComment]', error.message);
 }
 
 export async function countReviewComments(reviewIds: string[]): Promise<Map<string, number>> {

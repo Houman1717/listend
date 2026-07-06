@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Purchases, { CustomerInfo, LOG_LEVEL, Offerings, PurchasesPackage } from 'react-native-purchases';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -44,11 +44,34 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     setIsLoading(false);
   }, []);
 
+  // Tracks the last confirmed Pro state so we can tell a real downgrade apart
+  // from a stale/incomplete CustomerInfo snapshot (RevenueCat's listener often
+  // fires with cached data right as the app resumes from background, before
+  // it's re-validated with Apple — trusting that blindly would wrongly wipe
+  // out a real subscriber's Pro status).
+  const lastKnownProRef = useRef(false);
+
   // Sync entitlements whenever customer info changes — also writes to Supabase
   // so ProContext (which reads profiles.is_pro) stays in sync.
-  const syncCustomerInfo = useCallback((info: CustomerInfo) => {
+  const syncCustomerInfo = useCallback(async (info: CustomerInfo) => {
     const active = info.entitlements.active;
-    const proActive = PRO_ENTITLEMENT_ID in active;
+    let proActive = PRO_ENTITLEMENT_ID in active;
+
+    // Never trust a "just went inactive" signal at face value — force a fresh,
+    // server-verified re-check first. If that also fails, keep the previous
+    // state rather than risk a false downgrade.
+    if (!proActive && lastKnownProRef.current) {
+      try {
+        await Purchases.invalidateCustomerInfoCache();
+        const fresh = await Purchases.getCustomerInfo();
+        proActive = PRO_ENTITLEMENT_ID in fresh.entitlements.active;
+      } catch (e) {
+        console.warn('[RevenueCat] confirmatory re-check failed, keeping previous Pro state:', e);
+        return;
+      }
+    }
+
+    lastKnownProRef.current = proActive;
     setIsPro(proActive);
 
     // Mirror to Supabase so the rest of the app (ProContext, other-user views) reflects reality

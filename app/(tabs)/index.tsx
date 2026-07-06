@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -1234,6 +1234,7 @@ export default function HomeScreen() {
   const [friendsListened,        setFriendsListened]        = useState<FriendEntry[]>([]);
   const [friendsListenedLoading, setFriendsListenedLoading] = useState(false);
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
+  const pendingLikeToggles = useRef<Set<string>>(new Set());
 
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
@@ -1283,24 +1284,30 @@ export default function HomeScreen() {
 
   function handleLikeReview(id: string) {
     if (!user) return;
+    if (pendingLikeToggles.current.has(id)) return; // ignore taps while the previous toggle is still in flight
+    pendingLikeToggles.current.add(id);
+
     const wasLiked = likedReviews.has(id);
     setLikedReviews(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+    const done = () => pendingLikeToggles.current.delete(id);
     if (wasLiked) {
       supabase.from('likes').delete()
         .eq('user_id', user.id).eq('target_type', 'review').eq('target_id', id)
         .then(({ error }) => {
           if (error) setLikedReviews(prev => { const n = new Set(prev); n.add(id); return n; });
-        });
+        })
+        .then(done);
     } else {
       supabase.from('likes').insert({
         user_id: user.id, target_type: 'review', target_id: id, target_owner_id: id.split('_')[0],
       }).then(({ error }) => {
         if (error) setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
-      });
+      })
+      .then(done);
     }
   }
 
@@ -1769,35 +1776,7 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* 4 — Top Listend Songs This Week */}
-      <Section title="Top Listend Songs This Week" loading={loading}>
-        <FlatList
-          horizontal
-          data={songs.slice(0, 10)}
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.row}
-          renderItem={({ item }) => (
-            <SongCard item={item} isDark={isDark} onPress={() => handleSongPress(item)} />
-          )}
-          ListFooterComponent={
-            songs.length > 10 ? (
-              <Pressable
-                onPress={() => setShowAllSongs(true)}
-                style={({ pressed }) => ({
-                  width: SONG_CARD, height: SONG_CARD, borderRadius: 6,
-                  justifyContent: 'center', alignItems: 'center',
-                  backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
-                  opacity: pressed ? 0.7 : 1,
-                })}>
-                <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>See{'\n'}More</Text>
-              </Pressable>
-            ) : null
-          }
-        />
-      </Section>
-
-      {/* Top Listend Artists This Week */}
+      {/* 4 — Top Listend Artists This Week */}
       <Section title="Top Listend Artists This Week" loading={loading}>
         <FlatList
           horizontal
@@ -1814,6 +1793,34 @@ export default function HomeScreen() {
                 onPress={() => setShowAllArtists(true)}
                 style={({ pressed }) => ({
                   width: ARTIST_CARD, height: ARTIST_CARD, borderRadius: ARTIST_CARD / 2,
+                  justifyContent: 'center', alignItems: 'center',
+                  backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
+                  opacity: pressed ? 0.7 : 1,
+                })}>
+                <Text style={{ fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2, color: isDark ? '#f5e6c8' : '#1A0F0A' }}>See{'\n'}More</Text>
+              </Pressable>
+            ) : null
+          }
+        />
+      </Section>
+
+      {/* Top Listend Songs This Week */}
+      <Section title="Top Listend Songs This Week" loading={loading}>
+        <FlatList
+          horizontal
+          data={songs.slice(0, 10)}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.row}
+          renderItem={({ item }) => (
+            <SongCard item={item} isDark={isDark} onPress={() => handleSongPress(item)} />
+          )}
+          ListFooterComponent={
+            songs.length > 10 ? (
+              <Pressable
+                onPress={() => setShowAllSongs(true)}
+                style={({ pressed }) => ({
+                  width: SONG_CARD, height: SONG_CARD, borderRadius: 6,
                   justifyContent: 'center', alignItems: 'center',
                   backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
                   opacity: pressed ? 0.7 : 1,

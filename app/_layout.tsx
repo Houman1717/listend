@@ -89,12 +89,20 @@ function AuthGate() {
       router.replace('/login');
     } else if (session && inAuthScreen) {
       router.replace('/(tabs)');
-      if (needsOnboarding) {
-        router.push('/edit-profile');
-        clearNeedsOnboarding();
-      }
     }
-  }, [session, loading, segments, needsOnboarding]);
+  }, [session, loading, segments]);
+
+  // Separate from the above: ensureProfile (AuthContext) resolves asynchronously
+  // after SIGNED_IN, so needsOnboarding can flip true well after the effect above
+  // has already navigated off the login/signup screen. Firing this independently
+  // (not gated on segments) means it still reliably pushes edit-profile on top of
+  // wherever the user currently is.
+  useEffect(() => {
+    if (needsOnboarding && session) {
+      router.push('/edit-profile');
+      clearNeedsOnboarding();
+    }
+  }, [needsOnboarding, session]);
 
   // Navigate to the right screen when user taps a push notification
   useEffect(() => {
@@ -103,7 +111,7 @@ function AuthGate() {
       if (!data?.type) return;
       if (data.type === 'message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
-      } else if (data.type === 'like_review' && data.targetId) {
+      } else if ((data.type === 'like_review' || data.type === 'comment' || data.type === 'comment_reply') && data.targetId) {
         const albumId = data.targetId.split('_')[1];
         router.push({ pathname: '/album-detail', params: { id: albumId } } as any);
       } else {
