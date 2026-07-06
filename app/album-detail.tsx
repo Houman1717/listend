@@ -245,7 +245,7 @@ function MiniRatingBar({ rating, isDark }: { rating: number; isDark: boolean }) 
 
 // ─── Community Rating ─────────────────────────────────────────────────────────
 
-const MIN_RATINGS_TO_SHOW = 10;
+const MIN_RATINGS_TO_SHOW = 5;
 
 function CommunityRatingSection({
   isDark,
@@ -918,6 +918,7 @@ export default function AlbumDetailScreen() {
   // Community reviews + likes
   const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
   const [reviewLikesMap, setReviewLikesMap]     = useState<Map<string, LikeState>>(new Map());
+  const pendingLikeToggles = useRef<Set<string>>(new Set());
 
   const isLogged = !!loggedAlbum;
   const isWanted = wantToListen.some(a => a.id === myAlbumId);
@@ -1322,6 +1323,9 @@ export default function AlbumDetailScreen() {
   async function handleToggleLike(review: CommunityReview) {
     if (!user) return;
     const targetId = review.id; // already `${userId}_${albumId}`
+    if (pendingLikeToggles.current.has(targetId)) return; // ignore taps while the previous toggle is still in flight
+    pendingLikeToggles.current.add(targetId);
+
     const current  = reviewLikesMap.get(targetId) ?? { liked: false, count: 0 };
 
     // Optimistic update
@@ -1332,39 +1336,43 @@ export default function AlbumDetailScreen() {
     });
     setReviewLikesMap(updated);
 
-    if (current.liked) {
-      const { error } = await supabase
-        .from('likes')
-        .delete()
-        .eq('user_id',     user.id)
-        .eq('target_type', 'review')
-        .eq('target_id',   targetId);
-      if (error) {
-        console.error('[album-detail] unlike error:', error.message);
-        setReviewLikesMap(new Map(reviewLikesMap)); // revert
-      }
-    } else {
-      const { error } = await supabase
-        .from('likes')
-        .insert({
-          user_id:         user.id,
-          target_type:     'review',
-          target_id:       targetId,
-          target_owner_id: review.userId,
-        });
-      if (error) {
-        console.error('[album-detail] like error:', error.message);
-        setReviewLikesMap(new Map(reviewLikesMap)); // revert
+    try {
+      if (current.liked) {
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id',     user.id)
+          .eq('target_type', 'review')
+          .eq('target_id',   targetId);
+        if (error) {
+          console.error('[album-detail] unlike error:', error.message);
+          setReviewLikesMap(new Map(reviewLikesMap)); // revert
+        }
       } else {
-        supabase.from('notifications').insert({
-          user_id:   review.userId,
-          type:      'like_review',
-          actor_id:  user.id,
-          target_id: review.id,
-        }).then(({ error: notifErr }) => {
-          if (notifErr) console.error('[album-detail] notification error:', notifErr.message);
-        });
+        const { error } = await supabase
+          .from('likes')
+          .insert({
+            user_id:         user.id,
+            target_type:     'review',
+            target_id:       targetId,
+            target_owner_id: review.userId,
+          });
+        if (error) {
+          console.error('[album-detail] like error:', error.message);
+          setReviewLikesMap(new Map(reviewLikesMap)); // revert
+        } else {
+          supabase.from('notifications').insert({
+            user_id:   review.userId,
+            type:      'like_review',
+            actor_id:  user.id,
+            target_id: review.id,
+          }).then(({ error: notifErr }) => {
+            if (notifErr) console.error('[album-detail] notification error:', notifErr.message);
+          });
+        }
       }
+    } finally {
+      pendingLikeToggles.current.delete(targetId);
     }
   }
 

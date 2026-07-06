@@ -813,7 +813,7 @@ app.get('/api/discover/community-popular', async (req, res) => {
 // Requires MIN_RATINGS reviews per album to appear.
 // Cached 1 h in-memory, 6 h in Supabase.
 
-const MIN_RATINGS = 3;
+const MIN_RATINGS = 5;
 
 app.get('/api/discover/community-top-rated', async (req, res) => {
   const CACHE_KEY = 'discover:community-top-rated';
