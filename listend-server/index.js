@@ -25,6 +25,86 @@ async function amFetch(path) {
 
 const amArtwork = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
 
+// ── Canonical album resolution ────────────────────────────────────────────────
+// Pins one Apple Music catalog ID per (artist, title) so independently-seeded
+// lists (genre, decade, etc.) and album logging all agree on the same album,
+// instead of each list's own search landing on a different catalog entry —
+// e.g. an unrequested remaster/anniversary edition nobody asked for.
+
+const EDITION_QUALIFIERS = ['remaster', 'anniversary', 'deluxe', 'edition', 'reissue', 'bonus', 'expanded'];
+const normalizeKey = s => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const hasQualifier = s => EDITION_QUALIFIERS.some(w => (s ?? '').toLowerCase().includes(w));
+
+async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, fallbackArtworkUrl }) {
+  const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
+
+  const { data: existing } = await supabase
+    .from('canonical_albums')
+    .select('canonical_id, title, artist, year, artwork_url')
+    .eq('normalized_key', normalizedKey)
+    .maybeSingle();
+
+  if (existing) {
+    return { id: existing.canonical_id, title: existing.title, artist: existing.artist, year: existing.year, artworkUrl: existing.artwork_url };
+  }
+
+  let resolved = null;
+  try {
+    const q = encodeURIComponent(`${artist} ${title}`);
+    const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=10`);
+    const candidates = data.results?.albums?.data ?? [];
+
+    if (candidates.length > 0) {
+      const nt = normalizeKey(title);
+      const na = normalizeKey(artist);
+      const queryHasQualifier = hasQualifier(title);
+
+      // Unless the query itself asked for a remaster/deluxe/etc., filter those
+      // out of the candidate pool first — this is what stops a plain "Dark
+      // Side of the Moon" search from landing on the "50th Anniversary
+      // Remastered" entry. Don't discard everything if every result happens
+      // to carry a qualifier (some albums genuinely only exist that way).
+      const filtered = queryHasQualifier ? candidates : candidates.filter(item => !hasQualifier(item.attributes?.name));
+      const pool = filtered.length > 0 ? filtered : candidates;
+
+      const match =
+        pool.find(item => normalizeKey(item.attributes?.name) === nt && normalizeKey(item.attributes?.artistName) === na) ??
+        pool.find(item => normalizeKey(item.attributes?.name) === nt) ??
+        pool[0];
+
+      if (match) {
+        resolved = {
+          id:         match.id,
+          title:      match.attributes?.name       ?? title,
+          artist:     match.attributes?.artistName ?? artist,
+          year:       parseInt(match.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
+          artworkUrl: amArtwork(match.attributes?.artwork),
+        };
+      }
+    }
+  } catch (e) {
+    console.error('[resolveCanonicalAlbum] search error:', e.message);
+  }
+
+  if (!resolved) {
+    resolved = { id: fallbackId, title, artist, year: fallbackYear ?? 0, artworkUrl: fallbackArtworkUrl ?? '' };
+  }
+
+  if (resolved.id) {
+    const { error: upsertErr } = await supabase.from('canonical_albums').upsert({
+      normalized_key: normalizedKey,
+      canonical_id:   resolved.id,
+      title:          resolved.title,
+      artist:         resolved.artist,
+      year:           resolved.year,
+      artwork_url:    resolved.artworkUrl,
+    }, { onConflict: 'normalized_key' });
+    if (upsertErr) console.error('[resolveCanonicalAlbum] cache upsert error:', upsertErr.message);
+  }
+
+  return resolved;
+}
+
 const app = express();
 app.set('trust proxy', 1); // Railway sits behind a proxy
 const PORT = process.env.PORT || 8080;
@@ -383,6 +463,36 @@ app.get('/search', [
     res.json(results);
   } catch (err) {
     console.error('[/search]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /api/resolve-album ─────────────────────────────────────────────────────
+// Resolves title+artist to one pinned canonical Apple Music album ID. Used by
+// the client (navigateToAlbum, album logging) and internally by the genre/
+// decade seeding scripts, so everything agrees on the same album regardless
+// of which list or screen it came from.
+
+app.get('/api/resolve-album', [
+  query('title').trim().isLength({ min: 1, max: 200 }),
+  query('artist').trim().isLength({ min: 1, max: 200 }),
+  query('fallbackId').optional().trim().isLength({ max: 50 }),
+  query('fallbackYear').optional().trim().isLength({ max: 10 }),
+  query('fallbackArtworkUrl').optional().trim().isLength({ max: 500 }),
+  validate,
+], async (req, res) => {
+  try {
+    const { title, artist, fallbackId, fallbackYear, fallbackArtworkUrl } = req.query;
+    const resolved = await resolveCanonicalAlbum({
+      title,
+      artist,
+      fallbackId:         fallbackId || undefined,
+      fallbackYear:       fallbackYear ? parseInt(fallbackYear, 10) : undefined,
+      fallbackArtworkUrl: fallbackArtworkUrl || undefined,
+    });
+    res.json(resolved);
+  } catch (err) {
+    console.error('[/api/resolve-album]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2363,35 +2473,31 @@ app.get('/api/admin/populate-genres', requireAdmin, async (req, res) => {
 
         await Promise.all(batch.map(async ({ artist, title }) => {
           try {
-            const q    = encodeURIComponent(`${artist} ${title}`);
-            const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=1`);
-            const item = data.results?.albums?.data?.[0];
+            // Resolve via the shared canonical resolver instead of an
+            // independent search, so this list lands on the same album ID
+            // as any other list/logging that's already resolved it.
+            const resolved = await resolveCanonicalAlbum({ title, artist });
 
-            if (!item) {
+            if (!resolved?.id) {
               errors.push({ genre, artist, title, error: 'not found in AM catalog' });
               return;
             }
-
-            const artworkUrl = amArtwork(item.attributes?.artwork);
-            const year       = parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10);
-            const amTitle    = item.attributes?.name    ?? title;
-            const amArtist   = item.attributes?.artistName ?? artist;
 
             // ignoreDuplicates handles the case where two search queries resolve
             // to the same AM album ID within the same genre — just keep the first.
             const { error: insertErr } = await supabase.from('genre_albums').upsert({
               genre_label: genre,
-              spotify_id:  item.id,
-              title:       amTitle,
-              artist:      amArtist,
-              artwork_url: artworkUrl,
-              year,
+              spotify_id:  resolved.id,
+              title:       resolved.title,
+              artist:      resolved.artist,
+              artwork_url: resolved.artworkUrl,
+              year:        resolved.year,
             }, { onConflict: 'genre_label,spotify_id', ignoreDuplicates: true });
 
             if (insertErr) {
               errors.push({ genre, artist, title, error: insertErr.message });
             } else {
-              populated.push({ genre, title: amTitle, artist: amArtist, id: item.id });
+              populated.push({ genre, title: resolved.title, artist: resolved.artist, id: resolved.id });
             }
           } catch (e) {
             errors.push({ genre, artist, title, error: e.message });
@@ -2440,33 +2546,29 @@ app.get('/api/admin/populate-decades', requireAdmin, async (req, res) => {
 
         await Promise.all(batch.map(async ({ artist, title }) => {
           try {
-            const q    = encodeURIComponent(`${artist} ${title}`);
-            const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=1`);
-            const item = data.results?.albums?.data?.[0];
+            // Resolve via the shared canonical resolver instead of an
+            // independent search, so this list lands on the same album ID
+            // as any other list/logging that's already resolved it.
+            const resolved = await resolveCanonicalAlbum({ title, artist });
 
-            if (!item) {
+            if (!resolved?.id) {
               errors.push({ decade, artist, title, error: 'not found in AM catalog' });
               return;
             }
 
-            const artworkUrl = amArtwork(item.attributes?.artwork);
-            const year       = parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10);
-            const amTitle    = item.attributes?.name       ?? title;
-            const amArtist   = item.attributes?.artistName ?? artist;
-
             const { error: insertErr } = await supabase.from('decade_albums').upsert({
               decade_label: decade,
-              spotify_id:   item.id,
-              title:        amTitle,
-              artist:       amArtist,
-              artwork_url:  artworkUrl,
-              year,
+              spotify_id:   resolved.id,
+              title:        resolved.title,
+              artist:       resolved.artist,
+              artwork_url:  resolved.artworkUrl,
+              year:         resolved.year,
             }, { onConflict: 'decade_label,spotify_id', ignoreDuplicates: true });
 
             if (insertErr) {
               errors.push({ decade, artist, title, error: insertErr.message });
             } else {
-              populated.push({ decade, title: amTitle, artist: amArtist, id: item.id });
+              populated.push({ decade, title: resolved.title, artist: resolved.artist, id: resolved.id });
             }
           } catch (e) {
             errors.push({ decade, artist, title, error: e.message });

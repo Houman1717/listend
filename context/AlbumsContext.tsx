@@ -10,6 +10,7 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { resolveCanonicalAlbum } from '@/lib/resolveCanonicalAlbum';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -458,33 +459,46 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  function logAlbum(rating: number, review: string) {
+  async function logAlbum(rating: number, review: string) {
     if (!pendingAlbum) return;
+    const pending = pendingAlbum;
+
+    // Resolve to one canonical album (same id/title/artist/year regardless of
+    // which list/screen this was logged from) before writing anything, so
+    // ratings and reviews for "the same album" always land on one row
+    // instead of being scattered across different catalog IDs.
+    const resolved = await resolveCanonicalAlbum({
+      id:         pending.spotifyId,
+      title:      pending.title,
+      artist:     pending.artist,
+      year:       pending.year,
+      artworkUrl: pending.artworkUrl,
+    });
 
     if (reListenMode) {
       // Re-listen: insert new re_listens row, update user_albums rating+date+count
       const dateLogged = new Date().toISOString();
-      const existingAlbum = loggedAlbums.find(a => a.id === pendingAlbum!.spotifyId);
+      const existingAlbum = loggedAlbums.find(a => a.id === resolved.id);
       const newCount = (existingAlbum?.reListenCount ?? 0) + 1;
 
       // Update local state — preserve original dateLogged and rating; set lastRating/lastReview/lastListenedAt
       setLoggedAlbums(prev => prev.map(a =>
-        a.id === pendingAlbum!.spotifyId
+        a.id === resolved.id
           ? { ...a, lastRating: rating, lastReview: review.trim() || undefined, reListenCount: newCount, isRelistened: true, lastListenedAt: dateLogged }
           : a
       ));
-      setWantToListen(prev => prev.filter(a => a.id !== pendingAlbum!.spotifyId));
+      setWantToListen(prev => prev.filter(a => a.id !== resolved.id));
       setPendingAlbum(null);
       setReListenMode(false);
 
       if (user) {
         supabase.from('re_listens').insert({
           user_id:     user.id,
-          spotify_id:  pendingAlbum!.spotifyId,
-          title:       pendingAlbum!.title,
-          artist:      pendingAlbum!.artist,
-          artwork_url: pendingAlbum!.artworkUrl ?? null,
-          year:        pendingAlbum!.year,
+          spotify_id:  resolved.id,
+          title:       resolved.title,
+          artist:      resolved.artist,
+          artwork_url: resolved.artworkUrl || null,
+          year:        resolved.year,
           rating,
           review:      review.trim() || null,
           listened_at: dateLogged,
@@ -493,7 +507,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         supabase.from('user_albums').update({
           re_listen_count: newCount,
           is_relistened:   true,
-        }).eq('user_id', user.id).eq('spotify_id', pendingAlbum!.spotifyId)
+        }).eq('user_id', user.id).eq('spotify_id', resolved.id)
           .then(({ error }) => { if (error) console.error('[AlbumsContext] reListenAlbum update error:', error.message); });
       }
       return;
@@ -503,14 +517,14 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     const colorIndex = loggedAlbums.length % COVER_COLORS.length;
 
     const newAlbum: LoggedAlbum = {
-      id:         pendingAlbum.spotifyId,
-      title:      pendingAlbum.title,
-      artist:     pendingAlbum.artist,
-      year:       pendingAlbum.year,
+      id:         resolved.id,
+      title:      resolved.title,
+      artist:     resolved.artist,
+      year:       resolved.year,
       rating,
       review:     review.trim() || undefined,
       dateLogged,
-      artworkUrl: pendingAlbum.artworkUrl || undefined,
+      artworkUrl: resolved.artworkUrl || undefined,
       coverColor: COVER_COLORS[colorIndex],
     };
 
