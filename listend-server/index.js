@@ -2432,6 +2432,21 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /api/admin/purge-featured-playlist-cache ──────────────────────────────
+
+app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
+  try {
+    const keys = ['featured-playlists:meta:v6', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v6:${m.id}`)];
+    cacheClear(...keys);
+    await Promise.all(keys.map(k => deleteCache(k)));
+    console.log('[/api/admin/purge-featured-playlist-cache] done.');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[/api/admin/purge-featured-playlist-cache]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
+  }
+});
+
 // ── GET /api/admin/purge-lastfm-cache ─────────────────────────────────────────
 
 app.get('/api/admin/purge-lastfm-cache', requireAdmin, async (req, res) => {
@@ -2713,29 +2728,13 @@ app.post('/api/delete-cover', requireAuth, [
 // ── Featured Playlists ────────────────────────────────────────────────────────
 
 // Search Apple Music for a single album by artist + title. Returns a CatalogAlbum-compatible object.
-async function searchAMAlbum(artist, title, attempt = 0) {
-  const term = encodeURIComponent(`${title} ${artist}`);
-  const fallback = { id: `fp-${artist}-${title}`.replace(/\s+/g, '-').toLowerCase(), title, artist, year: 0, artworkUrl: '' };
-  try {
-    const data = await amFetch(`/catalog/us/search?types=albums&term=${term}&limit=1`);
-    const item = data?.results?.albums?.data?.[0];
-    if (!item) {
-      if (attempt < 2) { await new Promise(r => setTimeout(r, 600 * (attempt + 1))); return searchAMAlbum(artist, title, attempt + 1); }
-      return fallback;
-    }
-    const artworkUrl = amArtwork(item.attributes?.artwork);
-    if (!artworkUrl && attempt < 2) { await new Promise(r => setTimeout(r, 600 * (attempt + 1))); return searchAMAlbum(artist, title, attempt + 1); }
-    return {
-      id: item.id,
-      title: item.attributes?.name ?? title,
-      artist: item.attributes?.artistName ?? artist,
-      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
-      artworkUrl,
-    };
-  } catch {
-    if (attempt < 2) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); return searchAMAlbum(artist, title, attempt + 1); }
-    return fallback;
-  }
+// Delegates to the shared canonical resolver so featured playlists agree with
+// every other list/logging flow on the same album, instead of independently
+// landing on a different catalog entry (e.g. an unrequested remaster).
+async function searchAMAlbum(artist, title) {
+  const resolved = await resolveCanonicalAlbum({ title, artist });
+  if (resolved.id) return resolved;
+  return { id: `fp-${artist}-${title}`.replace(/\s+/g, '-').toLowerCase(), title, artist, year: 0, artworkUrl: '' };
 }
 
 // Deduplicate an album array by Apple Music ID, keeping first occurrence.
