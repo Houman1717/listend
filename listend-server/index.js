@@ -2497,6 +2497,59 @@ app.get('/api/admin/purge-search-cache', requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /api/admin/check-merge-conflict ───────────────────────────────────────
+// Read-only diagnostic: checks whether merging two spotify_ids in user_albums
+// would hit a conflict (the same user already having a row under both ids).
+// Pass ?idA=...&idB=... — no writes, safe to run any time.
+
+app.get('/api/admin/check-merge-conflict', requireAdmin, [
+  query('idA').trim().matches(/^[a-zA-Z0-9_-]+$/).isLength({ max: 50 }),
+  query('idB').trim().matches(/^[a-zA-Z0-9_-]+$/).isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
+  try {
+    const { idA, idB } = req.query;
+
+    const [{ data: rowsA, error: errA }, { data: rowsB, error: errB }] = await Promise.all([
+      supabase.from('user_albums').select('user_id, rating, review, listened_at').eq('spotify_id', idA),
+      supabase.from('user_albums').select('user_id, rating, review, listened_at').eq('spotify_id', idB),
+    ]);
+    if (errA) throw errA;
+    if (errB) throw errB;
+
+    const usersA = new Map((rowsA ?? []).map(r => [r.user_id, r]));
+    const usersB = new Map((rowsB ?? []).map(r => [r.user_id, r]));
+    const overlapUserIds = [...usersA.keys()].filter(u => usersB.has(u));
+
+    // Same check for likes/comments composite target ids, since those would
+    // also need re-pointing during an actual merge.
+    const targetsA = (rowsA ?? []).map(r => `${r.user_id}_${idA}`);
+    const targetsB = (rowsB ?? []).map(r => `${r.user_id}_${idB}`);
+    const [{ data: likesA }, { data: likesB }, { data: commentsA }, { data: commentsB }] = await Promise.all([
+      supabase.from('likes').select('id').eq('target_type', 'review').in('target_id', targetsA),
+      supabase.from('likes').select('id').eq('target_type', 'review').in('target_id', targetsB),
+      supabase.from('review_comments').select('id').in('review_id', targetsA),
+      supabase.from('review_comments').select('id').in('review_id', targetsB),
+    ]);
+
+    res.json({
+      idA,
+      idB,
+      countA: rowsA?.length ?? 0,
+      countB: rowsB?.length ?? 0,
+      overlapUserCount: overlapUserIds.length,
+      overlapDetails: overlapUserIds.map(u => ({ user_id: u, rowA: usersA.get(u), rowB: usersB.get(u) })),
+      likesOnA: likesA?.length ?? 0,
+      likesOnB: likesB?.length ?? 0,
+      commentsOnA: commentsA?.length ?? 0,
+      commentsOnB: commentsB?.length ?? 0,
+    });
+  } catch (err) {
+    console.error('[/api/admin/check-merge-conflict]', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Check failed' });
+  }
+});
+
 // ── GET /api/admin/purge-featured-playlist-cache ──────────────────────────────
 
 app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
