@@ -2,7 +2,7 @@
   "expo": {
     "name": "Listend",
     "slug": "Listend",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "listend",
@@ -29,6 +29,8 @@
       }
     },
     "android": {
+      "package": "com.houman.listend",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
