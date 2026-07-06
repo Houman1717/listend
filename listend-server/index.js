@@ -35,6 +35,16 @@ const EDITION_QUALIFIERS = ['remaster', 'anniversary', 'deluxe', 'edition', 'rei
 const normalizeKey = s => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const hasQualifier = s => EDITION_QUALIFIERS.some(w => (s ?? '').toLowerCase().includes(w));
 
+// Narrower than EDITION_QUALIFIERS above — only "same content, re-released"
+// cases (remaster/anniversary/reissue). Deliberately excludes deluxe/bonus/
+// expanded editions, which usually add genuinely different bonus content and
+// should stay separately findable (e.g. an artist's Collections tab already
+// correctly lists a deluxe edition as its own distinct item).
+const SAME_CONTENT_QUALIFIERS = ['remaster', 'anniversary', 'reissue'];
+const stripSameContentQualifier = title => (title ?? '')
+  .replace(/[([][^)\]]*\b(?:remaster(?:ed)?|anniversary|reissue)\b[^)\]]*[)\]]/gi, '')
+  .trim();
+
 async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, fallbackArtworkUrl }) {
   const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
 
@@ -434,13 +444,32 @@ app.get('/search', [
 
     let results;
     if (type === 'album') {
-      results = (data.results?.albums?.data ?? []).map(item => ({
+      const raw = (data.results?.albums?.data ?? []).map(item => ({
         id: item.id,
         title: item.attributes?.name ?? '',
         artist: item.attributes?.artistName ?? '',
         year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
         artworkUrl: artworkUrl(item.attributes?.artwork),
       }));
+
+      // Collapse remaster/anniversary/reissue duplicates of the same album
+      // into one result (preferring the plain version) so searching doesn't
+      // show near-duplicate entries for what's really one album. Deluxe/bonus
+      // editions are left alone — those stay separately searchable.
+      const groups = new Map();
+      const order  = [];
+      for (const album of raw) {
+        const key = `${normalizeKey(album.artist)}::${normalizeKey(stripSameContentQualifier(album.title))}`;
+        const existing = groups.get(key);
+        if (!existing) {
+          groups.set(key, album);
+          order.push(key);
+        } else if (SAME_CONTENT_QUALIFIERS.some(w => existing.title.toLowerCase().includes(w)) &&
+                   !SAME_CONTENT_QUALIFIERS.some(w => album.title.toLowerCase().includes(w))) {
+          groups.set(key, album); // prefer the plain version as the representative
+        }
+      }
+      results = order.map(key => groups.get(key));
     } else if (type === 'track') {
       results = (data.results?.songs?.data ?? []).map(item => ({
         id: item.id,
@@ -2428,6 +2457,22 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('[/api/admin/purge-discover-cache]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
+  }
+});
+
+// ── GET /api/admin/purge-search-cache ─────────────────────────────────────────
+
+app.get('/api/admin/purge-search-cache', requireAdmin, async (req, res) => {
+  try {
+    for (const key of memCache.keys()) {
+      if (key.startsWith('search:')) memCache.delete(key);
+    }
+    await deleteCachePrefix('search:');
+    console.log('[/api/admin/purge-search-cache] done.');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[/api/admin/purge-search-cache]', err.message ?? err);
     res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
   }
 });
