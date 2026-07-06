@@ -45,6 +45,25 @@ const stripSameContentQualifier = title => (title ?? '')
   .replace(/[([][^)\]]*\b(?:remaster(?:ed)?|anniversary|reissue)\b[^)\]]*[)\]]/gi, '')
   .trim();
 
+// Explicit/clean is a content-advisory marker some catalog entries bake
+// directly into the title text (e.g. "Deluxe Edition (Explicit)" vs. "Deluxe
+// Edition") — it's the same tracklist either way, unlike a genuine deluxe/
+// standard distinction, so this always collapses regardless of edition type.
+const CONTENT_TAGS = ['explicit', 'clean'];
+const stripContentTag = title => (title ?? '')
+  .replace(/[([][^)\]]*\b(?:explicit|clean)\b[^)\]]*[)\]]/gi, '')
+  .trim();
+
+// Lower = more preferred representative when multiple search results collapse
+// into the same group.
+function editionScore(title) {
+  const t = (title ?? '').toLowerCase();
+  let score = 0;
+  if (SAME_CONTENT_QUALIFIERS.some(w => t.includes(w))) score += 1;
+  if (CONTENT_TAGS.some(w => t.includes(w))) score += 1;
+  return score;
+}
+
 async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, fallbackArtworkUrl }) {
   const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
 
@@ -452,21 +471,22 @@ app.get('/search', [
         artworkUrl: artworkUrl(item.attributes?.artwork),
       }));
 
-      // Collapse remaster/anniversary/reissue duplicates of the same album
-      // into one result (preferring the plain version) so searching doesn't
-      // show near-duplicate entries for what's really one album. Deluxe/bonus
-      // editions are left alone — those stay separately searchable.
+      // Collapse remaster/anniversary/reissue/explicit-tag duplicates of the
+      // same album into one result (preferring the cleanest title) so
+      // searching doesn't show near-duplicate entries for what's really one
+      // album. Deluxe/bonus editions are left alone — those stay separately
+      // searchable, since they usually carry genuinely different content.
       const groups = new Map();
       const order  = [];
       for (const album of raw) {
-        const key = `${normalizeKey(album.artist)}::${normalizeKey(stripSameContentQualifier(album.title))}`;
+        const strippedTitle = stripContentTag(stripSameContentQualifier(album.title));
+        const key = `${normalizeKey(album.artist)}::${normalizeKey(strippedTitle)}`;
         const existing = groups.get(key);
         if (!existing) {
           groups.set(key, album);
           order.push(key);
-        } else if (SAME_CONTENT_QUALIFIERS.some(w => existing.title.toLowerCase().includes(w)) &&
-                   !SAME_CONTENT_QUALIFIERS.some(w => album.title.toLowerCase().includes(w))) {
-          groups.set(key, album); // prefer the plain version as the representative
+        } else if (editionScore(album.title) < editionScore(existing.title)) {
+          groups.set(key, album); // prefer the cleaner-titled representative
         }
       }
       results = order.map(key => groups.get(key));
