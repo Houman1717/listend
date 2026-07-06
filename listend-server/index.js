@@ -2568,6 +2568,67 @@ app.get('/api/admin/check-merge-conflict', requireAdmin, [
   }
 });
 
+// ── GET /api/admin/merge-albums ───────────────────────────────────────────────
+// Merges every user_albums row under idA into idB (the canonical id). For any
+// user who already has a row under both, keeps their existing idB row as-is
+// and deletes the idA duplicate. Everyone else's idA row gets re-pointed to
+// idB directly (spotify_id + display fields updated to match). Run
+// check-merge-conflict first — this assumes ratings already match for any
+// overlapping users; it does not attempt to reconcile differing ratings.
+
+app.get('/api/admin/merge-albums', requireAdmin, [
+  query('idA').trim().matches(/^[a-zA-Z0-9_-]+$/).isLength({ max: 50 }),
+  query('idB').trim().matches(/^[a-zA-Z0-9_-]+$/).isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
+  try {
+    const { idA, idB } = req.query;
+
+    const { data: canonicalRow, error: canErr } = await supabase
+      .from('user_albums')
+      .select('title, artist, artwork_url, year')
+      .eq('spotify_id', idB)
+      .limit(1)
+      .maybeSingle();
+    if (canErr) throw canErr;
+    if (!canonicalRow) return res.status(400).json({ error: `No existing user_albums row found for idB=${idB}` });
+
+    const [{ data: rowsA, error: errA }, { data: rowsB, error: errB }] = await Promise.all([
+      supabase.from('user_albums').select('user_id').eq('spotify_id', idA),
+      supabase.from('user_albums').select('user_id').eq('spotify_id', idB),
+    ]);
+    if (errA) throw errA;
+    if (errB) throw errB;
+
+    const usersB = new Set((rowsB ?? []).map(r => r.user_id));
+    const overlapUsers = (rowsA ?? []).filter(r => usersB.has(r.user_id)).map(r => r.user_id);
+    const uniqueAUsers = (rowsA ?? []).filter(r => !usersB.has(r.user_id)).map(r => r.user_id);
+
+    if (overlapUsers.length > 0) {
+      const { error } = await supabase.from('user_albums').delete()
+        .eq('spotify_id', idA).in('user_id', overlapUsers);
+      if (error) throw error;
+    }
+
+    if (uniqueAUsers.length > 0) {
+      const { error } = await supabase.from('user_albums').update({
+        spotify_id:  idB,
+        title:       canonicalRow.title,
+        artist:      canonicalRow.artist,
+        artwork_url: canonicalRow.artwork_url,
+        year:        canonicalRow.year,
+      }).eq('spotify_id', idA).in('user_id', uniqueAUsers);
+      if (error) throw error;
+    }
+
+    console.log(`[/api/admin/merge-albums] merged idA=${idA} into idB=${idB}: ${overlapUsers.length} duplicates removed, ${uniqueAUsers.length} rows re-pointed`);
+    res.json({ ok: true, idA, idB, duplicatesRemoved: overlapUsers.length, rowsRepointed: uniqueAUsers.length });
+  } catch (err) {
+    console.error('[/api/admin/merge-albums]', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Merge failed' });
+  }
+});
+
 // ── GET /api/admin/purge-featured-playlist-cache ──────────────────────────────
 
 app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
