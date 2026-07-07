@@ -189,6 +189,21 @@ function cacheClear(...keys) {
   for (const k of keys) memCache.delete(k);
 }
 
+// Supabase/PostgREST silently caps every response at 1000 rows regardless of
+// .limit() — so any query expecting more than 1000 rows (e.g. all-time
+// aggregations) must paginate with .range() or it silently drops the rest.
+async function fetchAllRows(buildQuery, pageSize = 1000, maxPages = 20) {
+  let rows = [];
+  for (let page = 0; page < maxPages; page++) {
+    const from = page * pageSize;
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    if (error) throw error;
+    rows = rows.concat(data ?? []);
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}
+
 // ── CORS ───────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
   'https://listend-production.up.railway.app',
@@ -931,21 +946,18 @@ app.get('/api/discover/community-popular', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_30M); return res.json(db); }
 
   try {
-    const [{ data, error }, { data: relistenData, error: relistenError }] = await Promise.all([
-      supabase
+    const [data, relistenData] = await Promise.all([
+      fetchAllRows((from, to) => supabase
         .from('user_albums')
         .select('spotify_id, user_id, title, artist, year, artwork_url')
         .not('listened_at', 'is', null)
-        .limit(5000),
-      supabase
+        .range(from, to)),
+      fetchAllRows((from, to) => supabase
         .from('re_listens')
         .select('spotify_id, user_id, title, artist, year, artwork_url')
         .not('listened_at', 'is', null)
-        .limit(5000),
+        .range(from, to)),
     ]);
-
-    if (error) throw error;
-    if (relistenError) throw relistenError;
 
     // Cap each user's contribution to an album at 2 (one base log + one
     // re-listen bonus) regardless of how many times they actually re-listen —
@@ -1004,14 +1016,12 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_30M); return res.json(db); }
 
   try {
-    const { data, error } = await supabase
+    const data = await fetchAllRows((from, to) => supabase
       .from('user_albums')
       .select('spotify_id, title, artist, year, artwork_url, rating')
       .not('rating', 'is', null)
       .gt('rating', 0)
-      .limit(5000);
-
-    if (error) throw error;
+      .range(from, to));
 
     const agg = new Map();
     for (const r of (data ?? [])) {
@@ -1061,14 +1071,11 @@ app.get('/api/discover/community-top-artists', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
 
   try {
-    const [{ data: likedRows, error: e1 }, { data: top5Rows, error: e2 }, { data: albumRows, error: e3 }] = await Promise.all([
-      supabase.from('liked_artists').select('artist_id, name, artwork_url').limit(5000),
-      supabase.from('top5_changes').select('item_id, item_name, item_image_url').eq('category', 'artists').limit(5000),
-      supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).limit(5000),
+    const [likedRows, top5Rows, albumRows] = await Promise.all([
+      fetchAllRows((from, to) => supabase.from('liked_artists').select('artist_id, name, artwork_url').range(from, to)),
+      fetchAllRows((from, to) => supabase.from('top5_changes').select('item_id, item_name, item_image_url').eq('category', 'artists').range(from, to)),
+      fetchAllRows((from, to) => supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).range(from, to)),
     ]);
-    if (e1) throw e1;
-    if (e2) throw e2;
-    if (e3) throw e3;
 
     const counts = new Map();
     for (const r of (likedRows ?? [])) {
@@ -1143,13 +1150,11 @@ app.get('/api/discover/community-top-songs', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
 
   try {
-    const { data, error } = await supabase
+    const data = await fetchAllRows((from, to) => supabase
       .from('top5_changes')
       .select('item_id, item_name, item_image_url')
       .eq('category', 'songs')
-      .limit(5000);
-
-    if (error) throw error;
+      .range(from, to));
 
     const counts = new Map();
     for (const r of (data ?? [])) {
