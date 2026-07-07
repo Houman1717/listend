@@ -170,6 +170,7 @@ const memCache = new Map();
 
 const TTL_6H  = 6  * 60 * 60 * 1000;
 const TTL_1H  = 1  * 60 * 60 * 1000;
+const TTL_30M = 30 * 60 * 1000;
 const TTL_10M = 10 * 60 * 1000;
 
 function cacheGet(key) {
@@ -917,7 +918,8 @@ app.get('/discover/top-rated', async (req, res) => {
 // ── GET /api/discover/community-popular ──────────────────────────────────────
 // All-time most-logged albums from real Listend user data.
 // Aggregates in JS (same pattern as fetchTopAlbumsThisWeek) over up to 5000 rows.
-// Cached 1 h in-memory, 6 h in Supabase.
+// Cached 30 min in-memory, 30 min in Supabase — kept short because with a small
+// user base, a handful of new logs/re-listens can visibly shift rank.
 
 app.get('/api/discover/community-popular', async (req, res) => {
   const CACHE_KEY = 'discover:community-popular';
@@ -925,40 +927,57 @@ app.get('/api/discover/community-popular', async (req, res) => {
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(mem);
 
-  const db = await getCached(CACHE_KEY, TTL_6H);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
+  const db = await getCached(CACHE_KEY, TTL_30M);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_30M); return res.json(db); }
 
   try {
-    const { data, error } = await supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, year, artwork_url')
-      .not('listened_at', 'is', null)
-      .limit(5000);
+    const [{ data, error }, { data: relistenData, error: relistenError }] = await Promise.all([
+      supabase
+        .from('user_albums')
+        .select('spotify_id, user_id, title, artist, year, artwork_url')
+        .not('listened_at', 'is', null)
+        .limit(5000),
+      supabase
+        .from('re_listens')
+        .select('spotify_id, user_id, title, artist, year, artwork_url')
+        .not('listened_at', 'is', null)
+        .limit(5000),
+    ]);
 
     if (error) throw error;
+    if (relistenError) throw relistenError;
 
-    const counts = new Map();
-    for (const r of (data ?? [])) {
-      if (!r.spotify_id) continue;
-      const e = counts.get(r.spotify_id);
-      if (e) {
-        e.count++;
-        // prefer non-empty artwork
-        if (!e.album.artworkUrl && r.artwork_url) e.album.artworkUrl = r.artwork_url;
-      } else {
-        counts.set(r.spotify_id, {
-          album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' },
-          count: 1,
-        });
+    // Cap each user's contribution to an album at 2 (one base log + one
+    // re-listen bonus) regardless of how many times they actually re-listen —
+    // otherwise a single user could spam re-listens to push an album to the
+    // top on their own.
+    const entries = new Map();
+    const getEntry = (r) => {
+      let e = entries.get(r.spotify_id);
+      if (!e) {
+        e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set() };
+        entries.set(r.spotify_id, e);
+      } else if (!e.album.artworkUrl && r.artwork_url) {
+        e.album.artworkUrl = r.artwork_url;
       }
+      return e;
+    };
+
+    for (const r of (data ?? [])) {
+      if (!r.spotify_id || !r.user_id) continue;
+      getEntry(r).baseUsers.add(r.user_id);
+    }
+    for (const r of (relistenData ?? [])) {
+      if (!r.spotify_id || !r.user_id) continue;
+      getEntry(r).relistenUsers.add(r.user_id);
     }
 
-    const results = Array.from(counts.values())
-      .sort((a, b) => b.count - a.count)
+    const results = Array.from(entries.values())
+      .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
       .slice(0, 50)
       .map(e => e.album);
 
-    cacheSet(CACHE_KEY, results, TTL_1H);
+    cacheSet(CACHE_KEY, results, TTL_30M);
     await setCache(CACHE_KEY, results);
     res.json(results);
   } catch (err) {
@@ -970,7 +989,8 @@ app.get('/api/discover/community-popular', async (req, res) => {
 // ── GET /api/discover/community-top-rated ────────────────────────────────────
 // All-time top-rated albums from real Listend user data.
 // Requires MIN_RATINGS reviews per album to appear.
-// Cached 1 h in-memory, 6 h in Supabase.
+// Cached 30 min in-memory, 30 min in Supabase — kept short because with a small
+// user base, a handful of new ratings can visibly shift average/rank.
 
 const MIN_RATINGS = 5;
 
@@ -980,8 +1000,8 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(mem);
 
-  const db = await getCached(CACHE_KEY, TTL_6H);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
+  const db = await getCached(CACHE_KEY, TTL_30M);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_30M); return res.json(db); }
 
   try {
     const { data, error } = await supabase
@@ -1016,7 +1036,7 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
       .slice(0, 50)
       .map(e => e.album);
 
-    cacheSet(CACHE_KEY, results, TTL_1H);
+    cacheSet(CACHE_KEY, results, TTL_30M);
     await setCache(CACHE_KEY, results);
     res.json(results);
   } catch (err) {
