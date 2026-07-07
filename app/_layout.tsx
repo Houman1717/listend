@@ -109,11 +109,19 @@ function AuthGate() {
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as any;
       if (!data?.type) return;
-      if (data.type === 'message') {
+      if (data.type === 'flip_cooldown') {
+        router.push('/flip-a-record');
+      } else if (data.type === 'message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
       } else if ((data.type === 'like_review' || data.type === 'comment' || data.type === 'comment_reply') && data.targetId) {
         const albumId = data.targetId.split('_')[1];
         router.push({ pathname: '/album-detail', params: { id: albumId } } as any);
+      } else if (data.type === 'like_playlist' && data.targetId) {
+        if ((data.targetId as string).startsWith('featured:')) {
+          router.push({ pathname: '/discover-featured-playlist', params: { id: (data.targetId as string).replace('featured:', '') } } as any);
+        } else {
+          router.push({ pathname: '/playlist-detail', params: { id: data.targetId } } as any);
+        }
       } else {
         router.push({ pathname: '/user-profile', params: { userId: data.actorId } });
       }

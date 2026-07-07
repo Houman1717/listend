@@ -112,12 +112,17 @@ export default function DMConversationScreen() {
       .single()
       .then(({ data }) => {
         if (data) {
+          const name = data.display_name || data.username || 'Message';
           navigation.setOptions({
-            title: data.display_name || data.username || 'Message',
+            headerTitle: () => (
+              <Pressable onPress={() => router.push({ pathname: '/user-profile', params: { userId: otherUserId } })}>
+                <Text style={{ color: '#f5e6c8', fontSize: 17, fontWeight: '700' }}>{name}</Text>
+              </Pressable>
+            ),
           });
         }
       });
-  }, [otherUserId, navigation]);
+  }, [otherUserId, navigation, router]);
 
   // ── Load messages + start polling ───────────────────────────────────────────
   useEffect(() => {

@@ -23,26 +23,46 @@ function weekAgo(): string {
 }
 
 export async function fetchTopAlbumsThisWeek(): Promise<CatalogAlbum[]> {
-  const { data } = await supabase
-    .from('user_albums')
-    .select('spotify_id, title, artist, year, artwork_url')
-    .gte('listened_at', weekAgo())
-    .limit(500);
+  const [{ data }, { data: relistenData }] = await Promise.all([
+    supabase
+      .from('user_albums')
+      .select('spotify_id, user_id, title, artist, year, artwork_url')
+      .gte('listened_at', weekAgo())
+      .limit(500),
+    supabase
+      .from('re_listens')
+      .select('spotify_id, user_id, title, artist, year, artwork_url')
+      .gte('listened_at', weekAgo())
+      .limit(500),
+  ]);
 
-  if (!data?.length) return [];
+  if (!data?.length && !relistenData?.length) return [];
 
-  const counts = new Map<string, { album: CatalogAlbum; count: number }>();
-  for (const r of data as any[]) {
-    if (!r.spotify_id) continue;
-    const e = counts.get(r.spotify_id);
-    if (e) e.count++;
-    else counts.set(r.spotify_id, {
-      album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' },
-      count: 1,
-    });
+  // Cap each user's contribution to an album at 2 (one base log + one re-listen
+  // bonus) regardless of how many times they actually re-listen — otherwise a
+  // single user could spam re-listens to push an album to the top on their own.
+  const entries = new Map<string, { album: CatalogAlbum; baseUsers: Set<string>; relistenUsers: Set<string> }>();
+  const getEntry = (r: any) => {
+    let e = entries.get(r.spotify_id);
+    if (!e) {
+      e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set() };
+      entries.set(r.spotify_id, e);
+    }
+    return e;
+  };
+
+  for (const r of (data ?? []) as any[]) {
+    if (!r.spotify_id || !r.user_id) continue;
+    getEntry(r).baseUsers.add(r.user_id);
+  }
+  for (const r of (relistenData ?? []) as any[]) {
+    if (!r.spotify_id || !r.user_id) continue;
+    getEntry(r).relistenUsers.add(r.user_id);
   }
 
-  return Array.from(counts.values()).sort((a, b) => b.count - a.count).map(e => e.album);
+  return Array.from(entries.values())
+    .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
+    .map(e => e.album);
 }
 
 export async function fetchTopSongsThisWeek(): Promise<CatalogTrack[]> {

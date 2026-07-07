@@ -16,6 +16,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
+import { ProBadge } from '@/components/ProBadge';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ type Conversation = {
   partnerName: string;
   partnerUsername: string | null;
   partnerAvatarUrl: string | null;
+  partnerIsPro: boolean;
   lastMessage: Message;
 };
 
@@ -106,7 +108,7 @@ export default function DMsScreen() {
 
     const { data: profiles, error: profErr } = await supabase
       .from('profiles')
-      .select('id, display_name, username, avatar_url')
+      .select('id, display_name, username, avatar_url, is_pro')
       .in('id', partnerIds);
 
     if (profErr) console.error('[DMs] profiles fetch error:', profErr);
@@ -121,6 +123,7 @@ export default function DMsScreen() {
           partnerName:      profile?.display_name || profile?.username || 'Unknown',
           partnerUsername:  profile?.username  ?? null,
           partnerAvatarUrl: profile?.avatar_url ?? null,
+          partnerIsPro:     !!(profile as any)?.is_pro,
           lastMessage: convMap.get(partnerId)!,
         };
       })
@@ -190,17 +193,25 @@ export default function DMsScreen() {
                 params: { userId: item.partnerId },
               })
             }>
-            {item.partnerAvatarUrl ? (
-              <ExpoImage source={{ uri: item.partnerAvatarUrl }} style={s.avatar}
-            contentFit="cover" cachePolicy="disk"
-          />
-            ) : (
-              <View style={[s.avatar, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={[s.avatarInitial, { color: colors.subtext }]}>{initial}</Text>
-              </View>
-            )}
+            <Pressable onPress={() => router.push({ pathname: '/user-profile', params: { userId: item.partnerId } })} hitSlop={4}>
+              {item.partnerAvatarUrl ? (
+                <ExpoImage source={{ uri: item.partnerAvatarUrl }} style={s.avatar}
+              contentFit="cover" cachePolicy="disk"
+            />
+              ) : (
+                <View style={[s.avatar, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={[s.avatarInitial, { color: colors.subtext }]}>{initial}</Text>
+                </View>
+              )}
+            </Pressable>
             <View style={s.textWrap}>
-              <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{item.partnerName}</Text>
+              <Pressable
+                onPress={() => router.push({ pathname: '/user-profile', params: { userId: item.partnerId } })}
+                hitSlop={4}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{item.partnerName}</Text>
+                {item.partnerIsPro && <ProBadge size="xs" />}
+              </Pressable>
               <Text style={[s.preview, { color: colors.subtext }]} numberOfLines={1}>{previewText(item.lastMessage)}</Text>
             </View>
             <Text style={[s.time, { color: colors.subtext }]}>

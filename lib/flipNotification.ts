@@ -10,6 +10,7 @@ export async function scheduleFlipCooldownNotification(cooldownUntil: number) {
     content: {
       title: 'Time to flip!',
       body: "Your cooldown is over — go find your next record.",
+      data: { type: 'flip_cooldown' },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,

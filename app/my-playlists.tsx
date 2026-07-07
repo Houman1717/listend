@@ -508,9 +508,10 @@ export default function MyPlaylistsScreen() {
         setPlaylistLikesMap(new Map(playlistLikesMap)); // revert
       } else {
         supabase.from('notifications').insert({
-          user_id:  viewingOther,   // recipient = playlist owner (user B)
-          type:     'like_playlist',
-          actor_id: user.id,        // sender   = liker          (user A)
+          user_id:   viewingOther,  // recipient = playlist owner (user B)
+          type:      'like_playlist',
+          actor_id:  user.id,       // sender   = liker          (user A)
+          target_id: targetId,
         }).then(({ error: notifErr }) => {
           if (notifErr) {
             console.error('[Playlists] notification insert error:', notifErr.message, notifErr.code, notifErr.details);

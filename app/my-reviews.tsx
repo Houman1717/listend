@@ -25,6 +25,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
@@ -156,6 +157,7 @@ function ReviewRow({
 
 function ReviewDetailModal({
   album,
+  reviewId,
   isDark,
   colors,
   reviewerUsername,
@@ -168,6 +170,7 @@ function ReviewDetailModal({
   onReport,
 }: {
   album: LoggedAlbum;
+  reviewId: string;
   isDark: boolean;
   colors: ColorsShape;
   reviewerUsername: string;
@@ -180,6 +183,7 @@ function ReviewDetailModal({
   onReport?: () => void;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [localComments,    setLocalComments]    = useState<ReviewComment[]>([]);
   const border = isDark ? '#2a1e14' : '#e5e5e5';
@@ -187,11 +191,17 @@ function ReviewDetailModal({
     ? new Date(album.dateLogged).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '';
 
+  useEffect(() => {
+    fetchReviewComments(reviewId).then(setLocalComments);
+  }, [reviewId]);
+
   function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+    if (!user?.id) return;
+    const tempId = `rev_${Date.now()}`;
     setLocalComments(prev => [...prev, {
-      id: `rev_${Date.now()}`,
-      reviewId: album.id,
-      userId: 'me',
+      id: tempId,
+      reviewId,
+      userId: user.id,
       username: commenterUsername ?? reviewerUsername,
       avatarUrl: avatarUrl ?? null,
       body,
@@ -199,6 +209,11 @@ function ReviewDetailModal({
       replyToUsername: replyToUsername ?? null,
       createdAt: 'just now',
     }]);
+    insertReviewComment(reviewId, user.id, body, parentId ?? null).then(realId => {
+      if (realId) {
+        setLocalComments(prev => prev.map(item => item.id === tempId ? { ...item, id: realId } : item));
+      }
+    });
   }
 
   return (
@@ -1016,6 +1031,7 @@ export default function MyReviewsScreen() {
         return (
           <ReviewDetailModal
             album={selectedReview}
+            reviewId={targetId}
             isDark={isDark}
             colors={colors}
             reviewerUsername={profileUsername}
@@ -1044,6 +1060,7 @@ export default function MyReviewsScreen() {
         return (
           <ReviewDetailModal
             album={selectedLiked}
+            reviewId={targetId}
             isDark={isDark}
             colors={colors}
             reviewerUsername={selectedLiked.username}

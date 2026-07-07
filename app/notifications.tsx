@@ -208,6 +208,12 @@ export default function NotificationsScreen() {
               } else if ((item.type === 'like_review' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
                 const albumId = item.targetId.split('_')[1];
                 router.push({ pathname: '/album-detail', params: { id: albumId, reviewId: item.targetId } } as any);
+              } else if (item.type === 'like_playlist' && item.targetId) {
+                if (item.targetId.startsWith('featured:')) {
+                  router.push({ pathname: '/discover-featured-playlist', params: { id: item.targetId.replace('featured:', '') } } as any);
+                } else {
+                  router.push({ pathname: '/playlist-detail', params: { id: item.targetId } } as any);
+                }
               } else {
                 router.push({ pathname: '/user-profile', params: { userId: item.actorId } });
               }
