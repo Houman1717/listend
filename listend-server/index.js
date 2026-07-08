@@ -2761,6 +2761,61 @@ app.get('/api/admin/populate-genres', requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /api/admin/fix-genre-album ────────────────────────────────────────────
+// One-off fix for a bad genre_albums row caused by a stale canonical_albums
+// cache entry. Deletes the wrong genre_albums row (matched by genre+badTitle+
+// badArtist), clears the poisoned canonical_albums cache entry for the correct
+// artist/title so it re-resolves against AM instead of returning the same bad
+// match, then inserts the freshly-resolved correct album.
+// Usage: ?genre=Hip-Hop%20%2F%20Rap&badTitle=Agony&badArtist=Take%20Care&artist=Drake&title=Take%20Care
+
+app.get('/api/admin/fix-genre-album', requireAdmin, async (req, res) => {
+  const { genre, badTitle, badArtist, artist, title } = req.query;
+  if (!genre || !badTitle || !badArtist || !artist || !title) {
+    return res.status(400).json({ error: 'genre, badTitle, badArtist, artist, title are all required' });
+  }
+
+  try {
+    const { error: delGenreErr } = await supabase
+      .from('genre_albums')
+      .delete()
+      .eq('genre_label', genre)
+      .ilike('title', badTitle)
+      .ilike('artist', badArtist);
+    if (delGenreErr) throw delGenreErr;
+
+    const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
+    const { error: delCanonicalErr } = await supabase
+      .from('canonical_albums')
+      .delete()
+      .eq('normalized_key', normalizedKey);
+    if (delCanonicalErr) throw delCanonicalErr;
+
+    const resolved = await resolveCanonicalAlbum({ title, artist });
+    if (!resolved?.id) {
+      return res.status(404).json({ error: 'Could not resolve the correct album in the AM catalog' });
+    }
+
+    const { error: insertErr } = await supabase.from('genre_albums').upsert({
+      genre_label: genre,
+      spotify_id:  resolved.id,
+      title:       resolved.title,
+      artist:      resolved.artist,
+      artwork_url: resolved.artworkUrl,
+      year:        resolved.year,
+    }, { onConflict: 'genre_label,spotify_id', ignoreDuplicates: true });
+    if (insertErr) throw insertErr;
+
+    cacheClear('genres');
+    await deleteCache('genres');
+
+    res.json({ ok: true, resolved });
+  } catch (err) {
+    console.error('[/api/admin/fix-genre-album]', err.message ?? err);
+    res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
+  }
+});
+
 // ── GET /api/admin/populate-decades ──────────────────────────────────────────
 // Searches AM for every album in DECADE_ALBUMS, then replaces decade_albums rows.
 // Run once after deploying a new decade list. Takes ~90–120 s for 384 albums.
