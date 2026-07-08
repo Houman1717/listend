@@ -37,17 +37,28 @@ const ART_SIZE  = SCREEN_W - 48;
 
 type AlbumData = { spotifyId: string; artworkUrl: string };
 
+async function fetchAlbumDataOnce(title: string, artist: string): Promise<AlbumData> {
+  const q   = encodeURIComponent(`${title} ${artist}`);
+  const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
+  if (!res.ok) return { spotifyId: '', artworkUrl: '' };
+  const data: { id: string; artworkUrl: string }[] = await res.json();
+  const hit = data[0];
+  return { spotifyId: hit?.id ?? '', artworkUrl: hit?.artworkUrl ?? '' };
+}
+
+// A transient network blip here previously meant a permanent fake `flip-XXXX`
+// ID + no artwork got written to the log with no way to recover — retry once
+// before giving up.
 async function fetchAlbumData(title: string, artist: string): Promise<AlbumData> {
-  try {
-    const q   = encodeURIComponent(`${title} ${artist}`);
-    const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
-    if (!res.ok) return { spotifyId: '', artworkUrl: '' };
-    const data: { id: string; artworkUrl: string }[] = await res.json();
-    const hit = data[0];
-    return { spotifyId: hit?.id ?? '', artworkUrl: hit?.artworkUrl ?? '' };
-  } catch {
-    return { spotifyId: '', artworkUrl: '' };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = await fetchAlbumDataOnce(title, artist);
+      if (result.spotifyId) return result;
+    } catch {
+      // fall through to retry
+    }
   }
+  return { spotifyId: '', artworkUrl: '' };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -2824,6 +2824,62 @@ app.get('/api/admin/fix-genre-album', requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /api/admin/fix-flip-placeholder-ids ───────────────────────────────────
+// Flip a Record logs a fake `flip-XXXX` spotify_id with no artwork whenever
+// the on-the-fly AM search at log time failed for any reason (network blip,
+// timeout, etc.) — permanently, since nothing ever retried it after the fact.
+// Since flip-XXXX is a shared static pool ID, every row with the same fake ID
+// is the same real album regardless of which user logged it, so this can be
+// fixed in bulk: resolve each distinct fake ID once via title+artist, then
+// repoint every row (across all users, in both user_albums and re_listens)
+// that shares that fake ID to the real catalog ID + artwork.
+
+app.get('/api/admin/fix-flip-placeholder-ids', requireAdmin, async (req, res) => {
+  const fixed  = [];
+  const errors = [];
+
+  try {
+    const [{ data: albumRows, error: e1 }, { data: relistenRows, error: e2 }] = await Promise.all([
+      supabase.from('user_albums').select('spotify_id, title, artist').ilike('spotify_id', 'flip-%'),
+      supabase.from('re_listens').select('spotify_id, title, artist').ilike('spotify_id', 'flip-%'),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+
+    const byFakeId = new Map();
+    for (const r of [...(albumRows ?? []), ...(relistenRows ?? [])]) {
+      if (!byFakeId.has(r.spotify_id)) byFakeId.set(r.spotify_id, { title: r.title, artist: r.artist });
+    }
+
+    for (const [fakeId, { title, artist }] of byFakeId) {
+      try {
+        const resolved = await resolveCanonicalAlbum({ title, artist });
+        if (!resolved?.id) {
+          errors.push({ fakeId, title, artist, error: 'not found in AM catalog' });
+          continue;
+        }
+
+        const updates = { spotify_id: resolved.id, artwork_url: resolved.artworkUrl, year: resolved.year };
+
+        const [{ error: uaErr }, { error: rlErr }] = await Promise.all([
+          supabase.from('user_albums').update(updates).eq('spotify_id', fakeId),
+          supabase.from('re_listens').update(updates).eq('spotify_id', fakeId),
+        ]);
+        if (uaErr) errors.push({ fakeId, title, artist, table: 'user_albums', error: uaErr.message });
+        if (rlErr) errors.push({ fakeId, title, artist, table: 're_listens', error: rlErr.message });
+        if (!uaErr || !rlErr) fixed.push({ fakeId, resolvedId: resolved.id, title: resolved.title, artist: resolved.artist });
+      } catch (err) {
+        errors.push({ fakeId, title, artist, error: err.message ?? String(err) });
+      }
+    }
+
+    res.json({ ok: true, fixed: fixed.length, errors: errors.length, fixedDetails: fixed, errorDetails: errors });
+  } catch (err) {
+    console.error('[/api/admin/fix-flip-placeholder-ids]', err.message ?? err);
+    res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
+  }
+});
+
 // ── GET /api/admin/populate-decades ──────────────────────────────────────────
 // Searches AM for every album in DECADE_ALBUMS, then replaces decade_albums rows.
 // Run once after deploying a new decade list. Takes ~90–120 s for 384 albums.
