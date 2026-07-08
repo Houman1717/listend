@@ -99,6 +99,14 @@ async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, 
       const match =
         pool.find(item => normalizeKey(item.attributes?.name) === nt && normalizeKey(item.attributes?.artistName) === na) ??
         pool.find(item => normalizeKey(item.attributes?.name) === nt) ??
+        // Some albums (e.g. Drake's "Take Care") only exist on the catalog as a
+        // "Deluxe"/"Anniversary" edition — the qualifier filter above would
+        // have stripped that candidate out of `pool` entirely, leaving an
+        // unrelated album to win by default. Before giving up and taking
+        // pool[0], check the *unfiltered* candidates for one whose artist
+        // matches exactly and whose title starts with the query title —
+        // requiring an exact artist match keeps this safe from false positives.
+        candidates.find(item => normalizeKey(item.attributes?.artistName) === na && normalizeKey(item.attributes?.name).startsWith(nt)) ??
         pool[0];
 
       if (match) {
