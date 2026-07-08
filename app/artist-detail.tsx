@@ -328,8 +328,15 @@ export default function ArtistDetailScreen() {
   }
 
   function handleToggleLike() {
-    const artistId = resolvedId || artistName;
-    toggleLike({ id: artistId, name: artistName, artworkUrl: artworkUrl || null });
+    // resolvedId falls back to the raw artist name until the real AM catalog
+    // ID resolves — liking before (or after a failed) resolution would
+    // permanently store the name as the "id", breaking this artist's page
+    // forever afterward. Real AM artist IDs are always numeric.
+    if (!resolvedId || !/^\d+$/.test(resolvedId)) {
+      showToast('Still loading — try again in a moment');
+      return;
+    }
+    toggleLike({ id: resolvedId, name: artistName, artworkUrl: artworkUrl || null });
     setArtistLikeCount(prev => prev === null ? null : liked ? Math.max(0, prev - 1) : prev + 1);
     showToast(!liked ? 'Artist liked' : 'Artist removed');
   }

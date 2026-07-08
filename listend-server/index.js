@@ -2824,6 +2824,77 @@ app.get('/api/admin/fix-genre-album', requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /api/admin/fix-liked-artist-ids ───────────────────────────────────────
+// artist-detail.tsx falls back to storing the artist's raw NAME as artist_id
+// in liked_artists whenever the real AM catalog ID hadn't resolved yet (or
+// failed to resolve) at the moment someone tapped the heart — permanently,
+// since nothing ever retried it. Real AM artist IDs are always numeric, so
+// any non-numeric artist_id is one of these broken rows. Resolves each
+// distinct bad name once via AM search, then repoints every row sharing it.
+// If a user already separately has a correctly-liked row for that same real
+// artist, updating would violate the (user_id, artist_id) uniqueness — in
+// that case the duplicate bad row is just deleted instead of updated.
+
+app.get('/api/admin/fix-liked-artist-ids', requireAdmin, async (req, res) => {
+  const fixed  = [];
+  const errors = [];
+
+  try {
+    const rows = await fetchAllRows((from, to) => supabase
+      .from('liked_artists')
+      .select('user_id, artist_id, name')
+      .range(from, to));
+
+    const badRows = rows.filter(r => r.artist_id && !/^\d+$/.test(r.artist_id));
+    const byBadId = new Map();
+    for (const r of badRows) {
+      if (!byBadId.has(r.artist_id)) byBadId.set(r.artist_id, { name: r.name, userIds: new Set() });
+      byBadId.get(r.artist_id).userIds.add(r.user_id);
+    }
+
+    for (const [badId, { name, userIds }] of byBadId) {
+      try {
+        const url = `https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(name)}&types=artists&limit=1`;
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${generateAppleToken()}` } });
+        if (!resp.ok) throw new Error(`Apple Music search → ${resp.status}`);
+        const data = await resp.json();
+        const hit = data.results?.artists?.data?.[0];
+        if (!hit?.id) {
+          errors.push({ badId, name, error: 'not found in AM catalog' });
+          continue;
+        }
+
+        const realId = hit.id;
+        const artworkUrl = (hit.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500');
+
+        // Per-user, not bulk by badId — if one user already separately has a
+        // correctly-liked row for the real artist, only THAT user's duplicate
+        // bad row should be dropped, not everyone else's who share this badId.
+        for (const uid of userIds) {
+          const { error: updateErr } = await supabase
+            .from('liked_artists')
+            .update({ artist_id: realId, artwork_url: artworkUrl })
+            .eq('user_id', uid)
+            .eq('artist_id', badId);
+
+          if (updateErr) {
+            const { error: delErr } = await supabase.from('liked_artists').delete().eq('user_id', uid).eq('artist_id', badId);
+            if (delErr) errors.push({ badId, name, userId: uid, error: delErr.message });
+          }
+        }
+        fixed.push({ badId, realId, name, userCount: userIds.size });
+      } catch (err) {
+        errors.push({ badId, name, error: err.message ?? String(err) });
+      }
+    }
+
+    res.json({ ok: true, fixed: fixed.length, errors: errors.length, fixedDetails: fixed, errorDetails: errors });
+  } catch (err) {
+    console.error('[/api/admin/fix-liked-artist-ids]', err.message ?? err);
+    res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
+  }
+});
+
 // ── GET /api/admin/fix-flip-placeholder-ids ───────────────────────────────────
 // Flip a Record logs a fake `flip-XXXX` spotify_id with no artwork whenever
 // the on-the-fly AM search at log time failed for any reason (network blip,
