@@ -1128,10 +1128,48 @@ app.get('/api/discover/community-top-artists', async (req, res) => {
       }
     }
 
-    const results = Array.from(byName.values())
+    const ranked = Array.from(byName.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 48)
       .map(e => e.artist);
+
+    // Resolve a real AM ID + artwork for any artist that only came from album
+    // logs (no artwork yet) — without this, every one of them permanently
+    // gets the `name:xxx` placeholder id (invalid — routes reject it), which
+    // is what was breaking so many well-known artists on this screen.
+    const missing = ranked.filter(a => !a.artworkUrl);
+    if (missing.length > 0) {
+      const resolved = await Promise.allSettled(
+        missing.map(a =>
+          fetch(`https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(a.name)}&types=artists&limit=1`, {
+            headers: { Authorization: `Bearer ${generateAppleToken()}` },
+          })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              const hit = data?.results?.artists?.data?.[0];
+              return { name: a.name, id: hit?.id ?? '', artworkUrl: (hit?.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500') };
+            })
+            .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
+        )
+      );
+      const artworkMap = {};
+      for (const r of resolved) {
+        if (r.status === 'fulfilled' && r.value.artworkUrl) {
+          artworkMap[r.value.name.toLowerCase()] = { id: r.value.id, artworkUrl: r.value.artworkUrl };
+        }
+      }
+      for (const artist of ranked) {
+        if (!artist.artworkUrl) {
+          const hit = artworkMap[artist.name.toLowerCase()];
+          if (hit) {
+            artist.artworkUrl = hit.artworkUrl;
+            if (hit.id) artist.id = hit.id;
+          }
+        }
+      }
+    }
+
+    const results = ranked;
 
     cacheSet(CACHE_KEY, results, TTL_1H);
     await setCache(CACHE_KEY, results);

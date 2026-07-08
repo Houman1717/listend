@@ -132,7 +132,13 @@ export default function ArtistDetailScreen() {
   const params = useLocalSearchParams<{ id?: string; name?: string; artworkUrl?: string }>();
 
   const artistName      = (params.name ?? '').trim();
-  const paramId         = (params.id   ?? '').trim();
+  const rawParamId      = (params.id   ?? '').trim();
+  // Real AM artist IDs are always numeric — a `name:xxx` (or plain-name)
+  // placeholder from an unresolved artist elsewhere in the app is NOT a real
+  // ID, even though it's non-empty. Treating it as one skips this screen's
+  // own search-resolution below and tries to use the fake value directly
+  // against AM catalog routes, which reject it outright.
+  const paramId         = /^\d+$/.test(rawParamId) ? rawParamId : '';
   const paramArtworkUrl = (params.artworkUrl ?? '').trim();
 
   // UI state
