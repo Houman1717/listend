@@ -708,8 +708,9 @@ const yc = StyleSheet.create({
 export default function MyStatsScreen() {
   const colorScheme = useColorScheme();
   const { isPro, proTheme: ownProTheme, showPaywall } = usePro();
-  const params = useLocalSearchParams<{ userId?: string; proTheme?: string; displayName?: string }>();
+  const params = useLocalSearchParams<{ userId?: string; proTheme?: string; displayName?: string; viewedIsPro?: string }>();
   const viewedUserId  = params.userId ?? null;
+  const viewedIsPro   = params.viewedIsPro === '1';
 
   // Resolve colors: other-user uses their proTheme param; own view uses own Pro context
   const activeThemeKey = viewedUserId ? (params.proTheme ?? 'default') : (isPro ? ownProTheme : 'default');
@@ -1304,8 +1305,8 @@ export default function MyStatsScreen() {
     } as any);
   }
 
-  // ── Pro gate — own stats only ─────────────────────────────────────────────
-  if (!viewedUserId && !isPro) {
+  // ── Pro gate — gated on the viewed profile's own Pro status, not the viewer's ──
+  if (viewedUserId ? !viewedIsPro : !isPro) {
     return (
       <>
         <Stack.Screen options={{
@@ -1319,20 +1320,24 @@ export default function MyStatsScreen() {
             <FontAwesome name="lock" size={28} color="#D4A017" />
           </View>
           <Text style={{ color: Colors[colorScheme ?? 'dark'].text, fontSize: 22, fontWeight: '800', textAlign: 'center', letterSpacing: -0.3 }}>
-            My Stats is a Pro Feature
+            {viewedUserId ? 'Stats Not Available' : 'My Stats is a Pro Feature'}
           </Text>
           <Text style={{ color: '#A08060', fontSize: 14, textAlign: 'center', lineHeight: 21 }}>
-            Unlock your full listening history — genre breakdowns, decade distribution, community comparisons, re-listen streaks, and more.
+            {viewedUserId
+              ? `${params.displayName || 'This user'} hasn't unlocked Listend Pro, so their stats aren't available to view.`
+              : 'Unlock your full listening history — genre breakdowns, decade distribution, community comparisons, re-listen streaks, and more.'}
           </Text>
-          <Pressable
-            onPress={showPaywall}
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1, borderRadius: 14, overflow: 'hidden', alignSelf: 'stretch' })}>
-            <View style={{ backgroundColor: '#D4A017', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}>
-              <Text style={{ color: '#0F0A07', fontSize: 16, fontWeight: '800', letterSpacing: 0.2 }}>
-                Unlock with Pro
-              </Text>
-            </View>
-          </Pressable>
+          {!viewedUserId && (
+            <Pressable
+              onPress={showPaywall}
+              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1, borderRadius: 14, overflow: 'hidden', alignSelf: 'stretch' })}>
+              <View style={{ backgroundColor: '#D4A017', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}>
+                <Text style={{ color: '#0F0A07', fontSize: 16, fontWeight: '800', letterSpacing: 0.2 }}>
+                  Unlock with Pro
+                </Text>
+              </View>
+            </Pressable>
+          )}
         </View>
       </>
     );
