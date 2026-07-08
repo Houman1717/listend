@@ -669,8 +669,10 @@ function AlbumSingleReviewModal({
               style={arm.authorRow}
               onPress={() => { onClose(); onAuthorPress?.(review.userId); }}
               disabled={!onAuthorPress}>
-              <View style={[arm.avatar, { backgroundColor: avatarColor(review.username) }]}>
-                <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+              <View style={[arm.avatar, { backgroundColor: avatarColor(review.username), overflow: 'hidden' }]}>
+                {review.avatarUrl
+                  ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+                  : <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>}
               </View>
               <View style={{ gap: 3 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>

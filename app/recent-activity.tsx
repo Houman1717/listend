@@ -1155,7 +1155,7 @@ export default function RecentActivityScreen() {
 
   function handleTop5Press(item: Top5ChangeItem) {
     if (item.category === 'albums') {
-      router.push({ pathname: '/album-detail', params: { id: item.itemId } });
+      router.push({ pathname: '/album-detail', params: { id: item.itemId, title: item.itemName, artist: item.itemArtist ?? '', artworkUrl: item.itemImageUrl ?? '' } });
     } else if (item.category === 'artists') {
       router.push({ pathname: '/artist-detail', params: { id: item.itemId, name: item.itemName } });
     } else {
@@ -1241,7 +1241,7 @@ export default function RecentActivityScreen() {
               if (item.data.type === 'reviewed') {
                 setSelectedReview(item.data);
               } else {
-                router.push({ pathname: '/album-detail', params: { id: item.data.id } });
+                router.push({ pathname: '/album-detail', params: { id: item.data.id, title: item.data.title, artist: item.data.artist, year: String(item.data.year ?? ''), artworkUrl: item.data.artworkUrl ?? '' } });
               }
             }}
           />

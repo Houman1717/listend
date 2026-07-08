@@ -105,8 +105,14 @@ function AuthGate() {
   }, [needsOnboarding, session]);
 
   // Navigate to the right screen when user taps a push notification
+  const handledResponseId = useRef<string | null>(null);
+
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+    function navigateForNotification(response: Notifications.NotificationResponse) {
+      const id = response.notification.request.identifier;
+      if (handledResponseId.current === id) return;
+      handledResponseId.current = id;
+
       const data = response.notification.request.content.data as any;
       if (!data?.type) return;
       if (data.type === 'flip_cooldown') {
@@ -125,9 +131,23 @@ function AuthGate() {
       } else {
         router.push({ pathname: '/user-profile', params: { userId: data.actorId } });
       }
-    });
+    }
+
+    // Catches taps that happen while the app is already running (foreground/background).
+    const sub = Notifications.addNotificationResponseReceivedListener(navigateForNotification);
+
+    // Catches the tap that cold-launched the app — addNotificationResponseReceivedListener
+    // registers too late to see that one, since the OS delivered it before this
+    // listener existed. Only check once auth/session has settled so this doesn't
+    // race the login-redirect effect above.
+    if (!loading && session) {
+      Notifications.getLastNotificationResponseAsync().then(response => {
+        if (response) navigateForNotification(response);
+      });
+    }
+
     return () => sub.remove();
-  }, []);
+  }, [loading, session]);
 
   return null;
 }
@@ -184,7 +204,7 @@ function ThemedApp() {
         <FavoritesSyncer />
         <OfflineBanner />
         <ProPaywallModal />
-        <Stack>
+        <Stack screenOptions={{ headerBackTitle: '', headerBackButtonDisplayMode: 'minimal' }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="signup" options={{ headerShown: false }} />

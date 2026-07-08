@@ -351,7 +351,7 @@ export default function PlaylistDetailScreen() {
                 cardWidth={cardWidth}
                 readOnly={!!viewingOther}
                 colors={colors}
-                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id } })}
+                onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year ?? ''), artworkUrl: album.artworkUrl ?? '' } })}
                 onRemove={() => confirmRemoveAlbum(album)}
               />
             ))}
