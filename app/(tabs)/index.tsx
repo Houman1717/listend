@@ -1433,8 +1433,13 @@ export default function HomeScreen() {
     if (item.kind === 'top5') {
       if (item.category === 'albums') {
         router.push({ pathname: '/album-detail', params: { id: item.itemId, title: item.itemName, artworkUrl: item.itemImageUrl ?? '' } } as any);
-      } else {
+      } else if (item.category === 'artists') {
         router.push({ pathname: '/artist-detail', params: { id: item.itemId, name: item.itemName } });
+      } else {
+        // Songs have no dedicated detail screen — go to the friend's profile
+        // so their actual Top 5 songs are visible, instead of misusing the
+        // artist-detail screen with a song's id/title.
+        router.push({ pathname: '/user-profile', params: { userId: item.friend.id } });
       }
     } else if (item.kind === 'likedArtist') {
       router.push({ pathname: '/artist-detail', params: { id: item.artistId, name: item.name } });

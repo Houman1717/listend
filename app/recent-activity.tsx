@@ -1159,7 +1159,11 @@ export default function RecentActivityScreen() {
     } else if (item.category === 'artists') {
       router.push({ pathname: '/artist-detail', params: { id: item.itemId, name: item.itemName } });
     } else {
-      router.push({ pathname: '/artist-detail', params: { name: item.itemArtist ?? item.itemName } });
+      // Songs have no dedicated detail screen — go to the profile whose Top 5
+      // this is, so their actual Top 5 songs are visible, instead of misusing
+      // the artist-detail screen with a song's id/title.
+      const profileId = viewingOther ?? user?.id;
+      if (profileId) router.push({ pathname: '/user-profile', params: { userId: profileId } });
     }
   }
 
