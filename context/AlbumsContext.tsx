@@ -92,8 +92,8 @@ type AlbumsContextType = {
   logAlbum: (rating: number, review: string) => void;
   reListenMode: boolean;
   setReListenMode: (v: boolean) => void;
-  updateReview: (id: string, rating: number, review: string) => void;
-  updateReListenReview: (id: string, rating: number, review: string) => void;
+  updateReview: (id: string, rating: number, review: string) => Promise<boolean>;
+  updateReListenReview: (id: string, rating: number, review: string) => Promise<boolean>;
   updateDuration: (id: string, durationMs: number) => void;
   removeLoggedAlbum: (id: string) => void;
   removeReListenEntry: (albumId: string, listenedAt: string) => Promise<void>;
@@ -577,46 +577,70 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function updateReview(id: string, rating: number, review: string) {
+  // Returns whether the write actually persisted — a silently-failed
+  // background write (bad network, etc.) previously left the local optimistic
+  // state looking saved, only for the next full reload to revert it back to
+  // whatever's really in the DB with zero indication anything went wrong.
+  async function updateReview(id: string, rating: number, review: string): Promise<boolean> {
+    const prevAlbums = loggedAlbums;
     setLoggedAlbums((prev) =>
       prev.map((a) =>
         a.id === id ? { ...a, rating, review: review.trim() || undefined } : a
       )
     );
 
-    if (user) {
-      supabase
-        .from('user_albums')
-        .update({ rating, review: review.trim() || null })
-        .match({ user_id: user.id, spotify_id: id })
-        .then(({ error }) => {
-          if (error) console.error('[AlbumsContext] updateReview error:', error.message);
-        });
+    if (!user) return true;
+
+    const { error } = await supabase
+      .from('user_albums')
+      .update({ rating, review: review.trim() || null })
+      .match({ user_id: user.id, spotify_id: id });
+
+    if (error) {
+      console.error('[AlbumsContext] updateReview error:', error.message);
+      setLoggedAlbums(prevAlbums);
+      return false;
     }
+    return true;
   }
 
-  function updateReListenReview(id: string, rating: number, review: string) {
+  async function updateReListenReview(id: string, rating: number, review: string): Promise<boolean> {
     const trimmedReview = review.trim() || null;
+    const prevAlbums = loggedAlbums;
 
     // Optimistic local update so My Listend and Re-listend tab reflect immediately
     setLoggedAlbums(prev => prev.map(a =>
       a.id === id ? { ...a, lastRating: rating, lastReview: trimmedReview ?? undefined } : a
     ));
 
-    if (!user) return;
+    if (!user) return true;
 
     // Use the server endpoint (service-role key) so the update bypasses RLS.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const token = session?.access_token;
-      if (!token) return;
-      fetch(`${API_URL}/api/re-listens`, {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      setLoggedAlbums(prevAlbums);
+      return false;
+    }
+
+    try {
+      const r = await fetch(`${API_URL}/api/re-listens`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ spotify_id: id, rating, review: trimmedReview }),
-      }).then(r => {
-        if (!r.ok) r.json().then(e => console.error('[AlbumsContext] updateReListenReview server error:', e));
-      }).catch(e => console.error('[AlbumsContext] updateReListenReview fetch error:', e));
-    });
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => null);
+        console.error('[AlbumsContext] updateReListenReview server error:', e);
+        setLoggedAlbums(prevAlbums);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('[AlbumsContext] updateReListenReview fetch error:', e);
+      setLoggedAlbums(prevAlbums);
+      return false;
+    }
   }
 
 

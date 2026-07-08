@@ -468,7 +468,7 @@ function AlbumReviewCard({
           onPress={isOwn ? undefined : () => onAuthorPress?.(review.userId)}
           hitSlop={6}>
           <View style={[arc.avatar, { backgroundColor: isOwn ? '#D4A017' : avatarColor(review.username), overflow: 'hidden' }]}>
-            {review.avatarUrl && !isOwn
+            {review.avatarUrl
               ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
               : <Text style={arc.avatarLetter}>{review.username[0].toUpperCase()}</Text>
             }
@@ -1379,13 +1379,20 @@ export default function AlbumDetailScreen() {
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
-  function handleSave() {
-    if (loggedAlbum?.isRelistened) {
-      updateReListenReview(myAlbumId, rating, review);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    const ok = loggedAlbum?.isRelistened
+      ? await updateReListenReview(myAlbumId, rating, review)
+      : await updateReview(myAlbumId, rating, review);
+    setSaving(false);
+
+    if (ok) {
+      setEditMode(false);
     } else {
-      updateReview(myAlbumId, rating, review);
+      Alert.alert('Couldn\'t save', 'Check your connection and try again — your changes are still here.');
     }
-    setEditMode(false);
   }
 
   function handleCancelEdit() {
@@ -1527,9 +1534,12 @@ export default function AlbumDetailScreen() {
               )}
               <View style={s.editBtnRow}>
                 <Pressable
-                  style={[s.primaryBtn, s.editBtnFlex, { backgroundColor: '#D4A017' }]}
-                  onPress={handleSave}>
-                  <Text style={[s.primaryBtnText, { color: '#fff' }]}>Save</Text>
+                  style={[s.primaryBtn, s.editBtnFlex, { backgroundColor: '#D4A017', opacity: saving ? 0.6 : 1 }]}
+                  onPress={handleSave}
+                  disabled={saving}>
+                  {saving
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={[s.primaryBtnText, { color: '#fff' }]}>Save</Text>}
                 </Pressable>
                 <Pressable
                   style={[s.secondaryBtn, s.editBtnFlex, { borderColor: isDark ? '#3a2818' : '#ddd' }]}

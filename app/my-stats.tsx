@@ -1797,7 +1797,7 @@ export default function MyStatsScreen() {
               {compHigher.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
                   {compHigher.map(({ album, communityAvg }) => (
-                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} />
+                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} tint={colors.tint} />
                   ))}
                 </ScrollView>
               ) : (
@@ -1817,7 +1817,7 @@ export default function MyStatsScreen() {
               {compLower.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
                   {compLower.map(({ album, communityAvg }) => (
-                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} />
+                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} tint={colors.tint} />
                   ))}
                 </ScrollView>
               ) : (
@@ -2235,10 +2235,11 @@ const s = StyleSheet.create({
 
 // ─── Community comparison card ────────────────────────────────────────────────
 
-function ComparisonCard({ album, communityAvg, onPress }: {
+function ComparisonCard({ album, communityAvg, onPress, tint = ACCENT }: {
   album: LoggedAlbum;
   communityAvg: number;
   onPress: () => void;
+  tint?: string;
 }) {
   const delta    = album.rating - communityAvg;
   const isHigher = delta > 0;
@@ -2257,7 +2258,7 @@ function ComparisonCard({ album, communityAvg, onPress }: {
         <Text style={cc.deltaBadgeText}>{sign}{delta.toFixed(1)}</Text>
       </View>
       <Text style={cc.title} numberOfLines={2}>{album.title}</Text>
-      <VolumeBadge rating={album.rating} />
+      <VolumeBadge rating={album.rating} tint={tint} />
       <Text style={cc.communityAvg}>Community: {communityAvg.toFixed(1)}</Text>
     </Pressable>
   );
