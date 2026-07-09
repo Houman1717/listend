@@ -971,12 +971,18 @@ app.get('/api/discover/community-popular', async (req, res) => {
     // re-listen bonus) regardless of how many times they actually re-listen —
     // otherwise a single user could spam re-listens to push an album to the
     // top on their own.
+    //
+    // Grouped by normalized title+artist rather than spotify_id — the same
+    // release often gets logged under different catalog IDs (reissues,
+    // remasters), which used to split its popularity count into separate
+    // buckets (and could even show the same album twice in the list).
     const entries = new Map();
     const getEntry = (r) => {
-      let e = entries.get(r.spotify_id);
+      const key = `${(r.title ?? '').toLowerCase().trim()}::${(r.artist ?? '').toLowerCase().trim()}`;
+      let e = entries.get(key);
       if (!e) {
         e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set() };
-        entries.set(r.spotify_id, e);
+        entries.set(key, e);
       } else if (!e.album.artworkUrl && r.artwork_url) {
         e.album.artworkUrl = r.artwork_url;
       }
@@ -984,11 +990,11 @@ app.get('/api/discover/community-popular', async (req, res) => {
     };
 
     for (const r of (data ?? [])) {
-      if (!r.spotify_id || !r.user_id) continue;
+      if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
       getEntry(r).baseUsers.add(r.user_id);
     }
     for (const r of (relistenData ?? [])) {
-      if (!r.spotify_id || !r.user_id) continue;
+      if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
       getEntry(r).relistenUsers.add(r.user_id);
     }
 
