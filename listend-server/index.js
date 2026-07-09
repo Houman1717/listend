@@ -1031,19 +1031,30 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
       .gt('rating', 0)
       .range(from, to));
 
+    // Group by normalized title+artist rather than spotify_id — the same
+    // release often gets logged under different catalog IDs (reissues,
+    // remasters), which used to split its ratings into separate buckets and
+    // rank it off an average nobody actually sees (album-detail merges by
+    // title+artist too, per resolveCanonicalAlbum/community reviews query).
     const agg = new Map();
     for (const r of (data ?? [])) {
-      if (!r.spotify_id) continue;
-      const e = agg.get(r.spotify_id);
+      if (!r.spotify_id || !r.title || !r.artist) continue;
+      const key = `${r.title.toLowerCase().trim()}::${r.artist.toLowerCase().trim()}`;
+      const e = agg.get(key);
       if (e) {
         e.totalRating += r.rating;
         e.count++;
         if (!e.album.artworkUrl && r.artwork_url) e.album.artworkUrl = r.artwork_url;
+        const idCount = (e.idCounts.get(r.spotify_id) ?? 0) + 1;
+        e.idCounts.set(r.spotify_id, idCount);
+        if (idCount > e.topIdCount) { e.topIdCount = idCount; e.album.id = r.spotify_id; }
       } else {
-        agg.set(r.spotify_id, {
-          album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' },
+        agg.set(key, {
+          album: { id: r.spotify_id, title: r.title, artist: r.artist, year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' },
           totalRating: r.rating,
           count: 1,
+          idCounts: new Map([[r.spotify_id, 1]]),
+          topIdCount: 1,
         });
       }
     }
