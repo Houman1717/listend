@@ -22,7 +22,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 
 type NotificationItem = {
   id: string;
-  type: 'follow' | 'message' | 'like_review' | 'like_playlist' | 'comment' | 'comment_reply';
+  type: 'follow' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'comment' | 'comment_reply';
   read: boolean;
   createdAt: string;
   actorId: string;
@@ -39,6 +39,7 @@ const NOTIF_META: Record<NotificationItem['type'], { body: string; iconName: str
   message:       { body: 'sent you a message',       iconName: 'envelope',  iconColor: '#B8880F' },
   like_review:   { body: 'liked your review',        iconName: 'heart',     iconColor: '#D4A017' },
   like_playlist: { body: 'liked your playlist',      iconName: 'heart',     iconColor: '#D4A017' },
+  like_comment:  { body: 'liked your comment',       iconName: 'heart',     iconColor: '#D4A017' },
   comment:       { body: 'commented on your review', iconName: 'comment',  iconColor: '#D4A017' },
   comment_reply: { body: 'replied to your comment',  iconName: 'comment',  iconColor: '#D4A017' },
 };
@@ -46,10 +47,12 @@ const NOTIF_META: Record<NotificationItem['type'], { body: string; iconName: str
 function NotifRow({
   item,
   onPress,
+  onAvatarPress,
   colors,
 }: {
   item: NotificationItem;
   onPress: () => void;
+  onAvatarPress: () => void;
   colors: ReturnType<typeof themeToColors>;
 }) {
   const initial = item.actorName.charAt(0).toUpperCase();
@@ -66,20 +69,22 @@ function NotifRow({
         { opacity: pressed ? 0.72 : 1 },
       ]}
       onPress={onPress}>
-      <View style={n.avatarWrap}>
-        {item.actorAvatarUrl ? (
-          <ExpoImage source={{ uri: item.actorAvatarUrl }} style={n.avatar}
-            contentFit="cover" cachePolicy="disk"
-          />
-        ) : (
-          <View style={[n.avatar, { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }]}>
-            <Text style={[n.avatarInitial, { color: colors.subtext }]}>{initial}</Text>
+      <Pressable onPress={onAvatarPress} hitSlop={4}>
+        <View style={n.avatarWrap}>
+          {item.actorAvatarUrl ? (
+            <ExpoImage source={{ uri: item.actorAvatarUrl }} style={n.avatar}
+              contentFit="cover" cachePolicy="disk"
+            />
+          ) : (
+            <View style={[n.avatar, { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={[n.avatarInitial, { color: colors.subtext }]}>{initial}</Text>
+            </View>
+          )}
+          <View style={[n.typeBadge, { backgroundColor: meta.iconColor, borderColor: colors.background }]}>
+            <FontAwesome name={meta.iconName as any} size={8} color="#fff" />
           </View>
-        )}
-        <View style={[n.typeBadge, { backgroundColor: meta.iconColor, borderColor: colors.background }]}>
-          <FontAwesome name={meta.iconName as any} size={8} color="#fff" />
         </View>
-      </View>
+      </Pressable>
       <View style={n.info}>
         <Text style={[n.body, { color: colors.text }]} numberOfLines={2}>
           <Text style={n.actor}>{item.actorName}</Text>
@@ -202,10 +207,11 @@ export default function NotificationsScreen() {
           <NotifRow
             item={item}
             colors={colors}
+            onAvatarPress={() => router.push({ pathname: '/user-profile', params: { userId: item.actorId } })}
             onPress={() => {
               if (item.type === 'message') {
                 router.push({ pathname: '/dm-conversation', params: { userId: item.actorId } });
-              } else if ((item.type === 'like_review' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
+              } else if ((item.type === 'like_review' || item.type === 'like_comment' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
                 const albumId = item.targetId.split('_')[1];
                 router.push({ pathname: '/album-detail', params: { id: albumId, reviewId: item.targetId } } as any);
               } else if (item.type === 'like_playlist' && item.targetId) {

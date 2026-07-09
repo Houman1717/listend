@@ -1147,7 +1147,6 @@ export default function FlipARecordScreen() {
                               amId = fetched.spotifyId;
                               if (fetched.artworkUrl) art = fetched.artworkUrl;
                             }
-                            markLogged(currentFlip.id);
                             setPendingAlbum({ spotifyId: amId || currentFlip.id, title: currentFlip.title, artist: currentFlip.artist, year: currentFlip.year, artworkUrl: art });
                             router.push('/log-album');
                           }}>

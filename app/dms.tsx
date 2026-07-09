@@ -208,7 +208,7 @@ export default function DMsScreen() {
               <Pressable
                 onPress={() => router.push({ pathname: '/user-profile', params: { userId: item.partnerId } })}
                 hitSlop={4}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}>
                 <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{item.partnerName}</Text>
                 {item.partnerIsPro && <ProBadge size="xs" />}
               </Pressable>

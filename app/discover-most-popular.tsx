@@ -26,7 +26,7 @@ export default function DiscoverMostPopularScreen() {
 
   useEffect(() => {
     if (albums.length > 0) return;
-    fetch(`${API_URL}/discover/popular`)
+    fetch(`${API_URL}/api/discover/community-popular`)
       .then(r => r.json())
       .then((data: CatalogAlbum[]) => { discoverSections.popular = data; setAlbums(data); })
       .catch(console.error);

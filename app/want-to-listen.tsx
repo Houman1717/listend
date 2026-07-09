@@ -20,6 +20,7 @@ import { useAlbums, WantToListenAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
+import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -113,6 +114,15 @@ export default function WantToListenScreen() {
 
   const sourceList = viewingOther ? otherList : wantToListen;
 
+  // ── Community stats (avg rating + popularity) — same source as My Listend ──
+  const [communityStatsMap, setCommunityStatsMap] = useState<Map<string, CommunityStats>>(new Map());
+
+  useEffect(() => {
+    if (sourceList.length === 0) return;
+    fetchCommunityStats(sourceList).then(setCommunityStatsMap);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceList.length]);
+
   // Fetch durations for any album in the list that doesn't have one yet
   useEffect(() => {
     const missing = sourceList.filter(a => !a.durationMs).map(a => a.id);
@@ -134,13 +144,17 @@ export default function WantToListenScreen() {
   }, [sourceList.length, viewingOther]);
 
   const displayList = useMemo(() => {
-    const sorted = shuffled ?? applySort(sourceList, sortKey);
+    const enriched = sourceList.map(a => {
+      const stats = communityStatsMap.get(communityStatsKey(a.title, a.artist));
+      return stats ? { ...a, communityAvgRating: stats.avg, communityRatingCount: stats.count } : a;
+    });
+    const sorted = shuffled ?? applySort(enriched, sortKey);
     if (!query.trim()) return sorted;
     const q = query.toLowerCase();
     return sorted.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [sourceList, sortKey, shuffled, query]);
+  }, [sourceList, sortKey, shuffled, query, communityStatsMap]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {

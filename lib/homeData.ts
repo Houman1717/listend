@@ -22,6 +22,13 @@ function weekAgo(): string {
   return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 }
 
+// Strips accents/diacritics (e.g. "Björk" → "Bjork") so title/artist grouping
+// keys aren't split just because different catalog sources spell a name
+// differently.
+function fold(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 export async function fetchTopAlbumsThisWeek(): Promise<CatalogAlbum[]> {
   const [{ data }, { data: relistenData }] = await Promise.all([
     supabase
@@ -41,22 +48,29 @@ export async function fetchTopAlbumsThisWeek(): Promise<CatalogAlbum[]> {
   // Cap each user's contribution to an album at 2 (one base log + one re-listen
   // bonus) regardless of how many times they actually re-listen — otherwise a
   // single user could spam re-listens to push an album to the top on their own.
+  //
+  // Grouped by normalized title+artist rather than spotify_id — the same
+  // release often gets logged under different catalog IDs (reissues,
+  // remasters), which used to split its listener count into separate buckets
+  // (and could even show the same album twice in the list). Mirrors the same
+  // fix applied to /api/discover/community-popular on the server.
   const entries = new Map<string, { album: CatalogAlbum; baseUsers: Set<string>; relistenUsers: Set<string> }>();
   const getEntry = (r: any) => {
-    let e = entries.get(r.spotify_id);
+    const key = `${fold(r.title ?? '')}::${fold(r.artist ?? '')}`;
+    let e = entries.get(key);
     if (!e) {
       e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set() };
-      entries.set(r.spotify_id, e);
+      entries.set(key, e);
     }
     return e;
   };
 
   for (const r of (data ?? []) as any[]) {
-    if (!r.spotify_id || !r.user_id) continue;
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
     getEntry(r).baseUsers.add(r.user_id);
   }
   for (const r of (relistenData ?? []) as any[]) {
-    if (!r.spotify_id || !r.user_id) continue;
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
     getEntry(r).relistenUsers.add(r.user_id);
   }
 
@@ -124,7 +138,7 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
   const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
   const byName = new Map<string, { artist: CatalogArtist; count: number }>();
   for (const entry of sorted) {
-    const key = entry.artist.name.toLowerCase().trim();
+    const key = fold(entry.artist.name);
     if (!key) continue;
     const existing = byName.get(key);
     if (existing) {
@@ -141,7 +155,7 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
   for (const r of (albumRows ?? []) as any[]) {
     const name = r.artist?.trim();
     if (!name) continue;
-    const key = name.toLowerCase();
+    const key = fold(name);
     const existing = byName.get(key);
     if (existing) {
       existing.count++;

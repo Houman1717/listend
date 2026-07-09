@@ -25,7 +25,7 @@ export default function DiscoverTopArtistsScreen() {
 
   useEffect(() => {
     if (artists.length > 0) return;
-    fetch(`${API_URL}/discover/top-artists`)
+    fetch(`${API_URL}/api/discover/community-top-artists`)
       .then(r => r.json())
       .then((data: CatalogArtist[]) => {
         discoverSections.topArtists = data;

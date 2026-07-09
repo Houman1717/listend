@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   Linking,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -122,6 +123,7 @@ function ProfileHeader({
   isDark,
   colors,
   isPro,
+  refreshKey,
 }: {
   displayName: string;
   username: string;
@@ -139,6 +141,7 @@ function ProfileHeader({
   isDark: boolean;
   colors: ColorsShape;
   isPro?: boolean;
+  refreshKey?: number;
 }) {
   const router  = useRouter();
   const initial = (displayName || username || '?').charAt(0).toUpperCase();
@@ -175,7 +178,7 @@ function ProfileHeader({
         .maybeSingle()
         .then(({ data }) => setIsFollowing(!!data));
     }
-  }, [isOwnProfile, currentUserId, profileUserId]);
+  }, [isOwnProfile, currentUserId, profileUserId, refreshKey]);
 
   async function handleFollow() {
     if (!currentUserId || !profileUserId || followLoading) return;
@@ -1034,6 +1037,8 @@ export default function ListendScreen() {
   const [profileUsername,    setProfileUsername]    = useState('');
   const [profileAvatarUrl,   setProfileAvatarUrl]   = useState<string | null>(null);
   const [profileBio,         setProfileBio]         = useState('');
+  const [refreshing,         setRefreshing]         = useState(false);
+  const [refreshKey,         setRefreshKey]         = useState(0);
 
   // "This Year" count — derived from loggedAlbums so it updates live when new albums are logged
   const thisYearCount = loggedAlbums.filter(a => {
@@ -1059,6 +1064,27 @@ export default function ListendScreen() {
         });
     }, [user])
   );
+
+  const onRefresh = useCallback(async () => {
+    if (!user) return;
+    setRefreshing(true);
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('display_name, username, avatar_url, bio')
+        .eq('id', user.id)
+        .single();
+      if (data) {
+        setProfileDisplayName(data.display_name ?? '');
+        setProfileUsername(   data.username     ?? '');
+        setProfileAvatarUrl(  data.avatar_url    ?? null);
+        setProfileBio(        data.bio           ?? '');
+      }
+    } finally {
+      setRefreshKey(k => k + 1);
+      setRefreshing(false);
+    }
+  }, [user]);
 
   // Inject bell + hamburger into the tab header, and sync header bg to the active pro theme
   const openSettings = useCallback(() => setSettingsVisible(true), []);
@@ -1117,7 +1143,10 @@ export default function ListendScreen() {
     <ScrollView
       style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}>
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} colors={[colors.tint]} />
+      }>
 
       {/* Profile header */}
       <ProfileHeader
@@ -1137,6 +1166,7 @@ export default function ListendScreen() {
         isDark={isDark}
         colors={colors}
         isPro={isPro}
+        refreshKey={refreshKey}
       />
 
       <RatingModal

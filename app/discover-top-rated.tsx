@@ -26,7 +26,7 @@ export default function DiscoverTopRatedScreen() {
 
   useEffect(() => {
     if (albums.length > 0) return;
-    fetch(`${API_URL}/discover/top-rated`)
+    fetch(`${API_URL}/api/discover/community-top-rated`)
       .then(r => r.json())
       .then((data: CatalogAlbum[]) => { discoverSections.topRated = data; setAlbums(data); })
       .catch(console.error);

@@ -30,8 +30,8 @@ async function fetchForCategory(category: string, value?: string): Promise<Catal
       return res.json();
     }
     case 'popular': {
-      const res = await fetch(`${API_URL}/discover/popular`);
-      if (!res.ok) throw new Error(`/discover/popular → ${res.status}`);
+      const res = await fetch(`${API_URL}/api/discover/community-popular`);
+      if (!res.ok) throw new Error(`/api/discover/community-popular → ${res.status}`);
       return res.json();
     }
     case 'coming-soon': {

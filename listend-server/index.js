@@ -212,6 +212,13 @@ async function fetchAllRows(buildQuery, pageSize = 1000, maxPages = 20) {
   return rows;
 }
 
+// Strips accents/diacritics (e.g. "Björk" → "Bjork") so title/artist grouping
+// keys aren't split just because different catalog sources spell a name
+// differently.
+function foldDiacritics(s) {
+  return (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 // ── CORS ───────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
   'https://listend-production.up.railway.app',
@@ -978,7 +985,7 @@ app.get('/api/discover/community-popular', async (req, res) => {
     // buckets (and could even show the same album twice in the list).
     const entries = new Map();
     const getEntry = (r) => {
-      const key = `${(r.title ?? '').toLowerCase().trim()}::${(r.artist ?? '').toLowerCase().trim()}`;
+      const key = `${foldDiacritics(r.title)}::${foldDiacritics(r.artist)}`;
       let e = entries.get(key);
       if (!e) {
         e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set() };
@@ -1045,7 +1052,7 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
     const agg = new Map();
     for (const r of (data ?? [])) {
       if (!r.spotify_id || !r.title || !r.artist) continue;
-      const key = `${r.title.toLowerCase().trim()}::${r.artist.toLowerCase().trim()}`;
+      const key = `${foldDiacritics(r.title)}::${foldDiacritics(r.artist)}`;
       const e = agg.get(key);
       if (e) {
         e.totalRating += r.rating;
@@ -1120,7 +1127,7 @@ app.get('/api/discover/community-top-artists', async (req, res) => {
     const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
     const byName = new Map();
     for (const entry of sorted) {
-      const key = entry.artist.name.toLowerCase().trim();
+      const key = foldDiacritics(entry.artist.name);
       if (!key) continue;
       const existing = byName.get(key);
       if (existing) {
@@ -1136,7 +1143,7 @@ app.get('/api/discover/community-top-artists', async (req, res) => {
     for (const r of (albumRows ?? [])) {
       const name = r.artist?.trim();
       if (!name) continue;
-      const key = name.toLowerCase();
+      const key = foldDiacritics(name);
       const existing = byName.get(key);
       if (existing) {
         existing.count++;

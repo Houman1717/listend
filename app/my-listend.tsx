@@ -24,6 +24,7 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
+import { fetchCommunityStats, communityStatsKey } from '@/lib/communityStats';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { navigateToProfile } from '@/lib/navigateToProfile';
@@ -213,31 +214,13 @@ export default function MyListendScreen() {
 
   const sourceAlbums = viewingOther ? otherAlbums : loggedAlbums;
 
-  // ── Community stats (avg rating + rating count) ───────────────────────────
-  type CommunityStats = { avg: number; count: number };
-  const [communityStatsMap, setCommunityStatsMap] = useState<Map<string, CommunityStats>>(new Map());
+  // ── Community stats (avg rating + popularity) — matched by title+artist,
+  // popularity = distinct listeners (not just ratings), same as Discover ──────
+  const [communityStatsMap, setCommunityStatsMap] = useState<Map<string, import('@/lib/communityStats').CommunityStats>>(new Map());
 
   useEffect(() => {
     if (sourceAlbums.length === 0) return;
-    const titles = [...new Set(sourceAlbums.map(a => a.title))];
-    supabase
-      .from('user_albums')
-      .select('title, year, rating')
-      .in('title', titles)
-      .gt('rating', 0)
-      .not('listened_at', 'is', null)
-      .then(({ data }) => {
-        if (!data || data.length === 0) return;
-        const acc = new Map<string, { sum: number; count: number }>();
-        for (const row of data as any[]) {
-          const key = `${(row.title as string).toLowerCase()}|${row.year}`;
-          const e = acc.get(key) ?? { sum: 0, count: 0 };
-          acc.set(key, { sum: e.sum + (row.rating as number), count: e.count + 1 });
-        }
-        const result = new Map<string, CommunityStats>();
-        acc.forEach((v, k) => result.set(k, { avg: v.sum / v.count, count: v.count }));
-        setCommunityStatsMap(result);
-      });
+    fetchCommunityStats(sourceAlbums).then(setCommunityStatsMap);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceAlbums.length]);
 
@@ -263,8 +246,7 @@ export default function MyListendScreen() {
 
   const displayAlbums = useMemo(() => {
     const enriched = sourceAlbums.map(a => {
-      const key = `${a.title.toLowerCase()}|${a.year}`;
-      const stats = communityStatsMap.get(key);
+      const stats = communityStatsMap.get(communityStatsKey(a.title, a.artist));
       return stats ? { ...a, communityAvgRating: stats.avg, communityRatingCount: stats.count } : a;
     });
     const sorted = shuffled ?? applySort(enriched, sortKey);

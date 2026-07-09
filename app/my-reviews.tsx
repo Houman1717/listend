@@ -24,6 +24,7 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
+import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
@@ -55,7 +56,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LikeState    = { liked: boolean; count: number };
-type LikedReview  = LoggedAlbum & { ownerId: string; username: string; isPro?: boolean; likedAt: string };
+type LikedReview  = LoggedAlbum & { ownerId: string; username: string; isPro?: boolean; avatarUrl?: string | null; likedAt: string };
 
 // ─── Review row ───────────────────────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ function ReviewDetailModal({
   colors,
   reviewerUsername,
   reviewerIsPro = false,
+  reviewerAvatarUrl,
   likeState,
   onLike,
   onClose,
@@ -175,6 +177,7 @@ function ReviewDetailModal({
   colors: ColorsShape;
   reviewerUsername: string;
   reviewerIsPro?: boolean;
+  reviewerAvatarUrl?: string | null;
   likeState: LikeState;
   onLike?: () => void;
   onClose: () => void;
@@ -270,9 +273,13 @@ function ReviewDetailModal({
               style={mrd.authorRow}
               onPress={() => onUsernamePress?.(reviewerUsername)}
               disabled={!onUsernamePress}>
-              <View style={[mrd.avatar, { backgroundColor: reviewerUsername === 'you' ? colors.tint : avatarColor(reviewerUsername) }]}>
-                <Text style={mrd.avatarLetter}>{reviewerUsername[0].toUpperCase()}</Text>
-              </View>
+              {reviewerAvatarUrl ? (
+                <ExpoImage source={{ uri: reviewerAvatarUrl }} style={mrd.avatar} contentFit="cover" cachePolicy="disk" />
+              ) : (
+                <View style={[mrd.avatar, { backgroundColor: reviewerUsername === 'you' ? colors.tint : avatarColor(reviewerUsername) }]}>
+                  <Text style={mrd.avatarLetter}>{reviewerUsername[0].toUpperCase()}</Text>
+                </View>
+              )}
               <View style={{ gap: 2 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Text style={mrd.username}>@{reviewerUsername}</Text>
@@ -386,6 +393,7 @@ export default function MyReviewsScreen() {
   const [sheetOpen, setSheetOpen]         = useState(false);
   const [selectedReview, setSelectedReview] = useState<LoggedAlbum | null>(null);
   const [profileUsername, setProfileUsername] = useState('you');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
   const [likedReviews,  setLikedReviews]  = useState<LikedReview[]>([]);
   const [likedLikesMap, setLikedLikesMap] = useState<Map<string, LikeState>>(new Map());
@@ -407,10 +415,13 @@ export default function MyReviewsScreen() {
     if (!uid) return;
     supabase
       .from('profiles')
-      .select('username')
+      .select('username, avatar_url')
       .eq('id', uid)
       .single()
-      .then(({ data }) => { if (data?.username) setProfileUsername(data.username); });
+      .then(({ data }) => {
+        if (data?.username) setProfileUsername(data.username);
+        setProfileAvatarUrl(data?.avatar_url ?? null);
+      });
   }, [viewingOther, user?.id]);
 
   // ── Load other user's reviews + like state ────────────────────────────────
@@ -519,13 +530,16 @@ export default function MyReviewsScreen() {
       const ownerIds = [...byOwner.keys()];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, is_pro')
+        .select('id, username, is_pro, avatar_url')
         .in('id', ownerIds);
       const usernameById = new Map<string, string>(
         (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
       );
       const isProById = new Map<string, boolean>(
         (profiles ?? []).map((p: any) => [p.id as string, !!(p.is_pro)])
+      );
+      const avatarById = new Map<string, string | null>(
+        (profiles ?? []).map((p: any) => [p.id as string, (p.avatar_url ?? null) as string | null])
       );
 
       const allReviews: LikedReview[] = [];
@@ -552,6 +566,7 @@ export default function MyReviewsScreen() {
             ownerId,
             username:   usernameById.get(ownerId) ?? '',
             isPro:      isProById.get(ownerId) ?? false,
+            avatarUrl:  avatarById.get(ownerId) ?? null,
             likedAt:    likedEntry?.likedAt ?? '',
           });
         }
@@ -661,13 +676,16 @@ export default function MyReviewsScreen() {
       const ownerIds = [...byOwner.keys()];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, is_pro')
+        .select('id, username, is_pro, avatar_url')
         .in('id', ownerIds);
       const usernameById = new Map<string, string>(
         (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
       );
       const isProById = new Map<string, boolean>(
         (profiles ?? []).map((p: any) => [p.id as string, !!(p.is_pro)])
+      );
+      const avatarById = new Map<string, string | null>(
+        (profiles ?? []).map((p: any) => [p.id as string, (p.avatar_url ?? null) as string | null])
       );
 
       const allReviews: LikedReview[] = [];
@@ -694,6 +712,7 @@ export default function MyReviewsScreen() {
             ownerId,
             username:   usernameById.get(ownerId) ?? '',
             isPro:      isProById.get(ownerId) ?? false,
+            avatarUrl:  avatarById.get(ownerId) ?? null,
             likedAt:    likedEntry?.likedAt ?? '',
           });
         }
@@ -787,6 +806,15 @@ export default function MyReviewsScreen() {
     ? otherReviews
     : loggedAlbums.filter((a) => !!a.review);
 
+  // ── Community stats (avg rating + popularity) — same source as My Listend ──
+  const [communityStatsMap, setCommunityStatsMap] = useState<Map<string, CommunityStats>>(new Map());
+
+  useEffect(() => {
+    if (sourceReviews.length === 0) return;
+    fetchCommunityStats(sourceReviews).then(setCommunityStatsMap);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceReviews.length]);
+
   // Fetch durations for any reviewed album that doesn't have one yet
   useEffect(() => {
     const missing = sourceReviews.filter(a => !a.durationMs).map(a => a.id);
@@ -808,13 +836,17 @@ export default function MyReviewsScreen() {
   }, [sourceReviews.length, viewingOther]);
 
   const reviewed = useMemo(() => {
-    const sorted = shuffled ?? applySort(sourceReviews, sortKey);
+    const enriched = sourceReviews.map(a => {
+      const stats = communityStatsMap.get(communityStatsKey(a.title, a.artist));
+      return stats ? { ...a, communityAvgRating: stats.avg, communityRatingCount: stats.count } : a;
+    });
+    const sorted = shuffled ?? applySort(enriched, sortKey);
     if (!query.trim()) return sorted;
     const q = query.toLowerCase();
     return sorted.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [sourceReviews, sortKey, shuffled, query]);
+  }, [sourceReviews, sortKey, shuffled, query, communityStatsMap]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -1035,6 +1067,7 @@ export default function MyReviewsScreen() {
             isDark={isDark}
             colors={colors}
             reviewerUsername={profileUsername}
+            reviewerAvatarUrl={profileAvatarUrl}
             likeState={likeState}
             onLike={viewingOther ? () => handleToggleLike(selectedReview) : undefined}
             onClose={() => setSelectedReview(null)}
@@ -1065,6 +1098,7 @@ export default function MyReviewsScreen() {
             colors={colors}
             reviewerUsername={selectedLiked.username}
             reviewerIsPro={selectedLiked.isPro}
+            reviewerAvatarUrl={selectedLiked.avatarUrl}
             likeState={likeState}
             onLike={!viewingOther
               ? () => handleUnlikeLikedReview(selectedLiked)

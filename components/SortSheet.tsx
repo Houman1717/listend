@@ -82,9 +82,17 @@ export function applySort<T extends {
     case 'release_new':     return a.sort((x, y) => y.year - x.year);
     case 'release_old':     return a.sort((x, y) => x.year - y.year);
 
-    // Community average rating — falls back to 0 if not yet fetched
+    // Community average rating — falls back to 0 if not yet fetched, or if
+    // the album hasn't hit the minimum-ratings threshold. Either way, 0 means
+    // "no reliable rating" and should sort to the end, not read as "lowest rated".
     case 'avg_rating_high': return a.sort((x, y) => (y.communityAvgRating ?? 0) - (x.communityAvgRating ?? 0));
-    case 'avg_rating_low':  return a.sort((x, y) => (x.communityAvgRating ?? 0) - (y.communityAvgRating ?? 0));
+    case 'avg_rating_low':  return a.sort((x, y) => {
+      const rx = x.communityAvgRating ?? 0, ry = y.communityAvgRating ?? 0;
+      if (rx === 0 && ry === 0) return 0;
+      if (rx === 0) return 1;
+      if (ry === 0) return -1;
+      return rx - ry;
+    });
 
     // My rating — unrated albums (0) always sort to the end
     case 'my_rating_high':  return a.sort((x, y) => myRating(y) - myRating(x));
@@ -96,15 +104,11 @@ export function applySort<T extends {
       return rx - ry;
     });
 
-    // Popularity — sort by community rating count; 0 goes to end
+    // Popularity — real distinct-listener count, so 0 is a legitimate value
+    // (e.g. a Want to Listen album nobody's logged yet) and sorts normally
+    // rather than being treated as "missing data".
     case 'num_ratings_high': return a.sort((x, y) => (y.communityRatingCount ?? 0) - (x.communityRatingCount ?? 0));
-    case 'num_ratings_low':  return a.sort((x, y) => {
-      const cx = x.communityRatingCount ?? 0, cy = y.communityRatingCount ?? 0;
-      if (cx === 0 && cy === 0) return 0;
-      if (cx === 0) return 1;
-      if (cy === 0) return -1;
-      return cx - cy;
-    });
+    case 'num_ratings_low':  return a.sort((x, y) => (x.communityRatingCount ?? 0) - (y.communityRatingCount ?? 0));
 
     // Duration — albums with no tracklist data sort to the end
     case 'duration_long':  return a.sort((x, y) => {

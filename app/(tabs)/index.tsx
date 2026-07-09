@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -37,10 +38,6 @@ import {
 } from '@/lib/homeData';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
-
-// ─── Backend URL ──────────────────────────────────────────────────────────────
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 // ─── Placeholder friends ──────────────────────────────────────────────────────
 
@@ -109,115 +106,8 @@ const cache: {
   popularReviews?: PopularReview[];
 } = {};
 
-// ─── Fetcher ──────────────────────────────────────────────────────────────────
-
-async function fetchHome(): Promise<{ albums: CatalogAlbum[]; songs: CatalogTrack[]; artists: CatalogArtist[] }> {
-  const res = await fetch(`${API_URL}/home`);
-  if (!res.ok) throw new Error(`/home → ${res.status}`);
-  return res.json();
-}
-
-// ─── Popular Reviews fake data ────────────────────────────────────────────────
-
-export const POPULAR_REVIEWS_DATA: PopularReview[] = [
-  {
-    id: '1',
-    username: 'vinylhead_92',
-    albumTitle: 'After Hours',
-    albumArtist: 'The Weeknd',
-    albumYear: '2020',
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/500x500bb.jpg',
-    rating: 8,
-    review: 'Blinding Lights alone makes this a classic, but the whole album is a cinematic fever dream. Abel at his darkest and best.',
-    likeCount: 61,
-    commentCount: 0,
-  },
-  {
-    id: '2',
-    username: 'moodboard_mel',
-    albumTitle: 'folklore',
-    albumArtist: 'Taylor Swift',
-    albumYear: '2020',
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/80/dc/b580dca0-349d-036b-e09b-bd849f6affd8/20UMGIM64216.rgb.jpg/500x500bb.jpg',
-    rating: 9,
-    review: 'Taylor proved she can do indie folk better than most indie folk artists. Cardigan is perfection.',
-    likeCount: 104,
-    commentCount: 0,
-  },
-  {
-    id: '3',
-    username: 'crate_digger',
-    albumTitle: 'DAMN.',
-    albumArtist: 'Kendrick Lamar',
-    albumYear: '2017',
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/86/c9/bb/86c9bb30-fe3d-442e-33c1-c106c4d23705/17UMGIM88776.rgb.jpg/500x500bb.jpg',
-    rating: 10,
-    review: 'Every track on this hits different. HUMBLE. to DUCKWORTH — it\'s a full experience, not just songs. Kendrick is built different.',
-    likeCount: 132,
-    commentCount: 0,
-  },
-  {
-    id: '4',
-    username: 'nightowl_nina',
-    albumTitle: 'SOS',
-    albumArtist: 'SZA',
-    albumYear: '2022',
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/3b/a9/bd3ba9fb-9609-144f-bcfe-ead67b5f6ab3/196589564931.jpg/500x500bb.jpg',
-    rating: 9,
-    review: 'Kill Bill is already a top-5 song of the decade. The whole album oozes emotion and SZA\'s voice is otherworldly.',
-    likeCount: 89,
-    commentCount: 0,
-  },
-  {
-    id: '5',
-    username: 'bass_notes_ben',
-    albumTitle: 'Random Access Memories',
-    albumArtist: 'Daft Punk',
-    albumYear: '2013',
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/500x500bb.jpg',
-    rating: 10,
-    review: 'Get Lucky aside, this whole record is a love letter to the golden age of funk. Daft Punk\'s magnum opus without a doubt.',
-    likeCount: 78,
-    commentCount: 0,
-  },
-  {
-    id: '6',
-    username: 'lofi_lyric',
-    albumTitle: 'Currents',
-    albumArtist: 'Tame Impala',
-    albumYear: '2015',
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/500x500bb.jpg',
-    rating: 9,
-    review: "The Less I Know The Better is just pure indie-pop joy but the whole album is a psychedelic journey worth taking.",
-    likeCount: 54,
-    commentCount: 0,
-  },
-];
-
 // avatarColor is re-exported so popular-reviews.tsx can import it from here
 export { avatarColor };
-
-// ─── Popular review mock comments ────────────────────────────────────────────
-
-export const POPULAR_REVIEW_COMMENTS: ReviewComment[] = [
-  // Review 1 — After Hours
-  { id: 'pr_c1', reviewId: '1', userId: 'u1', username: 'nightfreq',     body: 'Blinding Lights is one of those songs that transcends the whole album.',  createdAt: '1 day ago'  },
-  { id: 'pr_c2', reviewId: '1', userId: 'u2', username: 'wavesurfer',    body: 'The whole aesthetic is so coherent from start to finish.',                 createdAt: '2 days ago' },
-  // Review 2 — folklore
-  { id: 'pr_c3', reviewId: '2', userId: 'u3', username: 'indie_ears',    body: 'Cardigan is legitimately one of her best tracks ever written.',            createdAt: '3 days ago' },
-  { id: 'pr_c4', reviewId: '2', parentCommentId: 'pr_c3', userId: 'u4', username: 'moodboard_mel', body: 'Totally agree — the production on that one is so delicate.', createdAt: '2 days ago' },
-  // Review 3 — DAMN.
-  { id: 'pr_c5', reviewId: '3', userId: 'u5', username: 'deep_cuts99',   body: 'DUCKWORTH as the closer is a masterclass in sequencing.',                 createdAt: '5 days ago' },
-  { id: 'pr_c6', reviewId: '3', userId: 'u6', username: 'tape_collector',body: '"Built different" is an understatement.',                                  createdAt: '4 days ago' },
-  { id: 'pr_c7', reviewId: '3', userId: 'u7', username: 'lofi_lyric',    body: 'Still holds up perfectly years later.',                                    createdAt: '1 week ago' },
-  // Review 4 — SOS
-  { id: 'pr_c8', reviewId: '4', userId: 'u8', username: 'auralfix',      body: "Kill Bill is perfect. SZA's voice is on another level here.",             createdAt: '2 days ago' },
-  // Review 5 — Random Access Memories
-  { id: 'pr_c9',  reviewId: '5', userId: 'u9',  username: 'bass_notes_ben',  body: 'Touch is so underrated. Giorgio by Moroder too.',              createdAt: '6 days ago' },
-  { id: 'pr_c10', reviewId: '5', parentCommentId: 'pr_c9', userId: 'u10', username: 'nightowl_nina', body: 'Giorgio by Moroder is an absolute journey.', createdAt: '5 days ago' },
-  // Review 6 — Currents
-  { id: 'pr_c11', reviewId: '6', userId: 'u11', username: 'sideB_fan',   body: 'The Less I Know is just perfect indie-pop. Full stop.',                   createdAt: '1 week ago' },
-];
 
 // ─── Card sizes ───────────────────────────────────────────────────────────────
 
@@ -1231,6 +1121,7 @@ export default function HomeScreen() {
   const [artists,        setArtists]        = useState<CatalogArtist[]>(cache.artists       ?? []);
   const [popularReviews, setPopularReviews] = useState<PopularReview[]>(cache.popularReviews ?? []);
   const [loading,        setLoading]        = useState(!cache.albums);
+  const [refreshing,     setRefreshing]     = useState(false);
   const [friendsListened,        setFriendsListened]        = useState<FriendEntry[]>([]);
   const [friendsListenedLoading, setFriendsListenedLoading] = useState(false);
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
@@ -1429,6 +1320,28 @@ export default function HomeScreen() {
     }, [])
   );
 
+  const onRefresh = useCallback(() => {
+    if (!user?.id) return;
+    setRefreshing(true);
+    Promise.allSettled([
+      fetchTopAlbumsThisWeek(),
+      fetchTopSongsThisWeek(),
+      fetchTopArtistsThisWeek(),
+      fetchPopularReviewsThisWeek(),
+      fetchFriendsActivity(user.id),
+      fetchFriendsRecentListened(user.id),
+    ])
+      .then(([albs, sngs, arts, reviews, activity, listened]) => {
+        if (albs.status === 'fulfilled')     { cache.albums         = albs.value;    setAlbums(albs.value); }
+        if (sngs.status === 'fulfilled')     { cache.songs          = sngs.value;    setSongs(sngs.value); }
+        if (arts.status === 'fulfilled')     { cache.artists        = arts.value;    setArtists(arts.value); }
+        if (reviews.status === 'fulfilled')  { cache.popularReviews = reviews.value; setPopularReviews(reviews.value); }
+        if (activity.status === 'fulfilled') setFriendsActivity(activity.value);
+        if (listened.status === 'fulfilled') setFriendsListened(listened.value);
+      })
+      .finally(() => setRefreshing(false));
+  }, [user?.id]);
+
   function handleFriendActivityPress(item: FriendActivityItem) {
     if (item.kind === 'top5') {
       if (item.category === 'albums') {
@@ -1481,7 +1394,10 @@ export default function HomeScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}>
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} colors={[colors.tint]} />
+      }>
 
       {/* 1 — Top Listend Albums This Week */}
       <Section title="Top Listend Albums This Week" loading={loading}>

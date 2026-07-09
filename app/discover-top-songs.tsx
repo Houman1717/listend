@@ -25,7 +25,7 @@ export default function DiscoverTopSongsScreen() {
 
   useEffect(() => {
     if (songs.length > 0) return;
-    fetch(`${API_URL}/discover/top-songs`)
+    fetch(`${API_URL}/api/discover/community-top-songs`)
       .then(r => r.json())
       .then((data: CatalogTrack[]) => {
         discoverSections.topSongs = data;

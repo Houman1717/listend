@@ -7,6 +7,7 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -69,10 +70,10 @@ async function fetchSections(): Promise<void> {
 
   const [newReleases, popular, topRated, topArtists, topSongs] = await Promise.all([
     safe(fetchJson('/discover/new-releases')),
-    safe(fetchJson('/discover/popular')),
-    safe(fetchJson('/discover/top-rated')),
-    fetchTyped<CatalogArtist>('/discover/top-artists').catch(() => [] as CatalogArtist[]),
-    fetchTyped<CatalogTrack>('/discover/top-songs').catch(() => [] as CatalogTrack[]),
+    safe(fetchJson('/api/discover/community-popular')),
+    safe(fetchJson('/api/discover/community-top-rated')),
+    fetchTyped<CatalogArtist>('/api/discover/community-top-artists').catch(() => [] as CatalogArtist[]),
+    fetchTyped<CatalogTrack>('/api/discover/community-top-songs').catch(() => [] as CatalogTrack[]),
   ]);
 
   discoverSections.newReleases  = newReleases;
@@ -389,6 +390,7 @@ export default function DiscoverScreen() {
   const [featuredLoading,   setFeaturedLoading]   = useState(true);
 
   const [sectionsLoading,  setSectionsLoading]  = useState(discoverSections.newReleases.length === 0);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   useFocusEffect(
@@ -415,6 +417,23 @@ export default function DiscoverScreen() {
     }, [])
   );
 
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    Promise.allSettled([
+      fetchSections(),
+      fetch(`${API_URL}/api/featured-playlists`).then(r => r.json()),
+    ])
+      .then(([, featured]) => {
+        setNewReleases([...discoverSections.newReleases]);
+        setPopular([...discoverSections.popular]);
+        setTopRated([...discoverSections.topRated]);
+        setTopArtists([...discoverSections.topArtists]);
+        setTopSongs([...discoverSections.topSongs]);
+        if (featured.status === 'fulfilled') setFeaturedPlaylists(featured.value);
+      })
+      .finally(() => setRefreshing(false));
+  }, []);
+
   function goToAlbum(album: CatalogAlbum) {
     router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl } } as any);
   }
@@ -430,7 +449,10 @@ export default function DiscoverScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}>
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} colors={[colors.tint]} />
+      }>
 
       <Text style={[s.heading, { color: colors.text }]}>Discover</Text>
 
