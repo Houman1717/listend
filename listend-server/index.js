@@ -13,6 +13,7 @@ const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } =
 const generateAppleToken = require('./utils/appleToken');
 const { GENRE_ALBUMS } = require('./genreData');
 const { DECADE_ALBUMS } = require('./decadeData');
+const { NEW_RELEASE_ALBUMS } = require('./newReleaseData');
 const { FEATURED_PLAYLIST_META, PLAYLIST_ALBUMS } = require('./featuredPlaylistsData');
 
 async function amFetch(path) {
@@ -578,21 +579,10 @@ app.get('/api/resolve-album', [
 });
 
 // ── GET /discover/new-releases ────────────────────────────────────────────────
-// The underlying AM "most-played" chart lags behind actual release dates —
-// a same-day album often hasn't accumulated enough plays to chart yet, so
-// NEW_RELEASES_OVERRIDES pins known day-of releases to the front of the list
-// regardless of chart position. Dedup by id means it's a no-op once the
-// chart catches up on its own.
-const NEW_RELEASES_OVERRIDES = [
-  {
-    id: '6784327271', title: 'The Real Me', artist: 'Future', year: 2026,
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/8e/a0/75/8ea0757a-6859-9c50-e92b-944979cc0d53/196874557198.jpg/500x500bb.jpg',
-  },
-  {
-    id: '6788711232', title: 'Foreign Tongues', artist: 'The Rolling Stones', year: 2026,
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/5a/d5/b1/5ad5b194-b6e3-369f-1de6-f2e962582ad4/26UMGIM36901.rgb.jpg/500x500bb.jpg',
-  },
-];
+// Curated ordered list (NEW_RELEASE_ALBUMS) seeded into new_release_albums via
+// /api/admin/populate-new-releases — replaces the old AM most-played chart,
+// which lagged actual release dates since new albums haven't accumulated
+// plays yet.
 
 app.get('/discover/new-releases', async (req, res) => {
   const CACHE_KEY = 'discover:new-releases';
@@ -604,16 +594,19 @@ app.get('/discover/new-releases', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await amFetch('/catalog/us/charts?types=albums&chart=most-played&limit=20');
-    let results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
-      id: item.id,
-      title: item.attributes?.name ?? '',
-      artist: item.attributes?.artistName ?? '',
-      year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
-      artworkUrl: amArtwork(item.attributes?.artwork),
+    const { data, error } = await supabase
+      .from('new_release_albums')
+      .select('*')
+      .order('position');
+    if (error) throw error;
+
+    const results = (data ?? []).map(r => ({
+      id:         r.spotify_id,
+      title:      r.title,
+      artist:     r.artist,
+      year:       r.year ?? 0,
+      artworkUrl: r.artwork_url,
     }));
-    const overrides = NEW_RELEASES_OVERRIDES.filter(o => !results.some(r => r.id === o.id));
-    results = [...overrides, ...results];
     cacheSet(CACHE_KEY, results, TTL_6H);
     await setCache(CACHE_KEY, results);
     res.json(results);
@@ -2867,6 +2860,69 @@ app.get('/api/admin/populate-genres', requireAdmin, async (req, res) => {
     res.json({ ok: true, inserted: populated.length, errors: errors.length, errorDetails: errors });
   } catch (err) {
     console.error('[populate-genres] fatal:', err.message ?? err);
+    res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
+  }
+});
+
+// ── GET /api/admin/populate-new-releases ─────────────────────────────────────
+// Searches AM for every album in NEW_RELEASE_ALBUMS, then replaces
+// new_release_albums rows. position = index in the list, preserving display
+// order. Run once after editing the list.
+
+app.get('/api/admin/populate-new-releases', requireAdmin, async (req, res) => {
+  const BATCH = 4;
+  const DELAY = 500;
+
+  const populated = [];
+  const errors    = [];
+
+  try {
+    const { error: delErr } = await supabase.from('new_release_albums').delete().gte('position', 0);
+    if (delErr) throw delErr;
+
+    for (let i = 0; i < NEW_RELEASE_ALBUMS.length; i += BATCH) {
+      const batch = NEW_RELEASE_ALBUMS.slice(i, i + BATCH).map((album, j) => ({ ...album, position: i + j }));
+
+      await Promise.all(batch.map(async ({ artist, title, position }) => {
+        try {
+          const resolved = await resolveCanonicalAlbum({ title, artist });
+
+          if (!resolved?.id) {
+            errors.push({ position, artist, title, error: 'not found in AM catalog' });
+            return;
+          }
+
+          const { error: insertErr } = await supabase.from('new_release_albums').upsert({
+            position,
+            spotify_id:  resolved.id,
+            title:       resolved.title,
+            artist:      resolved.artist,
+            artwork_url: resolved.artworkUrl,
+            year:        resolved.year,
+          }, { onConflict: 'position' });
+
+          if (insertErr) {
+            errors.push({ position, artist, title, error: insertErr.message });
+          } else {
+            populated.push({ position, title: resolved.title, artist: resolved.artist, id: resolved.id });
+          }
+        } catch (e) {
+          errors.push({ position, artist, title, error: e.message });
+        }
+      }));
+
+      if (i + BATCH < NEW_RELEASE_ALBUMS.length) {
+        await new Promise(r => setTimeout(r, DELAY));
+      }
+    }
+
+    cacheClear('discover:new-releases');
+    await deleteCache('discover:new-releases');
+
+    console.log(`[populate-new-releases] complete — ${populated.length} inserted, ${errors.length} errors`);
+    res.json({ ok: true, inserted: populated.length, errors: errors.length, errorDetails: errors });
+  } catch (err) {
+    console.error('[populate-new-releases] fatal:', err.message ?? err);
     res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
   }
 });
