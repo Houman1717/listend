@@ -31,6 +31,7 @@ type NotificationItem = {
   actorUsername: string | null;
   actorAvatarUrl: string | null;
   targetId: string | null;
+  commentId: string | null;
 };
 
 // ─── Row ──────────────────────────────────────────────────────────────────────
@@ -126,7 +127,7 @@ export default function NotificationsScreen() {
 
     const { data: rows, error } = await supabase
       .from('notifications')
-      .select('id, type, read, created_at, actor_id, target_id')
+      .select('id, type, read, created_at, actor_id, target_id, comment_id')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -163,6 +164,7 @@ export default function NotificationsScreen() {
           actorUsername:  prof?.username                       ?? null,
           actorAvatarUrl: prof?.avatar_url                     ?? null,
           targetId:       row.target_id                        ?? null,
+          commentId:      row.comment_id                        ?? null,
         };
       }),
     );
@@ -214,7 +216,7 @@ export default function NotificationsScreen() {
               if (item.type === 'message') {
                 router.push({ pathname: '/dm-conversation', params: { userId: item.actorId } });
               } else if ((item.type === 'like_review' || item.type === 'like_comment' || item.type === 'like_reply' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
-                navigateToReviewNotification(router, item.targetId, item.type !== 'like_review');
+                navigateToReviewNotification(router, item.targetId, item.type !== 'like_review', item.commentId ?? undefined);
               } else if (item.type === 'like_playlist' && item.targetId) {
                 if (item.targetId.startsWith('featured:')) {
                   router.push({ pathname: '/discover-featured-playlist', params: { id: item.targetId.replace('featured:', '') } } as any);

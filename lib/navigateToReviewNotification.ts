@@ -13,6 +13,7 @@ export async function navigateToReviewNotification(
   router: Router,
   targetId: string,
   openComments: boolean,
+  highlightCommentId?: string,
 ) {
   const [userId, spotifyId] = targetId.split('_');
 
@@ -43,6 +44,7 @@ export async function navigateToReviewNotification(
       title, artist, year, artworkUrl,
       reviewId: targetId,
       openComments: openComments ? '1' : undefined,
+      highlightCommentId,
     },
   } as any);
 }

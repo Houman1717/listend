@@ -121,7 +121,7 @@ function AuthGate() {
       } else if (data.type === 'message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
       } else if ((data.type === 'like_review' || data.type === 'like_comment' || data.type === 'like_reply' || data.type === 'comment' || data.type === 'comment_reply') && data.targetId) {
-        navigateToReviewNotification(router, data.targetId, data.type !== 'like_review');
+        navigateToReviewNotification(router, data.targetId, data.type !== 'like_review', data.commentId ?? undefined);
       } else if (data.type === 'like_playlist' && data.targetId) {
         if ((data.targetId as string).startsWith('featured:')) {
           router.push({ pathname: '/discover-featured-playlist', params: { id: (data.targetId as string).replace('featured:', '') } } as any);

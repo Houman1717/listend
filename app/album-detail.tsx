@@ -579,6 +579,7 @@ function AlbumSingleReviewModal({
   onReport,
   isDark,
   colors,
+  highlightCommentId,
 }: {
   review: CommunityReview;
   albumTitle: string;
@@ -591,6 +592,7 @@ function AlbumSingleReviewModal({
   comments: ReviewComment[];
   commentsExpanded: boolean;
   onToggleComments: () => void;
+  highlightCommentId?: string;
   onAddComment: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
   onClose: () => void;
   onUsernamePress?: (username: string) => void;
@@ -739,6 +741,7 @@ function AlbumSingleReviewModal({
                 colors={colors}
                 onAddComment={onAddComment}
                 onUsernamePress={(username) => { onClose(); onUsernamePress?.(username); }}
+                highlightCommentId={highlightCommentId}
               />
             )}
           </ScrollView>
@@ -783,7 +786,7 @@ export default function AlbumDetailScreen() {
   const headerHeight = useHeaderHeight();
 
   const params = useLocalSearchParams<{
-    id: string; title?: string; artist?: string; year?: string; artworkUrl?: string; reviewId?: string; openComments?: string;
+    id: string; title?: string; artist?: string; year?: string; artworkUrl?: string; reviewId?: string; openComments?: string; highlightCommentId?: string;
   }>();
 
   const { user } = useAuth();
@@ -1938,6 +1941,7 @@ export default function AlbumDetailScreen() {
           }) : undefined}
           onUsernamePress={(username) => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); navigateToProfile(username, router); }}
           onAuthorPress={(userId) => { setExpandedAlbumReview(null); setSingleReviewCommentsOpen(false); router.push({ pathname: '/user-profile', params: { userId } } as any); }}
+          highlightCommentId={params.highlightCommentId}
           isDark={isDark}
           colors={colors}
         />

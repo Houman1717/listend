@@ -3581,7 +3581,7 @@ app.post('/api/webhook/notification', async (req, res) => {
     const row = req.body?.record;
     if (!row) return res.json({ ok: true });
 
-    const { user_id, type, actor_id, target_id } = row;
+    const { user_id, type, actor_id, target_id, comment_id } = row;
     if (!user_id || !type || !actor_id) return res.json({ ok: true });
 
     // Look up actor's display name
@@ -3595,7 +3595,7 @@ app.post('/api/webhook/notification', async (req, res) => {
     const title = PUSH_TITLES[type] ?? 'New notification';
     const body  = (PUSH_BODIES[type] ?? (() => name))(name);
 
-    await sendPush(user_id, title, body, { type, actorId: actor_id, targetId: target_id });
+    await sendPush(user_id, title, body, { type, actorId: actor_id, targetId: target_id, commentId: comment_id });
     res.json({ ok: true });
   } catch (err) {
     console.error('[webhook/notification]', err.message);

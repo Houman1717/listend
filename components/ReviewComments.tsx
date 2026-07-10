@@ -100,6 +100,7 @@ export function CommentBubble({
             type: comment.parentCommentId ? 'like_reply' : 'like_comment',
             actor_id: user.id,
             target_id: comment.reviewId,
+            comment_id: comment.id,
           }).then(({ error: notifErr }) => {
             if (notifErr) console.error('[ReviewComments] notification error:', notifErr.message);
           });
@@ -187,6 +188,7 @@ export function CommentsSection({
   onAddComment,
   onUsernamePress,
   large = false,
+  highlightCommentId,
 }: {
   comments: ReviewComment[];
   isDark: boolean;
@@ -194,6 +196,7 @@ export function CommentsSection({
   onAddComment?: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
   onUsernamePress?: (username: string) => void;
   large?: boolean;
+  highlightCommentId?: string;
 }) {
   const { user } = useAuth();
   const [myUsername, setMyUsername]         = useState('');
@@ -202,6 +205,16 @@ export function CommentsSection({
   const [replyText, setReplyText]           = useState('');
   const [commentText, setCommentText]       = useState('');
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
+
+  // If the highlighted comment is a reply hidden behind "show N more
+  // replies", expand its thread so it's actually visible.
+  useEffect(() => {
+    if (!highlightCommentId) return;
+    const target = comments.find(c => c.id === highlightCommentId);
+    if (target?.parentCommentId) {
+      setExpandedReplies(prev => new Set(prev).add(target.parentCommentId!));
+    }
+  }, [highlightCommentId, comments]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -263,9 +276,15 @@ export function CommentsSection({
     const hiddenCount = children.length - INITIAL_SHOWN;
 
     const isReplyOpen = replyTarget?.targetId === comment.id;
+    const isHighlighted = comment.id === highlightCommentId;
 
     return (
-      <View key={comment.id}>
+      <View
+        key={comment.id}
+        style={isHighlighted ? {
+          backgroundColor: isDark ? 'rgba(212,160,23,0.14)' : 'rgba(212,160,23,0.12)',
+          borderRadius: 10,
+        } : undefined}>
         <CommentBubble
           comment={comment}
           isReply={isReply}
