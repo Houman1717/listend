@@ -22,7 +22,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 
 type NotificationItem = {
   id: string;
-  type: 'follow' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'comment' | 'comment_reply';
+  type: 'follow' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'like_reply' | 'comment' | 'comment_reply';
   read: boolean;
   createdAt: string;
   actorId: string;
@@ -40,6 +40,7 @@ const NOTIF_META: Record<NotificationItem['type'], { body: string; iconName: str
   like_review:   { body: 'liked your review',        iconName: 'heart',     iconColor: '#D4A017' },
   like_playlist: { body: 'liked your playlist',      iconName: 'heart',     iconColor: '#D4A017' },
   like_comment:  { body: 'liked your comment',       iconName: 'heart',     iconColor: '#D4A017' },
+  like_reply:    { body: 'liked your reply',         iconName: 'heart',     iconColor: '#D4A017' },
   comment:       { body: 'commented on your review', iconName: 'comment',  iconColor: '#D4A017' },
   comment_reply: { body: 'replied to your comment',  iconName: 'comment',  iconColor: '#D4A017' },
 };
@@ -211,9 +212,10 @@ export default function NotificationsScreen() {
             onPress={() => {
               if (item.type === 'message') {
                 router.push({ pathname: '/dm-conversation', params: { userId: item.actorId } });
-              } else if ((item.type === 'like_review' || item.type === 'like_comment' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
+              } else if ((item.type === 'like_review' || item.type === 'like_comment' || item.type === 'like_reply' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
                 const albumId = item.targetId.split('_')[1];
-                router.push({ pathname: '/album-detail', params: { id: albumId, reviewId: item.targetId } } as any);
+                const openComments = item.type !== 'like_review';
+                router.push({ pathname: '/album-detail', params: { id: albumId, reviewId: item.targetId, openComments: openComments ? '1' : undefined } } as any);
               } else if (item.type === 'like_playlist' && item.targetId) {
                 if (item.targetId.startsWith('featured:')) {
                   router.push({ pathname: '/discover-featured-playlist', params: { id: item.targetId.replace('featured:', '') } } as any);

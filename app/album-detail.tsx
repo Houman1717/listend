@@ -24,6 +24,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePro } from '@/context/ProContext';
 import { reportContent } from '@/lib/reports';
 import { supabase } from '@/lib/supabase';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
@@ -782,18 +783,21 @@ export default function AlbumDetailScreen() {
   const headerHeight = useHeaderHeight();
 
   const params = useLocalSearchParams<{
-    id: string; title?: string; artist?: string; year?: string; artworkUrl?: string; reviewId?: string;
+    id: string; title?: string; artist?: string; year?: string; artworkUrl?: string; reviewId?: string; openComments?: string;
   }>();
 
   const { user } = useAuth();
+  const { isPro: myIsPro } = usePro();
   const [myUsername,  setMyUsername]  = useState('');
   const [myAvatarUrl, setMyAvatarUrl] = useState<string | null>(null);
+  const [myProfileLoaded, setMyProfileLoaded] = useState(false);
   useEffect(() => {
     if (!user?.id) return;
     supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
       .then(({ data }) => {
         if (data?.username) setMyUsername(data.username);
         setMyAvatarUrl((data as any)?.avatar_url ?? null);
+        setMyProfileLoaded(true);
       });
   }, [user?.id]);
 
@@ -934,6 +938,7 @@ export default function AlbumDetailScreen() {
         userId:       user.id,
         username:     myUsername || 'me',
         avatarUrl:    myAvatarUrl,
+        isPro:        myIsPro,
         rating:       loggedAlbum!.lastRating ?? loggedAlbum!.rating,
         text:         (loggedAlbum!.isRelistened ? (loggedAlbum!.lastReview ?? loggedAlbum!.review) : loggedAlbum!.review) ?? undefined,
         dateStr:      formatLoggedDate(loggedAlbum!.dateLogged),
@@ -943,15 +948,17 @@ export default function AlbumDetailScreen() {
       }
     : null;
 
-  // Auto-open own review when deep-linking from a like_review notification
+  // Auto-open own review when deep-linking from a review/comment notification.
+  // openComments is set for comment/reply notifications so tapping them
+  // actually surfaces the comment thread, not just the bare review.
   const autoOpenedRef = useRef(false);
   useEffect(() => {
-    if (!params.reviewId || autoOpenedRef.current || !ownReview) return;
+    if (!params.reviewId || autoOpenedRef.current || !ownReview || !myProfileLoaded) return;
     if (ownReview.id === params.reviewId) {
       autoOpenedRef.current = true;
-      openReview(ownReview, false);
+      openReview(ownReview, params.openComments === '1');
     }
-  }, [params.reviewId, ownReview?.id]);
+  }, [params.reviewId, params.openComments, ownReview?.id, myProfileLoaded]);
 
   // All reviews including own — used for ratings average and preview
   const allReviews = ownReview ? [ownReview, ...communityReviews] : communityReviews;

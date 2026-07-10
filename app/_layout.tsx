@@ -119,9 +119,10 @@ function AuthGate() {
         router.push('/flip-a-record');
       } else if (data.type === 'message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
-      } else if ((data.type === 'like_review' || data.type === 'comment' || data.type === 'comment_reply') && data.targetId) {
+      } else if ((data.type === 'like_review' || data.type === 'like_comment' || data.type === 'like_reply' || data.type === 'comment' || data.type === 'comment_reply') && data.targetId) {
         const albumId = data.targetId.split('_')[1];
-        router.push({ pathname: '/album-detail', params: { id: albumId } } as any);
+        const openComments = data.type !== 'like_review';
+        router.push({ pathname: '/album-detail', params: { id: albumId, reviewId: data.targetId, openComments: openComments ? '1' : undefined } } as any);
       } else if (data.type === 'like_playlist' && data.targetId) {
         if ((data.targetId as string).startsWith('featured:')) {
           router.push({ pathname: '/discover-featured-playlist', params: { id: (data.targetId as string).replace('featured:', '') } } as any);

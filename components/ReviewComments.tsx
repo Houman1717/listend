@@ -96,7 +96,10 @@ export function CommentBubble({
         if (error) { setLiked(false); setLikeCount(c => Math.max(0, c - 1)); }
         else if (comment.userId !== user.id) {
           supabase.from('notifications').insert({
-            user_id: comment.userId, type: 'like_comment', actor_id: user.id, target_id: comment.reviewId,
+            user_id: comment.userId,
+            type: comment.parentCommentId ? 'like_reply' : 'like_comment',
+            actor_id: user.id,
+            target_id: comment.reviewId,
           }).then(({ error: notifErr }) => {
             if (notifErr) console.error('[ReviewComments] notification error:', notifErr.message);
           });
