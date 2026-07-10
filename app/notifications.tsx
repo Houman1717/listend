@@ -17,6 +17,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
+import { navigateToReviewNotification } from '@/lib/navigateToReviewNotification';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -213,9 +214,7 @@ export default function NotificationsScreen() {
               if (item.type === 'message') {
                 router.push({ pathname: '/dm-conversation', params: { userId: item.actorId } });
               } else if ((item.type === 'like_review' || item.type === 'like_comment' || item.type === 'like_reply' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
-                const albumId = item.targetId.split('_')[1];
-                const openComments = item.type !== 'like_review';
-                router.push({ pathname: '/album-detail', params: { id: albumId, reviewId: item.targetId, openComments: openComments ? '1' : undefined } } as any);
+                navigateToReviewNotification(router, item.targetId, item.type !== 'like_review');
               } else if (item.type === 'like_playlist' && item.targetId) {
                 if (item.targetId.startsWith('featured:')) {
                   router.push({ pathname: '/discover-featured-playlist', params: { id: item.targetId.replace('featured:', '') } } as any);

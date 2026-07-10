@@ -10,6 +10,7 @@ import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 import { PostHogProvider } from 'posthog-react-native';
 import { posthog, identifyUser, resetAnalytics } from '@/lib/analytics';
+import { navigateToReviewNotification } from '@/lib/navigateToReviewNotification';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { ThemeProvider } from '@/context/ThemeContext';
@@ -120,9 +121,7 @@ function AuthGate() {
       } else if (data.type === 'message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
       } else if ((data.type === 'like_review' || data.type === 'like_comment' || data.type === 'like_reply' || data.type === 'comment' || data.type === 'comment_reply') && data.targetId) {
-        const albumId = data.targetId.split('_')[1];
-        const openComments = data.type !== 'like_review';
-        router.push({ pathname: '/album-detail', params: { id: albumId, reviewId: data.targetId, openComments: openComments ? '1' : undefined } } as any);
+        navigateToReviewNotification(router, data.targetId, data.type !== 'like_review');
       } else if (data.type === 'like_playlist' && data.targetId) {
         if ((data.targetId as string).startsWith('featured:')) {
           router.push({ pathname: '/discover-featured-playlist', params: { id: (data.targetId as string).replace('featured:', '') } } as any);
