@@ -2139,6 +2139,23 @@ app.get(['/catalog/artist/:id/top-tracks', '/spotify/artist/:id/top-tracks'], [
   }
 });
 
+// Manual overrides for albums Apple's catalog API hasn't linked to the
+// artist yet (e.g. a same-day release that isn't in the artist→albums
+// relationship even though the album itself is fully live). Keyed by AM
+// artist id. Removable once Apple's own relationship data catches up —
+// the id-based dedup below means a duplicate from Apple is harmless either
+// way.
+const ARTIST_ALBUM_OVERRIDES = {
+  '128050210': [ // Future
+    {
+      id: '6784327271', title: 'The Real Me',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/8e/a0/75/8ea0757a-6859-9c50-e92b-944979cc0d53/196874557198.jpg/500x500bb.jpg',
+      year: 2026, isSingle: false, isCompilation: false, trackCount: 22,
+      url: 'https://music.apple.com/us/album/the-real-me/6784327271', type: 'album',
+    },
+  ],
+};
+
 // ── GET /catalog/artist/:id/albums ────────────────────────────────────────────
 // Returns discography grouped by type: { albums, singles, compilations }.
 
@@ -2236,6 +2253,12 @@ app.get(['/catalog/artist/:id/albums', '/spotify/artist/:id/albums'], [
         nextPath = null;
       }
       page++;
+    }
+
+    const overrides = (ARTIST_ALBUM_OVERRIDES[id] ?? []).filter(o => !allItems.some(a => a.id === o.id));
+    if (overrides.length > 0) {
+      console.log(`[/catalog/artist/albums] merging ${overrides.length} manual override(s):`, overrides.map(o => o.title));
+      allItems = allItems.concat(overrides);
     }
 
     console.log(`[/catalog/artist/albums] ALL titles fetched (${allItems.length}):`, allItems.map(i => `"${i.title}" isSingle=${i.isSingle} isCompilation=${i.isCompilation} trackCount=${i.trackCount}`));
