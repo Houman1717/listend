@@ -1287,9 +1287,9 @@ export default function ListendScreen() {
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="quote-left" label="My Reviews"      sub={`${reviewCount} reviews`}                                                    onPress={() => router.push('/my-reviews')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="repeat"     label="Re-Listend"      sub={`${loggedAlbums.filter(a => a.isRelistened).length} albums`}                 onPress={() => router.push('/re-listened')} />
-        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="clock-o"    label="Recent Activity" sub="Your recent activity"                                                        onPress={() => router.push('/recent-activity')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="repeat"     label="Re-Listend"      sub={`${loggedAlbums.filter(a => a.isRelistened).length} albums`}                 onPress={() => router.push('/re-listened')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="list"       label="My Playlists"    sub="Your album lists"                                                            onPress={() => router.push('/my-playlists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
