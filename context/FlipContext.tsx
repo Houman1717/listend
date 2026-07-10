@@ -3,10 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { usePro } from '@/context/ProContext';
+import { supabase } from '@/lib/supabase';
 import { FLIP_POOL } from '@/constants/FlipPool';
 import { scheduleFlipCooldownNotification, cancelFlipCooldownNotification } from '@/lib/flipNotification';
 import { capture } from '@/lib/analytics';
 import { communityStatsKey } from '@/lib/communityStats';
+
+const FLIP_POOL_BY_ID = new Map(FLIP_POOL.map(a => [a.id, a]));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,8 +40,23 @@ type FlipContextType = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// Storage key is user-scoped so switching accounts never shares flip history.
+// Legacy AsyncStorage key — history used to live only here. Kept around solely
+// to migrate any pre-existing local history into Supabase on first load.
 const flipKey = (uid: string) => `@listend:flipData_v1_${uid}`;
+
+function rowToRecord(row: any): FlippedRecord {
+  const pool = FLIP_POOL_BY_ID.get(row.pool_id);
+  return {
+    id:         row.pool_id,
+    title:      row.album_title,
+    artist:     row.album_artist,
+    year:       row.album_year,
+    coverColor: pool?.coverColor ?? '#6B4C35',
+    genre:      pool?.genre,
+    flippedAt:  new Date(row.flipped_at).getTime(),
+    status:     row.status,
+  };
+}
 
 const COOLDOWN_MS_FREE = 12 * 60 * 60 * 1000; // 12 hours for free users
 const COOLDOWN_MS_PRO  =  1 * 60 * 60 * 1000; //  1 hour  for pro users
@@ -58,6 +76,9 @@ export function FlipProvider({ children }: { children: ReactNode }) {
 
   // ── Reload whenever the signed-in user changes ────────────────────────────
   // Clears current state first so Account A's history never bleeds to Account B.
+  // Source of truth is Supabase (flip_records) so history survives logout,
+  // reinstalls, and new devices. A local-only legacy history is migrated up
+  // once, the first time this account is ever loaded post-migration.
   useEffect(() => {
     setHistory([]);
     setCooldownUntil(null);
@@ -69,29 +90,57 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     }
 
     const uid = user.id;
-    AsyncStorage.getItem(flipKey(uid))
-      .then(raw => {
+
+    function applyCooldown(stored: number | null) {
+      const value = __DEV__ ? null : stored;
+      setCooldownUntil(value);
+      if (!value || value < Date.now()) {
+        cancelFlipCooldownNotification().catch(() => {});
+      }
+    }
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('flip_records')
+        .select('pool_id, album_title, album_artist, album_year, status, flipped_at, cooldown_until')
+        .eq('user_id', uid)
+        .not('pool_id', 'is', null)
+        .order('flipped_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        setHistory(data.map(rowToRecord));
+        applyCooldown(data[0].cooldown_until ? new Date(data[0].cooldown_until).getTime() : null);
+        setIsLoaded(true);
+        return;
+      }
+
+      // No Supabase history yet — check for a pre-migration local-only history
+      // and upload it once so it isn't lost for existing users.
+      try {
+        const raw = await AsyncStorage.getItem(flipKey(uid));
         if (raw) {
-          const data = JSON.parse(raw);
-          setHistory(data.history ?? []);
-          // Pro users have no cooldown; ignore any stored timestamp.
-          const stored: number | null = __DEV__ ? null : (data.cooldownUntil ?? null);
-          setCooldownUntil(stored);
-          // Cancel stale notification if cooldown has already passed
-          if (!stored || stored < Date.now()) {
-            cancelFlipCooldownNotification().catch(() => {});
+          const legacy = JSON.parse(raw);
+          const legacyHistory: FlippedRecord[] = legacy.history ?? [];
+          if (legacyHistory.length > 0) {
+            await supabase.from('flip_records').insert(legacyHistory.map(r => ({
+              user_id:      uid,
+              pool_id:      r.id,
+              album_title:  r.title,
+              album_artist: r.artist,
+              album_year:   r.year,
+              status:       r.status,
+              flipped_at:   new Date(r.flippedAt).toISOString(),
+            })));
+            setHistory(legacyHistory);
+            applyCooldown(legacy.cooldownUntil ?? null);
           }
         }
-      })
-      .catch(() => {})
-      .finally(() => setIsLoaded(true));
+      } catch (e) {
+        console.error('[Flip] legacy migration error:', e);
+      }
+      setIsLoaded(true);
+    })();
   }, [user?.id]);
-
-  // ── Persist on change ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isLoaded || !user?.id) return;
-    AsyncStorage.setItem(flipKey(user.id), JSON.stringify({ history, cooldownUntil })).catch(() => {});
-  }, [history, cooldownUntil, isLoaded, user?.id]);
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -148,18 +197,51 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     if (!__DEV__) {
       scheduleFlipCooldownNotification(cooldownUntilMs).catch(() => {});
     }
+
+    if (user) {
+      supabase.from('flip_records').insert({
+        user_id:       user.id,
+        pool_id:       album.id,
+        album_title:   album.title,
+        album_artist:  album.artist,
+        album_year:    album.year,
+        status:        'pending',
+        flipped_at:    new Date(now).toISOString(),
+        cooldown_until: new Date(cooldownUntilMs).toISOString(),
+      }).then(({ error }) => {
+        if (error) {
+          console.error('[Flip] insert error:', error.message);
+          setHistory(prev => prev.filter(r => r.flippedAt !== now));
+          setCooldownUntil(null);
+        }
+      });
+    }
   }
 
   function markLogged(id: string) {
     setHistory(prev =>
       prev.map(r => r.id === id && r.status === 'pending' ? { ...r, status: 'logged' } : r)
     );
+    if (!user) return;
+    supabase.from('flip_records')
+      .update({ status: 'logged' })
+      .eq('user_id', user.id)
+      .eq('pool_id', id)
+      .eq('status', 'pending')
+      .then(({ error }) => { if (error) console.error('[Flip] markLogged error:', error.message); });
   }
 
   function markDidntListen(id: string) {
     setHistory(prev =>
       prev.map(r => r.id === id && r.status === 'pending' ? { ...r, status: 'didnt_listen' } : r)
     );
+    if (!user) return;
+    supabase.from('flip_records')
+      .update({ status: 'didnt_listen' })
+      .eq('user_id', user.id)
+      .eq('pool_id', id)
+      .eq('status', 'pending')
+      .then(({ error }) => { if (error) console.error('[Flip] markDidntListen error:', error.message); });
   }
 
   return (
