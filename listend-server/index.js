@@ -578,6 +578,21 @@ app.get('/api/resolve-album', [
 });
 
 // ── GET /discover/new-releases ────────────────────────────────────────────────
+// The underlying AM "most-played" chart lags behind actual release dates —
+// a same-day album often hasn't accumulated enough plays to chart yet, so
+// NEW_RELEASES_OVERRIDES pins known day-of releases to the front of the list
+// regardless of chart position. Dedup by id means it's a no-op once the
+// chart catches up on its own.
+const NEW_RELEASES_OVERRIDES = [
+  {
+    id: '6784327271', title: 'The Real Me', artist: 'Future', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/8e/a0/75/8ea0757a-6859-9c50-e92b-944979cc0d53/196874557198.jpg/500x500bb.jpg',
+  },
+  {
+    id: '6788711232', title: 'Foreign Tongues', artist: 'The Rolling Stones', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/5a/d5/b1/5ad5b194-b6e3-369f-1de6-f2e962582ad4/26UMGIM36901.rgb.jpg/500x500bb.jpg',
+  },
+];
 
 app.get('/discover/new-releases', async (req, res) => {
   const CACHE_KEY = 'discover:new-releases';
@@ -590,13 +605,15 @@ app.get('/discover/new-releases', async (req, res) => {
 
   try {
     const data = await amFetch('/catalog/us/charts?types=albums&chart=most-played&limit=20');
-    const results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
+    let results = (data.results?.albums?.[0]?.data ?? []).map(item => ({
       id: item.id,
       title: item.attributes?.name ?? '',
       artist: item.attributes?.artistName ?? '',
       year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
       artworkUrl: amArtwork(item.attributes?.artwork),
     }));
+    const overrides = NEW_RELEASES_OVERRIDES.filter(o => !results.some(r => r.id === o.id));
+    results = [...overrides, ...results];
     cacheSet(CACHE_KEY, results, TTL_6H);
     await setCache(CACHE_KEY, results);
     res.json(results);
