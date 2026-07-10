@@ -458,6 +458,15 @@ function FullPoolModal({
   const total        = dedupedHistory.length;
   const listenedPct  = total > 0 ? Math.round(loggedCount / total * 100) : 0;
 
+  // Pool albums logged some other way (search, etc.) without ever being
+  // flipped — shown below the real flips so you can see the full picture of
+  // what's covered, but they don't count toward the flipped %/count above.
+  const libraryOnlyEntries: FlippedRecord[] = FLIP_POOL
+    .filter(a => libraryLoggedIds.has(a.id) && !seenIds.has(a.id))
+    .map(a => ({ id: a.id, title: a.title, artist: a.artist, year: a.year, coverColor: a.coverColor, genre: a.genre, flippedAt: 0, status: 'logged' as FlipStatus }));
+
+  const rows = [...dedupedHistory, ...libraryOnlyEntries];
+
   const bg        = colors.background;
   const borderCol = colors.border;
 
@@ -493,7 +502,7 @@ function FullPoolModal({
             </View>
 
             <FlatList
-              data={dedupedHistory}
+              data={rows}
               keyExtractor={item => item.id}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => (
