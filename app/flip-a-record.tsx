@@ -454,9 +454,18 @@ function FullPoolModal({
     if (!seenIds.has(r.id)) { seenIds.add(r.id); dedupedHistory.push(r); }
   }
 
-  const loggedCount  = dedupedHistory.filter(r => r.status === 'logged' || libraryLoggedIds.has(r.id)).length;
-  const total        = dedupedHistory.length;
+  // Pool albums you've logged some other way (search, etc.) without ever
+  // flipping them — still worth showing here since they count toward your
+  // progress, just not under "Recently Flipped" on the main screen.
+  const libraryOnlyEntries: FlippedRecord[] = FLIP_POOL
+    .filter(a => libraryLoggedIds.has(a.id) && !seenIds.has(a.id))
+    .map(a => ({ id: a.id, title: a.title, artist: a.artist, year: a.year, coverColor: a.coverColor, genre: a.genre, flippedAt: 0, status: 'logged' as FlipStatus }));
+
+  const rows = [...dedupedHistory, ...libraryOnlyEntries];
+  const loggedCount  = rows.filter(r => r.status === 'logged' || libraryLoggedIds.has(r.id)).length;
+  const total        = rows.length;
   const listenedPct  = total > 0 ? Math.round(loggedCount / total * 100) : 0;
+  const flippedCount = dedupedHistory.length;
 
   const bg        = colors.background;
   const borderCol = colors.border;
@@ -476,7 +485,7 @@ function FullPoolModal({
             <View style={[sfl.summary, { borderBottomColor: borderCol }]}>
               <View style={sfl.summaryRow}>
                 <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
-                  <Text style={{ color: '#D4A017', fontWeight: '700' }}>{total}</Text> flipped
+                  <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flippedCount}</Text> flipped
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <FontAwesome name="headphones" size={13} color="#D4A017" />
@@ -493,7 +502,7 @@ function FullPoolModal({
             </View>
 
             <FlatList
-              data={dedupedHistory}
+              data={rows}
               keyExtractor={item => item.id}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => (
@@ -665,7 +674,7 @@ export default function FlipARecordScreen() {
   const router      = useRouter();
   const navigation  = useNavigation();
 
-  const { history, cooldownUntil, currentFlip, poolExhausted, flip, markLogged, markDidntListen } = useFlip();
+  const { history, cooldownUntil, currentFlip, poolExhausted, flip, markLogged, markDidntListen, libraryLoggedIds } = useFlip();
   const { setPendingAlbum, addToWantToListen, removeFromWantToListen, wantToListen, loggedAlbums } = useAlbums();
   const { user } = useAuth();
 
@@ -1195,7 +1204,14 @@ export default function FlipARecordScreen() {
         {!poolExhausted && (() => {
           const total       = FLIP_POOL.length;
           const flipped     = new Set(history.map(r => r.id)).size;
-          const loggedCount = new Set(history.filter(r => r.status === 'logged').map(r => r.id)).size;
+          // Counts pool albums logged via the flip flow AND ones logged some
+          // other way (search, etc.) that just happen to be in the pool —
+          // libraryLoggedIds already covers the latter regardless of whether
+          // you ever flipped them.
+          const loggedCount = new Set([
+            ...history.filter(r => r.status === 'logged').map(r => r.id),
+            ...libraryLoggedIds,
+          ]).size;
           const listenedPct = total > 0 ? Math.round(loggedCount / total * 100) : 0;
           const flipPct     = total > 0 ? flipped / total : 0;
           return (
