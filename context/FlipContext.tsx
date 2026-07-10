@@ -6,6 +6,7 @@ import { usePro } from '@/context/ProContext';
 import { FLIP_POOL } from '@/constants/FlipPool';
 import { scheduleFlipCooldownNotification, cancelFlipCooldownNotification } from '@/lib/flipNotification';
 import { capture } from '@/lib/analytics';
+import { communityStatsKey } from '@/lib/communityStats';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,12 +103,15 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     history.filter(r => r.status === 'pending' || r.status === 'logged').map(r => r.id)
   ), [history]);
 
-  // Pool IDs that match albums already in the user's Listend library (by title)
+  // Pool IDs that match albums already in the user's Listend library — matched
+  // by title+artist (not title alone), otherwise unrelated albums that just
+  // share a pool title (e.g. Pop Smoke's "Faith" vs George Michael's "Faith")
+  // get falsely treated as already logged.
   const libraryLoggedIds = useMemo(() => {
-    const loggedTitles = new Set(loggedAlbums.map(a => a.title.toLowerCase().trim()));
+    const loggedKeys = new Set(loggedAlbums.map(a => communityStatsKey(a.title, a.artist)));
     const ids = new Set<string>();
     for (const a of FLIP_POOL) {
-      if (loggedTitles.has(a.title.toLowerCase().trim())) ids.add(a.id);
+      if (loggedKeys.has(communityStatsKey(a.title, a.artist))) ids.add(a.id);
     }
     return ids;
   }, [loggedAlbums]);
