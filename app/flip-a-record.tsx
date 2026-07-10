@@ -863,6 +863,19 @@ export default function FlipARecordScreen() {
     ? loggedAlbums.some(a => a.id === detailId || a.id === currentFlip.id)
     : false;
 
+  // Tracks which flip we just sent through "Log It", so once the save is
+  // confirmed (isAlreadyLogged flips true) we can advance straight to the
+  // next-flip/cooldown screen instead of stopping at the "already logged"
+  // confirmation panel — that panel is only meant for albums that were
+  // logged before this flip even happened.
+  const attemptedLogRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentFlip && isAlreadyLogged && attemptedLogRef.current === currentFlip.id) {
+      attemptedLogRef.current = null;
+      markLogged(currentFlip.id);
+    }
+  }, [currentFlip, isAlreadyLogged, markLogged]);
+
   const flipStreamLinks = currentFlip ? {
     appleMusic:   detailId ? `https://music.apple.com/us/album/${detailId}` : null,
     spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${currentFlip.title} ${currentFlip.artist}`)}`,
@@ -1147,6 +1160,7 @@ export default function FlipARecordScreen() {
                               amId = fetched.spotifyId;
                               if (fetched.artworkUrl) art = fetched.artworkUrl;
                             }
+                            attemptedLogRef.current = currentFlip.id;
                             setPendingAlbum({ spotifyId: amId || currentFlip.id, title: currentFlip.title, artist: currentFlip.artist, year: currentFlip.year, artworkUrl: art });
                             router.push('/log-album');
                           }}>
