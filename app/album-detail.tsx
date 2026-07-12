@@ -163,8 +163,8 @@ function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: 
   const tap = Gesture.Tap()
     .runOnJS(true)
     .onEnd(e => {
-      const val = Math.ceil((e.x / trackWidth) * 10);
-      onChange(Math.max(1, Math.min(10, val)));
+      const val = Math.max(1, Math.min(10, Math.ceil((e.x / trackWidth) * 10)));
+      onChange(val === rating ? 0 : val);
     });
 
   const pan = Gesture.Pan()

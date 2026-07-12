@@ -826,7 +826,7 @@ type FriendProfile = { id: string; username: string | null; avatarUrl: string | 
 type FriendActivityItem =
   | { kind: 'top5';            key: string; friend: FriendProfile; category: string; itemId: string; itemName: string; itemImageUrl: string | null; position: number; dateMs: number; dateLabel: string }
   | { kind: 'likedArtist';     key: string; friend: FriendProfile; artistId: string; name: string; artworkUrl: string | null; dateMs: number; dateLabel: string }
-  | { kind: 'likedPlaylist';   key: string; friend: FriendProfile; targetId: string; name: string; artworkUrls: string[]; dateMs: number; dateLabel: string }
+  | { kind: 'likedPlaylist';   key: string; friend: FriendProfile; targetId: string; ownerId: string | null; name: string; artworkUrls: string[]; dateMs: number; dateLabel: string }
   | { kind: 'createdPlaylist'; key: string; friend: FriendProfile; playlistId: string; name: string; artworkUrls: string[]; dateMs: number; dateLabel: string }
   | { kind: 'wantToListen';    key: string; friend: FriendProfile; albumId: string; title: string; artist: string; artworkUrl: string | null; dateMs: number; dateLabel: string }
   | { kind: 'flippedRecord';   key: string; friend: FriendProfile; albumTitle: string; albumArtist: string; artworkUrl: string | null; dateMs: number; dateLabel: string };
@@ -892,11 +892,12 @@ async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> 
 
   if (likedPlRows && likedPlRows.length > 0) {
     const plIds = (likedPlRows as any[]).map(r => r.target_id as string);
-    const [{ data: plData }, artworkMap] = await Promise.all([supabase.from('playlists').select('id, name').in('id', plIds), fetchFriendPlaylistArtwork(plIds)]);
-    const plNameMap = new Map((plData ?? []).map((p: any) => [p.id as string, p.name as string]));
+    const [{ data: plData }, artworkMap] = await Promise.all([supabase.from('playlists').select('id, name, user_id').in('id', plIds), fetchFriendPlaylistArtwork(plIds)]);
+    const plNameMap  = new Map((plData ?? []).map((p: any) => [p.id as string, p.name as string]));
+    const plOwnerMap = new Map((plData ?? []).map((p: any) => [p.id as string, p.user_id as string]));
     for (const r of likedPlRows as any[]) {
       const friend = profileMap.get(r.user_id); if (!friend) continue;
-      items.push({ kind: 'likedPlaylist', key: `lp-${r.user_id}-${r.target_id}`, friend, targetId: r.target_id, name: plNameMap.get(r.target_id) ?? 'Playlist', artworkUrls: artworkMap.get(r.target_id) ?? [], dateMs: new Date(r.created_at).getTime(), dateLabel: faDateLabel(r.created_at) });
+      items.push({ kind: 'likedPlaylist', key: `lp-${r.user_id}-${r.target_id}`, friend, targetId: r.target_id, ownerId: plOwnerMap.get(r.target_id) ?? null, name: plNameMap.get(r.target_id) ?? 'Playlist', artworkUrls: artworkMap.get(r.target_id) ?? [], dateMs: new Date(r.created_at).getTime(), dateLabel: faDateLabel(r.created_at) });
     }
   }
 
@@ -1360,10 +1361,10 @@ export default function HomeScreen() {
       if (item.targetId.startsWith('featured:')) {
         router.push({ pathname: '/discover-featured-playlist', params: { id: item.targetId.replace('featured:', ''), name: item.name } } as any);
       } else {
-        router.push({ pathname: '/playlist-detail', params: { id: item.targetId } });
+        router.push({ pathname: '/playlist-detail', params: { id: item.targetId, ...(item.ownerId ? { userId: item.ownerId } : {}) } });
       }
     } else if (item.kind === 'createdPlaylist') {
-      router.push({ pathname: '/playlist-detail', params: { id: item.playlistId } });
+      router.push({ pathname: '/playlist-detail', params: { id: item.playlistId, userId: item.friend.id } });
     } else if (item.kind === 'wantToListen') {
       navigateToAlbum(router, { id: item.albumId, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl ?? '' });
     } else if (item.kind === 'flippedRecord') {

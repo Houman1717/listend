@@ -85,6 +85,7 @@ type LikedArtistItem = {
 type LikedPlaylistItem = {
   key:         string;
   targetId:    string;
+  ownerId:     string | null;
   name:        string;
   artworkUrls: string[];
   dateMs:      number;
@@ -276,16 +277,18 @@ async function fetchLikedPlaylistsForUser(uid: string): Promise<LikedPlaylistIte
 
   const userIds = (likedRows as any[]).map((r: any) => r.target_id as string);
   const nameMap    = new Map<string, string>();
+  const ownerMap   = new Map<string, string>();
   const artworkMap = new Map<string, string[]>();
 
-  const { data: pls } = await supabase.from('playlists').select('id, name').in('id', userIds);
-  for (const p of (pls ?? []) as any[]) nameMap.set(p.id, p.name);
+  const { data: pls } = await supabase.from('playlists').select('id, name, user_id').in('id', userIds);
+  for (const p of (pls ?? []) as any[]) { nameMap.set(p.id, p.name); ownerMap.set(p.id, p.user_id); }
   const plArtwork = await fetchPlaylistArtwork(userIds);
   plArtwork.forEach((urls, id) => artworkMap.set(id, urls));
 
   return (likedRows as any[]).map((r: any): LikedPlaylistItem => ({
     key:         `liked-pl-${r.target_id}`,
     targetId:    r.target_id,
+    ownerId:     ownerMap.get(r.target_id) ?? null,
     name:        nameMap.get(r.target_id) ?? 'Playlist',
     artworkUrls: artworkMap.get(r.target_id) ?? [],
     dateMs:      new Date(r.created_at).getTime(),
@@ -319,6 +322,7 @@ async function fetchLikedFeaturedPlaylistsForUser(uid: string): Promise<LikedPla
         return {
           key:         `liked-pl-${rawId}`,
           targetId:    rawId,
+          ownerId:     null,
           name:        pl.name ?? 'Listend Playlist',
           artworkUrls: (pl.artworkUrls ?? []).slice(0, 4) as string[],
           dateMs:      new Date(dateStr).getTime(),
@@ -483,6 +487,8 @@ function ReviewCardModal({
   colors,
   isDark,
   reviewerUsername,
+  avatarUrl,
+  reviewerIsPro,
   likeState,
   onLike,
   onClose,
@@ -493,6 +499,8 @@ function ReviewCardModal({
   colors: ColorsShape;
   isDark: boolean;
   reviewerUsername: string;
+  avatarUrl?: string | null;
+  reviewerIsPro?: boolean;
   likeState: { liked: boolean; count: number };
   onLike?: () => void;
   onClose: () => void;
@@ -575,11 +583,18 @@ function ReviewCardModal({
               style={rm.authorRow}
               onPress={() => onUsernamePress?.(reviewerUsername)}
               disabled={!onUsernamePress}>
-              <View style={[rm.avatar, { backgroundColor: reviewerUsername === 'you' ? colors.tint : avatarColor(reviewerUsername) }]}>
-                <Text style={rm.avatarLetter}>{reviewerUsername[0]?.toUpperCase()}</Text>
-              </View>
+              {avatarUrl ? (
+                <ExpoImage source={{ uri: avatarUrl }} style={rm.avatar} contentFit="cover" cachePolicy="disk" />
+              ) : (
+                <View style={[rm.avatar, { backgroundColor: reviewerUsername === 'you' ? colors.tint : avatarColor(reviewerUsername) }]}>
+                  <Text style={rm.avatarLetter}>{reviewerUsername[0]?.toUpperCase()}</Text>
+                </View>
+              )}
               <View style={{ gap: 2 }}>
-                <Text style={rm.username}>@{reviewerUsername}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={rm.username}>@{reviewerUsername}</Text>
+                  {reviewerIsPro && <ProBadge size="xs" />}
+                </View>
                 {item.dateLabel ? (
                   <Text style={[rm.listenedDate, { color: colors.subtext }]}>Listend {item.dateLabel}</Text>
                 ) : null}
@@ -918,6 +933,8 @@ export default function RecentActivityScreen() {
   const [reviewLikeState,      setReviewLikeState]      = useState<{ liked: boolean; count: number }>({ liked: false, count: 0 });
   const pendingLikeToggle = useRef(false);
   const [reviewUsername,       setReviewUsername]       = useState('');
+  const [reviewAvatarUrl,      setReviewAvatarUrl]      = useState<string | null>(null);
+  const [reviewIsPro,          setReviewIsPro]          = useState(false);
   const isDark = colors.isDark;
 
   useEffect(() => {
@@ -998,14 +1015,16 @@ export default function RecentActivityScreen() {
         });
       });
 
-    // Fetch reviewer username
+    // Fetch reviewer username + avatar + pro status
     supabase
       .from('profiles')
-      .select('username')
+      .select('username, avatar_url, is_pro')
       .eq('id', ownerId)
       .single()
       .then(({ data }) => {
         setReviewUsername(data?.username ?? 'you');
+        setReviewAvatarUrl(data?.avatar_url ?? null);
+        setReviewIsPro(!!data?.is_pro);
       });
   }, [selectedReview?.id, selectedReview?.type]);
 
@@ -1078,6 +1097,7 @@ export default function RecentActivityScreen() {
       return {
         key:         `liked-pl-${rawId}`,
         targetId:    rawId,
+        ownerId:     null,
         name:        pl.name,
         artworkUrls: pl.artworkUrls.slice(0, 4),
         dateMs:      new Date(dateStr).getTime(),
@@ -1219,7 +1239,7 @@ export default function RecentActivityScreen() {
                 if (isFeature) {
                   router.push({ pathname: '/discover-featured-playlist', params: { id: item.data.targetId.replace('featured:', ''), name: item.data.name } } as any);
                 } else {
-                  router.push({ pathname: '/playlist-detail', params: { id: item.data.targetId } });
+                  router.push({ pathname: '/playlist-detail', params: { id: item.data.targetId, ...(item.data.ownerId ? { userId: item.data.ownerId } : {}) } });
                 }
               }}
             />
@@ -1230,7 +1250,7 @@ export default function RecentActivityScreen() {
             <CreatedPlaylistRow
               item={item.data}
               colors={colors}
-              onPress={() => router.push({ pathname: '/playlist-detail', params: { id: item.data.playlistId } })}
+              onPress={() => router.push({ pathname: '/playlist-detail', params: { id: item.data.playlistId, ...(viewingOther ? { userId: viewingOther } : {}) } })}
             />
           );
         }
@@ -1259,6 +1279,8 @@ export default function RecentActivityScreen() {
           colors={colors}
           isDark={isDark}
           reviewerUsername={reviewUsername}
+          avatarUrl={reviewAvatarUrl}
+          reviewerIsPro={reviewIsPro}
           likeState={reviewLikeState}
           onLike={viewingOther ? async () => {
             if (pendingLikeToggle.current) return;

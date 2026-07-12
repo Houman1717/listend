@@ -683,7 +683,7 @@ export default function FlipARecordScreen() {
   const [artworkUrl, setArtworkUrl]            = useState('');
   const [spotifyId,  setSpotifyId]             = useState('');
   const [recentCache, setRecentCache]          = useState<Record<string, AlbumData>>({});
-  const [friendFlips, setFriendFlips]          = useState<{ userId: string; username: string; avatarUrl: string | null; albumTitle: string }[]>([]);
+  const [friendFlips, setFriendFlips]          = useState<{ userId: string; username: string; avatarUrl: string | null; albumTitle: string; albumArtist: string; streak: number }[]>([]);
 
   // Streaming sheet
   const [showStreamSheet, setShowStreamSheet] = useState(false);
@@ -774,6 +774,34 @@ export default function FlipARecordScreen() {
         .in('id', uniqueIds);
       if (cancelled) return;
 
+      // Pull each friend's recent flip history to derive their current streak
+      // (consecutive calendar days with at least one flip, counting back from today).
+      const since = new Date(today); since.setDate(since.getDate() - 60);
+      const { data: historyRows } = await supabase
+        .from('flip_records')
+        .select('user_id, flipped_at')
+        .in('user_id', uniqueIds)
+        .gte('flipped_at', since.toISOString());
+      if (cancelled) return;
+
+      const datesByUser = new Map<string, Set<string>>();
+      for (const row of (historyRows ?? []) as any[]) {
+        const dateKey = new Date(row.flipped_at).toDateString();
+        if (!datesByUser.has(row.user_id)) datesByUser.set(row.user_id, new Set());
+        datesByUser.get(row.user_id)!.add(dateKey);
+      }
+      function computeStreak(userId: string): number {
+        const dates = datesByUser.get(userId);
+        if (!dates) return 0;
+        let count = 0;
+        const cursor = new Date(today);
+        while (dates.has(cursor.toDateString())) {
+          count++;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+        return count;
+      }
+
       const pm = new Map((profiles ?? []).map((p: any) => [p.id, p]));
       const seen = new Set<string>();
       const result: typeof friendFlips = [];
@@ -781,7 +809,14 @@ export default function FlipARecordScreen() {
         if (seen.has(flip.user_id)) continue;
         seen.add(flip.user_id);
         const p = pm.get(flip.user_id);
-        result.push({ userId: flip.user_id, username: p?.username ?? 'Someone', avatarUrl: p?.avatar_url ?? null, albumTitle: flip.album_title });
+        result.push({
+          userId:      flip.user_id,
+          username:    p?.username ?? 'Someone',
+          avatarUrl:   p?.avatar_url ?? null,
+          albumTitle:  flip.album_title,
+          albumArtist: flip.album_artist ?? '',
+          streak:      computeStreak(flip.user_id),
+        });
         if (result.length >= 3) break;
       }
       setFriendFlips(result);
@@ -1287,9 +1322,16 @@ export default function FlipARecordScreen() {
                 )}
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={[sf.friendName, { color: colors.text }]} numberOfLines={1}>@{f.username}</Text>
-                  <Text style={[sf.friendAlbum, { color: colors.subtext }]} numberOfLines={1}>{f.albumTitle}</Text>
+                  <Text style={[sf.friendAlbum, { color: colors.subtext }]} numberOfLines={1}>
+                    {f.albumTitle}{f.albumArtist ? ` · ${f.albumArtist}` : ''}
+                  </Text>
                 </View>
-                <FontAwesome name="circle" size={7} color={colors.subtext} />
+                {f.streak > 0 && (
+                  <View style={sf.friendStreak}>
+                    <FontAwesome name="fire" size={12} color="#D4A017" />
+                    <Text style={sf.friendStreakNum}>{f.streak}</Text>
+                  </View>
+                )}
               </View>
             ))}
           </View>
@@ -1381,6 +1423,8 @@ const sf = StyleSheet.create({
   friendAvatar:   { width: 34, height: 34, borderRadius: 17, overflow: 'hidden', flexShrink: 0 },
   friendName:     { fontSize: 13, fontWeight: '600' },
   friendAlbum:    { fontSize: 12 },
+  friendStreak:   { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 0 },
+  friendStreakNum:{ fontSize: 13, fontWeight: '700', color: '#D4A017' },
 
   // Recently flipped
   recentBlock:       { marginTop: 28, gap: 10 },

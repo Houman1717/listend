@@ -106,7 +106,16 @@ export default function PlaylistDetailScreen() {
     if (wasLiked) {
       await supabase.from('likes').delete().match({ user_id: user.id, target_type: 'playlist', target_id: id });
     } else {
-      await supabase.from('likes').upsert({ user_id: user.id, target_type: 'playlist', target_id: id });
+      await supabase.from('likes').upsert({
+        user_id: user.id, target_type: 'playlist', target_id: id,
+        target_owner_id: viewingOther ?? undefined,
+      });
+      if (viewingOther && viewingOther !== user.id) {
+        const { error: notifErr } = await supabase.from('notifications').insert({
+          user_id: viewingOther, type: 'like_playlist', actor_id: user.id, target_id: id,
+        });
+        if (notifErr) console.error('[PlaylistDetail] notification insert error:', notifErr.message);
+      }
     }
   }
 
