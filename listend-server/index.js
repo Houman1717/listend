@@ -26,6 +26,23 @@ async function amFetch(path) {
 
 const amArtwork = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
 
+// ── Storefront overrides ──────────────────────────────────────────────────────
+// A handful of catalog IDs (albums + their tracks) aren't licensed for the
+// `us` Apple Music storefront but are fully available on `gb` — resolve just
+// these specific IDs against `gb` instead of the default `us` everywhere a
+// catalog lookup takes an id. Everything else keeps using `us`.
+const GB_STOREFRONT_IDS = new Set([
+  // my bloody valentine — loveless (1991)
+  '1556921230',
+  '1556921231', '1556921232', '1556921233', '1556921234', '1556921235', '1556921236',
+  '1556921237', '1556921238', '1556921239', '1556921240', '1556921241',
+  // my bloody valentine — isn't anything (1988)
+  '1556913225',
+  '1556913228', '1556913229', '1556913230', '1556913231', '1556913232', '1556913233',
+  '1556913234', '1556913235', '1556913236', '1556913237', '1556913238', '1556913239',
+]);
+const storefrontFor = id => (GB_STOREFRONT_IDS.has(id) ? 'gb' : 'us');
+
 // ── Canonical album resolution ────────────────────────────────────────────────
 // Pins one Apple Music catalog ID per (artist, title) so independently-seeded
 // lists (genre, decade, etc.) and album logging all agree on the same album,
@@ -65,6 +82,21 @@ function editionScore(title) {
   return score;
 }
 
+// Pins for albums whose real catalog match Apple's `us` search can't reliably
+// surface — e.g. "my bloody valentine loveless" ranks "m b v" ahead of the
+// actual album, so the search-based resolver below would silently land on
+// the wrong Apple Music id. Checked before the search call runs.
+const CANONICAL_ALBUM_OVERRIDES = {
+  'mybloodyvalentine::loveless': {
+    id: '1556921230', title: 'loveless', artist: 'my bloody valentine', year: 1991,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/4c/e1/51/4ce15131-7ac5-daf5-bf62-0202f27d691d/887830015998.png/500x500bb.jpg',
+  },
+  'mybloodyvalentine::isntanything': {
+    id: '1556913225', title: "Isn't Anything", artist: 'my bloody valentine', year: 1988,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
+  },
+};
+
 async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, fallbackArtworkUrl }) {
   const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
 
@@ -78,8 +110,9 @@ async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, 
     return { id: existing.canonical_id, title: existing.title, artist: existing.artist, year: existing.year, artworkUrl: existing.artwork_url };
   }
 
-  let resolved = null;
-  try {
+  let resolved = CANONICAL_ALBUM_OVERRIDES[normalizedKey] ?? null;
+
+  if (!resolved) try {
     const q = encodeURIComponent(`${artist} ${title}`);
     const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=10`);
     const candidates = data.results?.albums?.data ?? [];
@@ -2036,7 +2069,7 @@ app.get(['/catalog/track/:id', '/spotify/track/:id'], [
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await amFetch(`/catalog/us/songs/${id}`);
+    const data = await amFetch(`/catalog/${storefrontFor(id)}/songs/${id}`);
     const t = data.data?.[0];
     const payload = {
       id:          t?.id ?? id,
@@ -2070,7 +2103,7 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const data = await amFetch(`/catalog/us/albums/${id}/tracks`);
+    const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/tracks`);
     const tracks = (data.data ?? []).map((t, i) => ({
       number: t.attributes?.trackNumber ?? i + 1,
       id: t.id,
@@ -2162,6 +2195,22 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/8e/a0/75/8ea0757a-6859-9c50-e92b-944979cc0d53/196874557198.jpg/500x500bb.jpg',
       year: 2026, isSingle: false, isCompilation: false, trackCount: 22,
       url: 'https://music.apple.com/us/album/the-real-me/6784327271', type: 'album',
+    },
+  ],
+  '206711': [ // my bloody valentine — loveless + isn't anything aren't licensed
+    // for the `us` storefront (present on `gb`/`ca`/etc.); ids listed in
+    // GB_STOREFRONT_IDS above so tracks/durations/streaming-links still resolve.
+    {
+      id: '1556921230', title: 'loveless',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/4c/e1/51/4ce15131-7ac5-daf5-bf62-0202f27d691d/887830015998.png/500x500bb.jpg',
+      year: 1991, isSingle: false, isCompilation: false, trackCount: 11,
+      url: 'https://music.apple.com/gb/album/loveless/1556921230', type: 'album',
+    },
+    {
+      id: '1556913225', title: "Isn't Anything",
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
+      year: 1988, isSingle: false, isCompilation: false, trackCount: 12,
+      url: 'https://music.apple.com/gb/album/isnt-anything/1556913225', type: 'album',
     },
   ],
 };
@@ -2413,7 +2462,7 @@ app.get('/api/album-durations', [
     if (!tracks) tracks = await getCached(CACHE_KEY, TTL_24H);
     if (!tracks) {
       try {
-        const data = await amFetch(`/catalog/us/albums/${id}/tracks`);
+        const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/tracks`);
         tracks = (data.data ?? []).map((t, i) => ({
           number: t.attributes?.trackNumber ?? i + 1,
           id: t.id,
@@ -3533,7 +3582,7 @@ app.get('/api/albums/streaming-links', [
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
-    const itunesUrl = `https://itunes.apple.com/us/album/id${appleId}`;
+    const itunesUrl = `https://itunes.apple.com/${storefrontFor(appleId)}/album/id${appleId}`;
     const odesliResp = await fetch(
       `https://api.song.link/v1-alpha.1/links?url=${encodeURIComponent(itunesUrl)}`
     );
