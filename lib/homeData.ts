@@ -1,6 +1,5 @@
 import { supabase } from '@/lib/supabase';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
-import { countReviewComments } from '@/lib/reviewComments';
 
 export type PopularReview = {
   id: string;
@@ -198,38 +197,66 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
   return ranked;
 }
 
+// Popularity is based on likes/comments *received* this week, regardless of
+// when the review itself was written (matches Letterboxd's "Popular Reviews"
+// model) — an old review that suddenly gets a wave of new engagement can
+// resurface here, rather than only ever showing reviews from the last 7 days.
 export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
-  const { data: reviewRows } = await supabase
-    .from('user_albums')
-    .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review')
-    .not('review', 'is', null)
-    .neq('review', '')
-    .gte('listened_at', weekAgo())
-    .limit(200);
+  const since = weekAgo();
 
-  if (!reviewRows?.length) return [];
-
-  const userIds = [...new Set((reviewRows as any[]).map(r => r.user_id as string))];
-  const targetIds = (reviewRows as any[]).map(r => `${r.user_id}_${r.spotify_id}`);
-
-  const [{ data: profiles }, { data: likeRows }, commentCounts] = await Promise.all([
-    supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds),
-    supabase.from('likes').select('target_id').eq('target_type', 'review').in('target_id', targetIds),
-    countReviewComments(targetIds),
+  const [{ data: likeRows }, { data: commentRows }] = await Promise.all([
+    supabase.from('likes').select('target_id').eq('target_type', 'review').gte('created_at', since),
+    supabase.from('review_comments').select('review_id').gte('created_at', since),
   ]);
 
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
   const likeCounts = new Map<string, number>();
   for (const l of (likeRows ?? []) as any[]) {
     likeCounts.set(l.target_id, (likeCounts.get(l.target_id) ?? 0) + 1);
   }
+  const commentCounts = new Map<string, number>();
+  for (const c of (commentRows ?? []) as any[]) {
+    commentCounts.set(c.review_id, (commentCounts.get(c.review_id) ?? 0) + 1);
+  }
 
-  const reviews: PopularReview[] = (reviewRows as any[]).map(r => {
-    const targetId = `${r.user_id}_${r.spotify_id}`;
-    const prof = profileMap.get(r.user_id);
-    return {
+  const candidateIds = new Set([...likeCounts.keys(), ...commentCounts.keys()]);
+  if (candidateIds.size === 0) return [];
+
+  const pairs = Array.from(candidateIds)
+    .map(targetId => {
+      const idx = targetId.indexOf('_');
+      return { targetId, userId: targetId.slice(0, idx), spotifyId: targetId.slice(idx + 1) };
+    })
+    .filter(p => p.userId && p.spotifyId);
+  if (pairs.length === 0) return [];
+
+  const userIds    = [...new Set(pairs.map(p => p.userId))];
+  const spotifyIds = [...new Set(pairs.map(p => p.spotifyId))];
+
+  const [{ data: reviewRows }, { data: profiles }] = await Promise.all([
+    supabase
+      .from('user_albums')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review')
+      .in('user_id', userIds)
+      .in('spotify_id', spotifyIds)
+      .not('review', 'is', null)
+      .neq('review', ''),
+    supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds),
+  ]);
+
+  const rowMap = new Map<string, any>();
+  for (const r of (reviewRows ?? []) as any[]) {
+    rowMap.set(`${r.user_id}_${r.spotify_id}`, r);
+  }
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
+
+  const reviews: PopularReview[] = [];
+  for (const { targetId, userId, spotifyId } of pairs) {
+    const r = rowMap.get(targetId);
+    if (!r) continue;
+    const prof = profileMap.get(userId);
+    reviews.push({
       id: targetId,
-      userId: r.user_id,
+      userId,
       username: prof?.username ?? 'user',
       avatarUrl: prof?.avatarUrl ?? null,
       isPro: prof?.isPro ?? false,
@@ -241,8 +268,8 @@ export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
       review: r.review ?? '',
       likeCount: likeCounts.get(targetId) ?? 0,
       commentCount: commentCounts.get(targetId) ?? 0,
-    };
-  });
+    });
+  }
 
   reviews.sort((a, b) => (b.likeCount + b.commentCount) - (a.likeCount + a.commentCount));
   return reviews.slice(0, 20);

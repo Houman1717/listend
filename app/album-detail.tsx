@@ -841,6 +841,7 @@ export default function AlbumDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const modalScrollRef = useRef<ScrollView>(null);
   const reviewYPositions = useRef<Map<string, number>>(new Map());
+  const editBlockYRef = useRef(0);
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
   const [expandedAlbumReview, setExpandedAlbumReview] = useState<CommunityReview | null>(null);
   const [singleReviewCommentsOpen, setSingleReviewCommentsOpen] = useState(false);
@@ -1532,7 +1533,7 @@ export default function AlbumDetailScreen() {
         {/* ── 3. Log / Save buttons ─────────────────────────────────────────── */}
         {isLogged ? (
           editMode ? (
-            <View style={s.editBlock}>
+            <View style={s.editBlock} onLayout={e => { editBlockYRef.current = e.nativeEvent.layout.y; }}>
               <Text style={[s.sectionLabel, { color: colors.subtext }]}>Rating</Text>
               <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
               <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 20 }]}>
@@ -1547,7 +1548,7 @@ export default function AlbumDetailScreen() {
                 multiline
                 textAlignVertical="top"
                 maxLength={1000}
-                onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
+                onFocus={() => setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(editBlockYRef.current - 20, 0), animated: true }), 300)}
               />
               {review.length > 0 && (
                 <Text style={[s.charCount, { color: colors.subtext }]}>{review.length}/1000</Text>
