@@ -951,17 +951,27 @@ export default function AlbumDetailScreen() {
       }
     : null;
 
-  // Auto-open own review when deep-linking from a review/comment notification.
+  // Auto-open the review a notification points to. reviewId is the *review's*
+  // target id ({reviewOwnerId}_{spotifyId}) — for comment/reply/like-on-comment
+  // notifications the review owner is often someone other than the recipient
+  // (e.g. you commented on a friend's review), so it can't just check
+  // ownReview; it also has to search the community reviews for this album.
   // openComments is set for comment/reply notifications so tapping them
   // actually surfaces the comment thread, not just the bare review.
   const autoOpenedRef = useRef(false);
   useEffect(() => {
-    if (!params.reviewId || autoOpenedRef.current || !ownReview || !myProfileLoaded) return;
-    if (ownReview.id === params.reviewId) {
+    if (!params.reviewId || autoOpenedRef.current || !myProfileLoaded) return;
+    if (ownReview && ownReview.id === params.reviewId) {
       autoOpenedRef.current = true;
       openReview(ownReview, params.openComments === '1');
+      return;
     }
-  }, [params.reviewId, params.openComments, ownReview?.id, myProfileLoaded]);
+    const communityMatch = communityReviews.find(r => r.id === params.reviewId);
+    if (communityMatch) {
+      autoOpenedRef.current = true;
+      openReview(communityMatch, params.openComments === '1');
+    }
+  }, [params.reviewId, params.openComments, ownReview?.id, communityReviews, myProfileLoaded]);
 
   // All reviews including own — used for ratings average and preview
   const allReviews = ownReview ? [ownReview, ...communityReviews] : communityReviews;
@@ -1536,11 +1546,11 @@ export default function AlbumDetailScreen() {
                 onChangeText={setReview}
                 multiline
                 textAlignVertical="top"
-                maxLength={500}
+                maxLength={1000}
                 onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
               />
               {review.length > 0 && (
-                <Text style={[s.charCount, { color: colors.subtext }]}>{review.length}/500</Text>
+                <Text style={[s.charCount, { color: colors.subtext }]}>{review.length}/1000</Text>
               )}
               <View style={s.editBtnRow}>
                 <Pressable

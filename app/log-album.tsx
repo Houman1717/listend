@@ -185,11 +185,11 @@ export default function LogAlbumScreen() {
           onChangeText={setReview}
           multiline
           textAlignVertical="top"
-          maxLength={500}
+          maxLength={1000}
         />
         {review.length > 0 && (
           <Text style={[styles.charCount, { color: colors.subtext }]}>
-            {review.length}/500
+            {review.length}/1000
           </Text>
         )}
 

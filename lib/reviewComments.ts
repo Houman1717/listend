@@ -53,16 +53,19 @@ export async function insertReviewComment(
     .single();
   if (error) { console.error('[insertReviewComment]', error.message); return null; }
 
-  notifyForComment(reviewId, userId, validParent).catch(e =>
-    console.error('[insertReviewComment] notify error:', e)
-  );
+  const newCommentId = (data as any)?.id ?? null;
+  if (newCommentId) {
+    notifyForComment(reviewId, userId, validParent, newCommentId).catch(e =>
+      console.error('[insertReviewComment] notify error:', e)
+    );
+  }
 
-  return (data as any)?.id ?? null;
+  return newCommentId;
 }
 
 // Notifies the parent comment's author on a reply, or the review's owner on a
 // top-level comment. Never notifies someone about their own action.
-async function notifyForComment(reviewId: string, actorId: string, parentCommentId: string | null) {
+async function notifyForComment(reviewId: string, actorId: string, parentCommentId: string | null, commentId: string) {
   let recipientId: string | null = null;
 
   if (parentCommentId) {
@@ -79,10 +82,11 @@ async function notifyForComment(reviewId: string, actorId: string, parentComment
   if (!recipientId || recipientId === actorId) return;
 
   const { error } = await supabase.from('notifications').insert({
-    user_id:   recipientId,
-    type:      parentCommentId ? 'comment_reply' : 'comment',
-    actor_id:  actorId,
-    target_id: reviewId,
+    user_id:    recipientId,
+    type:       parentCommentId ? 'comment_reply' : 'comment',
+    actor_id:   actorId,
+    target_id:  reviewId,
+    comment_id: commentId,
   });
   if (error) console.error('[notifyForComment]', error.message);
 }

@@ -312,7 +312,7 @@ export function CommentsSection({
               value={replyText}
               onChangeText={setReplyText}
               autoFocus
-              maxLength={300}
+              maxLength={500}
               returnKeyType="send"
               onSubmitEditing={submitReply}
               blurOnSubmit={false}
@@ -369,7 +369,7 @@ export function CommentsSection({
           placeholderTextColor={colors.subtext}
           value={commentText}
           onChangeText={setCommentText}
-          maxLength={300}
+          maxLength={500}
           returnKeyType="send"
           onSubmitEditing={submitComment}
           blurOnSubmit={false}
