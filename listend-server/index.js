@@ -100,6 +100,23 @@ const CANONICAL_ALBUM_OVERRIDES = {
 async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, fallbackArtworkUrl }) {
   const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
 
+  // Overrides are authoritative — checked, and re-upserted, ahead of the
+  // Supabase cache so a bad resolution cached before this pin existed (or
+  // before Apple's search ranking changes) can't shadow it indefinitely.
+  const override = CANONICAL_ALBUM_OVERRIDES[normalizedKey];
+  if (override) {
+    const { error: upsertErr } = await supabase.from('canonical_albums').upsert({
+      normalized_key: normalizedKey,
+      canonical_id:   override.id,
+      title:          override.title,
+      artist:         override.artist,
+      year:           override.year,
+      artwork_url:    override.artworkUrl,
+    }, { onConflict: 'normalized_key' });
+    if (upsertErr) console.error('[resolveCanonicalAlbum] override upsert error:', upsertErr.message);
+    return { id: override.id, title: override.title, artist: override.artist, year: override.year, artworkUrl: override.artworkUrl };
+  }
+
   const { data: existing } = await supabase
     .from('canonical_albums')
     .select('canonical_id, title, artist, year, artwork_url')
@@ -110,9 +127,9 @@ async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, 
     return { id: existing.canonical_id, title: existing.title, artist: existing.artist, year: existing.year, artworkUrl: existing.artwork_url };
   }
 
-  let resolved = CANONICAL_ALBUM_OVERRIDES[normalizedKey] ?? null;
+  let resolved = null;
 
-  if (!resolved) try {
+  try {
     const q = encodeURIComponent(`${artist} ${title}`);
     const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=10`);
     const candidates = data.results?.albums?.data ?? [];
