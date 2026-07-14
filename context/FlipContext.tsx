@@ -44,6 +44,13 @@ type FlipContextType = {
 // to migrate any pre-existing local history into Supabase on first load.
 const flipKey = (uid: string) => `@listend:flipData_v1_${uid}`;
 
+// Apple Music search often returns an edition/remaster suffix in parens or
+// brackets ("Led Zeppelin (Remastered)") that the pool's plain title doesn't
+// have — strip a trailing one before matching so those still count as logged.
+function stripEdition(title: string): string {
+  return title.replace(/\s*[([][^()[\]]*[)\]]\s*$/, '').trim();
+}
+
 function rowToRecord(row: any): FlippedRecord {
   const pool = FLIP_POOL_BY_ID.get(row.pool_id);
   return {
@@ -157,10 +164,10 @@ export function FlipProvider({ children }: { children: ReactNode }) {
   // share a pool title (e.g. Pop Smoke's "Faith" vs George Michael's "Faith")
   // get falsely treated as already logged.
   const libraryLoggedIds = useMemo(() => {
-    const loggedKeys = new Set(loggedAlbums.map(a => communityStatsKey(a.title, a.artist)));
+    const loggedKeys = new Set(loggedAlbums.map(a => communityStatsKey(stripEdition(a.title), a.artist)));
     const ids = new Set<string>();
     for (const a of FLIP_POOL) {
-      if (loggedKeys.has(communityStatsKey(a.title, a.artist))) ids.add(a.id);
+      if (loggedKeys.has(communityStatsKey(stripEdition(a.title), a.artist))) ids.add(a.id);
     }
     return ids;
   }, [loggedAlbums]);

@@ -366,7 +366,18 @@ function ListenedRow({
           <Text style={[sfl.itemSub, { color: colors.subtext }]}> · {year}</Text>
         </View>
       </View>
-      {(status === 'logged' || status === 'library') && (
+      {status === 'logged' && (
+        <View style={{ width: 28, height: 28 }}>
+          <View style={[sfl.statusDot, { backgroundColor: '#0f2e1a' }]}>
+            <Ionicons name="checkmark" size={14} color="#4ade80" />
+          </View>
+          {/* Marks this as an album you actually flipped (not just a library match) */}
+          <View style={[sfl.flipBadge, { borderColor: colors.surface }]}>
+            <FontAwesome name="random" size={8} color="#1a1206" />
+          </View>
+        </View>
+      )}
+      {status === 'library' && (
         <View style={[sfl.statusDot, { backgroundColor: '#0f2e1a' }]}>
           <Ionicons name="checkmark" size={14} color="#4ade80" />
         </View>
@@ -454,10 +465,11 @@ function FullPoolModal({
     if (!seenIds.has(r.id)) { seenIds.add(r.id); dedupedHistory.push(r); }
   }
 
-  const total        = FLIP_POOL.length;
-  const loggedCount = libraryLoggedIds.size;
-  const listenedPct  = total > 0 ? Math.round(loggedCount / total * 100) : 0;
-  const flippedCount = dedupedHistory.length;
+  const total            = FLIP_POOL.length;
+  const loggedCount      = libraryLoggedIds.size;
+  const listenedPct      = total > 0 ? Math.round(loggedCount / total * 100) : 0;
+  const flippedCount     = dedupedHistory.length;
+  const flipLoggedCount  = dedupedHistory.filter(r => r.status === 'logged').length;
 
   // Pool albums logged some other way (search, etc.) without ever being
   // flipped — shown below the real flips so you can see the full picture of
@@ -486,16 +498,17 @@ function FullPoolModal({
             <View style={[sfl.summary, { borderBottomColor: borderCol }]}>
               <View style={sfl.summaryRow}>
                 <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
-                  <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flippedCount}</Text> flipped
+                  <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flippedCount}</Text>
+                  {' flipped, '}
+                  <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipLoggedCount}</Text>
+                  {' logged'}
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <FontAwesome name="headphones" size={13} color="#D4A017" />
-                  <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
-                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text> logged
-                    {'  ·  '}
-                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{loggedCount}</Text> albums
-                  </Text>
-                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <FontAwesome name="headphones" size={13} color="#D4A017" />
+                <Text style={[sfl.summaryCount, sfl.summarySubCount, { color: colors.subtext }]}>
+                  {loggedCount}/{total} listened ({listenedPct}%)
+                </Text>
               </View>
               <View style={[sfl.track, { backgroundColor: colors.border }]}>
                 <View style={[sfl.fill, { width: `${Math.max(listenedPct, listenedPct > 0 ? 2 : 0)}%` as any }]} />
@@ -509,7 +522,7 @@ function FullPoolModal({
               renderItem={({ item }) => (
                 <PoolRow
                   item={item}
-                  status={item.status}
+                  status={seenIds.has(item.id) ? item.status : null}
                   libraryLogged={libraryLoggedIds.has(item.id)}
                   borderCol={borderCol}
                   colors={colors}
@@ -538,6 +551,7 @@ const sfl = StyleSheet.create({
   summary:     { paddingHorizontal: 20, paddingVertical: 14, gap: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   summaryRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   summaryCount:{ fontSize: 13 },
+  summarySubCount:{ fontSize: 11, opacity: 0.75 },
   track:       { height: 5, borderRadius: 3, overflow: 'hidden' },
   fill:        { height: 5, borderRadius: 3, backgroundColor: '#D4A017' },
   row:         { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -547,6 +561,7 @@ const sfl = StyleSheet.create({
   itemTitle:   { fontSize: 14, fontWeight: '600' },
   itemSub:     { fontSize: 12 },
   statusDot:   { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  flipBadge:   { position: 'absolute', bottom: -2, right: -2, width: 14, height: 14, borderRadius: 7, backgroundColor: '#D4A017', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5 },
   emptyWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, paddingHorizontal: 40 },
   emptyText:   { fontSize: 14, textAlign: 'center', lineHeight: 22 },
 });
@@ -1240,11 +1255,12 @@ export default function FlipARecordScreen() {
 
         {/* ── Progress stats ──────────────────────────────────────────── */}
         {!poolExhausted && (() => {
-          const total       = FLIP_POOL.length;
-          const flipped     = new Set(history.map(r => r.id)).size;
-          const loggedCount = libraryLoggedIds.size;
-          const listenedPct = total > 0 ? Math.round(loggedCount / total * 100) : 0;
-          const flipPct     = total > 0 ? loggedCount / total : 0;
+          const total           = FLIP_POOL.length;
+          const flipped         = new Set(history.map(r => r.id)).size;
+          const flipLoggedCount = new Set(history.filter(r => r.status === 'logged').map(r => r.id)).size;
+          const loggedCount     = libraryLoggedIds.size;
+          const listenedPct     = total > 0 ? Math.round(loggedCount / total * 100) : 0;
+          const flipPct         = total > 0 ? loggedCount / total : 0;
           return (
             <>
               <StreakCard streak={streak} isDark={isDark} />
@@ -1252,16 +1268,19 @@ export default function FlipARecordScreen() {
                 style={({ pressed }) => [sf.statsBlock, { opacity: pressed ? 0.75 : 1 }]}
                 onPress={() => setFullListVisible(true)}>
                 <View style={sf.statsRow}>
-                  <Text style={[sf.statsLabel, { color: colors.subtext }]}>
-                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipped}</Text>{'  flipped'}
+                  <Text style={[sf.statsLabel, { color: colors.subtext, flex: 1 }]}>
+                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipped}</Text>
+                    {' flipped, '}
+                    <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flipLoggedCount}</Text>
+                    {' logged'}
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <FontAwesome name="headphones" size={13} color="#D4A017" />
-                    <Text style={[sf.statsLabel, { color: colors.subtext }]}>
-                      {' '}<Text style={{ color: '#D4A017', fontWeight: '700' }}>{listenedPct}%</Text>{' listened'}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.subtext} />
-                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={colors.subtext} />
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <FontAwesome name="headphones" size={13} color="#D4A017" />
+                  <Text style={[sf.statsLabel, sf.statsSubLabel, { color: colors.subtext }]}>
+                    {loggedCount}/{total} listened ({listenedPct}%)
+                  </Text>
                 </View>
                 <View style={[sf.track, { backgroundColor: colors.border }]}>
                   <View style={[sf.fill, { width: `${Math.max(flipPct * 100, flipPct > 0 ? 2 : 0)}%` as any }]} />
@@ -1416,6 +1435,7 @@ const sf = StyleSheet.create({
   statsBlock:   { marginTop: 12, gap: 8 },
   statsRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statsLabel:   { fontSize: 13 },
+  statsSubLabel:{ fontSize: 11, opacity: 0.75 },
   track:        { height: 4, borderRadius: 2, overflow: 'hidden' },
   fill:         { height: 4, borderRadius: 2, backgroundColor: '#D4A017' },
 
