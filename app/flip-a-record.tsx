@@ -454,9 +454,10 @@ function FullPoolModal({
     if (!seenIds.has(r.id)) { seenIds.add(r.id); dedupedHistory.push(r); }
   }
 
-  const loggedCount = dedupedHistory.filter(r => r.status === 'logged' || libraryLoggedIds.has(r.id)).length;
-  const total        = dedupedHistory.length;
+  const total        = FLIP_POOL.length;
+  const loggedCount = libraryLoggedIds.size;
   const listenedPct  = total > 0 ? Math.round(loggedCount / total * 100) : 0;
+  const flippedCount = dedupedHistory.length;
 
   // Pool albums logged some other way (search, etc.) without ever being
   // flipped — shown below the real flips so you can see the full picture of
@@ -480,12 +481,12 @@ function FullPoolModal({
           </TouchableOpacity>
         </View>
 
-        {total > 0 ? (
+        {rows.length > 0 ? (
           <>
             <View style={[sfl.summary, { borderBottomColor: borderCol }]}>
               <View style={sfl.summaryRow}>
                 <Text style={[sfl.summaryCount, { color: colors.subtext }]}>
-                  <Text style={{ color: '#D4A017', fontWeight: '700' }}>{total}</Text> flipped
+                  <Text style={{ color: '#D4A017', fontWeight: '700' }}>{flippedCount}</Text> flipped
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <FontAwesome name="headphones" size={13} color="#D4A017" />
