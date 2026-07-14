@@ -16,6 +16,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
+import { useFlip } from '@/context/FlipContext';
 import { capture } from '@/lib/analytics';
 
 const RATING_LABELS: Record<number, string> = {
@@ -126,17 +127,23 @@ export default function LogAlbumScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
   const { pendingAlbum, logAlbum } = useAlbums();
+  const { markLogged } = useFlip();
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
 
   if (!pendingAlbum) return null;
 
-  function handleLog() {
+  async function handleLog() {
     capture('album_logged', {
       rating: rating > 0 ? rating : undefined,
       has_review: review.trim().length > 0,
     });
-    logAlbum(rating, review);
+    const flipId = pendingAlbum?.flipId;
+    await logAlbum(rating, review);
+    // Resolve the flip directly by the flip's own id rather than waiting for
+    // the logged album's (possibly remapped) canonical id to match back up —
+    // otherwise a canonical-id remap leaves Flip a Record stuck on this album.
+    if (flipId) markLogged(flipId);
     router.dismiss();
   }
 

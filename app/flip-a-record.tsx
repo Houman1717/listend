@@ -674,7 +674,7 @@ export default function FlipARecordScreen() {
   const router      = useRouter();
   const navigation  = useNavigation();
 
-  const { history, cooldownUntil, currentFlip, poolExhausted, flip, markLogged, markDidntListen } = useFlip();
+  const { history, cooldownUntil, currentFlip, poolExhausted, libraryLoggedIds, flip, markLogged, markDidntListen } = useFlip();
   const { setPendingAlbum, addToWantToListen, removeFromWantToListen, wantToListen, loggedAlbums } = useAlbums();
   const { user } = useAuth();
 
@@ -1205,7 +1205,7 @@ export default function FlipARecordScreen() {
                               if (fetched.artworkUrl) art = fetched.artworkUrl;
                             }
                             attemptedLogRef.current = currentFlip.id;
-                            setPendingAlbum({ spotifyId: amId || currentFlip.id, title: currentFlip.title, artist: currentFlip.artist, year: currentFlip.year, artworkUrl: art });
+                            setPendingAlbum({ spotifyId: amId || currentFlip.id, title: currentFlip.title, artist: currentFlip.artist, year: currentFlip.year, artworkUrl: art, flipId: currentFlip.id });
                             router.push('/log-album');
                           }}>
                           <FontAwesome name="plus" size={14} color="#fff" />
@@ -1239,9 +1239,9 @@ export default function FlipARecordScreen() {
         {!poolExhausted && (() => {
           const total       = FLIP_POOL.length;
           const flipped     = new Set(history.map(r => r.id)).size;
-          const loggedCount = new Set(history.filter(r => r.status === 'logged').map(r => r.id)).size;
+          const loggedCount = libraryLoggedIds.size;
           const listenedPct = total > 0 ? Math.round(loggedCount / total * 100) : 0;
-          const flipPct     = total > 0 ? flipped / total : 0;
+          const flipPct     = total > 0 ? loggedCount / total : 0;
           return (
             <>
               <StreakCard streak={streak} isDark={isDark} />

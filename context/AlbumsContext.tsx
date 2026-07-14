@@ -43,6 +43,10 @@ export type PendingAlbum = {
   artist: string;
   year: number;
   artworkUrl: string;
+  // Set when logging originates from Flip a Record, so the flip can be
+  // marked resolved directly instead of relying on the logged album's
+  // canonical ID (which resolveCanonicalAlbum may remap) matching back up.
+  flipId?: string;
 };
 
 export type TopAlbum = {
