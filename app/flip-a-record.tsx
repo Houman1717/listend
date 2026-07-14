@@ -712,16 +712,18 @@ export default function FlipARecordScreen() {
     fetchAlbumData(savedFlip.title, savedFlip.artist).then(({ artworkUrl: url, spotifyId: sid }) => {
       setArtworkUrl(url);
       setSpotifyId(sid);
-      // Insert into Supabase with artwork in one shot so Recent Activity always has the cover
+      // Backfill artwork onto the row flip() already inserted. Must be a plain
+      // update (not upsert) — an upsert here can race flip()'s insert and win,
+      // creating a row with no pool_id/status that silently falls out of every
+      // future history query (which filters pool_id IS NOT NULL), losing the
+      // flip entirely even though the album itself was logged fine.
       if (user) {
-        supabase.from('flip_records').upsert({
-          user_id:      user.id,
-          album_title:  savedFlip.title,
-          album_artist: savedFlip.artist,
-          album_year:   savedFlip.year,
-          flipped_at:   new Date(savedFlip.flippedAt).toISOString(),
-          artwork_url:  url || null,
-        }, { onConflict: 'user_id,flipped_at' }).then(() => {});
+        supabase.from('flip_records')
+          .update({ artwork_url: url || null })
+          .eq('user_id', user.id)
+          .eq('pool_id', savedFlip.id)
+          .eq('flipped_at', new Date(savedFlip.flippedAt).toISOString())
+          .then(() => {});
       }
     });
   }, [currentFlip?.id]);
