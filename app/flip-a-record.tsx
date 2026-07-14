@@ -777,30 +777,30 @@ export default function FlipARecordScreen() {
         .in('id', uniqueIds);
       if (cancelled) return;
 
-      // Pull each friend's recent flip history to derive their current streak
-      // (consecutive calendar days with at least one flip, counting back from today).
-      const since = new Date(today); since.setDate(since.getDate() - 60);
+      // Pull each friend's recent flip history to derive their current streak —
+      // same definition as your own Ember Run: consecutive logged flips at the
+      // top of their history, skipping a leading pending one.
       const { data: historyRows } = await supabase
         .from('flip_records')
-        .select('user_id, flipped_at')
+        .select('user_id, flipped_at, status')
         .in('user_id', uniqueIds)
-        .gte('flipped_at', since.toISOString());
+        .not('pool_id', 'is', null)
+        .order('flipped_at', { ascending: false });
       if (cancelled) return;
 
-      const datesByUser = new Map<string, Set<string>>();
+      const rowsByUser = new Map<string, { status: string }[]>();
       for (const row of (historyRows ?? []) as any[]) {
-        const dateKey = new Date(row.flipped_at).toDateString();
-        if (!datesByUser.has(row.user_id)) datesByUser.set(row.user_id, new Set());
-        datesByUser.get(row.user_id)!.add(dateKey);
+        if (!rowsByUser.has(row.user_id)) rowsByUser.set(row.user_id, []);
+        rowsByUser.get(row.user_id)!.push({ status: row.status });
       }
       function computeStreak(userId: string): number {
-        const dates = datesByUser.get(userId);
-        if (!dates) return 0;
+        const rows = rowsByUser.get(userId);
+        if (!rows) return 0;
         let count = 0;
-        const cursor = new Date(today);
-        while (dates.has(cursor.toDateString())) {
-          count++;
-          cursor.setDate(cursor.getDate() - 1);
+        for (const r of rows) {
+          if (r.status === 'pending') continue;
+          if (r.status === 'logged') count++;
+          else break;
         }
         return count;
       }
