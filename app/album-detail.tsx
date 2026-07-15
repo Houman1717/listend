@@ -140,7 +140,11 @@ type FriendActivity = {
 
 function sortReviews(reviews: CommunityReview[], sort: ReviewSort): CommunityReview[] {
   return [...reviews].sort((a, b) => {
-    if (sort === 'popular') return (b.likeCount + b.commentCount) - (a.likeCount + a.commentCount);
+    if (sort === 'popular') {
+      const hasTextDiff = (b.text ? 1 : 0) - (a.text ? 1 : 0);
+      if (hasTextDiff !== 0) return hasTextDiff;
+      return (b.likeCount + b.commentCount) - (a.likeCount + a.commentCount);
+    }
     if (sort === 'newest')  return new Date(b.listenedAt ?? 0).getTime() - new Date(a.listenedAt ?? 0).getTime();
     return b.rating - a.rating;
   });
