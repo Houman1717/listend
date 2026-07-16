@@ -12,6 +12,7 @@ interface RevenueCatContextValue {
   purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
   isLoading: boolean;
+  offeringsError: string | null;
 }
 
 const RevenueCatContext = createContext<RevenueCatContextValue>({
@@ -20,6 +21,7 @@ const RevenueCatContext = createContext<RevenueCatContextValue>({
   purchasePackage: async () => false,
   restorePurchases: async () => false,
   isLoading: true,
+  offeringsError: null,
 });
 
 export function RevenueCatProvider({ children }: { children: React.ReactNode }) {
@@ -27,11 +29,14 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
   const [isPro,      setIsPro]      = useState(false);
   const [offerings,  setOfferings]  = useState<Offerings | null>(null);
   const [isLoading,  setIsLoading]  = useState(true);
+  const [offeringsError, setOfferingsError] = useState<string | null>(null);
+  const [configured, setConfigured] = useState(false);
 
   // Initialise SDK once on mount
   useEffect(() => {
     if (!REVENUECAT_IOS_KEY) {
       console.warn('[RevenueCat] EXPO_PUBLIC_REVENUECAT_IOS_KEY is not set');
+      setOfferingsError('RevenueCat is not configured (missing API key)');
       setIsLoading(false);
       return;
     }
@@ -41,7 +46,7 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     }
 
     Purchases.configure({ apiKey: REVENUECAT_IOS_KEY });
-    setIsLoading(false);
+    setConfigured(true);
   }, []);
 
   // Tracks the last confirmed Pro state so we can tell a real downgrade apart
@@ -50,6 +55,10 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
   // it's re-validated with Apple — trusting that blindly would wrongly wipe
   // out a real subscriber's Pro status).
   const lastKnownProRef = useRef(false);
+
+  // Tracks whether we've called Purchases.logIn() this session, so the
+  // log-out effect doesn't fire on an already-anonymous user.
+  const loggedInRef = useRef(false);
 
   // Sync entitlements whenever customer info changes — also writes to Supabase
   // so ProContext (which reads profiles.is_pro) stays in sync.
@@ -86,12 +95,26 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     }
   }, [user?.id]);
 
-  // Fetch offerings on mount
+  // Fetch offerings once the SDK is configured
   useEffect(() => {
+    if (!configured) return;
+
     Purchases.getOfferings()
-      .then(setOfferings)
-      .catch((e) => console.warn('[RevenueCat] getOfferings error:', e));
-  }, []);
+      .then((fetched) => {
+        setOfferings(fetched);
+        if (!fetched.current || fetched.current.availablePackages.length === 0) {
+          console.warn('[RevenueCat] getOfferings succeeded but "current" offering has no packages — check the RevenueCat dashboard offering/product configuration');
+          setOfferingsError('No subscription packages are configured for this offering');
+        } else {
+          setOfferingsError(null);
+        }
+      })
+      .catch((e) => {
+        console.warn('[RevenueCat] getOfferings error:', e);
+        setOfferingsError(e?.message ?? 'Failed to load subscription offerings');
+      })
+      .finally(() => setIsLoading(false));
+  }, [configured]);
 
   // Listen for real-time entitlement changes (e.g. subscription expires mid-session)
   useEffect(() => {
@@ -108,7 +131,11 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
       Purchases.logIn(user.id)
         .then(({ customerInfo }) => syncCustomerInfo(customerInfo))
         .catch((e) => console.warn('[RevenueCat] logIn error:', e));
-    } else {
+      loggedInRef.current = true;
+    } else if (loggedInRef.current) {
+      // Only log out if we previously logged in — the SDK already starts
+      // anonymous, and calling logOut() on an anonymous user throws.
+      loggedInRef.current = false;
       Purchases.logOut()
         .then((info) => syncCustomerInfo(info))
         .catch((e) => console.warn('[RevenueCat] logOut error:', e));
@@ -140,7 +167,7 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
   }, [syncCustomerInfo]);
 
   return (
-    <RevenueCatContext.Provider value={{ isPro, offerings, purchasePackage, restorePurchases, isLoading }}>
+    <RevenueCatContext.Provider value={{ isPro, offerings, purchasePackage, restorePurchases, isLoading, offeringsError }}>
       {children}
     </RevenueCatContext.Provider>
   );

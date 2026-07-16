@@ -79,7 +79,7 @@ const FEATURES = [
 
 export function ProPaywallModal() {
   const { paywallVisible, hidePaywall } = usePro();
-  const { offerings, purchasePackage, restorePurchases, isLoading } = useRevenueCat();
+  const { offerings, purchasePackage, restorePurchases, isLoading, offeringsError } = useRevenueCat();
   const scheme = useColorScheme();
   const c = scheme === 'light' ? LIGHT : DARK;
 
@@ -293,6 +293,11 @@ export function ProPaywallModal() {
                 <Text style={[s.priceSub,    { color: c.textDim }]}>
                   Subscription pricing will be announced shortly
                 </Text>
+                {__DEV__ && offeringsError ? (
+                  <Text style={[s.priceSub, { color: c.textDim, marginTop: 8 }]}>
+                    [DEV] {offeringsError}
+                  </Text>
+                ) : null}
               </View>
             )}
 
