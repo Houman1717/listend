@@ -78,7 +78,7 @@ const FEATURES = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ProPaywallModal() {
-  const { paywallVisible, hidePaywall } = usePro();
+  const { paywallVisible, hidePaywall, markProActive } = usePro();
   const { offerings, purchasePackage, restorePurchases, isLoading, offeringsError } = useRevenueCat();
   const scheme = useColorScheme();
   const c = scheme === 'light' ? LIGHT : DARK;
@@ -94,7 +94,10 @@ export function ProPaywallModal() {
     setPurchasing(true);
     const success = await purchasePackage(activePkg);
     setPurchasing(false);
-    if (success) hidePaywall();
+    if (success) {
+      markProActive();
+      hidePaywall();
+    }
   }
 
   async function handleRestore() {
@@ -102,6 +105,7 @@ export function ProPaywallModal() {
     const success = await restorePurchases();
     setPurchasing(false);
     if (success) {
+      markProActive();
       hidePaywall();
     } else {
       Alert.alert('No purchases found', 'We could not find any previous Pro purchases to restore.');

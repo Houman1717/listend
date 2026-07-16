@@ -12,6 +12,7 @@ interface ProContextValue {
   showPaywall: () => void;
   hidePaywall: () => void;
   refreshPro: () => void;
+  markProActive: () => void;
 }
 
 const ProContext = createContext<ProContextValue>({
@@ -22,6 +23,7 @@ const ProContext = createContext<ProContextValue>({
   showPaywall: () => {},
   hidePaywall: () => {},
   refreshPro: () => {},
+  markProActive: () => {},
 });
 
 export function ProProvider({ children }: { children: React.ReactNode }) {
@@ -66,6 +68,10 @@ export function ProProvider({ children }: { children: React.ReactNode }) {
       showPaywall:  () => { capture('paywall_shown'); setPaywallVisible(true); },
       hidePaywall:  () => setPaywallVisible(false),
       refreshPro:   loadPro,
+      // RevenueCat's own purchase/restore result is already ground truth —
+      // set it immediately instead of racing the fire-and-forget Supabase
+      // mirror write that syncCustomerInfo kicks off in RevenueCatContext.
+      markProActive: () => { loadedFor.current = user?.id ?? null; setIsPro(true); },
     }}>
       {children}
     </ProContext.Provider>
