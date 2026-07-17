@@ -5,6 +5,7 @@
 const NEW_RELEASE_ALBUMS = [
   { artist: 'Steve Lacy',             title: 'Oh Yeah!' },
   { artist: 'Gracie Abrams',          title: 'Daughter From Hell' },
+  { artist: 'Tory Lanez',             title: 'Made You Think I Was Gone ...But' },
   { artist: 'Rick Ross',              title: 'Set In Stone' },
   { artist: 'Future',                 title: 'The Real Me' },
   { artist: 'The Rolling Stones',     title: 'Foreign Tongues' },
