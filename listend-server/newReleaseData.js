@@ -3,16 +3,15 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Steve Lacy',             title: 'Oh Yeah!' },
+  { artist: 'Gracie Abrams',          title: 'Daughter From Hell' },
+  { artist: 'Rick Ross',              title: 'Set In Stone' },
   { artist: 'Future',                 title: 'The Real Me' },
-  { artist: 'Kelela',                 title: 'New Avatar' },
-  { artist: 'Jack White',             title: 'Frozen Charlotte' },
   { artist: 'The Rolling Stones',     title: 'Foreign Tongues' },
   { artist: 'Madonna',                title: 'Confessions II' },
   { artist: 'Ken Carson',             title: 'Xperiment' },
-  { artist: 'Mary in the Junkyard',   title: 'Role Model Hermit' },
   { artist: 'Slayyyter',              title: 'WORST GIRL IN AMERICA' },
   { artist: 'Olivia Rodrigo',         title: 'you seem pretty sad for a girl so in love' },
-  { artist: 'Rick Ross',              title: 'Set In Stone' },
   { artist: 'Lizzo',                  title: 'Bitch' },
   { artist: 'Vince Staples',          title: 'Cry Baby' },
   { artist: 'Chris Brown',            title: 'BROWN' },
