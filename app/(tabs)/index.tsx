@@ -149,7 +149,7 @@ function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumbe
   const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <FontAwesome name="volume-up" size={10} color="#D4A017" />
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : inactive} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
@@ -158,7 +158,7 @@ function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumbe
           );
         })}
       </View>
-      {showNumber && (
+      {showNumber && rating > 0 && (
         <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
       )}
     </View>
@@ -1146,6 +1146,7 @@ export default function HomeScreen() {
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Map<string, ReviewComment[]>>(new Map());
 
+  const popularReviewIdsKey = popularReviews.map(r => r.id).join(',');
   useEffect(() => {
     if (!user?.id || popularReviews.length === 0) return;
     const ids = popularReviews.map(r => r.id);
@@ -1158,7 +1159,8 @@ export default function HomeScreen() {
           return next;
         });
       });
-  }, [popularReviews.length, user?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popularReviewIdsKey, user?.id]);
 
   useEffect(() => {
     if (!user?.id || friendsListened.length === 0) return;
@@ -1198,9 +1200,12 @@ export default function HomeScreen() {
       supabase.from('likes').insert({
         user_id: user.id, target_type: 'review', target_id: id, target_owner_id: ownerId,
       }).then(({ error }) => {
-        if (error) {
+        // A unique-violation means the like already exists server-side (e.g. the
+        // local "am I liking this?" state was stale) — the heart should stay filled,
+        // not revert, since the user's intent (liked) already matches the DB.
+        if (error && error.code !== '23505') {
           setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
-        } else if (ownerId !== user.id) {
+        } else if (!error && ownerId !== user.id) {
           supabase.from('notifications').insert({
             user_id: ownerId, type: 'like_review', actor_id: user.id, target_id: id,
           }).then(({ error: notifErr }) => {
@@ -1305,7 +1310,7 @@ export default function HomeScreen() {
         fetchTopAlbumsThisWeek(),
         fetchTopSongsThisWeek(),
         fetchTopArtistsThisWeek(),
-        fetchPopularReviewsThisWeek(),
+        fetchPopularReviewsThisWeek(user?.id),
       ])
         .then(([albs, sngs, arts, reviews]) => {
           if (albs.status === 'fulfilled')    { cache.albums         = albs.value;    setAlbums(albs.value);         const urls = albs.value.map(a => a.artworkUrl).filter(Boolean) as string[]; if (urls.length) ExpoImage.prefetch(urls); }
@@ -1318,7 +1323,7 @@ export default function HomeScreen() {
           if (reviews.status === 'rejected')    console.error('[Home] reviews failed:', reviews.reason?.message);
         })
         .finally(() => setLoading(false));
-    }, [])
+    }, [user?.id])
   );
 
   const onRefresh = useCallback(() => {
@@ -1328,7 +1333,7 @@ export default function HomeScreen() {
       fetchTopAlbumsThisWeek(),
       fetchTopSongsThisWeek(),
       fetchTopArtistsThisWeek(),
-      fetchPopularReviewsThisWeek(),
+      fetchPopularReviewsThisWeek(user.id),
       fetchFriendsActivity(user.id),
       fetchFriendsRecentListened(user.id),
     ])

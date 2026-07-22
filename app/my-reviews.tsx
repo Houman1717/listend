@@ -118,7 +118,7 @@ function ReviewRow({
           </Text>
         ) : null}
         <Text style={[s.review, { color: isDark ? '#a07850' : '#7a5535' }]}>
-          {album.review}
+          {album.lastReview ?? album.review}
         </Text>
 
         {/* Like button (other's reviews) or read-only count (own reviews) */}
@@ -263,7 +263,7 @@ function ReviewDetailModal({
                   {album.artist} · {album.year}
                 </Text>
                 <View style={mrd.ratingRow}>
-                  <VolumeBadge rating={album.rating} isDark={isDark} tint={colors.tint} />
+                  <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />
                 </View>
               </View>
             </Pressable>
@@ -294,9 +294,9 @@ function ReviewDetailModal({
             </Pressable>
 
             {/* Review text */}
-            {album.review ? (
+            {(album.lastReview ?? album.review) ? (
               <Text style={[mrd.reviewText, { color: isDark ? '#A08060' : '#6B4C35' }]}>
-                "{album.review}"
+                "{album.lastReview ?? album.review}"
               </Text>
             ) : (
               <Text style={[mrd.reviewText, { color: isDark ? '#4a3020' : '#C8B89A', fontStyle: 'italic' }]}>
@@ -429,27 +429,52 @@ export default function MyReviewsScreen() {
     if (!viewingOther) return;
 
     async function loadReviewsAndLikes() {
-      // 1. Fetch the reviews
-      const { data } = await supabase
-        .from('user_albums')
-        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms')
-        .eq('user_id', viewingOther!)
-        .not('review', 'is', null)
-        .order('listened_at', { ascending: false });
+      // 1. Fetch the reviews (+ latest re-listen rating/review per album, so a
+      // re-listen-only review still surfaces even when the original log has none)
+      const [{ data }, { data: reListenData }] = await Promise.all([
+        supabase
+          .from('user_albums')
+          .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms, is_relistened')
+          .eq('user_id', viewingOther!)
+          .order('listened_at', { ascending: false }),
+        supabase
+          .from('re_listens')
+          .select('spotify_id, rating, review, listened_at')
+          .eq('user_id', viewingOther!)
+          .order('listened_at', { ascending: false }),
+      ]);
 
       if (!data) return;
-      setOtherReviews(data.map((a, i) => ({
-        id:         a.spotify_id,
-        title:      a.title      ?? '',
-        artist:     a.artist     ?? '',
-        year:       a.year       ?? 0,
-        rating:     a.rating     ?? 0,
-        review:     a.review     ?? undefined,
-        dateLogged: a.listened_at ?? new Date().toISOString(),
-        artworkUrl: a.artwork_url ?? undefined,
-        coverColor: COVER_COLORS[i % COVER_COLORS.length],
-        durationMs: a.duration_ms ?? undefined,
-      })));
+
+      const latestReListenRating = new Map<string, number>();
+      const latestReListenReview = new Map<string, string>();
+      const latestReListenDate   = new Map<string, string>();
+      for (const r of (reListenData ?? []) as any[]) {
+        if (!latestReListenDate.has(r.spotify_id) && r.listened_at) latestReListenDate.set(r.spotify_id, r.listened_at);
+        if (!latestReListenRating.has(r.spotify_id) && r.rating) latestReListenRating.set(r.spotify_id, r.rating);
+        if (!latestReListenReview.has(r.spotify_id) && r.review) latestReListenReview.set(r.spotify_id, r.review);
+      }
+
+      setOtherReviews(
+        data
+          .filter((a: any) => !!a.review || !!latestReListenReview.get(a.spotify_id))
+          .map((a: any, i) => ({
+            id:            a.spotify_id,
+            title:         a.title      ?? '',
+            artist:        a.artist     ?? '',
+            year:          a.year       ?? 0,
+            rating:        a.rating     ?? 0,
+            review:        a.review     ?? undefined,
+            dateLogged:    a.listened_at ?? new Date().toISOString(),
+            artworkUrl:    a.artwork_url ?? undefined,
+            coverColor:    COVER_COLORS[i % COVER_COLORS.length],
+            durationMs:    a.duration_ms ?? undefined,
+            isRelistened:  a.is_relistened ?? false,
+            lastRating:    a.is_relistened ? latestReListenRating.get(a.spotify_id) : undefined,
+            lastReview:    a.is_relistened ? latestReListenReview.get(a.spotify_id) : undefined,
+            lastListenedAt: a.is_relistened ? latestReListenDate.get(a.spotify_id) : undefined,
+          }))
+      );
 
       // 2. Fetch all likes for this user's reviews (one query for counts + own state)
       const { data: allLikes } = await supabase
@@ -544,14 +569,31 @@ export default function MyReviewsScreen() {
 
       const allReviews: LikedReview[] = [];
       for (const [ownerId, albumIds] of byOwner.entries()) {
-        const { data } = await supabase
-          .from('user_albums')
-          .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
-          .eq('user_id', ownerId)
-          .in('spotify_id', albumIds)
-          .not('review', 'is', null);
+        const [{ data }, { data: reListenData }] = await Promise.all([
+          supabase
+            .from('user_albums')
+            .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, is_relistened')
+            .eq('user_id', ownerId)
+            .in('spotify_id', albumIds),
+          supabase
+            .from('re_listens')
+            .select('spotify_id, rating, review, listened_at')
+            .eq('user_id', ownerId)
+            .in('spotify_id', albumIds)
+            .order('listened_at', { ascending: false }),
+        ]);
         if (!data) continue;
-        for (const a of data as any[]) {
+
+        const latestReListenRating = new Map<string, number>();
+        const latestReListenReview = new Map<string, string>();
+        const latestReListenDate   = new Map<string, string>();
+        for (const r of (reListenData ?? []) as any[]) {
+          if (!latestReListenDate.has(r.spotify_id) && r.listened_at) latestReListenDate.set(r.spotify_id, r.listened_at);
+          if (!latestReListenRating.has(r.spotify_id) && r.rating) latestReListenRating.set(r.spotify_id, r.rating);
+          if (!latestReListenReview.has(r.spotify_id) && r.review) latestReListenReview.set(r.spotify_id, r.review);
+        }
+
+        for (const a of (data as any[]).filter(a => !!a.review || !!latestReListenReview.get(a.spotify_id))) {
           const likedEntry = parsed.find(p => p.ownerId === ownerId && p.albumId === a.spotify_id);
           allReviews.push({
             id:         a.spotify_id,
@@ -563,6 +605,10 @@ export default function MyReviewsScreen() {
             dateLogged: a.listened_at ?? undefined,
             artworkUrl: a.artwork_url ?? undefined,
             coverColor: COVER_COLORS[allReviews.length % COVER_COLORS.length],
+            isRelistened:   a.is_relistened ?? false,
+            lastRating:     a.is_relistened ? latestReListenRating.get(a.spotify_id) : undefined,
+            lastReview:     a.is_relistened ? latestReListenReview.get(a.spotify_id) : undefined,
+            lastListenedAt: a.is_relistened ? latestReListenDate.get(a.spotify_id) : undefined,
             ownerId,
             username:   usernameById.get(ownerId) ?? '',
             isPro:      isProById.get(ownerId) ?? false,
@@ -637,113 +683,6 @@ export default function MyReviewsScreen() {
     }
   }
 
-  // ── Fetch liked reviews (own or other user) when liked tab is active ─────
-  useEffect(() => {
-    if (activeTab !== 'liked') return;
-    const uid = viewingOther ?? user?.id;
-    if (!uid) return;
-    setLikedLoading(true);
-
-    (async () => {
-      const { data: likedRows } = await supabase
-        .from('likes')
-        .select('target_id, target_owner_id, created_at')
-        .eq('user_id', uid)
-        .eq('target_type', 'review')
-        .order('created_at', { ascending: false });
-
-      if (!likedRows || likedRows.length === 0) {
-        setLikedReviews([]);
-        setLikedLikesMap(new Map());
-        setLikedLoading(false);
-        return;
-      }
-
-      // target_id format is "{owner_uuid}_{spotify_id}" — UUID is 36 chars
-      const parsed = (likedRows as any[]).map(r => ({
-        ownerId:  (r.target_id as string).slice(0, 36),
-        albumId:  (r.target_id as string).slice(37),
-        likedAt:  r.created_at as string,
-        targetId: r.target_id as string,
-      }));
-
-      // Group albumIds by ownerId to batch queries
-      const byOwner = new Map<string, string[]>();
-      for (const { ownerId, albumId } of parsed) {
-        byOwner.set(ownerId, [...(byOwner.get(ownerId) ?? []), albumId]);
-      }
-
-      const ownerIds = [...byOwner.keys()];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username, is_pro, avatar_url')
-        .in('id', ownerIds);
-      const usernameById = new Map<string, string>(
-        (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
-      );
-      const isProById = new Map<string, boolean>(
-        (profiles ?? []).map((p: any) => [p.id as string, !!(p.is_pro)])
-      );
-      const avatarById = new Map<string, string | null>(
-        (profiles ?? []).map((p: any) => [p.id as string, (p.avatar_url ?? null) as string | null])
-      );
-
-      const allReviews: LikedReview[] = [];
-      for (const [ownerId, albumIds] of byOwner.entries()) {
-        const { data } = await supabase
-          .from('user_albums')
-          .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at')
-          .eq('user_id', ownerId)
-          .in('spotify_id', albumIds)
-          .not('review', 'is', null);
-        if (!data) continue;
-        for (const a of data as any[]) {
-          const likedEntry = parsed.find(p => p.ownerId === ownerId && p.albumId === a.spotify_id);
-          allReviews.push({
-            id:         a.spotify_id,
-            title:      a.title      ?? '',
-            artist:     a.artist     ?? '',
-            year:       a.year       ?? 0,
-            rating:     a.rating     ?? 0,
-            review:     a.review     ?? undefined,
-            dateLogged: a.listened_at ?? undefined,
-            artworkUrl: a.artwork_url ?? undefined,
-            coverColor: COVER_COLORS[allReviews.length % COVER_COLORS.length],
-            ownerId,
-            username:   usernameById.get(ownerId) ?? '',
-            isPro:      isProById.get(ownerId) ?? false,
-            avatarUrl:  avatarById.get(ownerId) ?? null,
-            likedAt:    likedEntry?.likedAt ?? '',
-          });
-        }
-      }
-      allReviews.sort((a, b) => b.likedAt.localeCompare(a.likedAt));
-
-      // Fetch like counts for all these reviews
-      const likedMap = new Map<string, LikeState>();
-      for (const ownerId of ownerIds) {
-        const { data: lks } = await supabase
-          .from('likes')
-          .select('user_id, target_id')
-          .eq('target_type', 'review')
-          .eq('target_owner_id', ownerId);
-        for (const lk of (lks ?? []) as any[]) {
-          const ex = likedMap.get(lk.target_id) ?? { liked: false, count: 0 };
-          likedMap.set(lk.target_id, {
-            count: ex.count + 1,
-            liked: ex.liked || lk.user_id === user?.id,
-          });
-        }
-      }
-
-      setLikedReviews(allReviews);
-      setLikedLikesMap(likedMap);
-      setLikedLoading(false);
-    })();
-  }, [activeTab, viewingOther, user?.id, likedFetchTick]);
-
-  // ── Unlike a review from the liked tab (own user) ─────────────────────────
-
   // ── Toggle like on another user's review ─────────────────────────────────
   async function handleToggleLike(album: LoggedAlbum) {
     if (!user || !viewingOther) return;
@@ -804,7 +743,7 @@ export default function MyReviewsScreen() {
   // ── Data ──────────────────────────────────────────────────────────────────
   const sourceReviews = viewingOther
     ? otherReviews
-    : loggedAlbums.filter((a) => !!a.review);
+    : loggedAlbums.filter((a) => !!(a.lastReview ?? a.review));
 
   // ── Community stats (avg rating + popularity) — same source as My Listend ──
   const [communityStatsMap, setCommunityStatsMap] = useState<Map<string, CommunityStats>>(new Map());

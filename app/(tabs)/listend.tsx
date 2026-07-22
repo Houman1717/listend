@@ -1119,7 +1119,7 @@ export default function ListendScreen() {
     });
   }, [navigation, openSettings, unreadCount, router, headerIconColor, colors.background, colors.text]);
 
-  const reviewCount = loggedAlbums.filter((a) => !!a.review).length;
+  const reviewCount = loggedAlbums.filter((a) => !!(a.lastReview ?? a.review)).length;
 
   // ── Profile stats ────────────────────────────────────────────────────────────
   const ratedAlbums = loggedAlbums.filter((a) => a.rating > 0);

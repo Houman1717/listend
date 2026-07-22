@@ -548,15 +548,23 @@ export default function UserProfileScreen() {
           setIsBlockedByThem(!!blockedByThem);
         }
 
-        const { data: userAlbums } = await supabase
-          .from('user_albums')
-          .select('spotify_id, title, artist, artwork_url, rating, review, year, listened_at')
-          .eq('user_id', viewedUserId)
-          .not('listened_at', 'is', null)
-          .order('listened_at', { ascending: false });
+        const [{ data: userAlbums }, { data: relistenRows }] = await Promise.all([
+          supabase
+            .from('user_albums')
+            .select('spotify_id, title, artist, artwork_url, rating, review, year, listened_at, is_relistened')
+            .eq('user_id', viewedUserId)
+            .not('listened_at', 'is', null)
+            .order('listened_at', { ascending: false }),
+          supabase
+            .from('re_listens')
+            .select('spotify_id, review')
+            .eq('user_id', viewedUserId)
+            .not('review', 'is', null),
+        ]);
 
         if (userAlbums) {
           setUserAlbums(userAlbums);
+          const relistenedIdsWithReview = new Set((relistenRows ?? []).map((r: any) => r.spotify_id));
           const thisYear = new Date().getFullYear();
           const withRating = userAlbums.filter((a: any) => a.rating > 0);
           setAlbumCount(userAlbums.length);
@@ -564,7 +572,7 @@ export default function UserProfileScreen() {
             const y = a.listened_at ? new Date(a.listened_at).getFullYear() : a.year;
             return y === thisYear;
           }).length);
-          setReviewCount(userAlbums.filter((a: any) => a.review).length);
+          setReviewCount(userAlbums.filter((a: any) => !!a.review || (a.is_relistened && relistenedIdsWithReview.has(a.spotify_id))).length);
           if (withRating.length > 0) {
             const sum = withRating.reduce((acc: number, a: any) => acc + a.rating, 0);
             setAvgRating((sum / withRating.length).toFixed(1));

@@ -201,17 +201,23 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
 // when the review itself was written (matches Letterboxd's "Popular Reviews"
 // model) — an old review that suddenly gets a wave of new engagement can
 // resurface here, rather than only ever showing reviews from the last 7 days.
-export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
+// `currentUserId`, when passed, is excluded from the returned `likeCount` — the
+// caller's own like is applied client-side via the optimistic `likedReviews` set
+// (`likeCount + (liked ? 1 : 0)`), so leaving it in the server count here would
+// double-count it once a refetch picks up the now-persisted like row.
+export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promise<PopularReview[]> {
   const since = weekAgo();
 
   const [{ data: likeRows }, { data: commentRows }] = await Promise.all([
-    supabase.from('likes').select('target_id').eq('target_type', 'review').gte('created_at', since),
+    supabase.from('likes').select('target_id, user_id').eq('target_type', 'review').gte('created_at', since),
     supabase.from('review_comments').select('review_id').gte('created_at', since),
   ]);
 
   const likeCounts = new Map<string, number>();
+  const currentUserLikedIds = new Set<string>();
   for (const l of (likeRows ?? []) as any[]) {
     likeCounts.set(l.target_id, (likeCounts.get(l.target_id) ?? 0) + 1);
+    if (currentUserId && l.user_id === currentUserId) currentUserLikedIds.add(l.target_id);
   }
   const commentCounts = new Map<string, number>();
   for (const c of (commentRows ?? []) as any[]) {
@@ -232,14 +238,18 @@ export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
   const userIds    = [...new Set(pairs.map(p => p.userId))];
   const spotifyIds = [...new Set(pairs.map(p => p.spotifyId))];
 
-  const [{ data: reviewRows }, { data: profiles }] = await Promise.all([
+  const [{ data: reviewRows }, { data: relistenRows }, { data: profiles }] = await Promise.all([
     supabase
       .from('user_albums')
-      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, is_relistened')
+      .in('user_id', userIds)
+      .in('spotify_id', spotifyIds),
+    supabase
+      .from('re_listens')
+      .select('user_id, spotify_id, rating, review, listened_at')
       .in('user_id', userIds)
       .in('spotify_id', spotifyIds)
-      .not('review', 'is', null)
-      .neq('review', ''),
+      .order('listened_at', { ascending: false }),
     supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds),
   ]);
 
@@ -247,12 +257,24 @@ export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
   for (const r of (reviewRows ?? []) as any[]) {
     rowMap.set(`${r.user_id}_${r.spotify_id}`, r);
   }
+  // Latest re-listen rating/review per user+album — a review written on a
+  // re-listen (with the original log unrated/unreviewed) must still surface.
+  const latestReListenRating = new Map<string, number>();
+  const latestReListenReview = new Map<string, string>();
+  for (const rl of (relistenRows ?? []) as any[]) {
+    const key = `${rl.user_id}_${rl.spotify_id}`;
+    if (!latestReListenRating.has(key) && rl.rating) latestReListenRating.set(key, rl.rating);
+    if (!latestReListenReview.has(key) && rl.review) latestReListenReview.set(key, rl.review);
+  }
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
 
   const reviews: PopularReview[] = [];
   for (const { targetId, userId, spotifyId } of pairs) {
     const r = rowMap.get(targetId);
     if (!r) continue;
+    const review = (r.is_relistened ? latestReListenReview.get(targetId) : undefined) ?? r.review ?? '';
+    if (!review) continue;
+    const rating = (r.is_relistened ? latestReListenRating.get(targetId) : undefined) ?? r.rating ?? 0;
     const prof = profileMap.get(userId);
     reviews.push({
       id: targetId,
@@ -264,9 +286,9 @@ export async function fetchPopularReviewsThisWeek(): Promise<PopularReview[]> {
       albumArtist: r.artist ?? '',
       albumYear: String(r.year ?? ''),
       artworkUrl: r.artwork_url ?? '',
-      rating: r.rating ?? 0,
-      review: r.review ?? '',
-      likeCount: likeCounts.get(targetId) ?? 0,
+      rating,
+      review,
+      likeCount: (likeCounts.get(targetId) ?? 0) - (currentUserLikedIds.has(targetId) ? 1 : 0),
       commentCount: commentCounts.get(targetId) ?? 0,
     });
   }

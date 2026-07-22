@@ -30,7 +30,7 @@ function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
   const inactive = isDark ? '#2a1e14' : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <FontAwesome name="volume-up" size={10} color="#D4A017" />
+      <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : inactive} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
@@ -39,7 +39,7 @@ function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
           );
         })}
       </View>
-      <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
+      {rating > 0 && <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>}
     </View>
   );
 }
@@ -180,9 +180,10 @@ export default function PopularReviewsScreen() {
   const [commentsMap,  setCommentsMap]  = useState<Map<string, ReviewComment[]>>(new Map());
 
   useEffect(() => {
-    fetchPopularReviewsThisWeek().then(setReviews);
-  }, []);
+    fetchPopularReviewsThisWeek(user?.id).then(setReviews);
+  }, [user?.id]);
 
+  const reviewIdsKey = reviews.map(r => r.id).join(',');
   useEffect(() => {
     if (!user?.id || reviews.length === 0) return;
     const ids = reviews.map(r => r.id);
@@ -191,7 +192,8 @@ export default function PopularReviewsScreen() {
       .then(({ data }) => {
         setLikedReviews(new Set((data ?? []).map((r: any) => r.target_id as string)));
       });
-  }, [reviews.length, user?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewIdsKey, user?.id]);
 
   function handleLike(id: string) {
     if (!user) return;
@@ -217,9 +219,12 @@ export default function PopularReviewsScreen() {
       supabase.from('likes').insert({
         user_id: user.id, target_type: 'review', target_id: id, target_owner_id: ownerId,
       }).then(({ error }) => {
-        if (error) {
+        // A unique-violation means the like already exists server-side (e.g. the
+        // local "am I liking this?" state was stale) — the heart should stay filled,
+        // not revert, since the user's intent (liked) already matches the DB.
+        if (error && error.code !== '23505') {
           setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
-        } else if (ownerId !== user.id) {
+        } else if (!error && ownerId !== user.id) {
           supabase.from('notifications').insert({
             user_id: ownerId, type: 'like_review', actor_id: user.id, target_id: id,
           }).then(({ error: notifErr }) => {
