@@ -3,6 +3,9 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'The Strokes',            title: 'Reality Awaits' },
+  { artist: 'Charli xcx',             title: 'Music, Fashion, Film' },
+  { artist: 'Tyla',                   title: 'A*POP' },
   { artist: 'Steve Lacy',             title: 'Oh Yeah!' },
   { artist: 'Gracie Abrams',          title: 'Daughter From Hell' },
   { artist: 'Tory Lanez',             title: 'Made You Think I Was Gone ...But' },
