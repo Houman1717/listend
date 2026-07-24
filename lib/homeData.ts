@@ -201,6 +201,9 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
 // when the review itself was written (matches Letterboxd's "Popular Reviews"
 // model) — an old review that suddenly gets a wave of new engagement can
 // resurface here, rather than only ever showing reviews from the last 7 days.
+// The weekly counts drive ranking only; the *displayed* likeCount is the
+// review's all-time total (matching the count shown on the album detail
+// page), fetched separately below so the two screens never disagree.
 // `currentUserId`, when passed, is excluded from the returned `likeCount` — the
 // caller's own like is applied client-side via the optimistic `likedReviews` set
 // (`likeCount + (liked ? 1 : 0)`), so leaving it in the server count here would
@@ -213,19 +216,30 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
     supabase.from('review_comments').select('review_id').gte('created_at', since),
   ]);
 
-  const likeCounts = new Map<string, number>();
-  const currentUserLikedIds = new Set<string>();
+  const weeklyLikeCounts = new Map<string, number>();
   for (const l of (likeRows ?? []) as any[]) {
-    likeCounts.set(l.target_id, (likeCounts.get(l.target_id) ?? 0) + 1);
-    if (currentUserId && l.user_id === currentUserId) currentUserLikedIds.add(l.target_id);
+    weeklyLikeCounts.set(l.target_id, (weeklyLikeCounts.get(l.target_id) ?? 0) + 1);
   }
   const commentCounts = new Map<string, number>();
   for (const c of (commentRows ?? []) as any[]) {
     commentCounts.set(c.review_id, (commentCounts.get(c.review_id) ?? 0) + 1);
   }
 
-  const candidateIds = new Set([...likeCounts.keys(), ...commentCounts.keys()]);
+  const candidateIds = new Set([...weeklyLikeCounts.keys(), ...commentCounts.keys()]);
   if (candidateIds.size === 0) return [];
+
+  const { data: totalLikeRows } = await supabase
+    .from('likes')
+    .select('target_id, user_id')
+    .eq('target_type', 'review')
+    .in('target_id', [...candidateIds]);
+
+  const likeCounts = new Map<string, number>();
+  const currentUserLikedIds = new Set<string>();
+  for (const l of (totalLikeRows ?? []) as any[]) {
+    likeCounts.set(l.target_id, (likeCounts.get(l.target_id) ?? 0) + 1);
+    if (currentUserId && l.user_id === currentUserId) currentUserLikedIds.add(l.target_id);
+  }
 
   const pairs = Array.from(candidateIds)
     .map(targetId => {
@@ -268,7 +282,7 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
   }
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
 
-  const reviews: PopularReview[] = [];
+  const reviews: (PopularReview & { weeklyScore: number })[] = [];
   for (const { targetId, userId, spotifyId } of pairs) {
     const r = rowMap.get(targetId);
     if (!r) continue;
@@ -276,6 +290,8 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
     if (!review) continue;
     const rating = (r.is_relistened ? latestReListenRating.get(targetId) : undefined) ?? r.rating ?? 0;
     const prof = profileMap.get(userId);
+    const weeklyLikes = weeklyLikeCounts.get(targetId) ?? 0;
+    const weeklyComments = commentCounts.get(targetId) ?? 0;
     reviews.push({
       id: targetId,
       userId,
@@ -290,9 +306,10 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
       review,
       likeCount: (likeCounts.get(targetId) ?? 0) - (currentUserLikedIds.has(targetId) ? 1 : 0),
       commentCount: commentCounts.get(targetId) ?? 0,
+      weeklyScore: weeklyLikes + weeklyComments,
     });
   }
 
-  reviews.sort((a, b) => (b.likeCount + b.commentCount) - (a.likeCount + a.commentCount));
-  return reviews.slice(0, 20);
+  reviews.sort((a, b) => b.weeklyScore - a.weeklyScore);
+  return reviews.slice(0, 20).map(({ weeklyScore, ...r }) => r);
 }
