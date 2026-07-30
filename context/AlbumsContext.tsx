@@ -93,11 +93,12 @@ type AlbumsContextType = {
   loggedAlbums: LoggedAlbum[];
   pendingAlbum: PendingAlbum | null;
   setPendingAlbum: (album: PendingAlbum | null) => void;
-  logAlbum: (rating: number, review: string) => void;
+  logAlbum: (rating: number, review: string, listenedAt?: Date) => void;
   reListenMode: boolean;
   setReListenMode: (v: boolean) => void;
   updateReview: (id: string, rating: number, review: string) => Promise<boolean>;
   updateReListenReview: (id: string, rating: number, review: string) => Promise<boolean>;
+  updateListenedDate: (albumId: string, targetListenedAt: string | null, newDate: Date) => Promise<boolean>;
   updateDuration: (id: string, durationMs: number) => void;
   removeLoggedAlbum: (id: string) => void;
   removeReListenEntry: (albumId: string, listenedAt: string) => Promise<void>;
@@ -463,7 +464,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async function logAlbum(rating: number, review: string) {
+  async function logAlbum(rating: number, review: string, listenedAt?: Date) {
     if (!pendingAlbum) return;
     const pending = pendingAlbum;
 
@@ -481,7 +482,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
     if (reListenMode) {
       // Re-listen: insert new re_listens row, update user_albums rating+date+count
-      const dateLogged = new Date().toISOString();
+      const dateLogged = (listenedAt ?? new Date()).toISOString();
       const existingAlbum = loggedAlbums.find(a => a.id === resolved.id);
       const newCount = (existingAlbum?.reListenCount ?? 0) + 1;
 
@@ -517,7 +518,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const dateLogged = new Date().toISOString();
+    const dateLogged = (listenedAt ?? new Date()).toISOString();
     const colorIndex = loggedAlbums.length % COVER_COLORS.length;
 
     const newAlbum: LoggedAlbum = {
@@ -647,6 +648,61 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     }
   }
 
+
+  // Retargets when an album was listened to. targetListenedAt === null edits the
+  // original user_albums row; otherwise it's the exact re_listens.listened_at value
+  // identifying which re-listen entry to move (same exact-match pattern as
+  // removeReListenEntry/undoLastReListenEntry below).
+  async function updateListenedDate(albumId: string, targetListenedAt: string | null, newDate: Date): Promise<boolean> {
+    if (!user) return false;
+    const newIso = newDate.toISOString();
+    const prevAlbums = loggedAlbums;
+
+    if (targetListenedAt === null) {
+      setLoggedAlbums(prev => prev.map(a => a.id === albumId ? { ...a, dateLogged: newIso } : a));
+
+      const { error } = await supabase
+        .from('user_albums')
+        .update({ listened_at: newIso })
+        .match({ user_id: user.id, spotify_id: albumId });
+
+      if (error) {
+        console.error('[AlbumsContext] updateListenedDate error:', error.message);
+        setLoggedAlbums(prevAlbums);
+        return false;
+      }
+      return true;
+    }
+
+    const { error } = await supabase
+      .from('re_listens')
+      .update({ listened_at: newIso })
+      .match({ user_id: user.id, spotify_id: albumId, listened_at: targetListenedAt });
+
+    if (error) {
+      console.error('[AlbumsContext] updateListenedDate (re-listen) error:', error.message);
+      return false;
+    }
+
+    // The edited re-listen may no longer be the most recent one — recompute
+    // which listen is "latest" so lastRating/lastReview/lastListenedAt stay accurate.
+    const { data: remaining } = await supabase
+      .from('re_listens')
+      .select('rating, review, listened_at')
+      .eq('user_id', user.id)
+      .eq('spotify_id', albumId)
+      .order('listened_at', { ascending: false });
+
+    const newLatest = remaining?.[0];
+    setLoggedAlbums(prev => prev.map(a => a.id === albumId ? {
+      ...a,
+      lastRating:     newLatest?.rating ?? a.lastRating,
+      lastReview:     newLatest?.review ?? undefined,
+      lastListenedAt: newLatest?.listened_at ?? a.lastListenedAt,
+    } : a));
+
+    return true;
+  }
 
   function updateDuration(id: string, durationMs: number) {
     setLoggedAlbums((prev) =>
@@ -1010,7 +1066,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   return (
     <AlbumsContext.Provider value={{
-      loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, reListenMode, setReListenMode, updateReview, updateReListenReview, updateDuration, removeLoggedAlbum, removeReListenEntry, undoLastReListenEntry, removeReListenEntry, undoLastReListenEntry,
+      loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, reListenMode, setReListenMode, updateReview, updateReListenReview, updateListenedDate, updateDuration, removeLoggedAlbum, removeReListenEntry, undoLastReListenEntry, removeReListenEntry, undoLastReListenEntry,
       topAlbums, topSongs, topArtists,
       addTopAlbum, addTopAlbumAtSlot, removeTopAlbum, reorderTopAlbums,
       addTopSong, addTopSongAtSlot, removeTopSong, reorderTopSongs,

@@ -31,6 +31,7 @@ import { ReviewComment, CommentsSection, avatarColor } from '@/components/Review
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
+import { EditListenDateModal } from '@/components/EditListenDateModal';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -846,6 +847,7 @@ export default function AlbumDetailScreen() {
   const modalScrollRef = useRef<ScrollView>(null);
   const reviewYPositions = useRef<Map<string, number>>(new Map());
   const editBlockYRef = useRef(0);
+  const [showEditDateModal, setShowEditDateModal] = useState(false);
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
   const [expandedAlbumReview, setExpandedAlbumReview] = useState<CommunityReview | null>(null);
   const [singleReviewCommentsOpen, setSingleReviewCommentsOpen] = useState(false);
@@ -1538,6 +1540,17 @@ export default function AlbumDetailScreen() {
         {isLogged ? (
           editMode ? (
             <View style={s.editBlock} onLayout={e => { editBlockYRef.current = e.nativeEvent.layout.y; }}>
+              <Pressable
+                style={({ pressed }) => [s.editDateRow, { borderColor: isDark ? '#3a2818' : '#e0e0e0', opacity: pressed ? 0.7 : 1 }]}
+                onPress={() => setShowEditDateModal(true)}>
+                <Text style={[s.editDateLabel, { color: colors.subtext }]}>
+                  Listend {formatLoggedDate(loggedAlbum!.lastListenedAt ?? loggedAlbum!.dateLogged)}
+                </Text>
+                <View style={s.editDateBtn}>
+                  <FontAwesome name="pencil" size={11} color="#D4A017" />
+                  <Text style={s.editDateBtnText}>Edit Date</Text>
+                </View>
+              </Pressable>
               <Text style={[s.sectionLabel, { color: colors.subtext }]}>Rating</Text>
               <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
               <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 20 }]}>
@@ -1631,8 +1644,12 @@ export default function AlbumDetailScreen() {
               <View style={s.editLogRight}>
                 <FontAwesome name="volume-up" size={14} color={(loggedAlbum!.lastRating ?? loggedAlbum!.rating) > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#ddd')} />
                 {(loggedAlbum!.lastRating ?? loggedAlbum!.rating) >= 1 && <MiniRatingBar rating={loggedAlbum!.lastRating ?? loggedAlbum!.rating} isDark={isDark} />}
-                <Pressable onPress={() => setEditMode(true)} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
-                  <FontAwesome name="pencil" size={13} color={colors.subtext} />
+                <Pressable
+                  onPress={() => setEditMode(true)}
+                  hitSlop={10}
+                  style={({ pressed }) => [s.editReviewBtn, { opacity: pressed ? 0.6 : 1 }]}>
+                  <FontAwesome name="pencil" size={11} color="#D4A017" />
+                  <Text style={s.editReviewBtnText}>Edit</Text>
                 </Pressable>
               </View>
             </View>
@@ -2118,6 +2135,15 @@ export default function AlbumDetailScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {showEditDateModal && loggedAlbum && (
+        <EditListenDateModal
+          album={loggedAlbum}
+          isDark={isDark}
+          colors={colors}
+          onClose={() => setShowEditDateModal(false)}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -2178,6 +2204,20 @@ const s = StyleSheet.create({
   editLogRight: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
 
   editBlock: { width: '100%', marginTop: 16 },
+  editDateRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, marginBottom: 20,
+  },
+  editDateLabel: { fontSize: 13, fontWeight: '500' },
+  editDateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  editDateBtnText: { fontSize: 13, fontWeight: '700', color: '#D4A017' },
+  editReviewBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 12, borderWidth: 1, borderColor: '#D4A017',
+  },
+  editReviewBtnText: { fontSize: 12, fontWeight: '700', color: '#D4A017' },
   editBtnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   editBtnFlex: { flex: 1, marginTop: 0 },
   removeListendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8B1A1A' },

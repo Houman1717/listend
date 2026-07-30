@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -130,6 +131,8 @@ export default function LogAlbumScreen() {
   const { markLogged } = useFlip();
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
+  const [logDate, setLogDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   if (!pendingAlbum) return null;
 
@@ -139,7 +142,7 @@ export default function LogAlbumScreen() {
       has_review: review.trim().length > 0,
     });
     const flipId = pendingAlbum?.flipId;
-    await logAlbum(rating, review);
+    await logAlbum(rating, review, logDate);
     // Resolve the flip directly by the flip's own id rather than waiting for
     // the logged album's (possibly remapped) canonical id to match back up —
     // otherwise a canonical-id remap leaves Flip a Record stuck on this album.
@@ -168,6 +171,30 @@ export default function LogAlbumScreen() {
         <Text style={[styles.artist, { color: colors.subtext }]}>
           {pendingAlbum.artist} · {pendingAlbum.year}
         </Text>
+
+        <Pressable
+          style={[styles.dateRow, { borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
+          onPress={() => setShowDatePicker(v => !v)}>
+          <Text style={[styles.dateRowText, { color: colors.subtext }]}>
+            Listend {logDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+          </Text>
+          <View style={styles.dateEditBtn}>
+            <FontAwesome name="pencil" size={11} color="#D4A017" />
+            <Text style={styles.dateEditBtnText}>Edit Date</Text>
+          </View>
+        </Pressable>
+        {showDatePicker && (
+          <DateTimePicker
+            value={logDate}
+            mode="date"
+            display="inline"
+            maximumDate={new Date()}
+            onChange={(_, d) => { if (d) setLogDate(d); }}
+            themeVariant={isDark ? 'dark' : 'light'}
+            accentColor="#D4A017"
+            style={{ width: '100%', marginTop: 10 }}
+          />
+        )}
 
         <Text style={[styles.sectionLabel, { color: colors.subtext }]}>
           Your rating <Text style={{ fontWeight: '400' }}>(optional)</Text>
@@ -243,6 +270,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 14,
     textAlign: 'center',
+  },
+  dateRow: {
+    marginTop: 16,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+  },
+  dateRowText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  dateEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dateEditBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#D4A017',
   },
   sectionLabel: {
     marginTop: 28,
