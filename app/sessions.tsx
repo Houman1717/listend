@@ -22,7 +22,6 @@ import { reportContent } from '@/lib/reports';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
-import { EditListenDateModal } from '@/components/EditListenDateModal';
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTH_NAMES = [
@@ -246,10 +245,6 @@ export default function SessionsScreen() {
 
   // Review modal state
   const [selectedAlbum,   setSelectedAlbum]   = useState<LoggedAlbum | null>(null);
-  // Edit-dates mode — an "Edit" header toggle (own calendar only) that makes
-  // tapping an album open the date picker directly instead of the review modal.
-  const [dateEditMode,    setDateEditMode]    = useState(false);
-  const [editingDateAlbum, setEditingDateAlbum] = useState<LoggedAlbum | null>(null);
   const [profileUsername, setProfileUsername] = useState('');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
@@ -268,10 +263,6 @@ export default function SessionsScreen() {
   }, [viewingOther, user?.id]);
 
   function handleAlbumPress(album: LoggedAlbum) {
-    if (dateEditMode && !viewingOther) {
-      setEditingDateAlbum(album);
-      return;
-    }
     setSelectedAlbum(album);
   }
 
@@ -350,13 +341,6 @@ export default function SessionsScreen() {
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,
-        headerRight: viewingOther ? undefined : () => (
-          <Pressable onPress={() => setDateEditMode(v => !v)} hitSlop={12} style={{ paddingHorizontal: 4 }}>
-            <Text style={{ color: '#D4A017', fontSize: 15, fontWeight: '600' }}>
-              {dateEditMode ? 'Done' : 'Edit Dates'}
-            </Text>
-          </Pressable>
-        ),
       }} />
     <ScrollView
       style={[s.container, { backgroundColor: colors.background }]}
@@ -373,14 +357,6 @@ export default function SessionsScreen() {
           <FontAwesome name="chevron-right" size={15} color={colors.text} />
         </Pressable>
       </View>
-
-      {dateEditMode && (
-        <View style={{ marginHorizontal: 20, marginBottom: 12 }}>
-          <Text style={{ fontSize: 12, color: colors.subtext }}>
-            Tap an album below to change the date it was logged.
-          </Text>
-        </View>
-      )}
 
       {/* ── Day-of-week header ────────────────────────────────────────────────── */}
       <View style={s.weekRow}>
@@ -553,21 +529,6 @@ export default function SessionsScreen() {
             reportedUser: viewingOther,
             label: 'review',
           }) : undefined}
-        />
-      )}
-
-      {editingDateAlbum && (
-        <EditListenDateModal
-          album={editingDateAlbum}
-          isDark={isDark}
-          colors={colors}
-          onClose={() => {
-            setEditingDateAlbum(null);
-            // Re-listen date edits land in the re_listens table, which this screen
-            // otherwise only refetches on focus — pull it immediately so the
-            // calendar dot/position reflects the new date without navigating away.
-            refetchOwnReListens();
-          }}
         />
       )}
     </>
