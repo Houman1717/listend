@@ -7,12 +7,13 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -127,12 +128,21 @@ export default function LogAlbumScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
-  const { pendingAlbum, logAlbum } = useAlbums();
+  const { pendingAlbum, logAlbum, reListenMode, setReListenMode } = useAlbums();
   const { markLogged } = useFlip();
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
   const [logDate, setLogDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Clears reListenMode on every dismissal path (Cancel, swipe-down, hardware
+  // back) — it was previously only reset after a successful submit, so
+  // backing out of a re-listen attempt left it stuck true and silently
+  // mis-routed the next log (even for an unrelated, brand-new album).
+  useEffect(() => {
+    return () => { if (reListenMode) setReListenMode(false); };
+  }, [reListenMode]);
 
   if (!pendingAlbum) return null;
 
@@ -142,7 +152,13 @@ export default function LogAlbumScreen() {
       has_review: review.trim().length > 0,
     });
     const flipId = pendingAlbum?.flipId;
-    await logAlbum(rating, review, logDate);
+    setSaving(true);
+    const ok = await logAlbum(rating, review, logDate);
+    setSaving(false);
+    if (!ok) {
+      Alert.alert('Couldn\'t save', 'Check your connection and try again — your changes are still here.');
+      return;
+    }
     // Resolve the flip directly by the flip's own id rather than waiting for
     // the logged album's (possibly remapped) canonical id to match back up —
     // otherwise a canonical-id remap leaves Flip a Record stuck on this album.
@@ -228,7 +244,8 @@ export default function LogAlbumScreen() {
         )}
 
         <Pressable
-          style={[styles.logButton, { backgroundColor: '#D4A017' }]}
+          style={[styles.logButton, { backgroundColor: '#D4A017', opacity: saving ? 0.6 : 1 }]}
+          disabled={saving}
           onPress={handleLog}>
           <Text style={[styles.logButtonText, { color: '#fff' }]}>
             Log Album

@@ -93,7 +93,7 @@ type AlbumsContextType = {
   loggedAlbums: LoggedAlbum[];
   pendingAlbum: PendingAlbum | null;
   setPendingAlbum: (album: PendingAlbum | null) => void;
-  logAlbum: (rating: number, review: string, listenedAt?: Date) => void;
+  logAlbum: (rating: number, review: string, listenedAt?: Date) => Promise<boolean>;
   reListenMode: boolean;
   setReListenMode: (v: boolean) => void;
   updateReview: (id: string, rating: number, review: string) => Promise<boolean>;
@@ -464,27 +464,44 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async function logAlbum(rating: number, review: string, listenedAt?: Date) {
-    if (!pendingAlbum) return;
+  async function logAlbum(rating: number, review: string, listenedAt?: Date): Promise<boolean> {
+    if (!pendingAlbum) return false;
     const pending = pendingAlbum;
 
     // Resolve to one canonical album (same id/title/artist/year regardless of
     // which list/screen this was logged from) before writing anything, so
     // ratings and reviews for "the same album" always land on one row
     // instead of being scattered across different catalog IDs.
-    const resolved = await resolveCanonicalAlbum({
-      id:         pending.spotifyId,
-      title:      pending.title,
-      artist:     pending.artist,
-      year:       pending.year,
-      artworkUrl: pending.artworkUrl,
-    });
+    //
+    // Re-listens skip this: pending.spotifyId is already the id the existing
+    // user_albums row was logged/pinned under (it came straight off the
+    // matched loggedAlbum in album-detail's handleReListenPressed). Re-running
+    // resolution here can legitimately return a *different* id if the
+    // server's canonical mapping for that title+artist has since changed
+    // (an override added, or the cache backfilled after an earlier fallback) —
+    // which would silently write the re_listens row and the user_albums
+    // update against a spotify_id that no longer matches the original row.
+    // My Listend / Re-listend / My Reviews all join back to loggedAlbums by
+    // id and would then never see the re-listen, while Recent Activity (which
+    // lists re_listens rows directly, no join) would still show it — exactly
+    // the split symptom this guards against.
+    const resolved = reListenMode
+      ? { id: pending.spotifyId, title: pending.title, artist: pending.artist, year: pending.year, artworkUrl: pending.artworkUrl ?? '' }
+      : await resolveCanonicalAlbum({
+          id:         pending.spotifyId,
+          title:      pending.title,
+          artist:     pending.artist,
+          year:       pending.year,
+          artworkUrl: pending.artworkUrl,
+        });
 
     if (reListenMode) {
       // Re-listen: insert new re_listens row, update user_albums rating+date+count
       const dateLogged = (listenedAt ?? new Date()).toISOString();
       const existingAlbum = loggedAlbums.find(a => a.id === resolved.id);
       const newCount = (existingAlbum?.reListenCount ?? 0) + 1;
+      const prevAlbums = loggedAlbums;
+      const prevWantToListen = wantToListen;
 
       // Update local state — preserve original dateLogged and rating; set lastRating/lastReview/lastListenedAt
       setLoggedAlbums(prev => prev.map(a =>
@@ -493,11 +510,13 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           : a
       ));
       setWantToListen(prev => prev.filter(a => a.id !== resolved.id));
-      setPendingAlbum(null);
-      setReListenMode(false);
 
       if (user) {
-        supabase.from('re_listens').insert({
+        // Awaited (not fire-and-forget) so a failed write — RLS rejection,
+        // network blip — rolls the optimistic update back and is reported to
+        // the caller instead of silently looking like it worked and then
+        // reverting on the next reload with zero indication anything went wrong.
+        const { error: insertError } = await supabase.from('re_listens').insert({
           user_id:     user.id,
           spotify_id:  resolved.id,
           title:       resolved.title,
@@ -507,15 +526,31 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           rating,
           review:      review.trim() || null,
           listened_at: dateLogged,
-        }).then(({ error }) => { if (error) console.error('[AlbumsContext] reListenAlbum error:', error.message); });
+        });
 
-        supabase.from('user_albums').update({
+        if (insertError) {
+          console.error('[AlbumsContext] reListenAlbum error:', insertError.message);
+          setLoggedAlbums(prevAlbums);
+          setWantToListen(prevWantToListen);
+          return false;
+        }
+
+        const { error: updateError } = await supabase.from('user_albums').update({
           re_listen_count: newCount,
           is_relistened:   true,
-        }).eq('user_id', user.id).eq('spotify_id', resolved.id)
-          .then(({ error }) => { if (error) console.error('[AlbumsContext] reListenAlbum update error:', error.message); });
+        }).eq('user_id', user.id).eq('spotify_id', resolved.id);
+
+        if (updateError) {
+          console.error('[AlbumsContext] reListenAlbum update error:', updateError.message);
+          setLoggedAlbums(prevAlbums);
+          setWantToListen(prevWantToListen);
+          return false;
+        }
       }
-      return;
+
+      setPendingAlbum(null);
+      setReListenMode(false);
+      return true;
     }
 
     const dateLogged = (listenedAt ?? new Date()).toISOString();
@@ -580,6 +615,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => {});
     }
+    return true;
   }
 
   // Returns whether the write actually persisted — a silently-failed
