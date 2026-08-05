@@ -1673,8 +1673,8 @@ export default function AlbumDetailScreen() {
           </View>
         )}
 
-        {/* ── 3b. Re-listen button ──────────────────────────────────────────── */}
-        {isLogged && (
+        {/* ── 3b. Re-listen button — hidden while editing to cut screen clutter ── */}
+        {isLogged && !editMode && (
           <Pressable
             style={({ pressed }) => [s.reListenBtn, { backgroundColor: '#D4A017', borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
             onPress={handleReListenPressed}>
@@ -1683,13 +1683,15 @@ export default function AlbumDetailScreen() {
           </Pressable>
         )}
 
-        {/* ── 3c. Stream button ─────────────────────────────────────────────── */}
-        <Pressable
-          style={({ pressed }) => [s.streamBtn, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
-          onPress={handleStream}>
-          <FontAwesome name="music" size={15} color="#D4A017" />
-          <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Listen on</Text>
-        </Pressable>
+        {/* ── 3c. Stream button — hidden while editing to cut screen clutter ──── */}
+        {!editMode && (
+          <Pressable
+            style={({ pressed }) => [s.streamBtn, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
+            onPress={handleStream}>
+            <FontAwesome name="music" size={15} color="#D4A017" />
+            <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Listen on</Text>
+          </Pressable>
+        )}
 
         {/* ── 4. Community Rating ───────────────────────────────────────────── */}
         <CommunityRatingSection
