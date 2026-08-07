@@ -3,6 +3,8 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'ROLE MODEL',             title: 'Chuck Timely & The Hourglass' },
+  { artist: 'Ravyn Lenae',            title: 'Blue Island' },
   { artist: 'Ariana Grande',          title: 'Petal' },
   { artist: 'Shaboozey',              title: 'The Outlaw Cherie Lee & Other Western Tales' },
   { artist: 'The Strokes',            title: 'Reality Awaits' },
