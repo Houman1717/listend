@@ -3,6 +3,10 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Phoebe Bridgers',        title: 'Lost Weekend' },
+  { artist: 'KATSEYE',                title: 'WILD' },
+  { artist: 'Trippie Redd',           title: 'NDA' },
+  { artist: 'Jungle',                 title: 'Sunshine' },
   { artist: 'ROLE MODEL',             title: 'Chuck Timely & The Hourglass' },
   { artist: 'Ravyn Lenae',            title: 'Blue Island' },
   { artist: 'Ariana Grande',          title: 'Petal' },
