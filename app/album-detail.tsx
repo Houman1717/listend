@@ -31,6 +31,7 @@ import { ReviewComment, CommentsSection, avatarColor } from '@/components/Review
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
+import { EditListenDateModal } from '@/components/EditListenDateModal';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -846,6 +847,7 @@ export default function AlbumDetailScreen() {
   const modalScrollRef = useRef<ScrollView>(null);
   const reviewYPositions = useRef<Map<string, number>>(new Map());
   const editBlockYRef = useRef(0);
+  const [showEditDateModal, setShowEditDateModal] = useState(false);
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
   const [expandedAlbumReview, setExpandedAlbumReview] = useState<CommunityReview | null>(null);
   const [singleReviewCommentsOpen, setSingleReviewCommentsOpen] = useState(false);
@@ -1538,6 +1540,17 @@ export default function AlbumDetailScreen() {
         {isLogged ? (
           editMode ? (
             <View style={s.editBlock} onLayout={e => { editBlockYRef.current = e.nativeEvent.layout.y; }}>
+              <Pressable
+                style={({ pressed }) => [s.editDateRow, { borderColor: isDark ? '#3a2818' : '#e0e0e0', opacity: pressed ? 0.7 : 1 }]}
+                onPress={() => setShowEditDateModal(true)}>
+                <Text style={[s.editDateLabel, { color: colors.subtext }]}>
+                  Listend {formatLoggedDate(loggedAlbum!.lastListenedAt ?? loggedAlbum!.dateLogged)}
+                </Text>
+                <View style={s.editDateBtn}>
+                  <FontAwesome name="pencil" size={11} color="#D4A017" />
+                  <Text style={s.editDateBtnText}>Edit Date</Text>
+                </View>
+              </Pressable>
               <Text style={[s.sectionLabel, { color: colors.subtext }]}>Rating</Text>
               <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
               <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 20 }]}>
@@ -2124,6 +2137,15 @@ export default function AlbumDetailScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {showEditDateModal && loggedAlbum && (
+        <EditListenDateModal
+          album={loggedAlbum}
+          isDark={isDark}
+          colors={colors}
+          onClose={() => setShowEditDateModal(false)}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -2184,6 +2206,14 @@ const s = StyleSheet.create({
   editLogRight: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
 
   editBlock: { width: '100%', marginTop: 16 },
+  editDateRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, marginBottom: 20,
+  },
+  editDateLabel: { fontSize: 13, fontWeight: '500' },
+  editDateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  editDateBtnText: { fontSize: 13, fontWeight: '700', color: '#D4A017' },
   editReviewBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 10, paddingVertical: 5,
