@@ -5,7 +5,6 @@
 const NEW_RELEASE_ALBUMS = [
   { artist: 'Denzel Curry & Kenny Beats', title: 'II' },
   { artist: 'Jorja Smith',            title: 'What Are the Odds' },
-  { artist: 'Weezer',                 title: 'Weezer (The Gold Album)' },
   { artist: 'Phoebe Bridgers',        title: 'Lost Weekend' },
   { artist: 'Trippie Redd',           title: 'NDA' },
   { artist: 'ROLE MODEL',             title: 'Chuck Timely & The Hourglass' },
