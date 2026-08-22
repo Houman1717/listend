@@ -3,10 +3,11 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Denzel Curry & Kenny Beats', title: 'II' },
+  { artist: 'Jorja Smith',            title: 'What Are the Odds' },
+  { artist: 'Weezer',                 title: 'Weezer (The Gold Album)' },
   { artist: 'Phoebe Bridgers',        title: 'Lost Weekend' },
-  { artist: 'Jungle',                 title: 'Sunshine' },
   { artist: 'Trippie Redd',           title: 'NDA' },
-  { artist: 'KATSEYE',                title: 'WILD' },
   { artist: 'ROLE MODEL',             title: 'Chuck Timely & The Hourglass' },
   { artist: 'Ravyn Lenae',            title: 'Blue Island' },
   { artist: 'Ariana Grande',          title: 'Petal' },
@@ -20,6 +21,7 @@ const NEW_RELEASE_ALBUMS = [
   { artist: 'Rick Ross',              title: 'Set In Stone' },
   { artist: 'Future',                 title: 'The Real Me' },
   { artist: 'The Rolling Stones',     title: 'Foreign Tongues' },
+  { artist: 'Kelela',                 title: 'New Avatar' },
   { artist: 'Madonna',                title: 'Confessions II' },
   { artist: 'Ken Carson',             title: 'Xperiment' },
   { artist: 'Slayyyter',              title: 'WORST GIRL IN AMERICA' },
