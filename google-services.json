@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "920966627125",
+    "project_id": "listend-94c45",
+    "storage_bucket": "listend-94c45.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:920966627125:android:0407ee8bc35ef5e829567c",
+        "android_client_info": {
+          "package_name": "com.houman.listend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArE4IVrNjm92WUtuaMZyMy_d_cyBds52I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

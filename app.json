@@ -2,7 +2,7 @@
   "expo": {
     "name": "Listend",
     "slug": "Listend",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "listend",
@@ -15,9 +15,9 @@
       "policy": "appVersion"
     },
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#241C19"
     },
     "ios": {
       "supportsTablet": true,
@@ -33,7 +33,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0F0A07"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -55,7 +55,15 @@
         }
       ],
       "expo-localization",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-logo.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#241C19"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
