@@ -1,6 +1,27 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+
+// Force-clears the local Supabase auth session no matter what state it's in.
+// supabase.auth.signOut() (default scope 'global') makes a network call to
+// revoke the token — if the refresh token is already invalid ("Already Used" /
+// revoked), that call fails and older behaviour left the dead session sitting
+// in storage, so the user was stuck: every read 401s and Sign Out does nothing.
+// This always ends with no session on disk and no session in React state.
+async function hardClearSession(setSession: (s: Session | null) => void) {
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch (e) {
+    console.warn('[Auth] signOut(local) failed, clearing storage directly:', (e as Error)?.message);
+  }
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const authKeys = keys.filter(k => k.startsWith('sb-') || k.includes('supabase.auth') || k.includes('-auth-token'));
+    if (authKeys.length) await AsyncStorage.multiRemove(authKeys);
+  } catch {}
+  setSession(null);
+}
 
 // Returns true when this call filled in a genuinely-missing username, so the
 // caller can route the account to onboarding.
@@ -98,20 +119,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        // Stale or revoked refresh token — clear it and force re-login
-        supabase.auth.signOut();
-        setSession(null);
-      } else {
-        setSession(session);
+    let done = false;
+    (async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          await hardClearSession(setSession);
+        } else if (session) {
+          // getSession() reads from storage and does NOT prove the session is
+          // still valid server-side. Validate with getUser() (a real API call);
+          // if the token is *rejected*, wipe it so the user lands on login
+          // instead of a logged-in-looking shell where every read 401s. A plain
+          // network failure must NOT log the user out — keep the session and let
+          // autoRefreshToken sort it out when connectivity returns.
+          const { error: userErr } = await supabase.auth.getUser();
+          const rejected =
+            userErr != null &&
+            ((userErr as any).status === 401 || (userErr as any).status === 403 ||
+             /jwt|token|session|expired|invalid/i.test(userErr.message ?? ''));
+          if (rejected) {
+            console.warn('[Auth] stored session rejected by server — clearing:', userErr!.message);
+            await hardClearSession(setSession);
+          } else if (!done) {
+            setSession(session);
+          }
+        } else if (!done) {
+          setSession(null);
+        }
+      } catch (e) {
+        // Likely a network error — don't log the user out over it. The
+        // onAuthStateChange INITIAL_SESSION event will still set a valid stored
+        // session; a truly dead token surfaces later as a failed refresh.
+        console.warn('[Auth] session bootstrap error (keeping session):', (e as Error)?.message);
+      } finally {
+        if (!done) setLoading(false);
       }
-      setLoading(false);
-    });
+    })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setSession(null);
+      // Refresh failed (revoked / "Already Used" refresh token) — get the user
+      // fully out rather than looping on a dead token.
+      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+        hardClearSession(setSession);
       } else {
         setSession(session);
         // OAuth (Google/Apple) sign-ups don't create a profiles row the way the
@@ -128,11 +177,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => { done = true; subscription.unsubscribe(); };
   }, []);
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await hardClearSession(setSession);
   }
 
   return (
