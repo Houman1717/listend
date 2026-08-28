@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { countOrNull, displayCount } from '@/lib/supabaseQuery';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
@@ -461,8 +462,9 @@ export default function UserProfileScreen() {
   const [isFollowing,    setIsFollowing]    = useState(false);
   const [isMutual,       setIsMutual]       = useState(false);
   const [followLoading,  setFollowLoading]  = useState(false);
-  const [followersCount, setFollowersCount] = useState(0);
-  const [followingCount, setFollowingCount] = useState(0);
+  // null = unknown (never loaded / load failed) → rendered as "—", never as 0.
+  const [followersCount, setFollowersCount] = useState<number | null>(null);
+  const [followingCount, setFollowingCount] = useState<number | null>(null);
 
   const [isBlockedByMe,   setIsBlockedByMe]   = useState(false);
   const [isBlockedByThem, setIsBlockedByThem] = useState(false);
@@ -473,7 +475,9 @@ export default function UserProfileScreen() {
   const [avgRating,     setAvgRating]     = useState('—');
   const [ratingDist,    setRatingDist]    = useState<RatingDist[]>([]);
   const [reviewCount,   setReviewCount]   = useState(0);
-  const [wantCount,     setWantCount]     = useState(0);
+  const [wantCount,     setWantCount]     = useState<number | null>(null);
+  const [loadError,     setLoadError]     = useState(false);
+  const [reloadKey,     setReloadKey]     = useState(0);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [userAlbums, setUserAlbums] = useState<any[]>([]);
   const [selectedTopAlbum, setSelectedTopAlbum] = useState<LoggedAlbum | null>(null);
@@ -486,6 +490,7 @@ export default function UserProfileScreen() {
 
     async function load() {
       setLoading(true);
+      setLoadError(false);
       try {
         const { data: prof, error: profErr } = await supabase
           .from('profiles')
@@ -493,7 +498,13 @@ export default function UserProfileScreen() {
           .eq('id', viewedUserId)
           .maybeSingle();
 
-        if (profErr) console.error('[UserProfile] profile fetch error:', profErr);
+        // A failed fetch is NOT "user not found" — surface it as a retryable
+        // error instead of leaving the screen on a dead spinner.
+        if (profErr) {
+          console.error('[UserProfile] profile fetch error:', profErr);
+          setLoadError(true);
+          return;
+        }
         if (prof) {
           const { data: favData } = await supabase
             .from('profiles')
@@ -514,13 +525,17 @@ export default function UserProfileScreen() {
           navigation.setOptions({ title: prof.display_name || prof.username || 'Profile' });
         }
 
-        const [{ count: followers }, { count: following }] =
+        const [followersRes, followingRes] =
           await Promise.all([
             supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', viewedUserId),
             supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', viewedUserId),
           ]);
-        setFollowersCount(followers ?? 0);
-        setFollowingCount(following ?? 0);
+        // countOrNull, not `?? 0` — a failed count must stay unknown ("—")
+        // rather than claiming this user has no followers.
+        const followers = countOrNull(followersRes);
+        const following = countOrNull(followingRes);
+        if (followers != null) setFollowersCount(followers);
+        if (following != null) setFollowingCount(following);
 
         if (currentUserId) {
           const { data: outgoing, error: outErr } = await supabase
@@ -584,21 +599,26 @@ export default function UserProfileScreen() {
           }
         }
 
-        const { count: want } = await supabase
+        const want = countOrNull(await supabase
           .from('want_to_listen')
           .select('*', { count: 'exact', head: true })
-          .eq('user_id', viewedUserId);
-        setWantCount(want ?? 0);
+          .eq('user_id', viewedUserId));
+        if (want != null) setWantCount(want);
 
       } catch (e) {
         console.error('[UserProfile] unexpected load error:', e);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
     }
 
     load();
-  }, [userId, user, navigation]);
+    // `navigation` and `user` are object identities that change on unrelated
+    // re-renders — depending on them re-ran this whole load in a loop, which
+    // kept the screen pinned on its loading spinner. Depend on the ids only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, user?.id, reloadKey]);
 
   // ── Sync header background to the viewed user's pro theme ────────────────────
   useEffect(() => {
@@ -634,7 +654,9 @@ export default function UserProfileScreen() {
       if (!error) {
         setIsFollowing(false);
         setIsMutual(false);
-        setFollowersCount(n => Math.max(0, n - 1));
+        // n === null means the count never loaded — leave it unknown rather
+        // than inventing a number from this one action.
+        setFollowersCount(n => (n == null ? null : Math.max(0, n - 1)));
       } else {
         console.error('[UserProfile] unfollow error:', error);
       }
@@ -644,7 +666,7 @@ export default function UserProfileScreen() {
         .insert({ follower_id: currentUserId, following_id: viewedUserId });
       if (!error) {
         setIsFollowing(true);
-        setFollowersCount(n => n + 1);
+        setFollowersCount(n => (n == null ? null : n + 1));
         supabase.from('notifications').insert({
           user_id:  viewedUserId,
           type:     'follow',
@@ -786,6 +808,29 @@ export default function UserProfileScreen() {
     );
   }
 
+  // Distinguish "we couldn't load it" from "no such user". Previously both fell
+  // through to a bare spinner / "User not found", so during a backend outage
+  // every profile looked permanently broken with no way to retry.
+  if (loadError) {
+    return (
+      <View style={[s.center, { backgroundColor: colors.background, paddingHorizontal: 32 }]}>
+        <FontAwesome name="exclamation-circle" size={32} color={colors.subtext} />
+        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600', marginTop: 16, textAlign: 'center' }}>
+          Couldn't load this profile
+        </Text>
+        <Text style={{ color: colors.subtext, fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+          Check your connection and try again.
+        </Text>
+        <Pressable
+          onPress={() => setReloadKey(k => k + 1)}
+          style={{ marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10, backgroundColor: ACCENT }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (!profile) {
     return (
       <View style={[s.center, { backgroundColor: colors.background }]}>
@@ -870,14 +915,14 @@ export default function UserProfileScreen() {
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'following' } })}>
-            <Text style={[s.socialCount, { color: colors.text }]}>{followingCount}</Text>
+            <Text style={[s.socialCount, { color: colors.text }]}>{displayCount(followingCount)}</Text>
             <Text style={[s.socialLabel, { color: colors.subtext }]}> Following</Text>
           </Pressable>
           <Text style={[s.socialDot, { color: colors.subtext }]}> · </Text>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'followers' } })}>
-            <Text style={[s.socialCount, { color: colors.text }]}>{followersCount}</Text>
+            <Text style={[s.socialCount, { color: colors.text }]}>{displayCount(followersCount)}</Text>
             <Text style={[s.socialLabel, { color: colors.subtext }]}> Followers</Text>
           </Pressable>
         </View>
@@ -1086,7 +1131,7 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="calendar"   label="Sessions"        sub="Listening diary"                onPress={() => router.push({ pathname: '/sessions',         params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="bookmark-o" label="Want to Listen"  sub={`${wantCount} saved`}           onPress={() => router.push({ pathname: '/want-to-listen',   params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
+            <NavRow icon="bookmark-o" label="Want to Listen"  sub={`${displayCount(wantCount)} saved`}           onPress={() => router.push({ pathname: '/want-to-listen',   params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="quote-left" label="Reviews"         sub={`${reviewCount} reviews`}       onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />

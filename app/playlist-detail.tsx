@@ -17,6 +17,7 @@ import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { countOrNull } from '@/lib/supabaseQuery';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -93,7 +94,9 @@ export default function PlaylistDetailScreen() {
         .eq('target_type', 'playlist').eq('target_id', id).eq('user_id', user.id).maybeSingle()
         : Promise.resolve({ data: null }),
     ]).then(([countRes, myRes]) => {
-      setLikeCount(countRes.count ?? 0);
+      // Keep the last known count if the query failed, rather than showing 0.
+      const c = countOrNull(countRes);
+      if (c != null) setLikeCount(c);
       setLiked(!!myRes.data);
     });
   }, [id, user?.id]);

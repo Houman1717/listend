@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import * as Notifications from 'expo-notifications';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
+import { countOrNull } from '@/lib/supabaseQuery';
 import { registerPushToken } from '@/lib/registerPushToken';
 
 // Show alerts + play sound when a push arrives while the app is foregrounded
@@ -37,7 +38,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   async function fetchUnreadCount(uid: string) {
-    const [{ count: total }, { count: dms }] = await Promise.all([
+    const [totalRes, dmsRes] = await Promise.all([
       supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true })
@@ -50,8 +51,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         .eq('type', 'message')
         .eq('read', false),
     ]);
-    setUnreadCount(total ?? 0);
-    setUnreadDMCount(dms ?? 0);
+    // A failed count must not clear the badge — keep the last known value
+    // rather than telling the user nothing is waiting for them.
+    const total = countOrNull(totalRes);
+    const dms   = countOrNull(dmsRes);
+    if (total != null) setUnreadCount(total);
+    if (dms   != null) setUnreadDMCount(dms);
   }
 
   useEffect(() => {

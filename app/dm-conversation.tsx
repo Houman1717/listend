@@ -22,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
+import { countOrNull } from '@/lib/supabaseQuery';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -191,14 +192,17 @@ export default function DMConversationScreen() {
 
   async function notifyRecipient() {
     if (!user || !otherUserId) return;
-    const { count } = await supabase
+    const count = countOrNull(await supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', otherUserId)
       .eq('type', 'message')
       .eq('actor_id', user.id)
-      .eq('read', false);
-    if ((count ?? 0) === 0) {
+      .eq('read', false));
+    // null = the check itself failed. `?? 0` used to make that look like "no
+    // existing notification", so during an outage every message sent inserted
+    // another duplicate. Skip instead — a missed notification beats spam.
+    if (count === 0) {
       supabase.from('notifications').insert({
         user_id:  otherUserId,
         type:     'message',
