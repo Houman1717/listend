@@ -21,6 +21,18 @@ function weekAgo(): string {
   return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 }
 
+// fetch() with a hard timeout — a slow/cold backend must never wedge a home
+// section (or, via pull-to-refresh, leave the RefreshControl spinning forever).
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Strips accents/diacritics (e.g. "Björk" → "Bjork") so title/artist grouping
 // keys aren't split just because different catalog sources spell a name
 // differently.
@@ -171,7 +183,7 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
   if (missing.length > 0) {
     const resolved = await Promise.allSettled(
       missing.map(a =>
-        fetch(`${API_URL}/search?q=${encodeURIComponent(a.name)}&type=artist`)
+        fetchWithTimeout(`${API_URL}/search?q=${encodeURIComponent(a.name)}&type=artist`, 4000)
           .then(r => r.ok ? r.json() : [])
           .then((results: { id: string; artworkUrl: string }[]) => ({ name: a.name, id: results[0]?.id ?? '', artworkUrl: results[0]?.artworkUrl ?? '' }))
           .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
@@ -312,4 +324,53 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
 
   reviews.sort((a, b) => b.weeklyScore - a.weeklyScore);
   return reviews.slice(0, 20).map(({ weeklyScore, ...r }) => r);
+}
+
+// Each section is the fetched array, or `undefined` if that section failed to
+// load (so the caller can keep whatever it already had rather than blank the
+// row). An empty array means the section genuinely has nothing this week.
+export type HomeThisWeek = {
+  albums?: CatalogAlbum[];
+  songs?: CatalogTrack[];
+  artists?: CatalogArtist[];
+  popularReviews?: PopularReview[];
+};
+
+// Single call for the four "This Week" home sections. The server aggregates and
+// caches them (rolling 7-day window), so the app no longer pulls ~2,000 raw rows
+// and de-dupes on-device every time Home gains focus. Falls back to the
+// per-section on-device queries if the endpoint is unavailable (older server,
+// network error) so Home still populates.
+export async function fetchHomeThisWeek(currentUserId?: string): Promise<HomeThisWeek> {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+  const qs = currentUserId ? `?userId=${encodeURIComponent(currentUserId)}` : '';
+  try {
+    const res = await fetchWithTimeout(`${API_URL}/api/home/this-week${qs}`, 8000);
+    if (!res.ok) throw new Error(`home/this-week → ${res.status}`);
+    const data = await res.json();
+    // Endpoint response is authoritative — trust all four arrays verbatim,
+    // including empties.
+    return {
+      albums:         Array.isArray(data?.albums)         ? data.albums         : [],
+      songs:          Array.isArray(data?.songs)          ? data.songs          : [],
+      artists:        Array.isArray(data?.artists)        ? data.artists        : [],
+      popularReviews: Array.isArray(data?.popularReviews) ? data.popularReviews : [],
+    };
+  } catch (err) {
+    console.warn('[Home] this-week endpoint failed, using on-device fallback:', (err as Error).message);
+    // allSettled, not all — one failing section must not wipe the others. A
+    // rejected section stays `undefined` so the caller keeps its cached value.
+    const [albs, sngs, arts, revs] = await Promise.allSettled([
+      fetchTopAlbumsThisWeek(),
+      fetchTopSongsThisWeek(),
+      fetchTopArtistsThisWeek(),
+      fetchPopularReviewsThisWeek(currentUserId),
+    ]);
+    return {
+      albums:         albs.status === 'fulfilled' ? albs.value : undefined,
+      songs:          sngs.status === 'fulfilled' ? sngs.value : undefined,
+      artists:        arts.status === 'fulfilled' ? arts.value : undefined,
+      popularReviews: revs.status === 'fulfilled' ? revs.value : undefined,
+    };
+  }
 }

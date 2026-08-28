@@ -31,10 +31,7 @@ import { reportContent } from '@/lib/reports';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import {
   PopularReview,
-  fetchTopAlbumsThisWeek,
-  fetchTopSongsThisWeek,
-  fetchTopArtistsThisWeek,
-  fetchPopularReviewsThisWeek,
+  fetchHomeThisWeek,
 } from '@/lib/homeData';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
@@ -104,7 +101,16 @@ const cache: {
   songs?:          CatalogTrack[];
   artists?:        CatalogArtist[];
   popularReviews?: PopularReview[];
+  userId?:         string;
+  fetchedAt?:      number;
 } = {};
+
+// How long the "This Week" home data stays fresh before a tab-focus refetch.
+// The rankings are a rolling 7-day window, so a few minutes of staleness is
+// invisible — and this stops every tab switch from re-running four heavy
+// aggregation queries (+ an Apple Music artwork burst). Pull-to-refresh always
+// bypasses it.
+const HOME_CACHE_TTL = 3 * 60 * 1000;
 
 // avatarColor is re-exported so popular-reviews.tsx can import it from here
 export { avatarColor };
@@ -1306,22 +1312,22 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      Promise.allSettled([
-        fetchTopAlbumsThisWeek(),
-        fetchTopSongsThisWeek(),
-        fetchTopArtistsThisWeek(),
-        fetchPopularReviewsThisWeek(user?.id),
-      ])
-        .then(([albs, sngs, arts, reviews]) => {
-          if (albs.status === 'fulfilled')    { cache.albums         = albs.value;    setAlbums(albs.value);         const urls = albs.value.map(a => a.artworkUrl).filter(Boolean) as string[]; if (urls.length) ExpoImage.prefetch(urls); }
-          if (sngs.status === 'fulfilled')    { cache.songs          = sngs.value;    setSongs(sngs.value); }
-          if (arts.status === 'fulfilled')    { cache.artists        = arts.value;    setArtists(arts.value); }
-          if (reviews.status === 'fulfilled') { cache.popularReviews = reviews.value; setPopularReviews(reviews.value); }
-          if (albs.status    === 'rejected')    console.error('[Home] albums failed:',  albs.reason?.message);
-          if (sngs.status    === 'rejected')    console.error('[Home] songs failed:',   sngs.reason?.message);
-          if (arts.status    === 'rejected')    console.error('[Home] artists failed:',  arts.reason?.message);
-          if (reviews.status === 'rejected')    console.error('[Home] reviews failed:', reviews.reason?.message);
+      const fresh =
+        cache.fetchedAt != null &&
+        cache.userId === user?.id &&
+        Date.now() - cache.fetchedAt < HOME_CACHE_TTL;
+      if (fresh) { setLoading(false); return; }
+
+      fetchHomeThisWeek(user?.id)
+        .then(({ albums: a, songs: s, artists: ar, popularReviews: pr }) => {
+          // undefined = that section failed to load; keep the cached value.
+          if (a)  { cache.albums         = a;  setAlbums(a);  const urls = a.map(x => x.artworkUrl).filter(Boolean) as string[]; if (urls.length) ExpoImage.prefetch(urls); }
+          if (s)  { cache.songs          = s;  setSongs(s); }
+          if (ar) { cache.artists        = ar; setArtists(ar); }
+          if (pr) { cache.popularReviews = pr; setPopularReviews(pr); }
+          if (a || s || ar || pr) { cache.userId = user?.id; cache.fetchedAt = Date.now(); }
         })
+        .catch((err) => console.error('[Home] this-week load failed:', err?.message))
         .finally(() => setLoading(false));
     }, [user?.id])
   );
@@ -1330,18 +1336,19 @@ export default function HomeScreen() {
     if (!user?.id) return;
     setRefreshing(true);
     Promise.allSettled([
-      fetchTopAlbumsThisWeek(),
-      fetchTopSongsThisWeek(),
-      fetchTopArtistsThisWeek(),
-      fetchPopularReviewsThisWeek(user.id),
+      fetchHomeThisWeek(user.id),
       fetchFriendsActivity(user.id),
       fetchFriendsRecentListened(user.id),
     ])
-      .then(([albs, sngs, arts, reviews, activity, listened]) => {
-        if (albs.status === 'fulfilled')     { cache.albums         = albs.value;    setAlbums(albs.value); }
-        if (sngs.status === 'fulfilled')     { cache.songs          = sngs.value;    setSongs(sngs.value); }
-        if (arts.status === 'fulfilled')     { cache.artists        = arts.value;    setArtists(arts.value); }
-        if (reviews.status === 'fulfilled')  { cache.popularReviews = reviews.value; setPopularReviews(reviews.value); }
+      .then(([home, activity, listened]) => {
+        if (home.status === 'fulfilled') {
+          const { albums: a, songs: s, artists: ar, popularReviews: pr } = home.value;
+          if (a)  { cache.albums         = a;  setAlbums(a); }
+          if (s)  { cache.songs          = s;  setSongs(s); }
+          if (ar) { cache.artists        = ar; setArtists(ar); }
+          if (pr) { cache.popularReviews = pr; setPopularReviews(pr); }
+          if (a || s || ar || pr) { cache.userId = user.id; cache.fetchedAt = Date.now(); }
+        }
         if (activity.status === 'fulfilled') setFriendsActivity(activity.value);
         if (listened.status === 'fulfilled') setFriendsListened(listened.value);
       })

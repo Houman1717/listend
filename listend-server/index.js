@@ -1311,6 +1311,317 @@ app.get('/api/discover/community-top-songs', async (req, res) => {
   }
 });
 
+// ── GET /api/home/this-week ──────────────────────────────────────────────────
+// The four "This Week" home sections (top albums / songs / artists / popular
+// reviews), computed server-side over a rolling 7-day window and cached, so the
+// app no longer pulls ~2,000 raw rows per client and de-dupes them on-device
+// every time the Home tab gains focus. Mirrors the four fetch*ThisWeek()
+// functions that used to live in the app's lib/homeData.ts.
+//
+// The heavy aggregation is cached (10 min in-memory + Supabase). The only
+// per-request work is subtracting the caller's own like from each popular
+// review's likeCount — the app adds it back client-side from its own optimistic
+// `likedReviews` set, so the cached payload must exclude it.
+
+const HOME_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function computeTopAlbumsThisWeek(since) {
+  const [data, relistenData] = await Promise.all([
+    fetchAllRows((from, to) => supabase
+      .from('user_albums')
+      .select('spotify_id, user_id, title, artist, year, artwork_url')
+      .gte('listened_at', since)
+      .range(from, to)),
+    fetchAllRows((from, to) => supabase
+      .from('re_listens')
+      .select('spotify_id, user_id, title, artist, year, artwork_url')
+      .gte('listened_at', since)
+      .range(from, to)),
+  ]);
+
+  const entries = new Map();
+  const getEntry = (r) => {
+    const key = `${foldDiacritics(r.title)}::${foldDiacritics(r.artist)}`;
+    let e = entries.get(key);
+    if (!e) {
+      e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set() };
+      entries.set(key, e);
+    } else if (!e.album.artworkUrl && r.artwork_url) {
+      e.album.artworkUrl = r.artwork_url;
+    }
+    return e;
+  };
+
+  for (const r of (data ?? [])) {
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
+    getEntry(r).baseUsers.add(r.user_id);
+  }
+  for (const r of (relistenData ?? [])) {
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
+    getEntry(r).relistenUsers.add(r.user_id);
+  }
+
+  return Array.from(entries.values())
+    .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
+    .slice(0, 50)
+    .map(e => e.album);
+}
+
+async function computeTopSongsThisWeek(since) {
+  const data = await fetchAllRows((from, to) => supabase
+    .from('top5_changes')
+    .select('item_id, item_name, item_image_url')
+    .eq('category', 'songs')
+    .gte('changed_at', since)
+    .range(from, to));
+
+  const counts = new Map();
+  for (const r of (data ?? [])) {
+    if (!r.item_id) continue;
+    const e = counts.get(r.item_id);
+    if (e) e.count++;
+    else counts.set(r.item_id, {
+      track: { id: r.item_id, title: r.item_name ?? '', artist: '', artworkUrl: r.item_image_url ?? '' },
+      count: 1,
+    });
+  }
+
+  return Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.track);
+}
+
+async function computeTopArtistsThisWeek(since) {
+  const [likedRows, top5Rows, albumRows] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from('liked_artists').select('artist_id, name, artwork_url').gte('created_at', since).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('top5_changes').select('item_id, item_name, item_image_url').eq('category', 'artists').gte('changed_at', since).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).gte('listened_at', since).range(from, to)),
+  ]);
+
+  const counts = new Map();
+  for (const r of (likedRows ?? [])) {
+    if (!r.artist_id) continue;
+    const e = counts.get(r.artist_id);
+    if (e) e.count++;
+    else counts.set(r.artist_id, { artist: { id: r.artist_id, name: r.name ?? '', genre: '', artworkUrl: r.artwork_url ?? '' }, count: 1 });
+  }
+  for (const r of (top5Rows ?? [])) {
+    if (!r.item_id) continue;
+    const e = counts.get(r.item_id);
+    if (e) e.count++;
+    else counts.set(r.item_id, { artist: { id: r.item_id, name: r.item_name ?? '', genre: '', artworkUrl: r.item_image_url ?? '' }, count: 1 });
+  }
+
+  const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
+  const byName = new Map();
+  for (const entry of sorted) {
+    const key = foldDiacritics(entry.artist.name);
+    if (!key) continue;
+    const existing = byName.get(key);
+    if (existing) {
+      existing.count += entry.count;
+      if (!existing.artist.artworkUrl && entry.artist.artworkUrl)
+        existing.artist = { ...existing.artist, artworkUrl: entry.artist.artworkUrl };
+    } else {
+      byName.set(key, { artist: { ...entry.artist }, count: entry.count });
+    }
+  }
+
+  for (const r of (albumRows ?? [])) {
+    const name = r.artist?.trim();
+    if (!name) continue;
+    const key = foldDiacritics(name);
+    const existing = byName.get(key);
+    if (existing) existing.count++;
+    else byName.set(key, { artist: { id: `name:${key}`, name, genre: '', artworkUrl: '' }, count: 1 });
+  }
+
+  const ranked = Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.artist);
+
+  const missing = ranked.filter(a => !a.artworkUrl);
+  if (missing.length > 0) {
+    const resolved = await Promise.allSettled(
+      missing.map(a =>
+        fetch(`https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(a.name)}&types=artists&limit=1`, {
+          headers: { Authorization: `Bearer ${generateAppleToken()}` },
+          signal: AbortSignal.timeout(5000),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            const hit = data?.results?.artists?.data?.[0];
+            return { name: a.name, id: hit?.id ?? '', artworkUrl: (hit?.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500') };
+          })
+          .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
+      )
+    );
+    const artworkMap = {};
+    for (const r of resolved) {
+      if (r.status === 'fulfilled' && r.value.artworkUrl) {
+        artworkMap[r.value.name.toLowerCase()] = { id: r.value.id, artworkUrl: r.value.artworkUrl };
+      }
+    }
+    for (const artist of ranked) {
+      if (!artist.artworkUrl) {
+        const hit = artworkMap[artist.name.toLowerCase()];
+        if (hit) {
+          artist.artworkUrl = hit.artworkUrl;
+          if (hit.id) artist.id = hit.id;
+        }
+      }
+    }
+  }
+
+  return ranked;
+}
+
+// Popular = likes/comments *received* this week, regardless of when the review
+// was written. Returned likeCount is the review's all-time total MINUS the
+// caller's own like (subtracted per-request in the route, not here).
+async function computePopularReviewsThisWeek(since) {
+  const [likeRows, commentRows] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from('likes').select('target_id, user_id').eq('target_type', 'review').gte('created_at', since).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('review_comments').select('review_id').gte('created_at', since).range(from, to)),
+  ]);
+
+  const weeklyLikeCounts = new Map();
+  for (const l of (likeRows ?? [])) weeklyLikeCounts.set(l.target_id, (weeklyLikeCounts.get(l.target_id) ?? 0) + 1);
+  const commentCounts = new Map();
+  for (const c of (commentRows ?? [])) commentCounts.set(c.review_id, (commentCounts.get(c.review_id) ?? 0) + 1);
+
+  const candidateIds = new Set([...weeklyLikeCounts.keys(), ...commentCounts.keys()]);
+  if (candidateIds.size === 0) return [];
+
+  const totalLikeRows = await fetchAllRows((from, to) => supabase
+    .from('likes')
+    .select('target_id')
+    .eq('target_type', 'review')
+    .in('target_id', [...candidateIds])
+    .range(from, to));
+
+  const likeCounts = new Map();
+  for (const l of (totalLikeRows ?? [])) likeCounts.set(l.target_id, (likeCounts.get(l.target_id) ?? 0) + 1);
+
+  const pairs = Array.from(candidateIds)
+    .map(targetId => {
+      const idx = targetId.indexOf('_');
+      return { targetId, userId: targetId.slice(0, idx), spotifyId: targetId.slice(idx + 1) };
+    })
+    .filter(p => p.userId && p.spotifyId);
+  if (pairs.length === 0) return [];
+
+  const userIds    = [...new Set(pairs.map(p => p.userId))];
+  const spotifyIds = [...new Set(pairs.map(p => p.spotifyId))];
+
+  const [reviewRows, relistenRows, profiles] = await Promise.all([
+    fetchAllRows((from, to) => supabase
+      .from('user_albums')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, is_relistened')
+      .in('user_id', userIds)
+      .in('spotify_id', spotifyIds)
+      .range(from, to)),
+    fetchAllRows((from, to) => supabase
+      .from('re_listens')
+      .select('user_id, spotify_id, rating, review, listened_at')
+      .in('user_id', userIds)
+      .in('spotify_id', spotifyIds)
+      .order('listened_at', { ascending: false })
+      .range(from, to)),
+    fetchAllRows((from, to) => supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds).range(from, to)),
+  ]);
+
+  const rowMap = new Map();
+  for (const r of (reviewRows ?? [])) rowMap.set(`${r.user_id}_${r.spotify_id}`, r);
+
+  const latestReListenRating = new Map();
+  const latestReListenReview = new Map();
+  for (const rl of (relistenRows ?? [])) {
+    const key = `${rl.user_id}_${rl.spotify_id}`;
+    if (!latestReListenRating.has(key) && rl.rating) latestReListenRating.set(key, rl.rating);
+    if (!latestReListenReview.has(key) && rl.review) latestReListenReview.set(key, rl.review);
+  }
+  const profileMap = new Map((profiles ?? []).map(p => [p.id, { username: p.username ?? null, avatarUrl: p.avatar_url ?? null, isPro: !!p.is_pro }]));
+
+  const reviews = [];
+  for (const { targetId, userId } of pairs) {
+    const r = rowMap.get(targetId);
+    if (!r) continue;
+    const review = (r.is_relistened ? latestReListenReview.get(targetId) : undefined) ?? r.review ?? '';
+    if (!review) continue;
+    const rating = (r.is_relistened ? latestReListenRating.get(targetId) : undefined) ?? r.rating ?? 0;
+    const prof = profileMap.get(userId);
+    const weeklyLikes = weeklyLikeCounts.get(targetId) ?? 0;
+    const weeklyComments = commentCounts.get(targetId) ?? 0;
+    reviews.push({
+      id: targetId,
+      userId,
+      username: prof?.username ?? 'user',
+      avatarUrl: prof?.avatarUrl ?? null,
+      isPro: prof?.isPro ?? false,
+      albumTitle: r.title ?? '',
+      albumArtist: r.artist ?? '',
+      albumYear: String(r.year ?? ''),
+      artworkUrl: r.artwork_url ?? '',
+      rating,
+      review,
+      likeCount: likeCounts.get(targetId) ?? 0,
+      commentCount: commentCounts.get(targetId) ?? 0,
+      weeklyScore: weeklyLikes + weeklyComments,
+    });
+  }
+
+  reviews.sort((a, b) => b.weeklyScore - a.weeklyScore);
+  return reviews.slice(0, 20).map(({ weeklyScore, ...r }) => r);
+}
+
+async function computeHomeThisWeek() {
+  const since = new Date(Date.now() - HOME_WEEK_MS).toISOString();
+  const [albums, songs, artists, popularReviews] = await Promise.all([
+    computeTopAlbumsThisWeek(since),
+    computeTopSongsThisWeek(since),
+    computeTopArtistsThisWeek(since),
+    computePopularReviewsThisWeek(since),
+  ]);
+  return { albums, songs, artists, popularReviews };
+}
+
+app.get('/api/home/this-week', async (req, res) => {
+  const CACHE_KEY = 'home:this-week';
+  const rawUserId = typeof req.query.userId === 'string' ? req.query.userId : '';
+  const userId = /^[0-9a-f-]{36}$/i.test(rawUserId) ? rawUserId : null;
+
+  try {
+    let base = cacheGet(CACHE_KEY);
+    if (!base) {
+      base = await getCached(CACHE_KEY, TTL_10M);
+      if (base) cacheSet(CACHE_KEY, base, TTL_10M);
+    }
+    if (!base) {
+      base = await computeHomeThisWeek();
+      cacheSet(CACHE_KEY, base, TTL_10M);
+      await setCache(CACHE_KEY, base);
+    }
+
+    let popularReviews = base.popularReviews ?? [];
+    if (userId && popularReviews.length) {
+      const ids = popularReviews.map(r => r.id);
+      const { data: mine } = await supabase
+        .from('likes')
+        .select('target_id')
+        .eq('target_type', 'review')
+        .eq('user_id', userId)
+        .in('target_id', ids);
+      const mineSet = new Set((mine ?? []).map(l => l.target_id));
+      if (mineSet.size) {
+        popularReviews = popularReviews.map(r =>
+          mineSet.has(r.id) ? { ...r, likeCount: Math.max(0, (r.likeCount ?? 0) - 1) } : r);
+      }
+    }
+
+    res.json({ ...base, popularReviews });
+  } catch (err) {
+    console.error('[/api/home/this-week]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /discover/recommended ─────────────────────────────────────────────────
 
 app.get('/discover/recommended', async (req, res) => {
@@ -3255,6 +3566,18 @@ cron.schedule('0 */6 * * *', () => {
                'discover:classics', 'discover:top-rated', 'discover:recommended');
     console.log('[cron] Cache cleared after refresh.');
   });
+});
+
+// Every 10 min — keep the home "This Week" aggregation warm so no user request
+// ever pays the full ~2,000-row compute. Matches the endpoint's 10-min TTL.
+cron.schedule('*/10 * * * *', async () => {
+  try {
+    const payload = await computeHomeThisWeek();
+    cacheSet('home:this-week', payload, TTL_10M);
+    await setCache('home:this-week', payload);
+  } catch (err) {
+    console.error('[cron:home-this-week]', err.message ?? err);
+  }
 });
 
 // Weekly Monday 6 am — bust coming-soon so it re-fetches fresh pre-adds for the new week.
