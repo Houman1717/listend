@@ -27,10 +27,15 @@ import { useTheme, ThemePreference } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { useLikedArtists } from '@/context/LikedArtistsContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { LoggedAlbum } from '@/context/AlbumsContext';
+
+// Cached copy of the user's own profile row, so an outage shows their real name
+// and avatar instead of a blank "?" placeholder.
+const profileCacheKey = (uid: string) => `listend:profile:${uid}`;
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { usePro } from '@/context/ProContext';
 import { ProBadge } from '@/components/ProBadge';
@@ -132,8 +137,9 @@ function ProfileHeader({
   isOwnProfile: boolean;
   currentUserId: string;
   profileUserId: string;
-  albumCount: number;
-  thisYearCount: number;
+  // null = not known yet (never loaded / load failed) → rendered as "—"
+  albumCount: number | null;
+  thisYearCount: number | null;
   avgRating: string;
   onPressAlbums: () => void;
   onPressThisYear: () => void;
@@ -147,8 +153,11 @@ function ProfileHeader({
   const initial = (displayName || username || '?').charAt(0).toUpperCase();
   const [isFollowing,    setIsFollowing]    = useState(false);
   const [followLoading,  setFollowLoading]  = useState(false);
-  const [followersCount, setFollowersCount] = useState(0);
-  const [followingCount, setFollowingCount] = useState(0);
+  // null = "not loaded yet / failed to load", rendered as "—".
+  // Never show 0 for a count we couldn't actually fetch: during the 2026-08-28
+  // Supabase outage this rendered "0 Following · 0 Followers" on a full account.
+  const [followersCount, setFollowersCount] = useState<number | null>(null);
+  const [followingCount, setFollowingCount] = useState<number | null>(null);
 
   // Fetch follow counts + current follow state on mount / profile change
   useEffect(() => {
@@ -159,14 +168,18 @@ function ProfileHeader({
       .from('follows')
       .select('*', { count: 'exact', head: true })
       .eq('following_id', profileUserId)
-      .then(({ count }) => setFollowersCount(count ?? 0));
+      .then(({ count, error }) => {
+        if (!error && count != null) setFollowersCount(count);
+      });
 
     // Following: rows where follower_id = this profile
     supabase
       .from('follows')
       .select('*', { count: 'exact', head: true })
       .eq('follower_id', profileUserId)
-      .then(({ count }) => setFollowingCount(count ?? 0));
+      .then(({ count, error }) => {
+        if (!error && count != null) setFollowingCount(count);
+      });
 
     // Current user's follow state (only relevant on other profiles)
     if (!isOwnProfile && currentUserId) {
@@ -190,13 +203,15 @@ function ProfileHeader({
         .eq('follower_id', currentUserId)
         .eq('following_id', profileUserId);
       setIsFollowing(false);
-      setFollowersCount((n) => Math.max(0, n - 1));
+      // n === null means the count never loaded — leave it unknown rather than
+      // inventing a number from a follow action.
+      setFollowersCount((n) => (n == null ? null : Math.max(0, n - 1)));
     } else {
       await supabase
         .from('follows')
         .insert({ follower_id: currentUserId, following_id: profileUserId });
       setIsFollowing(true);
-      setFollowersCount((n) => n + 1);
+      setFollowersCount((n) => (n == null ? null : n + 1));
     }
     setFollowLoading(false);
   }
@@ -233,14 +248,14 @@ function ProfileHeader({
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: profileUserId, type: 'following' } })}>
-            <Text style={[ph.socialCount, { color: colors.text }]}>{followingCount}</Text>
+            <Text style={[ph.socialCount, { color: colors.text }]}>{followingCount ?? '—'}</Text>
             <Text style={[ph.socialLabel, { color: colors.subtext }]}> Following</Text>
           </Pressable>
           <Text style={[ph.socialDot, { color: colors.subtext }]}> · </Text>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: profileUserId, type: 'followers' } })}>
-            <Text style={[ph.socialCount, { color: colors.text }]}>{followersCount}</Text>
+            <Text style={[ph.socialCount, { color: colors.text }]}>{followersCount ?? '—'}</Text>
             <Text style={[ph.socialLabel, { color: colors.subtext }]}> Followers</Text>
           </Pressable>
         </View>
@@ -270,14 +285,14 @@ function ProfileHeader({
           <Pressable
             style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
             onPress={onPressAlbums}>
-            <Text style={[ph.statValue, { color: colors.text }]}>{albumCount}</Text>
+            <Text style={[ph.statValue, { color: colors.text }]}>{albumCount ?? '—'}</Text>
             <Text style={[ph.statLabel, { color: colors.textMuted }]}>Albums</Text>
           </Pressable>
           <View style={[ph.statDivider, { backgroundColor: colors.border }]} />
           <Pressable
             style={({ pressed }) => [ph.statBox, { opacity: pressed ? 0.7 : 1 }]}
             onPress={onPressThisYear}>
-            <Text style={[ph.statValue, { color: colors.text }]}>{thisYearCount}</Text>
+            <Text style={[ph.statValue, { color: colors.text }]}>{thisYearCount ?? '—'}</Text>
             <Text style={[ph.statLabel, { color: colors.textMuted }]}>This Year</Text>
           </Pressable>
           <View style={[ph.statDivider, { backgroundColor: colors.border }]} />
@@ -1024,7 +1039,7 @@ export default function ListendScreen() {
   const { user } = useAuth();
   const { unreadCount, unreadDMCount } = useNotifications();
   const { likedArtists } = useLikedArtists();
-  const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, reorderTopAlbums, reorderTopSongs, reorderTopArtists, loggedAlbums, wantToListen } = useAlbums();
+  const { topAlbums, topSongs, topArtists, removeTopAlbum, removeTopSong, removeTopArtist, reorderTopAlbums, reorderTopSongs, reorderTopArtists, loggedAlbums, wantToListen, isRemoteLoaded } = useAlbums();
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [top5EditMode, setTop5EditMode] = useState(false);
@@ -1046,6 +1061,26 @@ export default function ListendScreen() {
     return !isNaN(d.getTime()) && d.getFullYear() === new Date().getFullYear();
   }).length;
 
+  // Restore the cached profile first so a backend outage shows the user's real
+  // name and picture instead of a blank "?" avatar. Only ever overwritten by a
+  // successful fetch.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    AsyncStorage.getItem(profileCacheKey(user.id))
+      .then(raw => {
+        if (cancelled || !raw) return;
+        const c = JSON.parse(raw);
+        // Don't clobber a fresh fetch that already landed.
+        setProfileDisplayName(prev => prev || (c.display_name ?? ''));
+        setProfileUsername(   prev => prev || (c.username     ?? ''));
+        setProfileAvatarUrl(  prev => prev ?? (c.avatar_url   ?? null));
+        setProfileBio(        prev => prev || (c.bio          ?? ''));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
@@ -1053,14 +1088,14 @@ export default function ListendScreen() {
         .from('profiles')
         .select('display_name, username, avatar_url, bio')
         .eq('id', user.id)
-        .single()
-        .then(({ data }) => {
-          if (data) {
-            setProfileDisplayName(data.display_name    ?? '');
-            setProfileUsername(   data.username        ?? '');
-            setProfileAvatarUrl(  data.avatar_url      ?? null);
-            setProfileBio(        data.bio             ?? '');
-          }
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error || !data) return;   // keep whatever we already show
+          setProfileDisplayName(data.display_name ?? '');
+          setProfileUsername(   data.username     ?? '');
+          setProfileAvatarUrl(  data.avatar_url   ?? null);
+          setProfileBio(        data.bio          ?? '');
+          AsyncStorage.setItem(profileCacheKey(user.id), JSON.stringify(data)).catch(() => {});
         });
     }, [user])
   );
@@ -1122,6 +1157,10 @@ export default function ListendScreen() {
   const reviewCount = loggedAlbums.filter((a) => !!(a.lastReview ?? a.review)).length;
 
   // ── Profile stats ────────────────────────────────────────────────────────────
+  // "Do we actually know this user's library?" — true once we have rows from
+  // either the offline cache or a remote sync. While false we render "—" rather
+  // than "0", so a backend outage never claims the account is empty.
+  const statsKnown = loggedAlbums.length > 0 || isRemoteLoaded;
   const ratedAlbums = loggedAlbums.filter((a) => a.rating > 0);
   const avgRating = ratedAlbums.length > 0
     ? (ratedAlbums.reduce((sum, a) => sum + a.rating, 0) / ratedAlbums.length).toFixed(1)
@@ -1157,8 +1196,8 @@ export default function ListendScreen() {
         isOwnProfile={true}
         currentUserId={user?.id ?? ''}
         profileUserId={user?.id ?? ''}
-        albumCount={loggedAlbums.length}
-        thisYearCount={thisYearCount}
+        albumCount={statsKnown ? loggedAlbums.length : null}
+        thisYearCount={statsKnown ? thisYearCount : null}
         avgRating={avgRating}
         onPressAlbums={() => router.push('/my-listend')}
         onPressThisYear={() => router.push('/sessions')}
