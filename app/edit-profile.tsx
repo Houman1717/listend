@@ -149,34 +149,46 @@ export default function EditProfileScreen() {
   const [avatarUri,    setAvatarUri]    = useState<string | null>(null);
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
-  const [toast,   setToast]   = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [toast,     setToast]     = useState(false);
 
   // ── Load existing profile ─────────────────────────────────────────────────
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
     if (!user) return;
+    setLoading(true);
+    setLoadError(false);
     supabase
       .from('profiles')
       .select('display_name, username, bio, avatar_url')
       .eq('id', user.id)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          setDisplayName(data.display_name  ?? '');
-          setUsername(   data.username      ?? '');
-          setBio(        data.bio           ?? '');
-
-
-          setAvatarUri(  data.avatar_url    ?? null);
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          // Never fall through to an editable empty form — saving it would
+          // overwrite the real profile with blanks.
+          console.error('[EditProfile] profile load failed:', error?.message ?? 'no row');
+          setLoadError(true);
+          setLoading(false);
+          return;
         }
+        setDisplayName(data.display_name ?? '');
+        setUsername(   data.username     ?? '');
+        setBio(        data.bio          ?? '');
+        setAvatarUri(  data.avatar_url   ?? null);
         setLoading(false);
       });
   }, [user]);
 
+  useEffect(() => { loadProfile(); }, [loadProfile]);
+
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    if (!user) return;
+    // Guard: never save before the profile has actually loaded, or after a load
+    // failure — the form state would be blank and the upsert would wipe the
+    // real profile (name + avatar).
+    if (!user || loading || loadError) return;
     setSaving(true);
 
     try {
@@ -227,7 +239,7 @@ export default function EditProfileScreen() {
     } finally {
       setSaving(false);
     }
-  }, [user, displayName, username, bio, avatarUri, avatarBase64]);
+  }, [user, loading, loadError, displayName, username, bio, avatarUri, avatarBase64]);
 
   // ── Inject Save button into header ───────────────────────────────────────
   useEffect(() => {
@@ -238,7 +250,7 @@ export default function EditProfileScreen() {
       headerRight: () =>
         saving ? (
           <ActivityIndicator color={accent} style={{ marginRight: 16 }} />
-        ) : (
+        ) : (loading || loadError) ? null : (
           <Pressable
             onPress={handleSave}
             hitSlop={10}
@@ -248,7 +260,7 @@ export default function EditProfileScreen() {
           </Pressable>
         ),
     });
-  }, [navigation, handleSave, saving, bg, text, accent]);
+  }, [navigation, handleSave, saving, loading, loadError, bg, text, accent]);
 
   // ── Image pickers ─────────────────────────────────────────────────────────
   async function onPickAvatar() {
@@ -261,6 +273,27 @@ export default function EditProfileScreen() {
     return (
       <View style={[s.center, { backgroundColor: bg }]}>
         <ActivityIndicator color={accent} size="large" />
+      </View>
+    );
+  }
+
+  // ── Load failed — don't show an editable blank form ───────────────────────
+  if (loadError) {
+    return (
+      <View style={[s.center, { backgroundColor: bg, paddingHorizontal: 32 }]}>
+        <FontAwesome name="exclamation-circle" size={32} color={subtext} />
+        <Text style={{ color: text, fontSize: 16, fontWeight: '600', marginTop: 16, textAlign: 'center' }}>
+          Couldn't load your profile
+        </Text>
+        <Text style={{ color: subtext, fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+          Check your connection and try again — your profile hasn't changed.
+        </Text>
+        <Pressable
+          onPress={loadProfile}
+          style={{ marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10, backgroundColor: accent }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+        </Pressable>
       </View>
     );
   }

@@ -206,6 +206,17 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     // Guard against race conditions if the user changes before async ops finish
     let cancelled = false;
 
+    // Whether the local cache held real data before this sync — used below to
+    // refuse to overwrite a populated list with an empty remote result (a
+    // transient auth/RLS failure returns [] with no error, and that must not
+    // wipe the user's library / picks).
+    const cached = { logged: false, want: false, topAlbums: false, topSongs: false, topArtists: false };
+    const nonEmptyArr = (s: string | null) => {
+      if (s == null) return false;
+      try { const v = JSON.parse(s); return Array.isArray(v) && v.some((x: any) => x != null); }
+      catch { return false; }
+    };
+
     (async () => {
       // ── Step 2: Fast restore from user-scoped AsyncStorage ─────────────────
       try {
@@ -220,6 +231,12 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           ]);
 
         if (cancelled) return;
+
+        cached.logged     = nonEmptyArr(albumsStr);
+        cached.topAlbums  = nonEmptyArr(topAlbumsStr);
+        cached.topSongs   = nonEmptyArr(topSongsStr);
+        cached.topArtists = nonEmptyArr(topArtistsStr);
+        cached.want       = nonEmptyArr(wantStr);
 
         if (albumsStr  !== null) setLoggedAlbums(JSON.parse(albumsStr));
         if (topAlbumsStr  !== null) setTopAlbums(padTo5(JSON.parse(topAlbumsStr)));
@@ -268,6 +285,18 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       if (!cancelled) {
         if (albumErr) {
           console.error('[AlbumsContext] user_albums sync error:', albumErr.message);
+        } else if ((albumData ?? []).length === 0) {
+          // Empty result with no error. Almost always a transient auth / RLS /
+          // network failure — NOT "the user deleted all their albums". Never
+          // overwrite a populated cache with []: doing so made whole libraries
+          // vanish and stay vanished across restarts. Individual deletions are
+          // handled by removeLoggedAlbum updating state directly.
+          if (cached.logged) {
+            console.warn('[AlbumsContext] user_albums returned 0 rows but cache had data — keeping cached library');
+          } else {
+            setLoggedAlbums([]);
+            AsyncStorage.setItem(sk(KEY.LOGGED, uid), '[]').catch(() => {});
+          }
         } else {
           const albums: LoggedAlbum[] = (albumData ?? []).map((row, i) => ({
             id:             row.spotify_id,
@@ -297,12 +326,10 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           const fetchedIds = new Set(albums.map(a => a.id));
           setLoggedAlbums(prev => {
             const prevMap = new Map(prev.map(a => [a.id, a]));
-            // Only preserve local-only albums when the DB returned *some* rows.
-            // If DB returned 0 rows (e.g. account was cleared), trust the DB
-            // and don't resurrect stale local cache entries.
-            const localOnly = albums.length > 0
-              ? prev.filter(a => !fetchedIds.has(a.id))
-              : [];
+            // Preserve local-only albums (e.g. logged while this fetch was in
+            // flight, not yet in the DB response). The empty-result case is
+            // handled above, so `albums` always has rows here.
+            const localOnly = prev.filter(a => !fetchedIds.has(a.id));
             const merged = albums.map(a => {
               const local = prevMap.get(a.id);
               if (local && local.dateLogged > a.dateLogged) {
@@ -387,6 +414,15 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       if (!cancelled) {
         if (wantErr) {
           console.error('[AlbumsContext] want_to_listen sync error:', wantErr.message);
+        } else if ((wantData ?? []).length === 0) {
+          // Same guard as logged albums — an empty result with no error is a
+          // transient failure, not "the user cleared their whole list".
+          if (cached.want) {
+            console.warn('[AlbumsContext] want_to_listen returned 0 rows but cache had data — keeping cached list');
+          } else {
+            setWantToListen([]);
+            AsyncStorage.setItem(sk(KEY.WANT, uid), '[]').catch(() => {});
+          }
         } else {
           const want: WantToListenAlbum[] = (wantData ?? []).map((w: any) => ({
             id:         w.spotify_id,
@@ -414,13 +450,23 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           console.error('[AlbumsContext] profiles top5 sync error:', profErr.message);
         } else if (profData) {
           console.log('[Top5] loading for user:', uid, profData);
-          if (Array.isArray(profData.top_albums))  setTopAlbums(padTo5(profData.top_albums));
-          if (Array.isArray(profData.top_songs))   setTopSongs(padTo5(profData.top_songs));
-          if (Array.isArray(profData.top_artists)) setTopArtists(padTo5(profData.top_artists));
-
-          AsyncStorage.setItem(sk(KEY.TOP_ALBUMS,  uid), JSON.stringify(profData.top_albums  ?? [])).catch(() => {});
-          AsyncStorage.setItem(sk(KEY.TOP_SONGS,   uid), JSON.stringify(profData.top_songs   ?? [])).catch(() => {});
-          AsyncStorage.setItem(sk(KEY.TOP_ARTISTS, uid), JSON.stringify(profData.top_artists ?? [])).catch(() => {});
+          // Don't let an empty/missing remote list overwrite populated local
+          // picks — a transient profiles read returning blank top-5 columns used
+          // to wipe them. Slot edits persist directly, so a real "cleared all
+          // slots" is already reflected locally and in the cache.
+          const syncTop = (remote: any, setter: (v: any) => void, cachedHad: boolean, key: string) => {
+            if (!Array.isArray(remote)) return;
+            const remoteHasAny = remote.some((x: any) => x != null);
+            if (!remoteHasAny && cachedHad) {
+              console.warn(`[AlbumsContext] ${key} returned empty but cache had data — keeping cached picks`);
+              return;
+            }
+            setter(padTo5(remote));
+            AsyncStorage.setItem(sk(key, uid), JSON.stringify(remote)).catch(() => {});
+          };
+          syncTop(profData.top_albums,  setTopAlbums,  cached.topAlbums,  KEY.TOP_ALBUMS);
+          syncTop(profData.top_songs,   setTopSongs,   cached.topSongs,   KEY.TOP_SONGS);
+          syncTop(profData.top_artists, setTopArtists, cached.topArtists, KEY.TOP_ARTISTS);
         }
         setIsRemoteLoaded(true);
       }
