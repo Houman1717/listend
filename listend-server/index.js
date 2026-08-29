@@ -50,7 +50,35 @@ const storefrontFor = id => (GB_STOREFRONT_IDS.has(id) ? 'gb' : 'us');
 // e.g. an unrequested remaster/anniversary edition nobody asked for.
 
 const EDITION_QUALIFIERS = ['remaster', 'anniversary', 'deluxe', 'edition', 'reissue', 'bonus', 'expanded'];
-const normalizeKey = s => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+// Characters stripped as typographic noise: whitespace, every apostrophe/
+// quote/dash form, brackets and sentence punctuation. Folding these is what
+// lets "Isn't Anything" match "Isn’t Anything" and keeps "(Deluxe)"
+// collapsing exactly as it always has.
+const TYPOGRAPHIC = /[\s'‘’‛`´"“”«»_.,;:!?()\[\]{}\/\\|@–—‑-]/g;
+
+// Symbols that are part of the title itself rather than punctuation around
+// it, so they have to survive normalization. Stripping them collapsed
+// genuinely different records onto one key: "#NDA" and "NDA" are two
+// separate Trippie Redd albums, and Ed Sheeran's "+", "=" and "÷" all
+// normalized to the empty string, so whichever was logged first made the
+// other two permanently unreachable. Deliberately excludes "&" and "$",
+// which are near-always stylistic — keeping those would re-key every
+// "X & Y" artist and every A$AP release without fixing any collision.
+const SIGNIFICANT_SYMBOLS = '#+=×÷';
+const INSIGNIFICANT = new RegExp(`[^a-z0-9${SIGNIFICANT_SYMBOLS}]`, 'g');
+
+const normalizeKey = s => {
+  const lowered = (s ?? '').toLowerCase();
+  const folded  = lowered.replace(TYPOGRAPHIC, '');
+  const key     = folded.replace(INSIGNIFICANT, '');
+  // A title written in a non-Latin script (Kino's "Группа крови") or made up
+  // entirely of stripped characters (Ed Sheeran's "-") keys to the empty
+  // string under the rule above, colliding with every other such title by
+  // the same artist — that's 11 Kino albums on one key. Fall back to the
+  // punctuation-folded form, then to the raw text, so those stay distinct
+  // while still matching each other across punctuation differences.
+  return key || folded || lowered.replace(/\s/g, '');
+};
 const hasQualifier = s => EDITION_QUALIFIERS.some(w => (s ?? '').toLowerCase().includes(w));
 
 // Narrower than EDITION_QUALIFIERS above — only "same content, re-released"

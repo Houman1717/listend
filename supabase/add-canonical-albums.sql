@@ -7,7 +7,13 @@
 -- entry (e.g. a remaster/anniversary edition nobody asked for).
 --
 -- normalized_key = normalize(artist) || '::' || normalize(title), where
--- normalize(s) = s.toLowerCase().replace(/[^a-z0-9]/g, '')
+-- normalize(s) lowercases, strips typographic noise (whitespace, every
+-- apostrophe/quote/dash form, brackets, sentence punctuation) and drops
+-- anything that isn't [a-z0-9] or one of the title-significant symbols
+-- #, +, =, × and ÷ — see normalizeKey in listend-server/index.js. Those
+-- symbols are preserved because stripping them collapsed genuinely
+-- different releases onto one key (Trippie Redd "NDA" vs "#NDA";
+-- Ed Sheeran "+", "=" and "÷", which all keyed to the empty string).
 --
 -- Only ever read/written by the server (service-role key) — never queried
 -- directly by the client.
