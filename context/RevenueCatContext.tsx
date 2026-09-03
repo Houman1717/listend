@@ -1,9 +1,20 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import Purchases, { CustomerInfo, LOG_LEVEL, Offerings, PurchasesPackage } from 'react-native-purchases';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
 
-const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
+// Each store has its own public SDK key and the SDK rejects the other one, so
+// an iOS `appl_` key on Android means offerings never load — which the paywall
+// renders as its "Coming Soon" empty state. Both env vars are referenced
+// statically so Expo can inline them at build time.
+const REVENUECAT_KEY = Platform.select({
+  ios:     process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
+  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
+}) ?? '';
+const REVENUECAT_KEY_VAR = Platform.OS === 'android'
+  ? 'EXPO_PUBLIC_REVENUECAT_ANDROID_KEY'
+  : 'EXPO_PUBLIC_REVENUECAT_IOS_KEY';
 const PRO_ENTITLEMENT_ID = 'pro';
 
 interface RevenueCatContextValue {
@@ -34,8 +45,8 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
 
   // Initialise SDK once on mount
   useEffect(() => {
-    if (!REVENUECAT_IOS_KEY) {
-      console.warn('[RevenueCat] EXPO_PUBLIC_REVENUECAT_IOS_KEY is not set');
+    if (!REVENUECAT_KEY) {
+      console.warn(`[RevenueCat] ${REVENUECAT_KEY_VAR} is not set`);
       setOfferingsError('RevenueCat is not configured (missing API key)');
       setIsLoading(false);
       return;
@@ -45,7 +56,7 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
       Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     }
 
-    Purchases.configure({ apiKey: REVENUECAT_IOS_KEY });
+    Purchases.configure({ apiKey: REVENUECAT_KEY });
     setConfigured(true);
   }, []);
 
@@ -118,14 +129,14 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
 
   // Listen for real-time entitlement changes (e.g. subscription expires mid-session)
   useEffect(() => {
-    if (!REVENUECAT_IOS_KEY) return;
+    if (!REVENUECAT_KEY) return;
     const listener = Purchases.addCustomerInfoUpdateListener(syncCustomerInfo);
     return () => listener?.remove();
   }, [syncCustomerInfo]);
 
   // Log in / log out with Supabase user ID
   useEffect(() => {
-    if (!REVENUECAT_IOS_KEY) return;
+    if (!REVENUECAT_KEY) return;
 
     if (user?.id) {
       Purchases.logIn(user.id)
