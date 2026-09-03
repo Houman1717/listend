@@ -297,9 +297,14 @@ export function ProPaywallModal() {
                 <Text style={[s.priceSub,    { color: c.textDim }]}>
                   Subscription pricing will be announced shortly
                 </Text>
-                {__DEV__ && offeringsError ? (
-                  <Text style={[s.priceSub, { color: c.textDim, marginTop: 8 }]}>
-                    [DEV] {offeringsError}
+                {/* Shown in production too. A misconfigured store is invisible
+                    otherwise — every failure looked like a deliberate "Coming
+                    Soon", including a whole platform that could never load
+                    products. Users only ever see this line when something is
+                    genuinely wrong, so a quiet diagnostic beats silence. */}
+                {offeringsError ? (
+                  <Text style={[s.priceSub, { color: c.textDim, marginTop: 8, fontSize: 11, opacity: 0.7 }]}>
+                    {offeringsError}
                   </Text>
                 ) : null}
               </View>

@@ -47,7 +47,7 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!REVENUECAT_KEY) {
       console.warn(`[RevenueCat] ${REVENUECAT_KEY_VAR} is not set`);
-      setOfferingsError('RevenueCat is not configured (missing API key)');
+      setOfferingsError(`${REVENUECAT_KEY_VAR} is not set in this build`);
       setIsLoading(false);
       return;
     }
@@ -113,16 +113,22 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     Purchases.getOfferings()
       .then((fetched) => {
         setOfferings(fetched);
-        if (!fetched.current || fetched.current.availablePackages.length === 0) {
-          console.warn('[RevenueCat] getOfferings succeeded but "current" offering has no packages — check the RevenueCat dashboard offering/product configuration');
-          setOfferingsError('No subscription packages are configured for this offering');
+        if (!fetched.current) {
+          console.warn('[RevenueCat] getOfferings succeeded but there is no "current" offering — set one in the RevenueCat dashboard');
+          setOfferingsError('No offering is marked Current in RevenueCat');
+        } else if (fetched.current.availablePackages.length === 0) {
+          // Packages exist but hold no product for THIS store — the usual cause
+          // is an offering whose packages were only ever given the other
+          // platform's product.
+          console.warn(`[RevenueCat] offering "${fetched.current.identifier}" returned 0 packages for ${Platform.OS} — check its packages contain a ${Platform.OS === 'android' ? 'Play Store' : 'App Store'} product`);
+          setOfferingsError(`Offering "${fetched.current.identifier}" has no ${Platform.OS === 'android' ? 'Play Store' : 'App Store'} products`);
         } else {
           setOfferingsError(null);
         }
       })
       .catch((e) => {
         console.warn('[RevenueCat] getOfferings error:', e);
-        setOfferingsError(e?.message ?? 'Failed to load subscription offerings');
+        setOfferingsError(`${Platform.OS}: ${e?.message ?? 'failed to load offerings'}`);
       })
       .finally(() => setIsLoading(false));
   }, [configured]);
