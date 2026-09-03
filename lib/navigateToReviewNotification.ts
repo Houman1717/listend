@@ -1,5 +1,6 @@
 import { Router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { parseReviewTargetId } from '@/lib/reviewTargets';
 
 /**
  * Notifications only store target_id (`{userId}_{spotifyId}`), so a bare
@@ -15,7 +16,11 @@ export async function navigateToReviewNotification(
   openComments: boolean,
   highlightCommentId?: string,
 ) {
-  const [userId, spotifyId] = targetId.split('_');
+  // Re-listen reviews are keyed `relisten_{userId}_{spotifyId}_{listenedAt}`,
+  // so a plain split hands back userId "relisten" and the wrong album id.
+  const parsed    = parseReviewTargetId(targetId);
+  const userId    = parsed?.userId;
+  const spotifyId = parsed?.spotifyId;
 
   let title: string | undefined;
   let artist: string | undefined;
@@ -40,7 +45,7 @@ export async function navigateToReviewNotification(
   router.push({
     pathname: '/album-detail',
     params: {
-      id: spotifyId ?? targetId.split('_')[1],
+      id: spotifyId ?? '',
       title, artist, year, artworkUrl,
       reviewId: targetId,
       openComments: openComments ? '1' : undefined,

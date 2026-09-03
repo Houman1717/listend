@@ -26,6 +26,7 @@ import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { reviewOwnerId } from '@/lib/reviewTargets';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { reportContent } from '@/lib/reports';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
@@ -1202,7 +1203,15 @@ export default function HomeScreen() {
         })
         .then(done);
     } else {
-      const ownerId = id.split('_')[0];
+      // Owner must be parsed, not split on the first "_" — a re-listen review's
+      // id starts `relisten_`, and writing that into the uuid column made the
+      // insert fail, which reverted the heart the instant it was tapped.
+      const ownerId = reviewOwnerId(id);
+      if (!ownerId) {
+        setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
+        done();
+        return;
+      }
       supabase.from('likes').insert({
         user_id: user.id, target_type: 'review', target_id: id, target_owner_id: ownerId,
       }).then(({ error }) => {
@@ -1674,7 +1683,7 @@ export default function HomeScreen() {
           onUsernamePress={(username) => { setExpandedFriend(null); navigateToProfile(username, router); }}
           onReport={(() => {
             const fid = expandedFriend.id;
-            const reportedUser = fid.startsWith('relisten_') ? fid.split('_')[1] : fid.split('_')[0];
+            const reportedUser = reviewOwnerId(fid) ?? '';
             if (reportedUser === user?.id) return undefined;
             return () => reportContent({ contentType: 'review', contentId: fid, reportedUser, label: 'review' });
           })()}

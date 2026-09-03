@@ -18,6 +18,7 @@ import { ReviewComment, CommentsSection, avatarColor } from '@/components/Review
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { reviewOwnerId } from '@/lib/reviewTargets';
 import { CatalogAlbum } from '@/context/CatalogService';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { ProBadge } from '@/components/ProBadge';
@@ -215,7 +216,13 @@ export default function PopularReviewsScreen() {
         })
         .then(done);
     } else {
-      const ownerId = id.split('_')[0];
+      // See handleLikeReview in (tabs)/index.tsx — re-listen ids don't split.
+      const ownerId = reviewOwnerId(id);
+      if (!ownerId) {
+        setLikedReviews(prev => { const n = new Set(prev); n.delete(id); return n; });
+        done();
+        return;
+      }
       supabase.from('likes').insert({
         user_id: user.id, target_type: 'review', target_id: id, target_owner_id: ownerId,
       }).then(({ error }) => {

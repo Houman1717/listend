@@ -23,6 +23,7 @@ import Colors, { type ColorsShape } from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { parseReviewTargetId } from '@/lib/reviewTargets';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
@@ -56,7 +57,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LikeState    = { liked: boolean; count: number };
-type LikedReview  = LoggedAlbum & { ownerId: string; username: string; isPro?: boolean; avatarUrl?: string | null; likedAt: string };
+type LikedReview  = LoggedAlbum & { ownerId: string; username: string; isPro?: boolean; avatarUrl?: string | null; likedAt: string; targetId: string };
 
 // ─── Review row ───────────────────────────────────────────────────────────────
 
@@ -538,13 +539,22 @@ export default function MyReviewsScreen() {
         return;
       }
 
-      // target_id format is "{owner_uuid}_{spotify_id}" — UUID is 36 chars
-      const parsed = (likedRows as any[]).map(r => ({
-        ownerId:  (r.target_id as string).slice(0, 36),
-        albumId:  (r.target_id as string).slice(37),
-        likedAt:  r.created_at as string,
-        targetId: r.target_id as string,
-      }));
+      // Ids are either "{owner_uuid}_{spotify_id}" or, for a review written on a
+      // re-listen, "relisten_{owner_uuid}_{spotify_id}_{listened_at}". Slicing at
+      // 36 chars mangled the latter into a non-uuid owner, which 400'd the
+      // profiles lookup below and emptied the whole tab.
+      const parsed = (likedRows as any[])
+        .map(r => {
+          const t = parseReviewTargetId(r.target_id as string);
+          return t ? { ownerId: t.userId, albumId: t.spotifyId, likedAt: r.created_at as string, targetId: t.targetId } : null;
+        })
+        .filter((p): p is { ownerId: string; albumId: string; likedAt: string; targetId: string } => p !== null);
+      if (parsed.length === 0) {
+        setLikedReviews([]);
+        setLikedLikesMap(new Map());
+        setLikedLoading(false);
+        return;
+      }
 
       // Group albumIds by ownerId to batch queries
       const byOwner = new Map<string, string[]>();
@@ -614,6 +624,8 @@ export default function MyReviewsScreen() {
             isPro:      isProById.get(ownerId) ?? false,
             avatarUrl:  avatarById.get(ownerId) ?? null,
             likedAt:    likedEntry?.likedAt ?? '',
+            // The real liked id — never re-compose it, a re-listen's differs.
+            targetId:   likedEntry?.targetId ?? `${ownerId}_${a.spotify_id}`,
           });
         }
       }
@@ -645,7 +657,7 @@ export default function MyReviewsScreen() {
   // ── Unlike a review from the liked tab (own user) ─────────────────────────
   async function handleUnlikeLikedReview(review: LikedReview) {
     if (!user) return;
-    const targetId = `${review.ownerId}_${review.id}`;
+    const targetId = review.targetId;
     setLikedReviews(prev => prev.filter(r => !(r.ownerId === review.ownerId && r.id === review.id)));
     setSelectedLiked(null);
     setLikedLikesMap(prev => {
@@ -663,7 +675,7 @@ export default function MyReviewsScreen() {
   // ── Toggle like on a review in another user's liked-reviews tab ───────────
   async function handleToggleLikedReviewLike(review: LikedReview) {
     if (!user) return;
-    const targetId = `${review.ownerId}_${review.id}`;
+    const targetId = review.targetId;
     const current  = likedLikesMap.get(targetId) ?? { liked: false, count: 0 };
     setLikedLikesMap(prev => {
       const m = new Map(prev);

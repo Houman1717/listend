@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { ReviewTarget, parseReviewTargetId } from '@/lib/reviewTargets';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 
 export type PopularReview = {
@@ -207,36 +208,6 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
   }
 
   return ranked;
-}
-
-// Review like/comment target_ids come in two shapes: `{userId}_{spotifyId}` for
-// an original log, and `relisten_{userId}_{spotifyId}_{listenedAt}` for a review
-// written on a re-listen. Naively splitting on the first "_" turns the latter
-// into userId "relisten", which Postgres rejects as a uuid — one such like used
-// to 400 the whole `.in('user_id', …)` query and blank the entire section.
-// Anything that doesn't parse to a real uuid is dropped rather than passed on.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-type ReviewTarget = { targetId: string; userId: string; spotifyId: string; listenedAt: string | null };
-
-function parseReviewTargetId(targetId: string): ReviewTarget | null {
-  if (targetId.startsWith('relisten_')) {
-    const rest       = targetId.slice('relisten_'.length);
-    const userId     = rest.slice(0, 36);
-    const tail       = rest.slice(37);
-    const idx        = tail.indexOf('_');
-    if (idx === -1) return null;
-    const spotifyId  = tail.slice(0, idx);
-    const listenedAt = tail.slice(idx + 1);
-    if (!UUID_RE.test(userId) || !spotifyId || !listenedAt) return null;
-    return { targetId, userId, spotifyId, listenedAt };
-  }
-  const idx = targetId.indexOf('_');
-  if (idx === -1) return null;
-  const userId    = targetId.slice(0, idx);
-  const spotifyId = targetId.slice(idx + 1);
-  if (!UUID_RE.test(userId) || !spotifyId) return null;
-  return { targetId, userId, spotifyId, listenedAt: null };
 }
 
 // Popularity is based on likes/comments *received* this week, regardless of

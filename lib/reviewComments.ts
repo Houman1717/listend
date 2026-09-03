@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { reviewOwnerId } from '@/lib/reviewTargets';
 import { ReviewComment } from '@/components/ReviewComments';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -76,7 +77,7 @@ async function notifyForComment(reviewId: string, actorId: string, parentComment
       .maybeSingle();
     recipientId = parent?.user_id ?? null;
   } else {
-    recipientId = reviewId.split('_')[0] || null;
+    recipientId = reviewOwnerId(reviewId);
   }
 
   if (!recipientId || recipientId === actorId) return;
