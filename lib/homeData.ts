@@ -209,6 +209,36 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
   return ranked;
 }
 
+// Review like/comment target_ids come in two shapes: `{userId}_{spotifyId}` for
+// an original log, and `relisten_{userId}_{spotifyId}_{listenedAt}` for a review
+// written on a re-listen. Naively splitting on the first "_" turns the latter
+// into userId "relisten", which Postgres rejects as a uuid — one such like used
+// to 400 the whole `.in('user_id', …)` query and blank the entire section.
+// Anything that doesn't parse to a real uuid is dropped rather than passed on.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type ReviewTarget = { targetId: string; userId: string; spotifyId: string; listenedAt: string | null };
+
+function parseReviewTargetId(targetId: string): ReviewTarget | null {
+  if (targetId.startsWith('relisten_')) {
+    const rest       = targetId.slice('relisten_'.length);
+    const userId     = rest.slice(0, 36);
+    const tail       = rest.slice(37);
+    const idx        = tail.indexOf('_');
+    if (idx === -1) return null;
+    const spotifyId  = tail.slice(0, idx);
+    const listenedAt = tail.slice(idx + 1);
+    if (!UUID_RE.test(userId) || !spotifyId || !listenedAt) return null;
+    return { targetId, userId, spotifyId, listenedAt };
+  }
+  const idx = targetId.indexOf('_');
+  if (idx === -1) return null;
+  const userId    = targetId.slice(0, idx);
+  const spotifyId = targetId.slice(idx + 1);
+  if (!UUID_RE.test(userId) || !spotifyId) return null;
+  return { targetId, userId, spotifyId, listenedAt: null };
+}
+
 // Popularity is based on likes/comments *received* this week, regardless of
 // when the review itself was written (matches Letterboxd's "Popular Reviews"
 // model) — an old review that suddenly gets a wave of new engagement can
@@ -254,11 +284,8 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
   }
 
   const pairs = Array.from(candidateIds)
-    .map(targetId => {
-      const idx = targetId.indexOf('_');
-      return { targetId, userId: targetId.slice(0, idx), spotifyId: targetId.slice(idx + 1) };
-    })
-    .filter(p => p.userId && p.spotifyId);
+    .map(parseReviewTargetId)
+    .filter((p): p is ReviewTarget => p !== null);
   if (pairs.length === 0) return [];
 
   const userIds    = [...new Set(pairs.map(p => p.userId))];
@@ -272,7 +299,7 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
       .in('spotify_id', spotifyIds),
     supabase
       .from('re_listens')
-      .select('user_id, spotify_id, rating, review, listened_at')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
       .in('user_id', userIds)
       .in('spotify_id', spotifyIds)
       .order('listened_at', { ascending: false }),
@@ -287,20 +314,31 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
   // re-listen (with the original log unrated/unreviewed) must still surface.
   const latestReListenRating = new Map<string, number>();
   const latestReListenReview = new Map<string, string>();
+  // Also keyed by the exact re-listen target_id, so a like on one specific
+  // re-listen review resolves to that re-listen's own rating/review.
+  const reListenMap = new Map<string, any>();
   for (const rl of (relistenRows ?? []) as any[]) {
     const key = `${rl.user_id}_${rl.spotify_id}`;
     if (!latestReListenRating.has(key) && rl.rating) latestReListenRating.set(key, rl.rating);
     if (!latestReListenReview.has(key) && rl.review) latestReListenReview.set(key, rl.review);
+    reListenMap.set(`relisten_${key}_${rl.listened_at}`, rl);
   }
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
 
   const reviews: (PopularReview & { weeklyScore: number })[] = [];
-  for (const { targetId, userId, spotifyId } of pairs) {
-    const r = rowMap.get(targetId);
-    if (!r) continue;
-    const review = (r.is_relistened ? latestReListenReview.get(targetId) : undefined) ?? r.review ?? '';
+  for (const { targetId, userId, spotifyId, listenedAt } of pairs) {
+    const baseKey = `${userId}_${spotifyId}`;
+    const base    = rowMap.get(baseKey);
+    const rl      = listenedAt ? reListenMap.get(targetId) : undefined;
+    if (!base && !rl) continue;
+    const review = listenedAt
+      ? (rl?.review ?? '')
+      : ((base.is_relistened ? latestReListenReview.get(baseKey) : undefined) ?? base.review ?? '');
     if (!review) continue;
-    const rating = (r.is_relistened ? latestReListenRating.get(targetId) : undefined) ?? r.rating ?? 0;
+    const rating = listenedAt
+      ? (rl?.rating ?? 0)
+      : ((base.is_relistened ? latestReListenRating.get(baseKey) : undefined) ?? base.rating ?? 0);
+    const r = base ?? rl;
     const prof = profileMap.get(userId);
     const weeklyLikes = weeklyLikeCounts.get(targetId) ?? 0;
     const weeklyComments = commentCounts.get(targetId) ?? 0;
