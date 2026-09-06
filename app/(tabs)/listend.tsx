@@ -40,6 +40,7 @@ import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { usePro } from '@/context/ProContext';
 import { ProBadge } from '@/components/ProBadge';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
+import { effectiveRating } from '@/lib/effectiveRating';
 
 const DARK_BG   = '#0F0A07';
 const CARD_BG   = '#2E2018';
@@ -1161,13 +1162,15 @@ export default function ListendScreen() {
   // either the offline cache or a remote sync. While false we render "—" rather
   // than "0", so a backend outage never claims the account is empty.
   const statsKnown = loggedAlbums.length > 0 || isRemoteLoaded;
-  const ratedAlbums = loggedAlbums.filter((a) => a.rating > 0);
+  // Re-listens replace the score, so aggregate on the latest rating — not the
+  // frozen original in user_albums.rating.
+  const ratedAlbums = loggedAlbums.filter((a) => effectiveRating(a) > 0);
   const avgRating = ratedAlbums.length > 0
-    ? (ratedAlbums.reduce((sum, a) => sum + a.rating, 0) / ratedAlbums.length).toFixed(1)
+    ? (ratedAlbums.reduce((sum, a) => sum + effectiveRating(a), 0) / ratedAlbums.length).toFixed(1)
     : '—';
   const ratingDistribution = Array.from({ length: 10 }, (_, i) => ({
     rating: i + 1,
-    count: loggedAlbums.filter(a => a.rating === i + 1).length,
+    count: loggedAlbums.filter(a => effectiveRating(a) === i + 1).length,
   }));
 
   return (

@@ -2,6 +2,7 @@ import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWind
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, Fragment, useMemo } from 'react';
+import { effectiveRating } from '@/lib/effectiveRating';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -173,9 +174,9 @@ function AlbumListModal({
                 )}
                 <Text style={[rm.cardTitle,  { color: txt }]} numberOfLines={1}>{item.title}</Text>
                 <Text style={[rm.cardArtist, { color: sub }]} numberOfLines={1}>{item.artist}</Text>
-                {item.rating > 0 && (
+                {effectiveRating(item) > 0 && (
                   <View style={{ marginTop: 3 }}>
-                    <VolumeBadge rating={item.rating} tint={tint} />
+                    <VolumeBadge rating={effectiveRating(item)} tint={tint} />
                   </View>
                 )}
               </Pressable>
@@ -329,7 +330,7 @@ function RatingDistribution({
 }) {
   const distribution = Array.from({ length: 10 }, (_, i) => ({
     rating: i + 1,
-    count: loggedAlbums.filter(a => a.rating === i + 1).length,
+    count: loggedAlbums.filter(a => effectiveRating(a) === i + 1).length,
   }));
   const maxCount = Math.max(...distribution.map(d => d.count), 1);
 
@@ -337,7 +338,7 @@ function RatingDistribution({
     <View style={rd.wrap}>
       {[...distribution].reverse().map(({ rating, count }) => {
         const filled = count > 0 ? Math.max(count / maxCount, 0.02) : 0;
-        const albums = loggedAlbums.filter(a => a.rating === rating);
+        const albums = loggedAlbums.filter(a => effectiveRating(a) === rating);
         return (
           <Pressable
             key={rating}
@@ -509,13 +510,13 @@ function buildDecadeBuckets(loggedAlbums: LoggedAlbum[]): Bucket[] {
   return [...byDecade.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([decade, albums]) => {
-      const rated = albums.filter(a => a.rating > 0);
+      const rated = albums.filter(a => effectiveRating(a) > 0);
       return {
         key: decade,
         label: `${decade}s`,
         albums,
         count: albums.length,
-        avgRating: rated.length > 0 ? rated.reduce((s, a) => s + a.rating, 0) / rated.length : 0,
+        avgRating: rated.length > 0 ? rated.reduce((s, a) => s + effectiveRating(a), 0) / rated.length : 0,
       };
     });
 }
@@ -524,13 +525,13 @@ function buildYearBuckets(loggedAlbums: LoggedAlbum[], decade: number): Bucket[]
   return Array.from({ length: 10 }, (_, i) => {
     const year   = decade + i;
     const albums = loggedAlbums.filter(a => a.year === year);
-    const rated  = albums.filter(a => a.rating > 0);
+    const rated  = albums.filter(a => effectiveRating(a) > 0);
     return {
       key: year,
       label: String(year),
       albums,
       count: albums.length,
-      avgRating: rated.length > 0 ? rated.reduce((s, a) => s + a.rating, 0) / rated.length : 0,
+      avgRating: rated.length > 0 ? rated.reduce((s, a) => s + effectiveRating(a), 0) / rated.length : 0,
     };
   });
 }
@@ -756,8 +757,8 @@ export default function MyStatsScreen() {
       });
   }, [viewedUserId]);
 
-  const loggedAlbums = viewedUserId ? otherAlbums  : ownAlbums;
-  const isLoaded     = viewedUserId ? otherLoaded  : ownLoaded;
+  const loggedAlbumsRaw = viewedUserId ? otherAlbums  : ownAlbums;
+  const isLoaded        = viewedUserId ? otherLoaded  : ownLoaded;
 
   const [selectedRating, setSelectedRating]   = useState<number | null>(null);
   const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
@@ -785,6 +786,19 @@ export default function MyStatsScreen() {
   const [friendReviewCount,  setFriendReviewCount]  = useState(0);
   const [artistImages,   setArtistImages]     = useState<Record<string, string>>({});
   const [allReLists,     setAllReLists]       = useState<Map<string, { rating: number; listenedAt: string }[]>>(new Map());
+
+  // A re-listen replaces the user's score; user_albums.rating stays frozen at
+  // the first listen (the rating-evolution charts need that original). Attach
+  // the latest re-listen rating as `lastRating` so every average and breakdown
+  // below counts the album under the score the user actually holds today.
+  // Own albums already carry lastRating from AlbumsContext; another user's
+  // rows are hydrated here from the re_listens fetch.
+  const loggedAlbums = useMemo(() => loggedAlbumsRaw.map(a => {
+    const lists = allReLists.get(a.id);
+    if (!lists || lists.length === 0) return a;
+    const latestRated = [...lists].reverse().find(r => r.rating > 0);
+    return latestRated ? { ...a, lastRating: latestRated.rating } : a;
+  }), [loggedAlbumsRaw, allReLists]);
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
   const [playlistAlbums, setPlaylistAlbums]   = useState<Record<string, { title: string; artist: string }[]>>({});
   const [genreAlbums,    setGenreAlbums]      = useState<Record<string, { title: string; artist: string }[]>>({});
@@ -797,9 +811,9 @@ export default function MyStatsScreen() {
   const cardBorder = colors.border;
 
   // ── Hero stats ────────────────────────────────────────────────────────────
-  const ratedAlbums    = loggedAlbums.filter(a => a.rating > 0);
+  const ratedAlbums    = loggedAlbums.filter(a => effectiveRating(a) > 0);
   const avgRating      = ratedAlbums.length > 0
-    ? (ratedAlbums.reduce((sum, a) => sum + a.rating, 0) / ratedAlbums.length).toFixed(1)
+    ? (ratedAlbums.reduce((sum, a) => sum + effectiveRating(a), 0) / ratedAlbums.length).toFixed(1)
     : '—';
   const uniqueArtists  = new Set(loggedAlbums.map(a => a.artist)).size;
   const totalMs        = loggedAlbums.reduce((sum, a) => sum + (a.durationMs ?? 0), 0);
@@ -873,9 +887,9 @@ export default function MyStatsScreen() {
   // ── Highest rated artists ─────────────────────────────────────────────────
   const artistRatings = new Map<string, number[]>();
   for (const album of loggedAlbums) {
-    if (!album.artist || album.rating <= 0) continue;
+    if (!album.artist || effectiveRating(album) <= 0) continue;
     if (!artistRatings.has(album.artist)) artistRatings.set(album.artist, []);
-    artistRatings.get(album.artist)!.push(album.rating);
+    artistRatings.get(album.artist)!.push(effectiveRating(album));
   }
   const topRatedArtists = [...artistRatings.entries()]
     .filter(([, ratings]) => ratings.length >= 2)
@@ -896,11 +910,11 @@ export default function MyStatsScreen() {
   // ── Highest rated genres ──────────────────────────────────────────────────
   const genreRatings = new Map<string, number[]>();
   for (const album of loggedAlbums) {
-    if (album.rating <= 0) continue;
+    if (effectiveRating(album) <= 0) continue;
     const genre = (album.genreTags ?? []).find(t => MAIN_GENRES.has(t));
     if (genre) {
       if (!genreRatings.has(genre)) genreRatings.set(genre, []);
-      genreRatings.get(genre)!.push(album.rating);
+      genreRatings.get(genre)!.push(effectiveRating(album));
     }
   }
   const topRatedGenres = [...genreRatings.entries()]
@@ -962,7 +976,7 @@ export default function MyStatsScreen() {
   // Fetch community averages for all rated albums (excluding viewed user's own rating)
   useEffect(() => {
     if (!isLoaded) return;
-    const ratedAlbums = loggedAlbums.filter(a => a.rating > 0);
+    const ratedAlbums = loggedAlbums.filter(a => effectiveRating(a) > 0);
     if (ratedAlbums.length === 0) return;
     const run = async (excludeUid: string) => {
       // Match by title+year (not spotify_id) — different users may have different AM IDs for same album
@@ -1065,10 +1079,10 @@ export default function MyStatsScreen() {
   type CompEntry = { album: LoggedAlbum; communityAvg: number; delta: number };
   const compHigher: CompEntry[] = [];
   const compLower:  CompEntry[] = [];
-  for (const album of loggedAlbums.filter(a => a.rating > 0)) {
+  for (const album of loggedAlbums.filter(a => effectiveRating(a) > 0)) {
     const c = communityAvgs[album.id];
     if (!c || c.count < MIN_COMMUNITY) continue;
-    const delta = album.rating - c.avg;
+    const delta = effectiveRating(album) - c.avg;
     if (delta >= 1)  compHigher.push({ album, communityAvg: c.avg, delta });
     if (delta <= -1) compLower.push({  album, communityAvg: c.avg, delta: Math.abs(delta) });
   }
@@ -1171,7 +1185,7 @@ export default function MyStatsScreen() {
   }
 
   async function loadFriendData(friendId: string) {
-    const [albumsRes, profileRes, likedRes, myLikedRes] = await Promise.allSettled([
+    const [albumsRes, profileRes, likedRes, myLikedRes, reListenRes] = await Promise.allSettled([
       supabase.from('user_albums')
         .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, review, is_relistened')
         .eq('user_id', friendId).not('listened_at', 'is', null),
@@ -1184,13 +1198,26 @@ export default function MyStatsScreen() {
         if (!session?.user?.id) return { data: [] };
         return supabase.from('liked_artists').select('artist_id, name').eq('user_id', session.user.id);
       }),
+      supabase.from('re_listens')
+        .select('spotify_id, rating, listened_at')
+        .eq('user_id', friendId).order('listened_at', { ascending: true }),
     ]);
+
+    // Latest re-listen rating per album — same reason as loggedAlbums above:
+    // their avg rating here must match what their own profile shows.
+    const friendLastRating = new Map<string, number>();
+    if (reListenRes.status === 'fulfilled' && (reListenRes.value as any).data) {
+      for (const r of (reListenRes.value as any).data as any[]) {
+        if ((r.rating ?? 0) > 0) friendLastRating.set(r.spotify_id, r.rating);
+      }
+    }
 
     if (albumsRes.status === 'fulfilled' && albumsRes.value.data) {
       const rows = albumsRes.value.data;
       setFriendAlbums(rows.map(r => ({
         id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
         year: r.year ?? 0, rating: r.rating ?? 0,
+        lastRating: friendLastRating.get(r.spotify_id),
         dateLogged: r.listened_at ?? new Date().toISOString(),
         artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
         durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
@@ -1228,9 +1255,9 @@ export default function MyStatsScreen() {
   const compatibility    = Math.round((artistScore * 0.6 + albumScore * 0.4) * 100);
 
   // Friend hero stats
-  const friendRated     = friendAlbums.filter(a => a.rating > 0);
+  const friendRated     = friendAlbums.filter(a => effectiveRating(a) > 0);
   const friendAvgRating = friendRated.length > 0
-    ? (friendRated.reduce((s, a) => s + a.rating, 0) / friendRated.length).toFixed(1) : '—';
+    ? (friendRated.reduce((s, a) => s + effectiveRating(a), 0) / friendRated.length).toFixed(1) : '—';
   const friendHours     = friendAlbums.reduce((s, a) => s + (a.durationMs ?? 0), 0);
   const friendHoursVal  = friendHours > 0 ? Math.round(friendHours / 3_600_000) : '—';
   const friendArtistCount = new Set(friendAlbums.map(a => a.artist)).size;
@@ -1429,8 +1456,8 @@ export default function MyStatsScreen() {
                           <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{item.artist}</Text>
                         </View>
                         <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                          {myEntry?.rating ? <Text style={{ color: ACCENT, fontSize: 12, fontWeight: '700' }}>You: {myEntry.rating}</Text> : null}
-                          {item.rating ? <Text style={{ color: colors.subtext, fontSize: 12, fontWeight: '600' }}>Them: {item.rating}</Text> : null}
+                          {myEntry && effectiveRating(myEntry) > 0 ? <Text style={{ color: ACCENT, fontSize: 12, fontWeight: '700' }}>You: {effectiveRating(myEntry)}</Text> : null}
+                          {effectiveRating(item) > 0 ? <Text style={{ color: colors.subtext, fontSize: 12, fontWeight: '600' }}>Them: {effectiveRating(item)}</Text> : null}
                         </View>
                       </Pressable>
                     );
@@ -1876,7 +1903,7 @@ export default function MyStatsScreen() {
                           title: artist,
                           albums: artistView === 'listend'
                             ? loggedAlbums.filter(a => a.artist === artist)
-                            : loggedAlbums.filter(a => a.artist === artist && a.rating > 0),
+                            : loggedAlbums.filter(a => a.artist === artist && effectiveRating(a) > 0),
                           onTitlePress: () => {
                             setListModal(null);
                             setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist, artworkUrl: artistImages[artist] ?? '' } } as any), 300);
@@ -1950,7 +1977,7 @@ export default function MyStatsScreen() {
                     pillBgColor={colors.elevated}
                     onPress={() => setListModal({
                       title: genre,
-                      albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre && a.rating > 0),
+                      albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre && effectiveRating(a) > 0),
                     })}
                   />
                 ))}
@@ -2248,7 +2275,7 @@ function ComparisonCard({ album, communityAvg, onPress, tint = ACCENT, textColor
   textColor?: string;
   subtextColor?: string;
 }) {
-  const delta    = album.rating - communityAvg;
+  const delta    = effectiveRating(album) - communityAvg;
   const isHigher = delta > 0;
   const deltaColor = isHigher ? GROW_CLR : FADE_CLR;
   const sign       = isHigher ? '+' : '';
@@ -2265,7 +2292,7 @@ function ComparisonCard({ album, communityAvg, onPress, tint = ACCENT, textColor
         <Text style={cc.deltaBadgeText}>{sign}{delta.toFixed(1)}</Text>
       </View>
       <Text style={[cc.title, { color: textColor }]} numberOfLines={2}>{album.title}</Text>
-      <VolumeBadge rating={album.rating} tint={tint} />
+      <VolumeBadge rating={effectiveRating(album)} tint={tint} />
       <Text style={[cc.communityAvg, { color: subtextColor }]}>Community: {communityAvg.toFixed(1)}</Text>
     </Pressable>
   );

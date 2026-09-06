@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { effectiveRating } from '@/lib/effectiveRating';
 import { useState, useEffect } from 'react';
 
 const GRADIENT: [string, string, string] = ['#D4A017', '#B8880F', '#D4A017'];
@@ -181,8 +182,10 @@ export default function ProfileScreen() {
     const d = new Date(a.dateLogged);
     return !isNaN(d.getTime()) && d.getFullYear() === new Date().getFullYear();
   }).length;
-  const avgRating  = albumCount
-    ? (loggedAlbums.reduce((s, a) => s + a.rating, 0) / albumCount).toFixed(1)
+  // Latest rating, not the frozen original — a re-listen replaces the score.
+  const ratedAlbums = loggedAlbums.filter(a => effectiveRating(a) > 0);
+  const avgRating  = ratedAlbums.length
+    ? (ratedAlbums.reduce((s, a) => s + effectiveRating(a), 0) / ratedAlbums.length).toFixed(1)
     : '—';
 
   // Fetch profile row (display_name, username, avatar_url)

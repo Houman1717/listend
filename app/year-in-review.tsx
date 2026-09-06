@@ -13,6 +13,7 @@ import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
+import { effectiveRating } from '@/lib/effectiveRating';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 
 // ─── Style constants (match my-stats.tsx) ─────────────────────────────────────
@@ -44,9 +45,9 @@ function computeYearStats(albums: LoggedAlbum[]) {
     (a, b) => new Date(a.dateLogged).getTime() - new Date(b.dateLogged).getTime(),
   );
 
-  const rated = albums.filter(a => a.rating > 0);
+  const rated = albums.filter(a => effectiveRating(a) > 0);
   const avgRating = rated.length > 0
-    ? (rated.reduce((s, a) => s + a.rating, 0) / rated.length).toFixed(1)
+    ? (rated.reduce((s, a) => s + effectiveRating(a), 0) / rated.length).toFixed(1)
     : '—';
   const totalMs = albums.reduce((s, a) => s + (a.durationMs ?? 0), 0);
   const hours = totalMs > 0 ? Math.round(totalMs / 3_600_000) : 0;
@@ -73,7 +74,7 @@ function computeYearStats(albums: LoggedAlbum[]) {
   // Highest rated (top 12, deduplicated by id)
   const seen = new Set<string>();
   const highestRated = [...rated]
-    .sort((a, b) => b.rating - a.rating || new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime())
+    .sort((a, b) => effectiveRating(b) - effectiveRating(a) || new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime())
     .filter(a => {
       if (seen.has(a.id)) return false;
       seen.add(a.id);
@@ -95,7 +96,7 @@ function computeYearStats(albums: LoggedAlbum[]) {
   // Rating distribution
   const ratingDist = Array.from({ length: 10 }, (_, i) => ({
     rating: i + 1,
-    count: albums.filter(a => a.rating === i + 1).length,
+    count: albums.filter(a => effectiveRating(a) === i + 1).length,
   }));
 
   // Top artists by count
@@ -103,9 +104,9 @@ function computeYearStats(albums: LoggedAlbum[]) {
   const artistRatingMap = new Map<string, number[]>();
   for (const a of albums) {
     artistCountMap.set(a.artist, (artistCountMap.get(a.artist) ?? 0) + 1);
-    if (a.rating > 0) {
+    if (effectiveRating(a) > 0) {
       if (!artistRatingMap.has(a.artist)) artistRatingMap.set(a.artist, []);
-      artistRatingMap.get(a.artist)!.push(a.rating);
+      artistRatingMap.get(a.artist)!.push(effectiveRating(a));
     }
   }
   const topArtistsByCount = [...artistCountMap.entries()]
@@ -182,7 +183,7 @@ function RatingDistribution({ albums, onRatingPress, tint = ACCENT, textColor = 
 }) {
   const dist = Array.from({ length: 10 }, (_, i) => ({
     rating: i + 1,
-    count: albums.filter(a => a.rating === i + 1).length,
+    count: albums.filter(a => effectiveRating(a) === i + 1).length,
   }));
   const maxCount = Math.max(...dist.map(d => d.count), 1);
   return (
@@ -193,7 +194,7 @@ function RatingDistribution({ albums, onRatingPress, tint = ACCENT, textColor = 
           <Pressable
             key={rating}
             style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 10 }, count > 0 && { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => { if (count > 0) onRatingPress(rating, albums.filter(a => a.rating === rating)); }}
+            onPress={() => { if (count > 0) onRatingPress(rating, albums.filter(a => effectiveRating(a) === rating)); }}
             disabled={count === 0}>
             <Text style={{ color: subtextColor, fontSize: 13, fontWeight: '600', width: 18, textAlign: 'right' }}>{rating}</Text>
             <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: trackColor, overflow: 'hidden', flexDirection: 'row' }}>
@@ -368,7 +369,7 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, o
                 <Text style={{ color: txt, fontSize: 12, fontWeight: '600', marginTop: 4 }} numberOfLines={1}>{item.title}</Text>
                 <Text style={{ color: sub, fontSize: 11, marginTop: 1 }} numberOfLines={1}>{item.artist}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 4 }}>
-                  {item.rating > 0 && <VolumeBadge rating={item.rating} tint={tint} />}
+                  {effectiveRating(item) > 0 && <VolumeBadge rating={effectiveRating(item)} tint={tint} />}
                   {onReviewPress && <FontAwesome name="quote-left" size={10} color={tint} />}
                 </View>
               </Pressable>
@@ -448,16 +449,31 @@ export default function YearInReviewScreen() {
   useEffect(() => {
     if (!viewedUserId) return;
     setOtherLoaded(false);
-    supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened')
-      .eq('user_id', viewedUserId)
-      .not('listened_at', 'is', null)
-      .order('listened_at', { ascending: false })
-      .then(({ data }) => {
+    // re_listens comes along because a re-listen replaces the user's score while
+    // user_albums.rating stays frozen at the first listen — without it every
+    // average and breakdown below counts the stale original.
+    Promise.all([
+      supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened')
+        .eq('user_id', viewedUserId)
+        .not('listened_at', 'is', null)
+        .order('listened_at', { ascending: false }),
+      supabase
+        .from('re_listens')
+        .select('spotify_id, rating, listened_at')
+        .eq('user_id', viewedUserId)
+        .order('listened_at', { ascending: true }),
+    ])
+      .then(([{ data }, { data: reListens }]) => {
+        const lastRatingById = new Map<string, number>();
+        for (const r of (reListens ?? []) as any[]) {
+          if ((r.rating ?? 0) > 0) lastRatingById.set(r.spotify_id, r.rating);
+        }
         setOtherAlbums((data ?? []).map(r => ({
           id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
           year: r.year ?? 0, rating: r.rating ?? 0,
+          lastRating: lastRatingById.get(r.spotify_id),
           dateLogged: r.listened_at ?? new Date().toISOString(),
           artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
           durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
@@ -532,9 +548,9 @@ export default function YearInReviewScreen() {
   }, [viewedUserId]);
 
   // All-time avg
-  const allRated = loggedAlbums.filter(a => a.rating > 0);
+  const allRated = loggedAlbums.filter(a => effectiveRating(a) > 0);
   const allTimeAvg = allRated.length > 0
-    ? (allRated.reduce((s, a) => s + a.rating, 0) / allRated.length)
+    ? (allRated.reduce((s, a) => s + effectiveRating(a), 0) / allRated.length)
     : null;
 
   function goToAlbum(a: LoggedAlbum) {
@@ -556,8 +572,8 @@ export default function YearInReviewScreen() {
   const buildHighestRated = (albums: LoggedAlbum[]) => {
     const seen = new Set<string>();
     return [...albums]
-      .filter(a => a.rating > 0)
-      .sort((a, b) => b.rating - a.rating || new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime())
+      .filter(a => effectiveRating(a) > 0)
+      .sort((a, b) => effectiveRating(b) - effectiveRating(a) || new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime())
       .filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; })
       .slice(0, 20);
   };
@@ -767,7 +783,7 @@ export default function YearInReviewScreen() {
                                 : <View style={{ width: 90, height: 90, borderRadius: 8, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}>
                                     <FontAwesome name="music" size={28} color={SUBTEXT} />
                                   </View>}
-                              <VolumeBadge rating={album.rating} tint={tint} />
+                              <VolumeBadge rating={effectiveRating(album)} tint={tint} />
                               <Text style={{ color: txt, fontSize: 11, fontWeight: '600', marginTop: 4 }} numberOfLines={1}>{album.title}</Text>
                               <Text style={{ color: sub, fontSize: 10, marginTop: 1 }} numberOfLines={1}>{album.artist}</Text>
                               <Text style={{ color: muted, fontSize: 10, marginTop: 1 }}>{album.year}</Text>
@@ -809,8 +825,8 @@ export default function YearInReviewScreen() {
                               <FontAwesome name="repeat" size={11} color={tint} />
                               <Text style={{ color: tint, fontSize: 13, fontWeight: '800' }}>{album.reListenCount}×</Text>
                             </View>
-                            {album.rating > 0 && (
-                              <Text style={{ color: sub, fontSize: 12, fontWeight: '600' }}>{album.rating}</Text>
+                            {effectiveRating(album) > 0 && (
+                              <Text style={{ color: sub, fontSize: 12, fontWeight: '600' }}>{effectiveRating(album)}</Text>
                             )}
                           </View>
                         </Pressable>
@@ -940,7 +956,7 @@ export default function YearInReviewScreen() {
                 )}
 
                 {/* ── Rating Distribution ── */}
-                {yearAlbums.filter(a => a.rating > 0).length > 0 && (
+                {yearAlbums.filter(a => effectiveRating(a) > 0).length > 0 && (
                   <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                     <Text style={[st.label, { color: muted }]}>RATING DISTRIBUTION</Text>
                     <View style={{ marginTop: 14 }}>
@@ -1012,7 +1028,7 @@ export default function YearInReviewScreen() {
                                     title: artist,
                                     albums: artistView === 'listend'
                                       ? yearAlbums.filter(a => a.artist === artist)
-                                      : yearAlbums.filter(a => a.artist === artist && a.rating > 0),
+                                      : yearAlbums.filter(a => a.artist === artist && effectiveRating(a) > 0),
                                     onTitlePress: () => {
                                       setModal(null);
                                       setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist } } as any), 300);

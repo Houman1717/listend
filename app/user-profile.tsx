@@ -474,6 +474,7 @@ export default function UserProfileScreen() {
   const [thisYearCount, setThisYearCount] = useState(0);
   const [avgRating,     setAvgRating]     = useState('—');
   const [ratingDist,    setRatingDist]    = useState<RatingDist[]>([]);
+  const [relistenLatest, setRelistenLatest] = useState<Map<string, { rating?: number; review?: string }>>(new Map());
   const [reviewCount,   setReviewCount]   = useState(0);
   const [wantCount,     setWantCount]     = useState<number | null>(null);
   const [loadError,     setLoadError]     = useState(false);
@@ -572,16 +573,25 @@ export default function UserProfileScreen() {
             .order('listened_at', { ascending: false }),
           supabase
             .from('re_listens')
-            .select('spotify_id, review')
+            .select('spotify_id, rating, review, listened_at')
             .eq('user_id', viewedUserId)
-            .not('review', 'is', null),
+            .order('listened_at', { ascending: true }),
         ]);
 
         if (userAlbums) {
           setUserAlbums(userAlbums);
-          const relistenedIdsWithReview = new Set((relistenRows ?? []).map((r: any) => r.spotify_id));
+          // Latest re-listen per album — its rating/review supersede the frozen
+          // originals on user_albums, so stats reflect what the user thinks now.
+          const latest = new Map<string, { rating?: number; review?: string }>();
+          const relistenedIdsWithReview = new Set<string>();
+          for (const r of (relistenRows ?? []) as any[]) {
+            latest.set(r.spotify_id, { rating: r.rating ?? undefined, review: r.review ?? undefined });
+            if (r.review) relistenedIdsWithReview.add(r.spotify_id);
+          }
+          setRelistenLatest(latest);
+          const ratingOf = (a: any) => latest.get(a.spotify_id)?.rating ?? a.rating ?? 0;
           const thisYear = new Date().getFullYear();
-          const withRating = userAlbums.filter((a: any) => a.rating > 0);
+          const withRating = userAlbums.filter((a: any) => ratingOf(a) > 0);
           setAlbumCount(userAlbums.length);
           setThisYearCount(userAlbums.filter((a: any) => {
             const y = a.listened_at ? new Date(a.listened_at).getFullYear() : a.year;
@@ -589,11 +599,11 @@ export default function UserProfileScreen() {
           }).length);
           setReviewCount(userAlbums.filter((a: any) => !!a.review || (a.is_relistened && relistenedIdsWithReview.has(a.spotify_id))).length);
           if (withRating.length > 0) {
-            const sum = withRating.reduce((acc: number, a: any) => acc + a.rating, 0);
+            const sum = withRating.reduce((acc: number, a: any) => acc + ratingOf(a), 0);
             setAvgRating((sum / withRating.length).toFixed(1));
             const dist: RatingDist[] = Array.from({ length: 10 }, (_, i) => ({
               rating: i + 1,
-              count: withRating.filter((a: any) => a.rating === i + 1).length,
+              count: withRating.filter((a: any) => ratingOf(a) === i + 1).length,
             }));
             setRatingDist(dist);
           }
@@ -1046,6 +1056,8 @@ export default function UserProfileScreen() {
                           year: found.year,
                           rating: found.rating ?? 0,
                           review: found.review ?? '',
+                          lastRating: relistenLatest.get(found.spotify_id)?.rating,
+                          lastReview: relistenLatest.get(found.spotify_id)?.review,
                           dateLogged: found.listened_at ?? '',
                           artworkUrl: found.artwork_url ?? a.artworkUrl,
                           coverColor: '#2a1e14',
