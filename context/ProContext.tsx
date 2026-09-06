@@ -31,7 +31,7 @@ const ProContext = createContext<ProContextValue>({
 });
 
 export function ProProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [isPro,           setIsPro]           = useState(false);
   const [proLoaded,       setProLoaded]       = useState(false);
   const [proTheme,        setProThemeState]   = useState<ProThemeKey>('default');
@@ -58,10 +58,14 @@ export function ProProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    // Signed out — nothing to wait for.
+    // Auth restores the stored session asynchronously, so `user` is null for a
+    // moment on every cold start. Treating that as "signed out" marked Pro as
+    // loaded-and-false and flashed the upsells at paying users.
+    if (authLoading) return;
+    // Genuinely signed out — nothing to wait for.
     if (!user) { setProLoaded(true); return; }
     if (loadedFor.current !== user.id) loadPro();
-  }, [user?.id, loadPro]);
+  }, [user?.id, authLoading, loadPro]);
 
   async function setProTheme(theme: ProThemeKey) {
     if (!user) return;
