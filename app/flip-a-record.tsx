@@ -37,12 +37,31 @@ const ART_SIZE  = SCREEN_W - 48;
 
 type AlbumData = { spotifyId: string; artworkUrl: string };
 
+// Loose match so punctuation/case/spacing differences between the pool entry
+// and the catalog don't count as a mismatch ("Blood, Sweat & Tears" vs
+// "Blood Sweat & Tears").
+const searchKey = (s: string) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
 async function fetchAlbumDataOnce(title: string, artist: string): Promise<AlbumData> {
   const q   = encodeURIComponent(`${title} ${artist}`);
   const res = await fetch(`${API_URL}/search?q=${q}&type=album`);
   if (!res.ok) return { spotifyId: '', artworkUrl: '' };
-  const data: { id: string; artworkUrl: string }[] = await res.json();
-  const hit = data[0];
+  const data: { id: string; artist?: string; title?: string; artworkUrl: string }[] = await res.json();
+
+  // Album titles are not unique — "Blood, Sweat & Tears" is a 1969 record by
+  // Blood, Sweat & Tears and a 2011 one by Ace Hood, and Apple's ranking can
+  // put either first. Taking data[0] blindly pinned the wrong album's ID and
+  // artwork onto the flip. Trust the artist, and only fall back to the top hit
+  // when nothing in the results is by them.
+  const ak = searchKey(artist);
+  const tk = searchKey(title);
+  const byArtist = data.filter(r => searchKey(r.artist ?? '') === ak);
+  const hit =
+    byArtist.find(r => searchKey(r.title ?? '') === tk) ??
+    byArtist.find(r => searchKey(r.title ?? '').startsWith(tk)) ??
+    byArtist[0] ??
+    data[0];
+
   return { spotifyId: hit?.id ?? '', artworkUrl: hit?.artworkUrl ?? '' };
 }
 

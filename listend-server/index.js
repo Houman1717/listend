@@ -175,17 +175,32 @@ async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, 
       const filtered = queryHasQualifier ? candidates : candidates.filter(item => !hasQualifier(item.attributes?.name));
       const pool = filtered.length > 0 ? filtered : candidates;
 
+      // Artist agreement is the strongest signal there is, so every
+      // artist-matching branch runs before the title-only one. Getting that
+      // order wrong is what sent Blood, Sweat & Tears' self-titled album to
+      // Ace Hood's "Blood Sweat & Tears": the real record is catalogued as
+      // "Blood, Sweat & Tears (Expanded Edition)", the qualifier filter
+      // dropped it out of `pool`, and the title-only branch then handed the
+      // key to a same-named album by a different artist 40 years later.
       const match =
         pool.find(item => normalizeKey(item.attributes?.name) === nt && normalizeKey(item.attributes?.artistName) === na) ??
-        pool.find(item => normalizeKey(item.attributes?.name) === nt) ??
-        // Some albums (e.g. Drake's "Take Care") only exist on the catalog as a
-        // "Deluxe"/"Anniversary" edition — the qualifier filter above would
-        // have stripped that candidate out of `pool` entirely, leaving an
-        // unrelated album to win by default. Before giving up and taking
-        // pool[0], check the *unfiltered* candidates for one whose artist
-        // matches exactly and whose title starts with the query title —
-        // requiring an exact artist match keeps this safe from false positives.
+        // Same exact-title-and-artist test against the *unfiltered* list, for
+        // when the query itself was unqualified but every catalog entry for
+        // it carries a qualifier.
+        candidates.find(item => normalizeKey(item.attributes?.name) === nt && normalizeKey(item.attributes?.artistName) === na) ??
+        // Some albums (e.g. Drake's "Take Care", or the Blood, Sweat & Tears
+        // case above) only exist on the catalog as a "Deluxe"/"Anniversary"/
+        // "Expanded" edition — the qualifier filter stripped that candidate
+        // out of `pool` entirely. Check the unfiltered candidates for one
+        // whose artist matches exactly and whose title starts with the query
+        // title; requiring the exact artist match keeps this safe from false
+        // positives.
         candidates.find(item => normalizeKey(item.attributes?.artistName) === na && normalizeKey(item.attributes?.name).startsWith(nt)) ??
+        // Last resort before pool[0]: title matches but the artist string
+        // doesn't. Legitimately needed for collaboration/credit differences
+        // ("Jay-Z" vs "JAY-Z & Kanye West"), which is why it stays — but only
+        // after every artist-verified option above has been ruled out.
+        pool.find(item => normalizeKey(item.attributes?.name) === nt) ??
         pool[0];
 
       if (match) {
@@ -3364,6 +3379,67 @@ app.get('/api/admin/populate-new-releases', requireAdmin, async (req, res) => {
     res.json({ ok: true, inserted: populated.length, errors: errors.length, errorDetails: errors });
   } catch (err) {
     console.error('[populate-new-releases] fatal:', err.message ?? err);
+    res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
+  }
+});
+
+// ── GET /api/admin/repin-canonical-album ──────────────────────────────────────
+// Clears a poisoned canonical_albums row and re-resolves it against Apple
+// Music. Needed whenever the resolver's matching rules improve: the old wrong
+// answer is cached under normalized_key and would otherwise be returned
+// forever, since the cache is checked before the search runs.
+// Also reports how many user_albums rows are still logged under the old ID, so
+// you can see whether any real user data needs moving across.
+// Usage: ?artist=Blood%2C%20Sweat%20%26%20Tears&title=Blood%2C%20Sweat%20%26%20Tears
+
+app.get('/api/admin/repin-canonical-album', requireAdmin, async (req, res) => {
+  const { artist, title } = req.query;
+  if (!artist || !title) {
+    return res.status(400).json({ error: 'artist and title are both required' });
+  }
+
+  try {
+    const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
+
+    const { data: before } = await supabase
+      .from('canonical_albums')
+      .select('canonical_id, title, artist, year')
+      .eq('normalized_key', normalizedKey)
+      .maybeSingle();
+
+    const { error: delErr } = await supabase
+      .from('canonical_albums')
+      .delete()
+      .eq('normalized_key', normalizedKey);
+    if (delErr) throw delErr;
+
+    const resolved = await resolveCanonicalAlbum({ title, artist });
+    if (!resolved?.id) {
+      return res.status(404).json({ error: 'Could not resolve the album in the AM catalog' });
+    }
+
+    // Rows still pointing at the old ID are left alone — moving user reviews
+    // between albums is a separate, deliberate call, not a side effect of
+    // re-pinning.
+    let staleLogs = null;
+    if (before?.canonical_id && before.canonical_id !== resolved.id) {
+      const { count } = await supabase
+        .from('user_albums')
+        .select('*', { count: 'exact', head: true })
+        .eq('spotify_id', before.canonical_id);
+      staleLogs = count ?? 0;
+    }
+
+    res.json({
+      ok: true,
+      normalizedKey,
+      before: before ?? null,
+      after: resolved,
+      changed: before?.canonical_id !== resolved.id,
+      staleLogsOnOldId: staleLogs,
+    });
+  } catch (err) {
+    console.error('[/api/admin/repin-canonical-album]', err.message ?? err);
     res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
   }
 });
