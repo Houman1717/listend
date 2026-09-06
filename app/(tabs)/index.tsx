@@ -642,8 +642,9 @@ function FriendCard({
       ) : (
         <ArtFallback size={artSize} radius={6} label={friend.album} />
       )}
-      <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress?.(); }} hitSlop={6}>
-        <Text style={[s.friendUser, { color: '#D4A017' }]} numberOfLines={1}>@{friend.user}</Text>
+      <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress?.(); }} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Text style={[s.friendUser, { color: '#D4A017', flexShrink: 1 }]} numberOfLines={1}>@{friend.user}</Text>
+        {friend.isPro && <ProBadge size="xs" />}
       </Pressable>
       <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{friend.album}</Text>
       <Text style={[s.cardSub,    { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{friend.artist}</Text>
@@ -830,7 +831,7 @@ function FriendReviewModal({
 
 // ─── Friends Recent Activity types + fetch ────────────────────────────────────
 
-type FriendProfile = { id: string; username: string | null; avatarUrl: string | null };
+type FriendProfile = { id: string; username: string | null; avatarUrl: string | null; isPro: boolean };
 
 type FriendActivityItem =
   | { kind: 'top5';            key: string; friend: FriendProfile; category: string; itemId: string; itemName: string; itemImageUrl: string | null; position: number; dateMs: number; dateLabel: string }
@@ -873,9 +874,9 @@ async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> 
   const friendIds = [...new Set((outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string))];
   if (friendIds.length === 0) return [];
 
-  const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', friendIds);
+  const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', friendIds);
   const profileMap = new Map<string, FriendProfile>();
-  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { id: p.id, username: p.username, avatarUrl: p.avatar_url });
+  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { id: p.id, username: p.username, avatarUrl: p.avatar_url, isPro: !!(p.is_pro) });
 
   const items: FriendActivityItem[] = [];
 
@@ -1097,8 +1098,9 @@ function FriendActivityCard({
           <Text style={{ color: isDark ? '#7a5535' : '#a07850', fontSize: 28, fontWeight: '700' }}>{itemName.charAt(0)}</Text>
         </View>
       )}
-      <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress(); }} hitSlop={6}>
-        <Text style={{ color: '#D4A017', fontSize: 11, fontWeight: '700' }} numberOfLines={1}>@{item.friend.username ?? 'user'}</Text>
+      <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress(); }} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Text style={{ color: '#D4A017', fontSize: 11, fontWeight: '700', flexShrink: 1 }} numberOfLines={1}>@{item.friend.username ?? 'user'}</Text>
+        {item.friend.isPro && <ProBadge size="xs" />}
       </Pressable>
       <Text style={{ color: isDark ? '#f5e6c8' : '#1A0F0A', fontSize: 12, fontWeight: '600', lineHeight: 16 }} numberOfLines={2}>{itemName}</Text>
       {itemSub ? <Text style={{ color: isDark ? '#A08060' : '#6B4C35', fontSize: 11 }} numberOfLines={1}>{itemSub}</Text> : null}
