@@ -27,6 +27,8 @@ import Colors, { type ColorsShape } from '@/constants/Colors';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
+import { ProAttributionSheet } from '@/components/ProAttributionSheet';
+import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { LoggedAlbum } from '@/context/AlbumsContext';
@@ -444,6 +446,10 @@ export default function UserProfileScreen() {
 
   const [profile,        setProfile]        = useState<Profile | null>(null);
   const [loading,        setLoading]        = useState(true);
+
+  // Viewer's own Pro state — drives whether the gold tick is an upsell or just a badge
+  const { isPro: viewerIsPro, proLoaded, showPaywall } = usePro();
+  const [proSheetVisible, setProSheetVisible] = useState(false);
 
   // Apply the viewed user's pro theme if they have one (default theme respects system light/dark)
   const colors = (profile?.is_pro && profile.pro_theme && profile.pro_theme !== 'default')
@@ -908,10 +914,23 @@ export default function UserProfileScreen() {
           )}
         </View>
 
-        {/* Name + Pro badge */}
+        {/* Name + Pro badge. For non-Pro viewers the tick is a tap target that
+            explains itself — this is the only Pro entry point that rides on
+            another user's purchase, so it stays subtle. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={[s.name, { color: colors.text }]}>{name}</Text>
-          {profile.is_pro && <ProBadge />}
+          {profile.is_pro && (
+            (viewerIsPro || !proLoaded)
+              ? <ProBadge />
+              : (
+                <Pressable
+                  onPress={() => setProSheetVisible(true)}
+                  hitSlop={10}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                  <ProBadge />
+                </Pressable>
+              )
+          )}
         </View>
 
         {/* Username */}
@@ -1192,6 +1211,19 @@ export default function UserProfileScreen() {
         })}
       />
     )}
+
+    <ProAttributionSheet
+      visible={proSheetVisible}
+      onClose={() => setProSheetVisible(false)}
+      onGetPro={() => {
+        setProSheetVisible(false);
+        // Let the sheet finish dismissing before the paywall slides up,
+        // otherwise the two modals fight over the presentation context.
+        setTimeout(() => showPaywall(), 300);
+      }}
+      displayName={profile?.display_name || profile?.username || 'This user'}
+      themeKey={(profile?.pro_theme as any) ?? null}
+    />
     </>
   );
 }

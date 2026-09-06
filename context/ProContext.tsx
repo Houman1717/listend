@@ -6,6 +6,9 @@ import { capture } from '@/lib/analytics';
 
 interface ProContextValue {
   isPro: boolean;
+  /** False until the profile row has been read. Upsell UI must wait on this,
+   *  otherwise a paying user is treated as free for the length of the query. */
+  proLoaded: boolean;
   proTheme: ProThemeKey;
   setProTheme: (theme: ProThemeKey) => Promise<void>;
   paywallVisible: boolean;
@@ -17,6 +20,7 @@ interface ProContextValue {
 
 const ProContext = createContext<ProContextValue>({
   isPro: false,
+  proLoaded: false,
   proTheme: 'default',
   setProTheme: async () => {},
   paywallVisible: false,
@@ -29,6 +33,7 @@ const ProContext = createContext<ProContextValue>({
 export function ProProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [isPro,           setIsPro]           = useState(false);
+  const [proLoaded,       setProLoaded]       = useState(false);
   const [proTheme,        setProThemeState]   = useState<ProThemeKey>('default');
   const [paywallVisible,  setPaywallVisible]  = useState(false);
   const loadedFor = useRef<string | null>(null);
@@ -46,11 +51,16 @@ export function ProProvider({ children }: { children: React.ReactNode }) {
           setProThemeState((data.pro_theme as ProThemeKey) ?? 'default');
           loadedFor.current = user.id;
         }
+        // Mark loaded even when the row is missing or the query failed, so a
+        // free user isn't left staring at permanently suppressed upsells.
+        setProLoaded(true);
       });
   }, [user?.id]);
 
   useEffect(() => {
-    if (user && loadedFor.current !== user.id) loadPro();
+    // Signed out — nothing to wait for.
+    if (!user) { setProLoaded(true); return; }
+    if (loadedFor.current !== user.id) loadPro();
   }, [user?.id, loadPro]);
 
   async function setProTheme(theme: ProThemeKey) {
@@ -62,6 +72,7 @@ export function ProProvider({ children }: { children: React.ReactNode }) {
   return (
     <ProContext.Provider value={{
       isPro,
+      proLoaded,
       proTheme,
       setProTheme,
       paywallVisible,
@@ -71,7 +82,7 @@ export function ProProvider({ children }: { children: React.ReactNode }) {
       // RevenueCat's own purchase/restore result is already ground truth —
       // set it immediately instead of racing the fire-and-forget Supabase
       // mirror write that syncCustomerInfo kicks off in RevenueCatContext.
-      markProActive: () => { loadedFor.current = user?.id ?? null; setIsPro(true); },
+      markProActive: () => { loadedFor.current = user?.id ?? null; setIsPro(true); setProLoaded(true); },
     }}>
       {children}
     </ProContext.Provider>

@@ -1339,7 +1339,9 @@ export default function ListendScreen() {
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                                                                    onPress={() => router.push('/dms')} badge={unreadDMCount} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="bar-chart"  label="My Stats"        sub="Your listening insights"                                                     onPress={() => isPro ? router.push('/my-stats') : showPaywall()} />
+        {/* Always navigate — my-stats renders its own tease for free users, which
+            sells better than firing the paywall straight off this row. */}
+        <NavRow colors={colors} icon="bar-chart"  label="My Stats"        sub="Your listening insights"                                                     onPress={() => router.push('/my-stats')} />
       </View>
 
     </ScrollView>

@@ -26,6 +26,7 @@ import Colors from '@/constants/Colors';
 import { useFlip, FlipStatus, FlippedRecord } from '@/context/FlipContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePro } from '@/context/ProContext';
 import { supabase } from '@/lib/supabase';
 import { FLIP_POOL, FlipAlbum } from '@/constants/FlipPool';
 
@@ -712,6 +713,7 @@ export default function FlipARecordScreen() {
   const { history, cooldownUntil, currentFlip, poolExhausted, libraryLoggedIds, flip, markLogged, markDidntListen } = useFlip();
   const { setPendingAlbum, addToWantToListen, removeFromWantToListen, wantToListen, loggedAlbums } = useAlbums();
   const { user } = useAuth();
+  const { isPro, proLoaded, showPaywall } = usePro();
 
   const [now, setNow]                          = useState(Date.now());
   const [fullListVisible, setFullListVisible]  = useState(false);
@@ -1259,7 +1261,7 @@ export default function FlipARecordScreen() {
                 </View>
               )}
 
-              {/* Countdown */}
+              {/* Countdown — free users wait 12h, so say what Pro would do here */}
               {cooldownActive && (
                 <View style={sf.countdownWrap}>
                   <Ionicons name="time-outline" size={14} color={colors.subtext} />
@@ -1267,6 +1269,15 @@ export default function FlipARecordScreen() {
                     {`Next flip in ${formatCountdown(remainingMs)}`}
                   </Text>
                 </View>
+              )}
+              {cooldownActive && proLoaded && !isPro && (
+                <Pressable
+                  onPress={showPaywall}
+                  style={({ pressed }) => [sf.cooldownUpsell, { opacity: pressed ? 0.7 : 1, borderColor: '#D4A017' }]}>
+                  <Ionicons name="flash" size={13} color="#D4A017" />
+                  <Text style={sf.cooldownUpsellText}>Pro flips every hour</Text>
+                  <Ionicons name="chevron-forward" size={12} color="#D4A017" />
+                </Pressable>
               )}
             </View>
           </Animated.View>
@@ -1449,6 +1460,14 @@ const sf = StyleSheet.create({
 
   countdownWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 20 },
   countdown:     { fontSize: 13, fontWeight: '500', letterSpacing: -0.1 },
+  cooldownUpsell: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    alignSelf: 'center', marginTop: -10, marginBottom: 18,
+    paddingVertical: 8, paddingHorizontal: 14,
+    borderRadius: 999, borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(212,160,23,0.10)',
+  },
+  cooldownUpsellText: { color: '#D4A017', fontSize: 12.5, fontWeight: '700', letterSpacing: -0.1 },
 
   // Stats
   statsBlock:   { marginTop: 12, gap: 8 },

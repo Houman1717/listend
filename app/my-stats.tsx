@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 import { FLIP_POOL } from '@/constants/FlipPool';
 import { useFlip } from '@/context/FlipContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const MAIN_GENRES = new Set([
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
@@ -708,7 +709,7 @@ const yc = StyleSheet.create({
 
 export default function MyStatsScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme: ownProTheme, showPaywall } = usePro();
+  const { isPro, proLoaded, proTheme: ownProTheme, showPaywall } = usePro();
   const params = useLocalSearchParams<{ userId?: string; proTheme?: string; displayName?: string; viewedIsPro?: string }>();
   const viewedUserId  = params.userId ?? null;
   const viewedIsPro   = params.viewedIsPro === '1';
@@ -1332,39 +1333,156 @@ export default function MyStatsScreen() {
     } as any);
   }
 
-  // ── Pro gate — gated on the viewed profile's own Pro status, not the viewer's ──
-  if (viewedUserId ? !viewedIsPro : !isPro) {
+  // ── Other-user gate — the viewed profile isn't Pro, so there's nothing to show ──
+  if (viewedUserId && !viewedIsPro) {
+    const c = Colors[colorScheme ?? 'dark'];
     return (
       <>
         <Stack.Screen options={{
           title: 'My Stats',
-          headerStyle: { backgroundColor: Colors[colorScheme ?? 'dark'].background },
-          headerTintColor: Colors[colorScheme ?? 'dark'].text,
+          headerStyle: { backgroundColor: c.background },
+          headerTintColor: c.text,
           headerShadowVisible: false,
         }} />
-        <View style={{ flex: 1, backgroundColor: Colors[colorScheme ?? 'dark'].background, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20 }}>
-          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#2A1E00', borderWidth: 1.5, borderColor: '#D4A017', alignItems: 'center', justifyContent: 'center' }}>
-            <FontAwesome name="lock" size={28} color="#D4A017" />
+        <View style={{ flex: 1, backgroundColor: c.background, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20 }}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#2A1E00', borderWidth: 1.5, borderColor: ACCENT, alignItems: 'center', justifyContent: 'center' }}>
+            <FontAwesome name="lock" size={28} color={ACCENT} />
           </View>
-          <Text style={{ color: Colors[colorScheme ?? 'dark'].text, fontSize: 22, fontWeight: '800', textAlign: 'center', letterSpacing: -0.3 }}>
-            {viewedUserId ? 'Stats Not Available' : 'My Stats is a Pro Feature'}
+          <Text style={{ color: c.text, fontSize: 22, fontWeight: '800', textAlign: 'center', letterSpacing: -0.3 }}>
+            Stats Not Available
           </Text>
-          <Text style={{ color: '#A08060', fontSize: 14, textAlign: 'center', lineHeight: 21 }}>
-            {viewedUserId
-              ? `${params.displayName || 'This user'} hasn't unlocked Listend Pro, so their stats aren't available to view.`
-              : 'Unlock your full listening history — genre breakdowns, decade distribution, community comparisons, re-listen streaks, and more.'}
+          <Text style={{ color: SUBTEXT, fontSize: 14, textAlign: 'center', lineHeight: 21 }}>
+            {`${params.displayName || 'This user'} hasn't unlocked Listend Pro, so their stats aren't available to view.`}
           </Text>
-          {!viewedUserId && (
+        </View>
+      </>
+    );
+  }
+
+  // ── Pro status still loading — hold rather than flash the tease at a paying
+  //    user while the profile query is in flight ──
+  if (!viewedUserId && !proLoaded) {
+    const c = Colors[colorScheme ?? 'dark'];
+    return (
+      <>
+        <Stack.Screen options={{
+          title: 'My Stats',
+          headerStyle: { backgroundColor: c.background },
+          headerTintColor: c.text,
+          headerShadowVisible: false,
+        }} />
+        <View style={{ flex: 1, backgroundColor: c.background, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={ACCENT} />
+        </View>
+      </>
+    );
+  }
+
+  // ── Own Pro gate — tease with one real, unlocked number, then blur the rest ──
+  if (!isPro) {
+    const c = Colors[colorScheme ?? 'dark'];
+    // Everything below the hero stays locked. Labels are real so the preview is
+    // honest about what's inside; the values are masked.
+    const hasHours = typeof totalHours === 'number' && totalHours > 0;
+    const lockedTiles = [
+      { label: hasHours ? 'Albums Logged' : 'Listening Hours', value: hasHours ? String(loggedAlbums.length) : '•••' },
+      { label: 'Unique Artists', value: '••' },
+      { label: 'Avg Rating',     value: '•••' },
+      { label: 'Best Streak',    value: '••' },
+    ];
+    const lockedSections = [
+      { icon: 'pie-chart',  label: 'Genre Breakdown',      sub: 'What you actually listen to, ranked' },
+      { icon: 'bar-chart',  label: 'Decade Distribution',  sub: 'Every decade you’ve logged, drillable by year' },
+      { icon: 'users',      label: 'You vs the Community', sub: 'Where you rate higher and lower than everyone else' },
+      { icon: 'line-chart', label: 'Growers & Faders',     sub: 'Albums your re-listens changed your mind about' },
+      { icon: 'star',       label: 'Most Listend Artists', sub: 'Your most-played artists of all time' },
+    ];
+
+    return (
+      <>
+        <Stack.Screen options={{
+          title: 'My Stats',
+          headerStyle: { backgroundColor: c.background },
+          headerTintColor: c.text,
+          headerShadowVisible: false,
+        }} />
+        <View style={{ flex: 1, backgroundColor: c.background }}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 140 }} showsVerticalScrollIndicator={false}>
+
+            {/* Hero — one real number, given away for free. Durations aren't always
+                cached, so fall back to the album count rather than showing a dash. */}
+            <View style={{ backgroundColor: c.card, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, padding: 24, alignItems: 'center' }}>
+              <Text style={{ color: c.subtext, fontSize: 12, fontWeight: '700', letterSpacing: 1.1 }}>
+                {hasHours ? "YOU'VE LISTENED FOR" : "YOU'VE LOGGED"}
+              </Text>
+              <Text style={{ color: ACCENT, fontSize: 56, fontWeight: '800', letterSpacing: -1.5, marginTop: 6 }}>
+                {hasHours ? totalHours : loggedAlbums.length}
+              </Text>
+              <Text style={{ color: c.text, fontSize: 15, fontWeight: '600', marginTop: -2 }}>
+                {hasHours
+                  ? (totalHours === 1 ? 'hour' : 'hours')
+                  : (loggedAlbums.length === 1 ? 'album' : 'albums')}
+              </Text>
+              <Text style={{ color: c.subtext, fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 14 }}>
+                That's one of {lockedSections.length + lockedTiles.length + 1} things My Stats knows about your listening. Here's the rest.
+              </Text>
+            </View>
+
+            {/* Locked tiles + sections, faded behind a scrim */}
+            <View style={{ marginTop: 14 }}>
+              <View style={{ opacity: 0.4 }} pointerEvents="none">
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {lockedTiles.map(t => (
+                    <View
+                      key={t.label}
+                      style={{ flexGrow: 1, flexBasis: '47%', backgroundColor: c.card, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, paddingVertical: 18, alignItems: 'center' }}>
+                      <Text style={{ color: ACCENT, fontSize: 24, fontWeight: '800' }}>{t.value}</Text>
+                      <Text style={{ color: c.subtext, fontSize: 11, fontWeight: '600', marginTop: 4 }}>{t.label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={{ marginTop: 10, gap: 10 }}>
+                  {lockedSections.map(sec => (
+                    <View
+                      key={sec.label}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: c.card, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, padding: 16 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(212,160,23,0.14)', alignItems: 'center', justifyContent: 'center' }}>
+                        <FontAwesome name={sec.icon as any} size={15} color={ACCENT} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: c.text, fontSize: 14, fontWeight: '700' }}>{sec.label}</Text>
+                        <Text style={{ color: c.subtext, fontSize: 12, marginTop: 2 }}>{sec.sub}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Fade the locked stack out into the background */}
+              <LinearGradient
+                colors={['transparent', c.background]}
+                style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 220 }}
+                pointerEvents="none"
+              />
+            </View>
+          </ScrollView>
+
+          {/* Pinned unlock bar */}
+          <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom + 12, backgroundColor: c.background, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
             <Pressable
               onPress={showPaywall}
-              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1, borderRadius: 14, overflow: 'hidden', alignSelf: 'stretch' })}>
-              <View style={{ backgroundColor: '#D4A017', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}>
+              style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, borderRadius: 14, overflow: 'hidden' })}>
+              <View style={{ backgroundColor: ACCENT, borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}>
                 <Text style={{ color: '#0F0A07', fontSize: 16, fontWeight: '800', letterSpacing: 0.2 }}>
-                  Unlock with Pro
+                  Unlock My Stats
                 </Text>
               </View>
             </Pressable>
-          )}
+            <Text style={{ color: c.subtext, fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+              Included with Listend Pro
+            </Text>
+          </View>
         </View>
       </>
     );

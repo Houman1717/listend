@@ -36,6 +36,8 @@ import {
 } from '@/lib/homeData';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
+import { ProHomeCard } from '@/components/ProHomeCard';
+import { usePro } from '@/context/ProContext';
 
 // ─── Placeholder friends ──────────────────────────────────────────────────────
 
@@ -1121,6 +1123,7 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
 
   const { user } = useAuth();
+  const { showPaywall } = usePro();
   const { loggedAlbums } = useAlbums();
   const loggedIds = new Set(loggedAlbums.map((a) => a.id));
 
@@ -1420,6 +1423,9 @@ export default function HomeScreen() {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} colors={[colors.tint]} />
       }>
+
+      {/* Pro promo — hides itself for Pro users and for 30 days after dismissal */}
+      <ProHomeCard colors={colors} onPress={showPaywall} />
 
       {/* 1 — Top Listend Albums This Week */}
       <Section title="Top Listend Albums This Week" loading={loading}>

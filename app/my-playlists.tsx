@@ -341,7 +341,7 @@ async function buildLikedEntries(
 
 export default function MyPlaylistsScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme: ownProTheme, showPaywall } = usePro();
+  const { isPro, proLoaded, proTheme: ownProTheme, showPaywall } = usePro();
   const { userId: paramUserId, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
   const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
   const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
@@ -680,11 +680,29 @@ export default function MyPlaylistsScreen() {
             <FontAwesome name="plus" size={13} color={colors.tint} />
             <Text style={[s.newBtnText, { color: colors.tint }]}>New Playlist</Text>
           </Pressable>
-          {!isPro && (
-            <Text style={{ fontSize: 12, color: colors.subtext }}>
-              {playlists.length}/3 free
-            </Text>
-          )}
+          {/* Free-tier counter doubles as the upsell — at the limit it goes gold
+              so the wall is visible before it's hit, not only on the 4th tap. */}
+          {proLoaded && !isPro && (() => {
+            const atLimit = playlists.length >= 3;
+            return (
+              <Pressable
+                onPress={showPaywall}
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 5,
+                  paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: atLimit ? '#D4A017' : colors.border,
+                  backgroundColor: atLimit ? 'rgba(212,160,23,0.12)' : 'transparent',
+                  opacity: pressed ? 0.7 : 1,
+                })}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: atLimit ? '#D4A017' : colors.subtext }}>
+                  {atLimit ? 'Go unlimited' : `${playlists.length}/3 free`}
+                </Text>
+                <FontAwesome name="chevron-right" size={9} color={atLimit ? '#D4A017' : colors.subtext} />
+              </Pressable>
+            );
+          })()}
         </View>
       )}
 
