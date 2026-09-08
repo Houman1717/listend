@@ -87,6 +87,12 @@ export default function DMConversationScreen() {
 
   const [messages,     setMessages]     = useState<Message[]>([]);
   const [loadingMsgs,  setLoadingMsgs]  = useState(true);
+  // Height of the on-screen keyboard, Android only. Under edge-to-edge the app
+  // window is already full-screen, so `adjustResize` never moves anything and
+  // nothing lifts the input bar off the keyboard on its own — we apply the IME
+  // inset ourselves. `keyboardDidHide` always fires, so this returns to 0 and
+  // can't leave a gap behind the way KeyboardAvoidingView's height math did.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [inputText,    setInputText]    = useState('');
   const [sending,      setSending]      = useState(false);
 
@@ -124,6 +130,13 @@ export default function DMConversationScreen() {
         }
       });
   }, [otherUserId, navigation, router]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const onShow = Keyboard.addListener('keyboardDidShow', e => setKeyboardHeight(e.endCoordinates.height));
+    const onHide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => { onShow.remove(); onHide.remove(); };
+  }, []);
 
   // React Navigation paints its own container behind this screen, and in
   // light mode that colour is a near-white grey. Any moment the content
@@ -316,15 +329,14 @@ export default function DMConversationScreen() {
   }
 
   return (
-    // Android already resizes the window for the keyboard itself
-    // (`softwareKeyboardLayoutMode: 'resize'` + edge-to-edge), so having
-    // KeyboardAvoidingView subtract a keyboard height on top of that
-    // double-counts. With `behavior="height"` it pinned the screen to
-    // `initialFrameHeight - keyboard - headerHeight` and left that gap behind
-    // even once the keyboard had closed — the "big white space under the DMs".
-    // iOS does need it, and keeps the header offset.
+    // iOS keeps KeyboardAvoidingView. Android drives its own padding from the
+    // measured keyboard height instead: `behavior="height"` shrank the view by
+    // keyboard + header and left that shortfall in place after the keyboard
+    // closed (the "white space under the DMs"), while no behavior at all left
+    // the input buried under the keyboard, because edge-to-edge means the
+    // window never resizes for the IME in the first place.
     <KeyboardAvoidingView
-      style={[s.root, { backgroundColor: colors.background }]}
+      style={[s.root, { backgroundColor: colors.background, paddingBottom: keyboardHeight }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
 
@@ -400,7 +412,13 @@ export default function DMConversationScreen() {
       />
 
       {/* ── Input bar ──────────────────────────────────────────────────────── */}
-      <View style={[s.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: 10 + insets.bottom }]}>
+      <View style={[s.inputBar, {
+        backgroundColor: colors.surface,
+        borderTopColor: colors.border,
+        // The keyboard draws over the navigation bar, so its inset would be
+        // counted twice while it's open — the input would float above the keys.
+        paddingBottom: 10 + (keyboardHeight > 0 ? 0 : insets.bottom),
+      }]}>
         <Pressable
           style={({ pressed }) => [s.albumBtn, {
             backgroundColor: colors.elevated,
