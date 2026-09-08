@@ -78,7 +78,6 @@ export function FlipProvider({ children }: { children: ReactNode }) {
   const { isPro } = usePro();
 
   const [history, setHistory]           = useState<FlippedRecord[]>([]);
-  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [isLoaded, setIsLoaded]         = useState(false);
 
   // ── Reload whenever the signed-in user changes ────────────────────────────
@@ -88,7 +87,6 @@ export function FlipProvider({ children }: { children: ReactNode }) {
   // once, the first time this account is ever loaded post-migration.
   useEffect(() => {
     setHistory([]);
-    setCooldownUntil(null);
     setIsLoaded(false);
 
     if (!user) {
@@ -97,14 +95,6 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     }
 
     const uid = user.id;
-
-    function applyCooldown(stored: number | null) {
-      const value = __DEV__ ? null : stored;
-      setCooldownUntil(value);
-      if (!value || value < Date.now()) {
-        cancelFlipCooldownNotification().catch(() => {});
-      }
-    }
 
     (async () => {
       const { data, error } = await supabase
@@ -116,7 +106,6 @@ export function FlipProvider({ children }: { children: ReactNode }) {
 
       if (!error && data && data.length > 0) {
         setHistory(data.map(rowToRecord));
-        applyCooldown(data[0].cooldown_until ? new Date(data[0].cooldown_until).getTime() : null);
         setIsLoaded(true);
         return;
       }
@@ -139,7 +128,6 @@ export function FlipProvider({ children }: { children: ReactNode }) {
               flipped_at:   new Date(r.flippedAt).toISOString(),
             })));
             setHistory(legacyHistory);
-            applyCooldown(legacy.cooldownUntil ?? null);
           }
         }
       } catch (e) {
@@ -153,6 +141,38 @@ export function FlipProvider({ children }: { children: ReactNode }) {
 
   // The most recent flip that is still unresolved
   const currentFlip = history.find(r => r.status === 'pending') ?? null;
+
+  // The cooldown is DERIVED from the last flip every render — never read back
+  // from the stored `cooldown_until` column. Freezing it at flip time meant a
+  // Pro user who tapped before ProContext had finished reading
+  // `profiles.is_pro` (cold start, or a query that simply failed) was locked
+  // into the free 12h window for that flip, permanently. Deriving it also
+  // means a cooldown that started while free shortens to 1h the moment a
+  // subscription lands, instead of holding the user for another 11 hours.
+  const lastFlipAt = useMemo(
+    () => history.reduce((max, r) => Math.max(max, r.flippedAt), 0),
+    [history]
+  );
+
+  // Pro state resolves asynchronously, so assume free until it does: a Pro
+  // user briefly sees the longer countdown before it corrects itself, which is
+  // the harmless direction to be wrong in.
+  const cooldownUntil = useMemo(() => {
+    if (__DEV__ || !lastFlipAt) return null;
+    return lastFlipAt + (isPro ? COOLDOWN_MS_PRO : COOLDOWN_MS_FREE);
+  }, [lastFlipAt, isPro]);
+
+  // Keep the scheduled "time to flip" reminder in step with that derived
+  // value — scheduling once at flip time would leave a Pro user with a
+  // notification 11 hours late whenever Pro resolved after the tap.
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (cooldownUntil && cooldownUntil > Date.now()) {
+      scheduleFlipCooldownNotification(cooldownUntil).catch(() => {});
+    } else {
+      cancelFlipCooldownNotification().catch(() => {});
+    }
+  }, [cooldownUntil, isLoaded]);
 
   // IDs excluded from future flips: pending or logged via flip history
   const excludedByHistory = useMemo(() => new Set(
@@ -198,12 +218,10 @@ export function FlipProvider({ children }: { children: ReactNode }) {
       status:      'pending',
     };
 
+    // Recorded on the row for history/debugging only — the app never reads it
+    // back, it derives the live cooldown from `flipped_at` instead.
     const cooldownUntilMs = now + (isPro ? COOLDOWN_MS_PRO : COOLDOWN_MS_FREE);
     setHistory(prev => [record, ...prev]);
-    setCooldownUntil(cooldownUntilMs);
-    if (!__DEV__) {
-      scheduleFlipCooldownNotification(cooldownUntilMs).catch(() => {});
-    }
 
     if (user) {
       supabase.from('flip_records').insert({
@@ -219,7 +237,6 @@ export function FlipProvider({ children }: { children: ReactNode }) {
         if (error) {
           console.error('[Flip] insert error:', error.message);
           setHistory(prev => prev.filter(r => r.flippedAt !== now));
-          setCooldownUntil(null);
         }
       });
     }

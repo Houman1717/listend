@@ -74,8 +74,8 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
   // Sync entitlements whenever customer info changes — also writes to Supabase
   // so ProContext (which reads profiles.is_pro) stays in sync.
   const syncCustomerInfo = useCallback(async (info: CustomerInfo) => {
-    const active = info.entitlements.active;
-    let proActive = PRO_ENTITLEMENT_ID in active;
+    let snapshot = info;
+    let proActive = PRO_ENTITLEMENT_ID in snapshot.entitlements.active;
 
     // Never trust a "just went inactive" signal at face value — force a fresh,
     // server-verified re-check first. If that also fails, keep the previous
@@ -83,8 +83,8 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     if (!proActive && lastKnownProRef.current) {
       try {
         await Purchases.invalidateCustomerInfoCache();
-        const fresh = await Purchases.getCustomerInfo();
-        proActive = PRO_ENTITLEMENT_ID in fresh.entitlements.active;
+        snapshot = await Purchases.getCustomerInfo();
+        proActive = PRO_ENTITLEMENT_ID in snapshot.entitlements.active;
       } catch (e) {
         console.warn('[RevenueCat] confirmatory re-check failed, keeping previous Pro state:', e);
         return;
@@ -94,8 +94,16 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     lastKnownProRef.current = proActive;
     setIsPro(proActive);
 
+    // RevenueCat only gets to *revoke* Pro for users it actually issued it to.
+    // `entitlements.all` keeps expired entitlements too, so a real subscriber
+    // whose plan lapsed still shows up here and is downgraded correctly — but
+    // Pro granted by hand in Supabase (comps, testers, early supporters) never
+    // appears at all, and the first sync of every session was mirroring that
+    // absence back as `is_pro: false`, quietly un-Pro-ing those accounts.
+    const ownedByRevenueCat = PRO_ENTITLEMENT_ID in (snapshot.entitlements.all ?? {});
+
     // Mirror to Supabase so the rest of the app (ProContext, other-user views) reflects reality
-    if (user?.id) {
+    if (user?.id && (proActive || ownedByRevenueCat)) {
       supabase
         .from('profiles')
         .update({ is_pro: proActive })

@@ -125,6 +125,14 @@ export default function DMConversationScreen() {
       });
   }, [otherUserId, navigation, router]);
 
+  // React Navigation paints its own container behind this screen, and in
+  // light mode that colour is a near-white grey. Any moment the content
+  // doesn't reach the bottom of the window, that grey is what shows through —
+  // so a themed container makes a stray gap invisible rather than glaring.
+  useEffect(() => {
+    navigation.setOptions({ contentStyle: { backgroundColor: colors.background } });
+  }, [navigation, colors.background]);
+
   // ── Load messages + start polling ───────────────────────────────────────────
   useEffect(() => {
     if (!user || !otherUserId) return;
@@ -308,10 +316,17 @@ export default function DMConversationScreen() {
   }
 
   return (
+    // Android already resizes the window for the keyboard itself
+    // (`softwareKeyboardLayoutMode: 'resize'` + edge-to-edge), so having
+    // KeyboardAvoidingView subtract a keyboard height on top of that
+    // double-counts. With `behavior="height"` it pinned the screen to
+    // `initialFrameHeight - keyboard - headerHeight` and left that gap behind
+    // even once the keyboard had closed — the "big white space under the DMs".
+    // iOS does need it, and keeps the header offset.
     <KeyboardAvoidingView
       style={[s.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={headerHeight}>
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
 
       {/* ── Message list ───────────────────────────────────────────────────── */}
       <FlatList
