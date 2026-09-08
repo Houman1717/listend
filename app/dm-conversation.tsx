@@ -92,6 +92,8 @@ export default function DMConversationScreen() {
   // nothing lifts the input bar off the keyboard on its own — we apply the IME
   // inset ourselves. `keyboardDidHide` always fires, so this returns to 0 and
   // can't leave a gap behind the way KeyboardAvoidingView's height math did.
+  // Note this is measured from the top of the navigation bar, not the bottom
+  // of the screen, so the input bar keeps its own `insets.bottom` on top.
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [inputText,    setInputText]    = useState('');
   const [sending,      setSending]      = useState(false);
@@ -415,9 +417,11 @@ export default function DMConversationScreen() {
       <View style={[s.inputBar, {
         backgroundColor: colors.surface,
         borderTopColor: colors.border,
-        // The keyboard draws over the navigation bar, so its inset would be
-        // counted twice while it's open — the input would float above the keys.
-        paddingBottom: 10 + (keyboardHeight > 0 ? 0 : insets.bottom),
+        // Keep the safe-area inset even while the keyboard is up: Android
+        // reports the IME height measured from *above* the navigation bar, so
+        // the root's keyboard padding alone leaves the bar a nav-bar's height
+        // short and the keys cover it.
+        paddingBottom: 10 + insets.bottom,
       }]}>
         <Pressable
           style={({ pressed }) => [s.albumBtn, {
