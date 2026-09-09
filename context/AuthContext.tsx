@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
@@ -145,9 +145,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  // The auth listener is registered once and closes over its first render, so
+  // it can't read `session` state. This ref gives it the current value.
+  const sessionRef = useRef<Session | null>(null);
   const [recoveryMode, setRecoveryMode]       = useState(false);
   const [recoveryPending, setRecoveryPending] = useState(false);
   const [recoveryError, setRecoveryError]     = useState<string | null>(null);
+
+  useEffect(() => { sessionRef.current = session; }, [session]);
 
   useEffect(() => {
     let done = false;
@@ -187,6 +192,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Refresh failed (revoked / "Already Used" refresh token) — get the user
       // fully out rather than looping on a dead token.
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+        // Nothing to tear down. This is also what stops an infinite loop:
+        // hardClearSession calls signOut({ scope: 'local' }), which itself
+        // emits SIGNED_OUT, which lands right back here. Without this guard the
+        // two spin forever — clearing, re-emitting, clearing — and any session
+        // established in the meantime gets nulled by the next lap, which is why
+        // signing in bounced straight back to /login.
+        if (!sessionRef.current) return;
         // Don't take this at face value. A refresh of a STALE token left in
         // storage by an earlier session fails on its own schedule — often about
         // half a second after launch, which is exactly when someone is finishing
@@ -209,6 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.warn('[Auth] sign-out check failed, keeping session:', (e as Error)?.message);
             return;
           }
+          sessionRef.current = null;
           setRecoveryMode(false);
           setRecoveryPending(false);
           setRecoveryError(null);
@@ -223,6 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // anyone out. supabase-js can emit a null-session INITIAL_SESSION just
         // after a fast sign-in, which used to drop the user back on the login
         // screen half a second after they got in.
+        if (session) sessionRef.current = session;
         setSession((prev) => session ?? prev);
         // OAuth (Google/Apple) sign-ups don't create a profiles row the way the
         // email signup screen does — make sure one exists on every fresh sign-in.
@@ -242,6 +256,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function signOut() {
+    // Clear the ref up front, not just React state. hardClearSession emits its
+    // own SIGNED_OUT, which reaches the listener before React has committed —
+    // without this the listener treats it as a fresh sign-out and clears a
+    // second time, costing a pointless getUser round-trip on every sign-out.
+    sessionRef.current = null;
     await hardClearSession(setSession);
   }
 
