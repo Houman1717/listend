@@ -105,6 +105,13 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
+        <Pressable
+          onPress={() => router.push('/forgot-password')}
+          style={s.forgotRow}
+          hitSlop={8}>
+          <Text style={[s.forgotText, { color: ACCENT }]}>Forgot password?</Text>
+        </Pressable>
+
         <View style={s.dividerRow}>
           <View style={[s.dividerLine, { backgroundColor: colors.border }]} />
           <Text style={[s.dividerLabel, { color: colors.subtext }]}>or</Text>
@@ -126,6 +133,8 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
+  forgotRow:  { alignSelf: 'center', paddingVertical: 4 },
+  forgotText: { fontSize: 14, fontWeight: '500' },
   inner: {
     flex: 1,
     alignItems: 'center',

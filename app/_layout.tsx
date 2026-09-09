@@ -6,6 +6,8 @@ import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Linking from 'expo-linking';
+import { supabase } from '@/lib/supabase';
 import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 import { PostHogProvider } from 'posthog-react-native';
@@ -75,23 +77,88 @@ export default function RootLayout() {
   return <RootLayoutNav />;
 }
 
+// Handles the deep link that a password-reset email opens
+// (listend://reset-password?code=...). Supabase's PKCE flow hands back a
+// one-time code that has to be swapped for a session before the new password
+// can be saved; the matching code verifier lives in this device's storage,
+// which is why the link only works on the device that requested it.
+function usePasswordRecoveryLink(startRecovery: (error?: string | null) => void) {
+  const router = useRouter();
+  const handledUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function handle(url: string | null) {
+      if (!url || cancelled || handledUrl.current === url) return;
+
+      const { path, queryParams } = Linking.parse(url);
+      if (!path?.replace(/^\//, '').startsWith('reset-password')) return;
+      handledUrl.current = url;
+
+      const code       = queryParams?.code as string | undefined;
+      const linkError  = (queryParams?.error_description ?? queryParams?.error) as string | undefined;
+
+      if (linkError) {
+        startRecovery(String(linkError));
+        router.replace('/reset-password');
+        return;
+      }
+      if (!code) {
+        startRecovery('That link was missing its reset code.');
+        router.replace('/reset-password');
+        return;
+      }
+
+      // Enter recovery mode *before* exchanging, so the SIGNED_IN event the
+      // exchange fires can't send AuthGate into the tabs.
+      startRecovery(null);
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (cancelled) return;
+      if (error) {
+        console.warn('[recovery] exchangeCodeForSession failed:', error.message);
+        startRecovery('That link has expired or was already used. Reset links also only work on the device that requested them.');
+      }
+      router.replace('/reset-password');
+    }
+
+    Linking.getInitialURL().then(handle).catch(() => {});
+    const sub = Linking.addEventListener('url', (e) => { handle(e.url); });
+    return () => { cancelled = true; sub.remove(); };
+  }, []);
+}
+
 // Watches auth state and redirects to login or app accordingly.
 function AuthGate() {
-  const { session, loading, needsOnboarding, clearNeedsOnboarding } = useAuth();
+  const {
+    session, loading, needsOnboarding, clearNeedsOnboarding,
+    recoveryMode, startRecovery,
+  } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  usePasswordRecoveryLink(startRecovery);
 
   useEffect(() => {
     if (loading) return;
 
-    const inAuthScreen = segments[0] === 'login' || segments[0] === 'signup';
+    // A recovery link mints a real session, so the rule below would bounce the
+    // user into the app before they've set a new password. Reset screens own
+    // their own navigation until endRecovery() is called.
+    if (recoveryMode) return;
+
+    const inAuthScreen =
+      segments[0] === 'login' ||
+      segments[0] === 'signup' ||
+      segments[0] === 'forgot-password' ||
+      segments[0] === 'reset-password';
 
     if (!session && !inAuthScreen) {
       router.replace('/login');
     } else if (session && inAuthScreen) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, segments]);
+  }, [session, loading, segments, recoveryMode]);
 
   // Separate from the above: ensureProfile (AuthContext) resolves asynchronously
   // after SIGNED_IN, so needsOnboarding can flip true well after the effect above
@@ -99,11 +166,11 @@ function AuthGate() {
   // (not gated on segments) means it still reliably pushes edit-profile on top of
   // wherever the user currently is.
   useEffect(() => {
-    if (needsOnboarding && session) {
+    if (needsOnboarding && session && !recoveryMode) {
       router.push('/edit-profile');
       clearNeedsOnboarding();
     }
-  }, [needsOnboarding, session]);
+  }, [needsOnboarding, session, recoveryMode]);
 
   // Navigate to the right screen when user taps a push notification
   const handledResponseId = useRef<string | null>(null);
@@ -208,6 +275,8 @@ function ThemedApp() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="signup" options={{ headerShown: false }} />
+          <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+          <Stack.Screen name="reset-password" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
           <Stack.Screen name="log-album" options={{ presentation: 'modal', title: 'Log Album' }} />
           <Stack.Screen name="album-detail" options={{ presentation: 'modal', title: 'Album' }} />

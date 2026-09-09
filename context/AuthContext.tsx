@@ -102,6 +102,13 @@ type AuthContextType = {
   needsOnboarding: boolean;
   clearNeedsOnboarding: () => void;
   signOut: () => Promise<void>;
+  // A password-reset link is being handled. The session that a recovery link
+  // mints looks exactly like a normal one, so without this flag AuthGate would
+  // whisk the user into the app before they ever set a new password.
+  recoveryMode: boolean;
+  recoveryError: string | null;
+  startRecovery: (error?: string | null) => void;
+  endRecovery: () => void;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -111,12 +118,18 @@ const AuthContext = createContext<AuthContextType>({
   needsOnboarding: false,
   clearNeedsOnboarding: () => {},
   signOut: async () => {},
+  recoveryMode: false,
+  recoveryError: null,
+  startRecovery: () => {},
+  endRecovery: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [recoveryMode, setRecoveryMode]       = useState(false);
+  const [recoveryError, setRecoveryError]     = useState<string | null>(null);
 
   useEffect(() => {
     let done = false;
@@ -160,8 +173,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Refresh failed (revoked / "Already Used" refresh token) — get the user
       // fully out rather than looping on a dead token.
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+        setRecoveryMode(false);
+        setRecoveryError(null);
         hardClearSession(setSession);
       } else {
+        // Emitted when a recovery link is consumed. The deep-link handler
+        // usually sets this first; this covers the flows where it doesn't.
+        if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
         setSession(session);
         // OAuth (Google/Apple) sign-ups don't create a profiles row the way the
         // email signup screen does — make sure one exists on every fresh sign-in.
@@ -193,6 +211,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         needsOnboarding,
         clearNeedsOnboarding: () => setNeedsOnboarding(false),
         signOut,
+        recoveryMode,
+        recoveryError,
+        startRecovery: (error = null) => { setRecoveryError(error); setRecoveryMode(true); },
+        endRecovery: () => { setRecoveryMode(false); setRecoveryError(null); },
       }}>
       {children}
     </AuthContext.Provider>
