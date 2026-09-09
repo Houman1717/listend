@@ -25,7 +25,7 @@ export default function ResetPasswordScreen() {
   const colors      = Colors[colorScheme ?? 'dark'];
 
   const router = useRouter();
-  const { session, recoveryError, endRecovery } = useAuth();
+  const { session, recoveryPending, recoveryError, endRecovery } = useAuth();
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
@@ -53,6 +53,18 @@ export default function ResetPasswordScreen() {
     endRecovery();
     Alert.alert('Password updated', 'You’re signed in.');
     router.replace('/(tabs)');
+  }
+
+  // Expo Router lands on this screen the moment the deep link arrives, which
+  // is before the code has been swapped for a session. Wait that out rather
+  // than flashing the failure state on every successful reset.
+  if (recoveryPending) {
+    return (
+      <View style={[s.root, s.inner, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={ACCENT} />
+        <Text style={[s.body, { color: colors.subtext }]}>Checking your link…</Text>
+      </View>
+    );
   }
 
   // The link failed to turn into a session — almost always because it was

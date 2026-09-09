@@ -82,7 +82,10 @@ export default function RootLayout() {
 // one-time code that has to be swapped for a session before the new password
 // can be saved; the matching code verifier lives in this device's storage,
 // which is why the link only works on the device that requested it.
-function usePasswordRecoveryLink(startRecovery: (error?: string | null) => void) {
+function usePasswordRecoveryLink(
+  startRecovery: () => void,
+  resolveRecovery: (error?: string | null) => void,
+) {
   const router = useRouter();
   const handledUrl = useRef<string | null>(null);
 
@@ -99,27 +102,28 @@ function usePasswordRecoveryLink(startRecovery: (error?: string | null) => void)
       const code       = queryParams?.code as string | undefined;
       const linkError  = (queryParams?.error_description ?? queryParams?.error) as string | undefined;
 
+      // Enter recovery mode *before* anything else, so the SIGNED_IN event the
+      // exchange fires can't send AuthGate into the tabs.
+      startRecovery();
+      router.replace('/reset-password');
+
       if (linkError) {
-        startRecovery(String(linkError));
-        router.replace('/reset-password');
+        resolveRecovery(String(linkError));
         return;
       }
       if (!code) {
-        startRecovery('That link was missing its reset code.');
-        router.replace('/reset-password');
+        resolveRecovery('That link was missing its reset code.');
         return;
       }
 
-      // Enter recovery mode *before* exchanging, so the SIGNED_IN event the
-      // exchange fires can't send AuthGate into the tabs.
-      startRecovery(null);
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (cancelled) return;
       if (error) {
         console.warn('[recovery] exchangeCodeForSession failed:', error.message);
-        startRecovery('That link has expired or was already used. Reset links also only work on the device that requested them.');
+        resolveRecovery('That link has expired or was already used. Reset links also only work on the device that requested them.');
+        return;
       }
-      router.replace('/reset-password');
+      resolveRecovery(null);
     }
 
     Linking.getInitialURL().then(handle).catch(() => {});
@@ -132,12 +136,12 @@ function usePasswordRecoveryLink(startRecovery: (error?: string | null) => void)
 function AuthGate() {
   const {
     session, loading, needsOnboarding, clearNeedsOnboarding,
-    recoveryMode, startRecovery,
+    recoveryMode, startRecovery, resolveRecovery,
   } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
-  usePasswordRecoveryLink(startRecovery);
+  usePasswordRecoveryLink(startRecovery, resolveRecovery);
 
   useEffect(() => {
     if (loading) return;

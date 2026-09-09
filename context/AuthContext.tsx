@@ -106,8 +106,14 @@ type AuthContextType = {
   // mints looks exactly like a normal one, so without this flag AuthGate would
   // whisk the user into the app before they ever set a new password.
   recoveryMode: boolean;
+  // True while the one-time code from the link is still being swapped for a
+  // session. Expo Router routes to /reset-password the instant the deep link
+  // lands, which is before the swap finishes — without this the screen would
+  // flash its "link didn't work" state on every successful reset.
+  recoveryPending: boolean;
   recoveryError: string | null;
-  startRecovery: (error?: string | null) => void;
+  startRecovery: () => void;
+  resolveRecovery: (error?: string | null) => void;
   endRecovery: () => void;
 };
 
@@ -119,8 +125,10 @@ const AuthContext = createContext<AuthContextType>({
   clearNeedsOnboarding: () => {},
   signOut: async () => {},
   recoveryMode: false,
+  recoveryPending: false,
   recoveryError: null,
   startRecovery: () => {},
+  resolveRecovery: () => {},
   endRecovery: () => {},
 });
 
@@ -129,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [recoveryMode, setRecoveryMode]       = useState(false);
+  const [recoveryPending, setRecoveryPending] = useState(false);
   const [recoveryError, setRecoveryError]     = useState<string | null>(null);
 
   useEffect(() => {
@@ -174,6 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // fully out rather than looping on a dead token.
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
         setRecoveryMode(false);
+        setRecoveryPending(false);
         setRecoveryError(null);
         hardClearSession(setSession);
       } else {
@@ -212,9 +222,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearNeedsOnboarding: () => setNeedsOnboarding(false),
         signOut,
         recoveryMode,
+        recoveryPending,
         recoveryError,
-        startRecovery: (error = null) => { setRecoveryError(error); setRecoveryMode(true); },
-        endRecovery: () => { setRecoveryMode(false); setRecoveryError(null); },
+        startRecovery: () => {
+          setRecoveryError(null);
+          setRecoveryPending(true);
+          setRecoveryMode(true);
+        },
+        resolveRecovery: (error = null) => {
+          setRecoveryError(error);
+          setRecoveryPending(false);
+        },
+        endRecovery: () => {
+          setRecoveryMode(false);
+          setRecoveryPending(false);
+          setRecoveryError(null);
+        },
       }}>
       {children}
     </AuthContext.Provider>
