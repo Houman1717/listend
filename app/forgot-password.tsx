@@ -43,15 +43,31 @@ export default function ForgotPasswordScreen() {
     });
     setLoading(false);
 
-    // Supabase deliberately returns success for unknown addresses so this
-    // screen can't be used to probe which emails have accounts — mirror that
-    // and show the same confirmation either way.
-    if (error && !/rate|too many/i.test(error.message)) {
+    if (error) {
+      const status = (error as any).status as number | undefined;
+
+      if (status === 429 || /rate|too many/i.test(error.message)) {
+        Alert.alert('Too many requests', 'Please wait a minute and try again.');
+        return;
+      }
+
+      // A 5xx means our mail provider rejected the send. That's our fault, not
+      // a hint about whether the address has an account, so say so plainly —
+      // telling someone to check an inbox no email is coming to is worse than
+      // admitting the failure.
+      if (status === undefined || status >= 500) {
+        console.error('[forgot-password] send failed:', error.message);
+        Alert.alert(
+          'Couldn’t send the email',
+          'Something went wrong on our end, not yours. Please try again in a few minutes — if it keeps failing, get in touch and we’ll sort your account out manually.',
+        );
+        return;
+      }
+
+      // Anything else (a 4xx — typically an unknown address) falls through to
+      // the same confirmation, so this screen can't be used to probe which
+      // emails have accounts.
       console.warn('[forgot-password] resetPasswordForEmail:', error.message);
-    }
-    if (error && /rate|too many/i.test(error.message)) {
-      Alert.alert('Too many requests', 'Please wait a minute and try again.');
-      return;
     }
     setSent(true);
   }
@@ -63,8 +79,8 @@ export default function ForgotPasswordScreen() {
         <Text style={[s.title, { color: colors.text }]}>Check your email</Text>
         <Text style={[s.body, { color: colors.subtext }]}>
           If there's a Listend account for {email.trim()}, we've sent it a link to set a
-          new password. Open the link on this device and it'll take you straight back
-          into the app.
+          new password. Tap the link, choose your new password, then come back here and
+          sign in with it. The link expires in an hour.
         </Text>
         <Text style={[s.body, { color: colors.subtext }]}>
           Signed up with Apple or Google? You can still set a password here — or just
