@@ -23,6 +23,15 @@ async function hardClearSession(setSession: (s: Session | null) => void) {
   setSession(null);
 }
 
+// Distinguishes "the server rejected this token" from "we couldn't reach the
+// server". Only the former may log anyone out — a flaky connection must not.
+function isTokenRejection(err: { status?: number; message?: string } | null): boolean {
+  if (!err) return false;
+  const status = (err as any).status;
+  return status === 401 || status === 403 ||
+    /jwt|token|session|expired|invalid|missing/i.test(err.message ?? '');
+}
+
 // Returns true when this call filled in a genuinely-missing username, so the
 // caller can route the account to onboarding.
 //
@@ -155,11 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // network failure must NOT log the user out — keep the session and let
           // autoRefreshToken sort it out when connectivity returns.
           const { error: userErr } = await supabase.auth.getUser();
-          const rejected =
-            userErr != null &&
-            ((userErr as any).status === 401 || (userErr as any).status === 403 ||
-             /jwt|token|session|expired|invalid/i.test(userErr.message ?? ''));
-          if (rejected) {
+          if (isTokenRejection(userErr)) {
             console.warn('[Auth] stored session rejected by server — clearing:', userErr!.message);
             await hardClearSession(setSession);
           } else if (!done) {
@@ -182,10 +187,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Refresh failed (revoked / "Already Used" refresh token) — get the user
       // fully out rather than looping on a dead token.
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
-        setRecoveryMode(false);
-        setRecoveryPending(false);
-        setRecoveryError(null);
-        hardClearSession(setSession);
+        // Don't take this at face value. A refresh of a STALE token left in
+        // storage by an earlier session fails on its own schedule — often about
+        // half a second after launch, which is exactly when someone is finishing
+        // a fresh sign-in. supabase-js reports that failure as a sign-out, and
+        // clearing here dragged the brand-new session down with it: the first
+        // sign-in after opening the app bounced straight back to /login, while
+        // the second worked, because the first failure had already flushed the
+        // dead token.
+        //
+        // So ask the server who we are. A live session means this event was
+        // about a token we no longer care about — ignore it. Only a genuine
+        // rejection clears; a network error leaves the session alone.
+        (async () => {
+          try {
+            const { error: userErr } = await supabase.auth.getUser();
+            if (!isTokenRejection(userErr)) return;
+          } catch (e) {
+            // Couldn't ask. Staying signed in is the safe direction — a truly
+            // dead token surfaces again on the next refresh.
+            console.warn('[Auth] sign-out check failed, keeping session:', (e as Error)?.message);
+            return;
+          }
+          setRecoveryMode(false);
+          setRecoveryPending(false);
+          setRecoveryError(null);
+          hardClearSession(setSession);
+        })();
       } else {
         // Emitted when a recovery link is consumed. The deep-link handler
         // usually sets this first; this covers the flows where it doesn't.
