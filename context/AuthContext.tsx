@@ -190,7 +190,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Emitted when a recovery link is consumed. The deep-link handler
         // usually sets this first; this covers the flows where it doesn't.
         if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
-        setSession(session);
+        // Never let an event that carries no session tear down one we already
+        // hold — only SIGNED_OUT and a failed refresh (handled above) should log
+        // anyone out. supabase-js can emit a null-session INITIAL_SESSION just
+        // after a fast sign-in, which used to drop the user back on the login
+        // screen half a second after they got in.
+        setSession((prev) => session ?? prev);
         // OAuth (Google/Apple) sign-ups don't create a profiles row the way the
         // email signup screen does — make sure one exists on every fresh sign-in.
         // Also runs on INITIAL_SESSION (a normal app reopen with an already-logged-in
