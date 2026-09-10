@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, useWindowDimensions } from 'react-native';
+import { StyleSheet, FlatList, useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
+import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, COLS, GAP, PADDING } from '@/components/AlbumGridCard';
 import { CatalogAlbum } from '@/context/CatalogService';
 import { discoverSections } from '@/context/discoverSections';
 import { useAlbums } from '@/context/AlbumsContext';
@@ -32,38 +32,49 @@ export default function DiscoverMostPopularScreen() {
       .catch(console.error);
   }, []);
 
+  // The list runs to 201 albums, so it renders through a virtualized FlatList —
+  // a plain mapped ScrollView would mount every artwork Image at once.
+  const loading = albums.length === 0;
+  const data: CatalogAlbum[] = loading
+    ? Array.from({ length: PLACEHOLDER_COUNT }, (_, i) => ({ id: `placeholder-${i}` } as CatalogAlbum))
+    : albums;
+
   return (
     <>
       <Stack.Screen options={{ title: 'Popular Albums' }} />
-      <ScrollView
+      <FlatList
+        data={data}
+        keyExtractor={(item) => item.id}
+        numColumns={COLS}
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}
-        showsVerticalScrollIndicator={false}>
-        <View style={s.grid}>
-          {albums.length === 0
-            ? Array.from({ length: PLACEHOLDER_COUNT }).map((_, i) => (
-                <AlbumGridCardPlaceholder key={i} width={cw} isDark={isDark} />
-              ))
-            : albums.map(album => (
-                <AlbumGridCard
-                  key={album.id}
-                  album={album}
-                  width={cw}
-                  isDark={isDark}
-                  isLogged={loggedIds.has(album.id)}
-                  textColor={colors.text}
-                  subColor={isDark ? '#a07850' : '#7a5535'}
-                  onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl } } as any)}
-                />
-              ))
-          }
-        </View>
-      </ScrollView>
+        columnWrapperStyle={s.row}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={18}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        removeClippedSubviews
+        renderItem={({ item }) => (
+          loading ? (
+            <AlbumGridCardPlaceholder width={cw} isDark={isDark} />
+          ) : (
+            <AlbumGridCard
+              album={item}
+              width={cw}
+              isDark={isDark}
+              isLogged={loggedIds.has(item.id)}
+              textColor={colors.text}
+              subColor={isDark ? '#a07850' : '#7a5535'}
+              onPress={() => router.push({ pathname: '/album-detail', params: { id: item.id, title: item.title, artist: item.artist, year: String(item.year), artworkUrl: item.artworkUrl } } as any)}
+            />
+          )
+        )}
+      />
     </>
   );
 }
 
 const s = StyleSheet.create({
-  gridWrap: { padding: PADDING, paddingBottom: 48 },
-  grid:     { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  gridWrap: { padding: PADDING, paddingBottom: 48, rowGap: GAP },
+  row:      { gap: GAP },
 });

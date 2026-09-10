@@ -1110,7 +1110,7 @@ app.get('/api/discover/community-popular', async (req, res) => {
 
     const results = Array.from(entries.values())
       .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
-      .slice(0, 50)
+      .slice(0, 201)
       .map(e => e.album);
 
     cacheSet(CACHE_KEY, results, TTL_30M);
@@ -1178,7 +1178,7 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
     const results = Array.from(agg.values())
       .filter(e => e.count >= MIN_RATINGS)
       .sort((a, b) => (b.totalRating / b.count) - (a.totalRating / a.count))
-      .slice(0, 50)
+      .slice(0, 201)
       .map(e => e.album);
 
     cacheSet(CACHE_KEY, results, TTL_30M);
