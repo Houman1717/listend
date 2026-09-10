@@ -26,6 +26,48 @@ async function amFetch(path) {
 
 const amArtwork = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
 
+// ── Song artist backfill ──────────────────────────────────────────────────────
+// top5_changes only stores a song's id, name and image — never its artist — so
+// anything built from it comes back with a blank artist. Resolve the names from
+// the catalog in one batched call per storefront rather than one per song.
+// A failed chunk leaves those artists blank instead of failing the whole
+// section, since a nameless song still renders fine.
+
+async function attachSongArtists(tracks) {
+  const missing = tracks.filter(t => t.id && !t.artist);
+  if (missing.length === 0) return tracks;
+
+  const byStorefront = new Map();
+  for (const t of missing) {
+    const sf = storefrontFor(t.id);
+    if (!byStorefront.has(sf)) byStorefront.set(sf, []);
+    byStorefront.get(sf).push(t.id);
+  }
+
+  const names = new Map();
+  await Promise.all(Array.from(byStorefront.entries()).map(async ([sf, ids]) => {
+    // Apple caps the ids param, so chunk well under it.
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      try {
+        const data = await amFetch(`/catalog/${sf}/songs?ids=${chunk.join(',')}`);
+        for (const song of (data?.data ?? [])) {
+          const name = song?.attributes?.artistName;
+          if (song?.id && name) names.set(song.id, name);
+        }
+      } catch (err) {
+        console.error('[attachSongArtists]', sf, err.message ?? err);
+      }
+    }
+  }));
+
+  for (const t of tracks) {
+    const name = names.get(t.id);
+    if (name) t.artist = name;
+  }
+  return tracks;
+}
+
 // ── Storefront overrides ──────────────────────────────────────────────────────
 // A handful of catalog IDs (albums + their tracks) aren't licensed for the
 // `us` Apple Music storefront but are fully available on `gb` — resolve just
@@ -1361,10 +1403,12 @@ app.get('/api/discover/community-top-songs', async (req, res) => {
       });
     }
 
-    const results = Array.from(counts.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 75)
-      .map(e => e.track);
+    const results = await attachSongArtists(
+      Array.from(counts.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 75)
+        .map(e => e.track)
+    );
 
     cacheSet(CACHE_KEY, results, TTL_1H);
     await setCache(CACHE_KEY, results);
@@ -1450,7 +1494,9 @@ async function computeTopSongsThisWeek(since) {
     });
   }
 
-  return Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.track);
+  return attachSongArtists(
+    Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.track)
+  );
 }
 
 async function computeTopArtistsThisWeek(since) {
@@ -1668,7 +1714,7 @@ async function computePopularReviewsThisWeek(since) {
   }
 
   reviews.sort((a, b) => b.weeklyScore - a.weeklyScore);
-  return reviews.slice(0, 20).map(({ weeklyScore, ...r }) => r);
+  return reviews.slice(0, 30).map(({ weeklyScore, ...r }) => r);
 }
 
 async function computeHomeThisWeek() {

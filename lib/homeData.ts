@@ -332,7 +332,7 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
   }
 
   reviews.sort((a, b) => b.weeklyScore - a.weeklyScore);
-  return reviews.slice(0, 20).map(({ weeklyScore, ...r }) => r);
+  return reviews.slice(0, 30).map(({ weeklyScore, ...r }) => r);
 }
 
 // Each section is the fetched array, or `undefined` if that section failed to
