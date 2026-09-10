@@ -1128,7 +1128,7 @@ app.get('/api/discover/community-popular', async (req, res) => {
 // Cached 30 min in-memory, 30 min in Supabase — kept short because with a small
 // user base, a handful of new ratings can visibly shift average/rank.
 
-const MIN_RATINGS = 5;
+const MIN_RATINGS = 10;
 
 app.get('/api/discover/community-top-rated', async (req, res) => {
   const CACHE_KEY = 'discover:community-top-rated';
@@ -1175,9 +1175,30 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
       }
     }
 
-    const results = Array.from(agg.values())
-      .filter(e => e.count >= MIN_RATINGS)
-      .sort((a, b) => (b.totalRating / b.count) - (a.totalRating / a.count))
+    const qualifying = Array.from(agg.values()).filter(e => e.count >= MIN_RATINGS);
+
+    // Rank on a confidence-weighted average rather than the raw one. A raw
+    // average lets a barely-rated album outrank a beloved one — 10 ratings all
+    // at 10 beats 80 ratings averaging 9.4, which is not what "top rated"
+    // should mean. So pull every album's average toward the site-wide mean,
+    // weighted by how much evidence it has: albums with many ratings barely
+    // move, thinly-rated ones get pulled most of the way back.
+    //
+    // Same shape as IMDb's weighted rating. PRIOR_WEIGHT is "how many ratings
+    // of the average album we pretend every album starts with" — at 10 it
+    // roughly halves the pull once an album has 10 real ratings of its own.
+    // The mean is computed from the data, not hardcoded, so it tracks as the
+    // rating pool grows.
+    const PRIOR_WEIGHT = 10;
+    const totalRatings = qualifying.reduce((sum, e) => sum + e.count, 0);
+    const globalMean = totalRatings > 0
+      ? qualifying.reduce((sum, e) => sum + e.totalRating, 0) / totalRatings
+      : 0;
+    const weighted = (e) =>
+      (e.totalRating + globalMean * PRIOR_WEIGHT) / (e.count + PRIOR_WEIGHT);
+
+    const results = qualifying
+      .sort((a, b) => weighted(b) - weighted(a))
       .slice(0, 201)
       .map(e => e.album);
 
