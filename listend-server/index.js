@@ -1427,7 +1427,7 @@ async function computeTopAlbumsThisWeek(since) {
 
   return Array.from(entries.values())
     .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
-    .slice(0, 50)
+    .slice(0, 51)
     .map(e => e.album);
 }
 
