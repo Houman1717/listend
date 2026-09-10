@@ -112,7 +112,7 @@ export async function fetchTopSongsThisWeek(): Promise<CatalogTrack[]> {
     });
   }
 
-  return Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.track);
+  return Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 21).map(e => e.track);
 }
 
 export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
@@ -176,7 +176,7 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
     }
   }
 
-  const ranked = Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.artist);
+  const ranked = Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 21).map(e => e.artist);
 
   // Resolve AM artwork for any artist that came only from album logs (no artwork yet)
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';

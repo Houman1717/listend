@@ -1495,7 +1495,7 @@ async function computeTopSongsThisWeek(since) {
   }
 
   return attachSongArtists(
-    Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.track)
+    Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 21).map(e => e.track)
   );
 }
 
@@ -1544,7 +1544,7 @@ async function computeTopArtistsThisWeek(since) {
     else byName.set(key, { artist: { id: `name:${key}`, name, genre: '', artworkUrl: '' }, count: 1 });
   }
 
-  const ranked = Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 20).map(e => e.artist);
+  const ranked = Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 21).map(e => e.artist);
 
   const missing = ranked.filter(a => !a.artworkUrl);
   if (missing.length > 0) {
