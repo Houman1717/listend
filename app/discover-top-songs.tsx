@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, useWindowDimensions } from 'react-native';
+import { StyleSheet, FlatList, useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
+import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, COLS, GAP, PADDING } from '@/components/AlbumGridCard';
 import { CatalogTrack } from '@/context/CatalogService';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { discoverSections } from '@/context/discoverSections';
@@ -44,34 +44,40 @@ export default function DiscoverTopSongsScreen() {
         onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
         onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
       />
-      <ScrollView
+      <FlatList
+        data={loading
+          ? Array.from({ length: PLACEHOLDER_COUNT }, (_, i) => ({ id: `placeholder-${i}` } as CatalogTrack))
+          : songs}
+        keyExtractor={(item) => item.id}
+        numColumns={COLS}
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}
-        showsVerticalScrollIndicator={false}>
-        <View style={s.grid}>
-          {loading
-            ? Array.from({ length: PLACEHOLDER_COUNT }).map((_, i) => (
-                <AlbumGridCardPlaceholder key={i} width={cw} isDark={isDark} />
-              ))
-            : songs.map(song => (
-                <AlbumGridCard
-                  key={song.id}
-                  album={song}
-                  width={cw}
-                  isDark={isDark}
-                  textColor={colors.text}
-                  subColor={isDark ? '#a07850' : '#7a5535'}
-                  onPress={() => setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate })}
-                />
-              ))
-          }
-        </View>
-      </ScrollView>
+        columnWrapperStyle={s.row}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={18}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        removeClippedSubviews
+        renderItem={({ item: song }) => (
+          loading ? (
+            <AlbumGridCardPlaceholder width={cw} isDark={isDark} />
+          ) : (
+            <AlbumGridCard
+              album={song}
+              width={cw}
+              isDark={isDark}
+              textColor={colors.text}
+              subColor={isDark ? '#a07850' : '#7a5535'}
+              onPress={() => setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate })}
+            />
+          )
+        )}
+      />
     </>
   );
 }
 
 const s = StyleSheet.create({
-  gridWrap: { padding: PADDING, paddingBottom: 48 },
-  grid:     { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  gridWrap: { padding: PADDING, paddingBottom: 48, rowGap: GAP },
+  row:      { gap: GAP },
 });

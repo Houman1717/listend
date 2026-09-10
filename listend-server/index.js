@@ -1278,7 +1278,7 @@ app.get('/api/discover/community-top-artists', async (req, res) => {
 
     const ranked = Array.from(byName.values())
       .sort((a, b) => b.count - a.count)
-      .slice(0, 48)
+      .slice(0, 99)
       .map(e => e.artist);
 
     // Resolve a real AM ID + artwork for any artist that only came from album
@@ -1363,7 +1363,7 @@ app.get('/api/discover/community-top-songs', async (req, res) => {
 
     const results = Array.from(counts.values())
       .sort((a, b) => b.count - a.count)
-      .slice(0, 48)
+      .slice(0, 75)
       .map(e => e.track);
 
     cacheSet(CACHE_KEY, results, TTL_1H);
