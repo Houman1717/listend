@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Session, User } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { unregisterPushToken } from '@/lib/registerPushToken';
 
 // Force-clears the local Supabase auth session no matter what state it's in.
 // supabase.auth.signOut() (default scope 'global') makes a network call to
@@ -256,6 +257,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function signOut() {
+    // Detach this device from the account first, while the access token still
+    // exists — otherwise the signed-out account's notifications keep arriving
+    // on this phone.
+    await unregisterPushToken(sessionRef.current?.access_token);
     // Clear the ref up front, not just React state. hardClearSession emits its
     // own SIGNED_OUT, which reaches the listener before React has committed —
     // without this the listener treats it as a fresh sign-out and clears a

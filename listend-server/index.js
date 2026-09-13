@@ -3891,6 +3891,60 @@ app.post('/api/delete-cover', requireAuth, [
   return res.json({ success: true });
 });
 
+// ── Push tokens ───────────────────────────────────────────────────────────────
+// A device's Expo push token belongs to whoever is signed in on it right now.
+// Registering claims the token: any row tying it to a different account (left
+// behind when someone signed out, or switched accounts on the same phone) is
+// deleted, otherwise that old account's notifications keep landing on this
+// device. Runs server-side because RLS won't let a client delete other users'
+// rows.
+
+app.post('/api/push-token', requireAuth, [
+  body('token').trim().isString().isLength({ min: 10, max: 200 }).withMessage('token is required'),
+  body('platform').optional().trim().isIn(['ios', 'android', 'web']),
+  validate,
+], async (req, res) => {
+  const { token, platform } = req.body;
+  const userId = req.user.id;
+
+  const { error: claimErr } = await supabase
+    .from('push_tokens')
+    .delete()
+    .eq('token', token)
+    .neq('user_id', userId);
+  if (claimErr) {
+    console.error('[push-token] claim error:', claimErr.message);
+    return res.status(500).json({ error: claimErr.message });
+  }
+
+  const { error } = await supabase
+    .from('push_tokens')
+    .upsert({ user_id: userId, token, platform: platform ?? null }, { onConflict: 'user_id,token' });
+  if (error) {
+    console.error('[push-token] upsert error:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+
+  return res.json({ success: true });
+});
+
+// Called on sign-out so the device stops receiving the account's pushes.
+app.post('/api/push-token/remove', requireAuth, [
+  body('token').trim().isString().isLength({ min: 10, max: 200 }).withMessage('token is required'),
+  validate,
+], async (req, res) => {
+  const { error } = await supabase
+    .from('push_tokens')
+    .delete()
+    .eq('token', req.body.token)
+    .eq('user_id', req.user.id);
+  if (error) {
+    console.error('[push-token/remove] error:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+  return res.json({ success: true });
+});
+
 // ── Featured Playlists ────────────────────────────────────────────────────────
 
 // Search Apple Music for a single album by artist + title. Returns a CatalogAlbum-compatible object.
