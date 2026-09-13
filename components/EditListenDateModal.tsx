@@ -1,5 +1,5 @@
-import { StyleSheet, View, Text, Pressable, Modal, ScrollView, ActivityIndicator } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { StyleSheet, View, Text, Pressable, Modal, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useEffect, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -140,16 +140,38 @@ export function EditListenDateModal({
                     {chosen.label}
                   </Text>
                 )}
-                <DateTimePicker
-                  value={date}
-                  mode="date"
-                  display="inline"
-                  maximumDate={new Date()}
-                  onChange={(_, d) => d && setDate(d)}
-                  themeVariant={isDark ? 'dark' : 'light'}
-                  accentColor="#D4A017"
-                  style={{ width: '100%' }}
-                />
+                {Platform.OS === 'android' ? (
+                  // Android's picker is a native dialog — rendering the component
+                  // re-opens it on every re-render (including after OK/Cancel), so
+                  // show the date as a tappable row and open the dialog on demand.
+                  <Pressable
+                    onPress={() => DateTimePickerAndroid.open({
+                      value: date,
+                      mode: 'date',
+                      maximumDate: new Date(),
+                      onChange: (event, d) => { if (event.type === 'set' && d) setDate(d); },
+                    })}
+                    style={({ pressed }) => [
+                      s.optionRow,
+                      { borderColor: border, opacity: pressed ? 0.7 : 1, width: '100%' },
+                    ]}>
+                    <Text style={[s.optionLabel, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>
+                      {formatDate(date.toISOString())}
+                    </Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#D4A017' }}>Change</Text>
+                  </Pressable>
+                ) : (
+                  <DateTimePicker
+                    value={date}
+                    mode="date"
+                    display="inline"
+                    maximumDate={new Date()}
+                    onChange={(_, d) => d && setDate(d)}
+                    themeVariant={isDark ? 'dark' : 'light'}
+                    accentColor="#D4A017"
+                    style={{ width: '100%' }}
+                  />
+                )}
 
                 <Pressable
                   style={[s.saveButton, { backgroundColor: '#D4A017', opacity: saving ? 0.6 : 1 }]}

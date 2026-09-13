@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -190,7 +190,22 @@ export default function LogAlbumScreen() {
 
         <Pressable
           style={[styles.dateRow, { borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
-          onPress={() => setShowDatePicker(v => !v)}>
+          onPress={() => {
+            // Android's picker is a native dialog, not an inline view. Rendering
+            // <DateTimePicker> re-opens that dialog on every re-render, so any tap
+            // on this screen (or OK/Cancel itself) popped it straight back up and
+            // trapped the user. Open it imperatively instead — it closes itself.
+            if (Platform.OS === 'android') {
+              DateTimePickerAndroid.open({
+                value: logDate,
+                mode: 'date',
+                maximumDate: new Date(),
+                onChange: (event, d) => { if (event.type === 'set' && d) setLogDate(d); },
+              });
+              return;
+            }
+            setShowDatePicker(v => !v);
+          }}>
           <Text style={[styles.dateRowText, { color: colors.subtext }]}>
             Listend {logDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
           </Text>
@@ -199,7 +214,7 @@ export default function LogAlbumScreen() {
             <Text style={styles.dateEditBtnText}>Edit Date</Text>
           </View>
         </Pressable>
-        {showDatePicker && (
+        {Platform.OS === 'ios' && showDatePicker && (
           <DateTimePicker
             value={logDate}
             mode="date"
