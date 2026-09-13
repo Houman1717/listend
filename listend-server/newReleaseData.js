@@ -3,6 +3,7 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Jhené Aiko',             title: 'Westside Whimsy' },
   { artist: 'Erykah Badu & The Alchemist', title: 'Before The World Blows' },
   { artist: 'Interpol',               title: 'This Mirror Weighs a Ton' },
   { artist: 'Denzel Curry & Kenny Beats', title: 'II' },
