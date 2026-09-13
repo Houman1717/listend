@@ -241,11 +241,25 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
   const candidateIds = new Set([...weeklyLikeCounts.keys(), ...commentCounts.keys()]);
   if (candidateIds.size === 0) return [];
 
-  const { data: totalLikeRows } = await supabase
-    .from('likes')
-    .select('target_id, user_id')
-    .eq('target_type', 'review')
-    .in('target_id', [...candidateIds]);
+  // Weekly comments decide ranking, but the card shows the all-time total —
+  // same as likes. Showing only this week's comments made a review with older
+  // comments read "0 comments" on the card, then "2" once opened.
+  const [{ data: totalLikeRows }, { data: totalCommentRows }] = await Promise.all([
+    supabase
+      .from('likes')
+      .select('target_id, user_id')
+      .eq('target_type', 'review')
+      .in('target_id', [...candidateIds]),
+    supabase
+      .from('review_comments')
+      .select('review_id')
+      .in('review_id', [...candidateIds]),
+  ]);
+
+  const totalCommentCounts = new Map<string, number>();
+  for (const c of (totalCommentRows ?? []) as any[]) {
+    totalCommentCounts.set(c.review_id, (totalCommentCounts.get(c.review_id) ?? 0) + 1);
+  }
 
   const likeCounts = new Map<string, number>();
   const currentUserLikedIds = new Set<string>();
@@ -326,7 +340,7 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
       rating,
       review,
       likeCount: (likeCounts.get(targetId) ?? 0) - (currentUserLikedIds.has(targetId) ? 1 : 0),
-      commentCount: commentCounts.get(targetId) ?? 0,
+      commentCount: totalCommentCounts.get(targetId) ?? 0,
       weeklyScore: weeklyLikes + weeklyComments,
     });
   }

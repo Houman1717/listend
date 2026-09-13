@@ -1637,6 +1637,18 @@ async function computePopularReviewsThisWeek(since) {
   const likeCounts = new Map();
   for (const l of (totalLikeRows ?? [])) likeCounts.set(l.target_id, (likeCounts.get(l.target_id) ?? 0) + 1);
 
+  // Weekly comments decide ranking, but the card shows the all-time total —
+  // same as likes. Showing only this week's comments made a review with older
+  // comments read "0 comments" on the card, then "2" once opened.
+  const totalCommentRows = await fetchAllRows((from, to) => supabase
+    .from('review_comments')
+    .select('review_id')
+    .in('review_id', [...candidateIds])
+    .range(from, to));
+
+  const totalCommentCounts = new Map();
+  for (const c of (totalCommentRows ?? [])) totalCommentCounts.set(c.review_id, (totalCommentCounts.get(c.review_id) ?? 0) + 1);
+
   const pairs = Array.from(candidateIds)
     .map(parseReviewTargetId)
     .filter(Boolean);
@@ -1708,7 +1720,7 @@ async function computePopularReviewsThisWeek(since) {
       rating,
       review,
       likeCount: likeCounts.get(targetId) ?? 0,
-      commentCount: commentCounts.get(targetId) ?? 0,
+      commentCount: totalCommentCounts.get(targetId) ?? 0,
       weeklyScore: weeklyLikes + weeklyComments,
     });
   }
