@@ -869,6 +869,19 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
+          {/* Suggest an Album — for records missing from the catalog (licensing) */}
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => Linking.openURL('https://listend.uk/suggest')}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="music" size={16} color={accentColor} />
+            </View>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>Suggest an Album</Text>
+            <FontAwesome name="chevron-right" size={13} color={segTextColor} />
+          </Pressable>
+
+          <View style={[ss.separator, { backgroundColor: sepColor }]} />
+
           {/* Rate Us */}
           <Pressable
             style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
@@ -881,7 +894,9 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
             <View style={ss.iconWrap}>
               <FontAwesome name="star-o" size={16} color={accentColor} />
             </View>
-            <Text style={[ss.rowLabel, { color: labelColor }]}>Rate Us on the App Store</Text>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>
+              {Platform.OS === 'ios' ? 'Rate Us on the App Store' : 'Rate Us on Google Play'}
+            </Text>
             <FontAwesome name="chevron-right" size={13} color={segTextColor} />
           </Pressable>
 
