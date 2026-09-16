@@ -11,6 +11,7 @@ const { sendPush } = require('./sendPush');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
+const { handleOrName } = require('./userHandle');
 const { GENRE_ALBUMS } = require('./genreData');
 const { DECADE_ALBUMS } = require('./decadeData');
 const { NEW_RELEASE_ALBUMS } = require('./newReleaseData');
@@ -1671,7 +1672,7 @@ async function computePopularReviewsThisWeek(since) {
       .in('spotify_id', spotifyIds)
       .order('listened_at', { ascending: false })
       .range(from, to)),
-    fetchAllRows((from, to) => supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', userIds).range(from, to)),
   ]);
 
   const rowMap = new Map();
@@ -1688,7 +1689,15 @@ async function computePopularReviewsThisWeek(since) {
     if (!latestReListenReview.has(key) && rl.review) latestReListenReview.set(key, rl.review);
     reListenMap.set(`relisten_${key}_${rl.listened_at}`, rl);
   }
-  const profileMap = new Map((profiles ?? []).map(p => [p.id, { username: p.username ?? null, avatarUrl: p.avatar_url ?? null, isPro: !!p.is_pro }]));
+  const profileMap = new Map((profiles ?? []).map(p => [p.id, {
+    username:  p.username ?? null,
+    // What the app actually renders: the real "@handle", or their display name
+    // when the account never picked one. Sent alongside username so older app
+    // builds, which only read username, are unaffected.
+    handle:    handleOrName(p.username, p.display_name, p.id),
+    avatarUrl: p.avatar_url ?? null,
+    isPro:     !!p.is_pro,
+  }]));
 
   const reviews = [];
   for (const { targetId, userId, spotifyId, listenedAt } of pairs) {
@@ -1711,6 +1720,7 @@ async function computePopularReviewsThisWeek(since) {
       id: targetId,
       userId,
       username: prof?.username ?? 'user',
+      handle: prof?.handle ?? 'User',
       avatarUrl: prof?.avatarUrl ?? null,
       isPro: prof?.isPro ?? false,
       albumTitle: r.title ?? '',
