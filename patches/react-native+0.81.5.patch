@@ -1,0 +1,28 @@
+diff --git a/node_modules/react-native/Libraries/Text/Text.js b/node_modules/react-native/Libraries/Text/Text.js
+index b08b8f3..0ddaa50 100644
+--- a/node_modules/react-native/Libraries/Text/Text.js
++++ b/node_modules/react-native/Libraries/Text/Text.js
+@@ -170,6 +170,23 @@ const TextImpl: component(
+   const _nativeID = id ?? nativeID;
+ 
+   const hasTextAncestor = useContext(TextAncestorContext);
++
++  // [Listend patch] Android's "Bold text" accessibility setting
++  // (Configuration.fontWeightAdjustment) is applied by TextView when drawing
++  // text that has no explicit typeface, but RN measures text without it — so
++  // regular-weight text renders wider than its measured box and the end of the
++  // line wraps onto a hidden second line (e.g. "@mariza" shows as "@mariz").
++  // An explicit weight makes RN set the typeface itself for both measuring and
++  // drawing. Nested <Text> inherits from its root, so only roots need it.
++  if (
++    Platform.OS === 'android' &&
++    !hasTextAncestor &&
++    processedStyle?.fontWeight == null &&
++    processedStyle?.fontFamily == null
++  ) {
++    // $FlowFixMe[incompatible-type]
++    _style = [{fontWeight: '400'}, _style];
++  }
+   if (hasTextAncestor) {
+     if (isPressable) {
+       return (

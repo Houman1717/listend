@@ -1468,9 +1468,21 @@ export default function AlbumDetailScreen() {
     }
   }
 
-  function handleCancelEdit() {
+  // rating/review are only seeded from loggedAlbum on mount, so an album
+  // logged (or re-listened) while this screen is open would open the editor
+  // blank. Re-seed from the current log every time editing starts or stops.
+  function resetDraftFromLog() {
     setRating(loggedAlbum?.lastRating ?? loggedAlbum?.rating ?? 0);
     setReview(loggedAlbum?.isRelistened ? (loggedAlbum?.lastReview ?? '') : (loggedAlbum?.review ?? ''));
+  }
+
+  function handleStartEdit() {
+    resetDraftFromLog();
+    setEditMode(true);
+  }
+
+  function handleCancelEdit() {
+    resetDraftFromLog();
     setEditMode(false);
   }
 
@@ -1703,7 +1715,7 @@ export default function AlbumDetailScreen() {
                 <FontAwesome name="volume-up" size={14} color={(loggedAlbum!.lastRating ?? loggedAlbum!.rating) > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#ddd')} />
                 {(loggedAlbum!.lastRating ?? loggedAlbum!.rating) >= 1 && <MiniRatingBar rating={loggedAlbum!.lastRating ?? loggedAlbum!.rating} isDark={isDark} />}
                 <Pressable
-                  onPress={() => setEditMode(true)}
+                  onPress={handleStartEdit}
                   hitSlop={10}
                   style={({ pressed }) => [s.editReviewBtn, { opacity: pressed ? 0.6 : 1 }]}>
                   <FontAwesome name="pencil" size={11} color="#D4A017" />
