@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { handleOrName } from '@/lib/userHandle';
 import { reviewOwnerId } from '@/lib/reviewTargets';
 import { ReviewComment } from '@/components/ReviewComments';
 
@@ -16,13 +17,13 @@ export async function fetchReviewComments(reviewId: string): Promise<ReviewComme
   const userIds = [...new Set((rows as any[]).map(r => r.user_id as string))];
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url, is_pro')
+    .select('id, username, display_name, avatar_url, is_pro')
     .in('id', userIds);
 
   const profileMap = new Map(
     (profiles ?? []).map((p: any) => [
       p.id as string,
-      { username: p.username as string, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) },
+      { username: p.username as string, handle: handleOrName(p.username, p.display_name, p.id), avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) },
     ])
   );
 
@@ -31,6 +32,7 @@ export async function fetchReviewComments(reviewId: string): Promise<ReviewComme
     reviewId:        r.review_id as string,
     userId:          r.user_id as string,
     username:        profileMap.get(r.user_id)?.username ?? 'user',
+    handle:          profileMap.get(r.user_id)?.handle ?? 'User',
     avatarUrl:       profileMap.get(r.user_id)?.avatarUrl ?? null,
     isPro:           profileMap.get(r.user_id)?.isPro ?? false,
     body:            r.body as string,

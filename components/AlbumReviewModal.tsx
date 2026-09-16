@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
+import { handleOrName } from '@/lib/userHandle';
 import { supabase } from '@/lib/supabase';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 
@@ -32,6 +33,8 @@ export function AlbumReviewModal({
   album,
   reviewUserId,
   username,
+  displayName,
+  authorId,
   avatarUrl,
   onClose,
   onAlbumPress,
@@ -46,6 +49,9 @@ export function AlbumReviewModal({
   album: LoggedAlbum;
   reviewUserId: string;
   username: string;
+  /** Used with `authorId` to fall back to a display name when the account never picked a username. */
+  displayName?: string | null;
+  authorId?: string | null;
   avatarUrl?: string | null;
   onClose: () => void;
   onAlbumPress: () => void;
@@ -59,6 +65,11 @@ export function AlbumReviewModal({
 }) {
   const { user } = useAuth();
   const targetId = `${reviewUserId}_${album.id}`;
+  // Accounts that signed in with Apple/Google never picked a username, so show
+  // their display name rather than the auto-generated placeholder handle.
+  const handle   = username || displayName
+    ? handleOrName(username, displayName, authorId ?? reviewUserId, displayName || '…')
+    : '…';
 
   const [liked,            setLiked]            = useState(false);
   const [likeCount,        setLikeCount]        = useState(0);
@@ -123,7 +134,7 @@ export function AlbumReviewModal({
     }
   }
 
-  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null, commenterHandle?: string) {
     if (!user?.id) return;
     const tempId = `mlc_${Date.now()}`;
     const c: ReviewComment = {
@@ -131,6 +142,7 @@ export function AlbumReviewModal({
       reviewId:        targetId,
       userId:          user.id,
       username:        commenterUsername ?? username,
+      handle:          commenterHandle ?? handle,
       avatarUrl:       avatarUrl ?? null,
       body,
       parentCommentId: parentId ?? undefined,
@@ -208,11 +220,11 @@ export function AlbumReviewModal({
                 <ExpoImage source={{ uri: avatarUrl }} style={s.avatar} contentFit="cover" cachePolicy="disk" />
               ) : (
                 <View style={[s.avatar, { backgroundColor: avatarColor(username || '?') }]}>
-                  <Text style={s.avatarLetter}>{(username || '?')[0].toUpperCase()}</Text>
+                  <Text style={s.avatarLetter}>{handle.replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
                 </View>
               )}
               <View style={{ gap: 1 }}>
-                <Text style={[s.username, { color: colors.tint }]}>@{username || '…'}</Text>
+                <Text style={[s.username, { color: colors.tint }]}>{handle}</Text>
                 {dateStr ? (
                   <Text style={[s.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
                     Listend {dateStr}

@@ -167,11 +167,13 @@ function AuthGate() {
   // Separate from the above: ensureProfile (AuthContext) resolves asynchronously
   // after SIGNED_IN, so needsOnboarding can flip true well after the effect above
   // has already navigated off the login/signup screen. Firing this independently
-  // (not gated on segments) means it still reliably pushes edit-profile on top of
-  // wherever the user currently is.
+  // (not gated on segments) means it still reliably pushes the username step on
+  // top of wherever the user currently is. choose-username forwards to
+  // edit-profile itself — and skips straight there for accounts that already
+  // picked a real username (email/password sign-ups).
   useEffect(() => {
     if (needsOnboarding && session && !recoveryMode) {
-      router.push('/edit-profile');
+      router.push('/choose-username');
       clearNeedsOnboarding();
     }
   }, [needsOnboarding, session, recoveryMode]);
@@ -308,6 +310,9 @@ function ThemedApp() {
           <Stack.Screen name="my-reviews" options={{ title: 'My Reviews', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="edit-profile" options={{ title: 'Edit Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          {/* Mandatory first-run step — no header and no swipe-back, so it
+              can't be skipped before a username is chosen. */}
+          <Stack.Screen name="choose-username" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="user-profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="followers-following" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="artist-detail" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />

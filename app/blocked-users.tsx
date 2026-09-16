@@ -12,6 +12,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { supabase } from '@/lib/supabase';
+import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -115,7 +116,7 @@ export default function BlockedUsersScreen() {
         </View>
       }
       renderItem={({ item }) => {
-        const name    = item.display_name || item.username || 'Unknown';
+        const name    = nameOrHandle(item.display_name, item.username, item.id, 'Unknown');
         const initial = name.charAt(0).toUpperCase();
         const isUnblocking = unblocking === item.id;
 
@@ -133,8 +134,8 @@ export default function BlockedUsersScreen() {
             {/* Name */}
             <View style={s.info}>
               <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{name}</Text>
-              {item.username ? (
-                <Text style={[s.username, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
+              {handleText(item.username, item.id) ? (
+                <Text style={[s.username, { color: colors.subtext }]} numberOfLines={1}>{handleText(item.username, item.id)}</Text>
               ) : null}
             </View>
 

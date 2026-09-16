@@ -41,6 +41,7 @@ import { usePro } from '@/context/ProContext';
 import { ProBadge } from '@/components/ProBadge';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { effectiveRating } from '@/lib/effectiveRating';
+import { handleText, isAutoUsername, nameOrHandle } from '@/lib/userHandle';
 
 const DARK_BG   = '#0F0A07';
 const CARD_BG   = '#2E2018';
@@ -151,7 +152,13 @@ function ProfileHeader({
   refreshKey?: number;
 }) {
   const router  = useRouter();
-  const initial = (displayName || username || '?').charAt(0).toUpperCase();
+  const shownName = nameOrHandle(displayName, username, profileUserId, '');
+  const ownHandle = handleText(username, profileUserId);
+  // Accounts created through Apple/Google before the mandatory username step
+  // existed still carry an auto-generated placeholder. Their handle is hidden
+  // everywhere, so the only way they'd know is if we ask.
+  const needsUsername = isOwnProfile && !!username && isAutoUsername(username, profileUserId);
+  const initial   = (shownName || '?').charAt(0).toUpperCase();
   const [isFollowing,    setIsFollowing]    = useState(false);
   const [followLoading,  setFollowLoading]  = useState(false);
   // null = "not loaded yet / failed to load", rendered as "—".
@@ -234,15 +241,34 @@ function ProfileHeader({
 
         {/* Name + Pro badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={[ph.name, { color: colors.text }]}>{displayName || username || ''}</Text>
+          <Text style={[ph.name, { color: colors.text }]}>{shownName}</Text>
           {isPro && <ProBadge />}
         </View>
 
         {/* Username */}
-        {username ? <Text style={[ph.username, { color: colors.subtext }]}>@{username}</Text> : null}
+        {ownHandle ? <Text style={[ph.username, { color: colors.subtext }]}>{ownHandle}</Text> : null}
 
         {/* Bio */}
         {bio ? <Text style={[ph.bio, { color: colors.subtext }]}>{bio}</Text> : null}
+
+        {/* Username prompt — only while they're still on a placeholder */}
+        {needsUsername && (
+          <Pressable
+            onPress={() => router.push('/choose-username?mode=settings')}
+            style={({ pressed }) => [
+              ph.usernamePrompt,
+              { backgroundColor: colors.surface, borderColor: colors.tint, opacity: pressed ? 0.8 : 1 },
+            ]}>
+            <FontAwesome name="at" size={14} color={colors.tint} />
+            <View style={{ flex: 1 }}>
+              <Text style={[ph.usernamePromptTitle, { color: colors.text }]}>Pick a username</Text>
+              <Text style={[ph.usernamePromptSub, { color: colors.subtext }]}>
+                So people can find you in search.
+              </Text>
+            </View>
+            <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
+          </Pressable>
+        )}
 
         {/* Following / Followers */}
         <View style={ph.socialRow}>
@@ -366,6 +392,19 @@ const ph = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.3,
   },
+  usernamePrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    alignSelf: 'stretch',
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  usernamePromptTitle: { fontSize: 14, fontWeight: '700' },
+  usernamePromptSub:   { fontSize: 12, marginTop: 1 },
   username: {
     color: SUBTEXT,
     fontSize: 14,
@@ -1366,6 +1405,7 @@ export default function ListendScreen() {
         album={selectedTopAlbum}
         reviewUserId={user!.id}
         username={profileUsername}
+        displayName={profileDisplayName}
         avatarUrl={profileAvatarUrl}
         onClose={() => setSelectedTopAlbum(null)}
         onAlbumPress={() => {

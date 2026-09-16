@@ -23,6 +23,7 @@ import Colors, { type ColorsShape } from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { handleOrName } from '@/lib/userHandle';
 import { parseReviewTargetId } from '@/lib/reviewTargets';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
@@ -57,7 +58,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LikeState    = { liked: boolean; count: number };
-type LikedReview  = LoggedAlbum & { ownerId: string; username: string; isPro?: boolean; avatarUrl?: string | null; likedAt: string; targetId: string };
+type LikedReview  = LoggedAlbum & { ownerId: string; username: string; handle: string; isPro?: boolean; avatarUrl?: string | null; likedAt: string; targetId: string };
 
 // ─── Review row ───────────────────────────────────────────────────────────────
 
@@ -70,6 +71,7 @@ function ReviewRow({
   isLiked = false,
   onLike,
   byUsername,
+  byHandle,
   byUserIsPro,
 }: {
   album: LoggedAlbum;
@@ -80,6 +82,7 @@ function ReviewRow({
   isLiked?: boolean;
   onLike?: () => void;
   byUsername?: string;
+  byHandle?: string;
   byUserIsPro?: boolean;
 }) {
   return (
@@ -105,7 +108,7 @@ function ReviewRow({
         </Text>
         {byUsername ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={[s.byUser, { color: colors.tint }]} numberOfLines={1}>by @{byUsername}</Text>
+            <Text style={[s.byUser, { color: colors.tint }]} numberOfLines={1}>by {byHandle ?? `@${byUsername}`}</Text>
             {byUserIsPro && <ProBadge size="xs" />}
           </View>
         ) : null}
@@ -163,6 +166,7 @@ function ReviewDetailModal({
   isDark,
   colors,
   reviewerUsername,
+  reviewerHandle,
   reviewerIsPro = false,
   reviewerAvatarUrl,
   likeState,
@@ -177,6 +181,7 @@ function ReviewDetailModal({
   isDark: boolean;
   colors: ColorsShape;
   reviewerUsername: string;
+  reviewerHandle?: string;
   reviewerIsPro?: boolean;
   reviewerAvatarUrl?: string | null;
   likeState: LikeState;
@@ -199,7 +204,7 @@ function ReviewDetailModal({
     fetchReviewComments(reviewId).then(setLocalComments);
   }, [reviewId]);
 
-  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null, commenterHandle?: string) {
     if (!user?.id) return;
     const tempId = `rev_${Date.now()}`;
     setLocalComments(prev => [...prev, {
@@ -207,6 +212,7 @@ function ReviewDetailModal({
       reviewId,
       userId: user.id,
       username: commenterUsername ?? reviewerUsername,
+      handle:   commenterHandle ?? reviewerHandle ?? `@${reviewerUsername}`,
       avatarUrl: avatarUrl ?? null,
       body,
       parentCommentId: parentId ?? undefined,
@@ -278,12 +284,12 @@ function ReviewDetailModal({
                 <ExpoImage source={{ uri: reviewerAvatarUrl }} style={mrd.avatar} contentFit="cover" cachePolicy="disk" />
               ) : (
                 <View style={[mrd.avatar, { backgroundColor: reviewerUsername === 'you' ? colors.tint : avatarColor(reviewerUsername) }]}>
-                  <Text style={mrd.avatarLetter}>{reviewerUsername[0].toUpperCase()}</Text>
+                  <Text style={mrd.avatarLetter}>{(reviewerHandle ?? reviewerUsername).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
                 </View>
               )}
               <View style={{ gap: 2 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={mrd.username}>@{reviewerUsername}</Text>
+                  <Text style={mrd.username}>{reviewerHandle ?? `@${reviewerUsername}`}</Text>
                   {reviewerIsPro && <ProBadge size="xs" />}
                 </View>
                 {dateStr ? (
@@ -394,6 +400,7 @@ export default function MyReviewsScreen() {
   const [sheetOpen, setSheetOpen]         = useState(false);
   const [selectedReview, setSelectedReview] = useState<LoggedAlbum | null>(null);
   const [profileUsername, setProfileUsername] = useState('you');
+  const [profileHandle,   setProfileHandle]   = useState('@you');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
   const [likedReviews,  setLikedReviews]  = useState<LikedReview[]>([]);
@@ -416,11 +423,12 @@ export default function MyReviewsScreen() {
     if (!uid) return;
     supabase
       .from('profiles')
-      .select('username, avatar_url')
+      .select('username, display_name, avatar_url')
       .eq('id', uid)
       .single()
       .then(({ data }) => {
         if (data?.username) setProfileUsername(data.username);
+        setProfileHandle(handleOrName(data?.username, (data as any)?.display_name, uid, 'You'));
         setProfileAvatarUrl(data?.avatar_url ?? null);
       });
   }, [viewingOther, user?.id]);
@@ -565,10 +573,13 @@ export default function MyReviewsScreen() {
       const ownerIds = [...byOwner.keys()];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, is_pro, avatar_url')
+        .select('id, username, display_name, is_pro, avatar_url')
         .in('id', ownerIds);
       const usernameById = new Map<string, string>(
         (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
+      );
+      const handleById = new Map<string, string>(
+        (profiles ?? []).map((p: any) => [p.id as string, handleOrName(p.username, p.display_name, p.id)])
       );
       const isProById = new Map<string, boolean>(
         (profiles ?? []).map((p: any) => [p.id as string, !!(p.is_pro)])
@@ -621,6 +632,7 @@ export default function MyReviewsScreen() {
             lastListenedAt: a.is_relistened ? latestReListenDate.get(a.spotify_id) : undefined,
             ownerId,
             username:   usernameById.get(ownerId) ?? '',
+            handle:     handleById.get(ownerId) ?? 'User',
             isPro:      isProById.get(ownerId) ?? false,
             avatarUrl:  avatarById.get(ownerId) ?? null,
             likedAt:    likedEntry?.likedAt ?? '',
@@ -992,6 +1004,7 @@ export default function MyReviewsScreen() {
                   colors={colors}
                   isDark={isDark}
                   byUsername={item.username}
+                  byHandle={item.handle}
                   byUserIsPro={item.isPro}
                   onPress={() => setSelectedLiked(item)}
                   likeCount={likeState.count}
@@ -1018,6 +1031,7 @@ export default function MyReviewsScreen() {
             isDark={isDark}
             colors={colors}
             reviewerUsername={profileUsername}
+            reviewerHandle={profileHandle}
             reviewerAvatarUrl={profileAvatarUrl}
             likeState={likeState}
             onLike={viewingOther ? () => handleToggleLike(selectedReview) : undefined}
@@ -1048,6 +1062,7 @@ export default function MyReviewsScreen() {
             isDark={isDark}
             colors={colors}
             reviewerUsername={selectedLiked.username}
+            reviewerHandle={selectedLiked.handle}
             reviewerIsPro={selectedLiked.isPro}
             reviewerAvatarUrl={selectedLiked.avatarUrl}
             likeState={likeState}

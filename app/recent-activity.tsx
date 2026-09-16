@@ -20,6 +20,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
@@ -201,7 +202,7 @@ async function fetchFriendsForUser(uid: string): Promise<FriendItem[]> {
     friends.push({
       key:       `friend-${id}`,
       friendId:  id,
-      name:      prof?.display_name || prof?.username || 'User',
+      name:      nameOrHandle(prof?.display_name, prof?.username, prof?.id, 'User'),
       username:  prof?.username   ?? null,
       avatarUrl: prof?.avatar_url ?? null,
       isPro:     !!(prof?.is_pro),
@@ -487,6 +488,7 @@ function ReviewCardModal({
   colors,
   isDark,
   reviewerUsername,
+  reviewerHandle,
   avatarUrl,
   reviewerIsPro,
   likeState,
@@ -499,6 +501,7 @@ function ReviewCardModal({
   colors: ColorsShape;
   isDark: boolean;
   reviewerUsername: string;
+  reviewerHandle?: string;
   avatarUrl?: string | null;
   reviewerIsPro?: boolean;
   likeState: { liked: boolean; count: number };
@@ -513,12 +516,13 @@ function ReviewCardModal({
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [localComments, setLocalComments] = useState<ReviewComment[]>([]);
 
-  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null, commenterHandle?: string) {
     setLocalComments(prev => [...prev, {
       id: `rev_${Date.now()}`,
       reviewId: item.id,
       userId: 'me',
       username: commenterUsername ?? reviewerUsername,
+      handle:   commenterHandle ?? reviewerHandle ?? `@${reviewerUsername}`,
       avatarUrl: avatarUrl ?? null,
       body,
       parentCommentId: parentId ?? undefined,
@@ -587,12 +591,12 @@ function ReviewCardModal({
                 <ExpoImage source={{ uri: avatarUrl }} style={rm.avatar} contentFit="cover" cachePolicy="disk" />
               ) : (
                 <View style={[rm.avatar, { backgroundColor: reviewerUsername === 'you' ? colors.tint : avatarColor(reviewerUsername) }]}>
-                  <Text style={rm.avatarLetter}>{reviewerUsername[0]?.toUpperCase()}</Text>
+                  <Text style={rm.avatarLetter}>{(reviewerHandle ?? reviewerUsername).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
                 </View>
               )}
               <View style={{ gap: 2 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={rm.username}>@{reviewerUsername}</Text>
+                  <Text style={rm.username}>{reviewerHandle ?? `@${reviewerUsername}`}</Text>
                   {reviewerIsPro && <ProBadge size="xs" />}
                 </View>
                 {item.dateLabel ? (
@@ -733,9 +737,11 @@ function FriendRow({ item, onPress, colors }: { item: FriendItem; onPress: () =>
       )}
       <View style={s.info}>
         <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-        {item.username ? (
+        {(handleText(item.username, item.friendId) || item.isPro) ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
+            {handleText(item.username, item.friendId)
+              ? <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>{handleText(item.username, item.friendId)}</Text>
+              : null}
             {item.isPro && <ProBadge size="xs" />}
           </View>
         ) : null}
@@ -933,6 +939,7 @@ export default function RecentActivityScreen() {
   const [reviewLikeState,      setReviewLikeState]      = useState<{ liked: boolean; count: number }>({ liked: false, count: 0 });
   const pendingLikeToggle = useRef(false);
   const [reviewUsername,       setReviewUsername]       = useState('');
+  const [reviewHandle,         setReviewHandle]         = useState('');
   const [reviewAvatarUrl,      setReviewAvatarUrl]      = useState<string | null>(null);
   const [reviewIsPro,          setReviewIsPro]          = useState(false);
   const isDark = colors.isDark;
@@ -1018,11 +1025,12 @@ export default function RecentActivityScreen() {
     // Fetch reviewer username + avatar + pro status
     supabase
       .from('profiles')
-      .select('username, avatar_url, is_pro')
+      .select('username, display_name, avatar_url, is_pro')
       .eq('id', ownerId)
       .single()
       .then(({ data }) => {
         setReviewUsername(data?.username ?? 'you');
+        setReviewHandle(handleOrName(data?.username, (data as any)?.display_name, ownerId, 'You'));
         setReviewAvatarUrl(data?.avatar_url ?? null);
         setReviewIsPro(!!data?.is_pro);
       });
@@ -1279,6 +1287,7 @@ export default function RecentActivityScreen() {
           colors={colors}
           isDark={isDark}
           reviewerUsername={reviewUsername}
+          reviewerHandle={reviewHandle}
           avatarUrl={reviewAvatarUrl}
           reviewerIsPro={reviewIsPro}
           likeState={reviewLikeState}

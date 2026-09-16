@@ -22,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
+import { nameOrHandle } from '@/lib/userHandle';
 import { countOrNull } from '@/lib/supabaseQuery';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
@@ -116,12 +117,12 @@ export default function DMConversationScreen() {
     if (!otherUserId) return;
     supabase
       .from('profiles')
-      .select('display_name, username')
+      .select('id, display_name, username')
       .eq('id', otherUserId)
       .single()
       .then(({ data }) => {
         if (data) {
-          const name = data.display_name || data.username || 'Message';
+          const name = nameOrHandle(data.display_name, data.username, (data as any).id, 'Message');
           navigation.setOptions({
             headerTitle: () => (
               <Pressable onPress={() => router.push({ pathname: '/user-profile', params: { userId: otherUserId } })}>

@@ -10,6 +10,7 @@ import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { handleOrName } from '@/lib/userHandle';
 import { ProBadge } from '@/components/ProBadge';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,6 +22,8 @@ export type ReviewComment = {
   replyToUsername?: string | null;
   userId:           string;
   username:         string;
+  /** "@handle" when the account picked a username, else their display name. */
+  handle?:          string;
   avatarUrl?:       string | null;
   isPro?:           boolean;
   body:             string;
@@ -129,14 +132,14 @@ export function CommentBubble({
         />
       ) : (
         <View style={[cms.commentAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: avatarColor(comment.username) }]}>
-          <Text style={[cms.commentAvatarLetter, { fontSize: large ? 13 : 10 }]}>{comment.username[0].toUpperCase()}</Text>
+          <Text style={[cms.commentAvatarLetter, { fontSize: large ? 13 : 10 }]}>{(comment.handle ?? comment.username).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
         </View>
       )}
       <View style={cms.commentBody}>
         <View style={cms.commentTopLine}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
             <Pressable onPress={() => onUsernamePress?.(comment.username)} hitSlop={4} disabled={!onUsernamePress}>
-              <Text style={[cms.commentUsername, { fontSize: usernameSz }]}>@{comment.username}</Text>
+              <Text style={[cms.commentUsername, { fontSize: usernameSz }]}>{comment.handle ?? `@${comment.username}`}</Text>
             </Pressable>
             {comment.isPro && <ProBadge size="xs" />}
           </View>
@@ -144,7 +147,7 @@ export function CommentBubble({
         </View>
         {comment.replyToUsername && (
           <Text style={[cms.replyingToLabel, { color: colors.subtext, fontSize: large ? 11 : 9 }]}>
-            replying to @{comment.replyToUsername}
+            replying to {comment.replyToUsername}
           </Text>
         )}
         <Text style={[cms.commentText, { color: isDark ? '#a07850' : '#3a2818', fontSize: bodyTextSz, lineHeight: bodyLineH }]}>{comment.body}</Text>
@@ -193,13 +196,14 @@ export function CommentsSection({
   comments: ReviewComment[];
   isDark: boolean;
   colors: { text: string; subtext: string; background: string };
-  onAddComment?: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
+  onAddComment?: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null, handle?: string) => void;
   onUsernamePress?: (username: string) => void;
   large?: boolean;
   highlightCommentId?: string;
 }) {
   const { user } = useAuth();
   const [myUsername, setMyUsername]         = useState('');
+  const [myHandle,   setMyHandle]           = useState('');
   const [myAvatarUrl, setMyAvatarUrl]       = useState<string | null>(null);
   const [replyTarget, setReplyTarget]       = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText]           = useState('');
@@ -218,9 +222,10 @@ export function CommentsSection({
 
   useEffect(() => {
     if (!user?.id) return;
-    supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
+    supabase.from('profiles').select('username, display_name, avatar_url').eq('id', user.id).single()
       .then(({ data }) => {
         if (data?.username)  setMyUsername(data.username);
+        setMyHandle(handleOrName(data?.username, (data as any)?.display_name, user.id, 'You'));
         if (data?.avatar_url !== undefined) setMyAvatarUrl(data.avatar_url ?? null);
       });
   }, [user?.id]);
@@ -245,6 +250,7 @@ export function CommentsSection({
       myUsername || undefined,
       replyTarget.targetUsername,
       myAvatarUrl,
+      myHandle || undefined,
     );
     setReplyText('');
     setReplyTarget(null);
@@ -252,7 +258,7 @@ export function CommentsSection({
 
   function submitComment() {
     if (!commentText.trim()) return;
-    onAddComment?.(commentText.trim(), null, myUsername || undefined, undefined, myAvatarUrl);
+    onAddComment?.(commentText.trim(), null, myUsername || undefined, undefined, myAvatarUrl, myHandle || undefined);
     setCommentText('');
   }
 
@@ -296,7 +302,7 @@ export function CommentsSection({
               prev?.targetId === comment.id ? null : {
                 topLevelId:     effectiveTopLevelId,
                 targetId:       comment.id,
-                targetUsername: comment.username,
+                targetUsername: comment.handle ?? `@${comment.username}`,
               }
             );
             setReplyText('');
@@ -307,7 +313,7 @@ export function CommentsSection({
           <View style={[cms.replyInputRow, { borderTopColor: borderColor, paddingLeft: replyIndent }]}>
             <TextInput
               style={[cms.replyInput, { color: colors.text, backgroundColor: isDark ? '#2e2018' : '#f5f5f5', borderColor: isDark ? '#2a1e14' : '#e0e0e0', fontSize: inputFontSize, paddingVertical: inputPadV }]}
-              placeholder={`Reply to @${comment.username}…`}
+              placeholder={`Reply to ${comment.handle ?? `@${comment.username}`}…`}
               placeholderTextColor={colors.subtext}
               value={replyText}
               onChangeText={setReplyText}

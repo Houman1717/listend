@@ -17,6 +17,7 @@ import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { effectiveRating } from '@/lib/effectiveRating';
+import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { useState, useEffect } from 'react';
 
 const GRADIENT: [string, string, string] = ['#D4A017', '#B8880F', '#D4A017'];
@@ -198,7 +199,10 @@ export default function ProfileScreen() {
       .single()
       .then(({ data }) => {
         if (data) {
-          setDisplayName(data.display_name || data.username || '');
+          // Keep the raw display name here — nameOrHandle at the render site
+          // does the falling back, and can only do it if this isn't pre-filled
+          // with the username.
+          setDisplayName(data.display_name || '');
           setUsername(data.username || '');
           setAvatarUrl(data.avatar_url ?? null);
         }
@@ -272,8 +276,8 @@ export default function ProfileScreen() {
           </LinearGradient>
         )}
         <View style={s.nameBlock}>
-          <Text style={s.displayName}>{displayName || username || user?.email || ''}</Text>
-          {username ? <Text style={s.handle}>@{username}</Text> : null}
+          <Text style={s.displayName}>{nameOrHandle(displayName, username, user?.id, '')}</Text>
+          {handleText(username, user?.id) ? <Text style={s.handle}>{handleText(username, user?.id)}</Text> : null}
         </View>
       </View>
 

@@ -26,6 +26,7 @@ import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { handleOrName } from '@/lib/userHandle';
 import { reviewOwnerId } from '@/lib/reviewTargets';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { reportContent } from '@/lib/reports';
@@ -82,7 +83,10 @@ const PLACEHOLDER_FRIENDS = [
 
 const AGO = ['2m ago', '14m ago', '1h ago', '2h ago', '3h ago', '5h ago'];
 
-type FriendEntry = typeof PLACEHOLDER_FRIENDS[number];
+type FriendEntry = typeof PLACEHOLDER_FRIENDS[number] & {
+  /** "@handle" when the account picked a username, else their display name. */
+  handle?: string;
+};
 
 const FRIEND_COMMENTS: ReviewComment[] = [
   { id: 'fc1',  reviewId: '1', userId: 'u1', username: 'vinyl_ghost',   body: 'Save Your Tears (Remix) was everywhere but the OG hits different.',       createdAt: '1h ago'    },
@@ -229,6 +233,13 @@ function ArtistCard({ item, isDark, onPress }: { item: CatalogArtist; isDark: bo
 
 // ─── Popular review card ──────────────────────────────────────────────────────
 
+// Belt-and-braces: `handle` is filled in by homeData, but these cards are also
+// built from the /api/home/this-week payload, which has no such field. Never
+// render an empty byline because a field went missing upstream.
+function prHandle(r: PopularReview): string {
+  return r.handle || `@${r.username}`;
+}
+
 function PopularReviewCard({
   item,
   liked,
@@ -300,12 +311,12 @@ function PopularReviewCard({
           <View style={[pr.avatar, { backgroundColor: avatarColor(item.username), overflow: 'hidden' }]}>
             {item.avatarUrl
               ? <ExpoImage source={{ uri: item.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-              : <Text style={pr.avatarLetter}>{item.username[0].toUpperCase()}</Text>
+              : <Text style={pr.avatarLetter}>{prHandle(item).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
             }
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
             <Text style={[pr.username, { color: '#D4A017' }]} numberOfLines={1}>
-              @{item.username}
+              {prHandle(item)}
             </Text>
             {item.isPro && <ProBadge size="xs" />}
           </View>
@@ -425,11 +436,11 @@ function PopularReviewModal({
               <View style={[rm.avatar, { backgroundColor: avatarColor(review.username), overflow: 'hidden' }]}>
                 {review.avatarUrl
                   ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-                  : <Text style={rm.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+                  : <Text style={rm.avatarLetter}>{prHandle(review).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
                 }
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={rm.username}>@{review.username}</Text>
+                <Text style={rm.username}>{prHandle(review)}</Text>
                 {review.isPro && <ProBadge size="xs" />}
               </View>
             </Pressable>
@@ -523,10 +534,10 @@ function FriendFullRow({
   const border  = isDark ? '#2a1e14' : '#e8e8e8';
   const subtext = isDark ? '#6B4C35' : '#A08060';
 
-  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+  function handleAddComment(body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null, commenterHandle?: string) {
     setLocalComments(prev => [...prev, {
       id: `ffc_${Date.now()}`, reviewId: friend.id,
-      userId: 'me', username: commenterUsername ?? 'me', body,
+      userId: 'me', username: commenterUsername ?? 'me', handle: commenterHandle ?? '@me', body,
       parentCommentId: parentId ?? undefined,
       replyToUsername: replyToUsername ?? null,
       avatarUrl: avatarUrl ?? null,
@@ -570,12 +581,12 @@ function FriendFullRow({
           <View style={[flr.avatar, { backgroundColor: avatarColor(friend.user), overflow: 'hidden' }]}>
             {friend.avatarUrl
               ? <ExpoImage source={{ uri: friend.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-              : <Text style={flr.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+              : <Text style={flr.avatarLetter}>{(friend.handle ?? friend.user).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
             }
           </View>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={flr.username}>@{friend.user}</Text>
+              <Text style={flr.username}>{friend.handle ?? `@${friend.user}`}</Text>
               {friend.isPro && <ProBadge size="xs" />}
             </View>
             <Text style={[flr.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>Listend {friend.loggedDate}</Text>
@@ -643,7 +654,7 @@ function FriendCard({
         <ArtFallback size={artSize} radius={6} label={friend.album} />
       )}
       <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress?.(); }} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <Text style={[s.friendUser, { color: '#D4A017', flexShrink: 1 }]} numberOfLines={1}>@{friend.user}</Text>
+        <Text style={[s.friendUser, { color: '#D4A017', flexShrink: 1 }]} numberOfLines={1}>{friend.handle ?? `@${friend.user}`}</Text>
         {friend.isPro && <ProBadge size="xs" />}
       </Pressable>
       <Text style={[s.cardTitle,  { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{friend.album}</Text>
@@ -752,12 +763,12 @@ function FriendReviewModal({
               <View style={[rm.avatar, { backgroundColor: avatarColor(friend.user), overflow: 'hidden' }]}>
                 {friend.avatarUrl
                   ? <ExpoImage source={{ uri: friend.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-                  : <Text style={rm.avatarLetter}>{friend.user[0].toUpperCase()}</Text>
+                  : <Text style={rm.avatarLetter}>{(friend.handle ?? friend.user).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
                 }
               </View>
               <View style={{ gap: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={rm.username}>@{friend.user}</Text>
+                  <Text style={rm.username}>{friend.handle ?? `@${friend.user}`}</Text>
                   {friend.isPro && <ProBadge size="xs" />}
                 </View>
                 <Text style={[rm.listenedDate, { color: isDark ? '#A08060' : '#6B4C35' }]}>
@@ -831,7 +842,7 @@ function FriendReviewModal({
 
 // ─── Friends Recent Activity types + fetch ────────────────────────────────────
 
-type FriendProfile = { id: string; username: string | null; avatarUrl: string | null; isPro: boolean };
+type FriendProfile = { id: string; username: string | null; handle: string; avatarUrl: string | null; isPro: boolean };
 
 type FriendActivityItem =
   | { kind: 'top5';            key: string; friend: FriendProfile; category: string; itemId: string; itemName: string; itemImageUrl: string | null; position: number; dateMs: number; dateLabel: string }
@@ -874,9 +885,9 @@ async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> 
   const friendIds = [...new Set((outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string))];
   if (friendIds.length === 0) return [];
 
-  const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', friendIds);
+  const { data: profiles } = await supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', friendIds);
   const profileMap = new Map<string, FriendProfile>();
-  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { id: p.id, username: p.username, avatarUrl: p.avatar_url, isPro: !!(p.is_pro) });
+  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { id: p.id, username: p.username, handle: handleOrName(p.username, p.display_name, p.id), avatarUrl: p.avatar_url, isPro: !!(p.is_pro) });
 
   const items: FriendActivityItem[] = [];
 
@@ -944,9 +955,9 @@ async function fetchFriendsRecentListened(uid: string): Promise<FriendEntry[]> {
   const friendIds = [...new Set((outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string))];
   if (friendIds.length === 0) return [];
 
-  const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', friendIds);
-  const profileMap = new Map<string, { username: string | null; avatarUrl: string | null; isPro: boolean }>();
-  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { username: p.username, avatarUrl: p.avatar_url, isPro: !!(p.is_pro) });
+  const { data: profiles } = await supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', friendIds);
+  const profileMap = new Map<string, { username: string | null; handle: string; avatarUrl: string | null; isPro: boolean }>();
+  for (const p of (profiles ?? []) as any[]) profileMap.set(p.id, { username: p.username, handle: handleOrName(p.username, p.display_name, p.id), avatarUrl: p.avatar_url, isPro: !!(p.is_pro) });
 
   const [{ data: rows }, { data: reListenRows }] = await Promise.all([
     supabase
@@ -975,6 +986,7 @@ async function fetchFriendsRecentListened(uid: string): Promise<FriendEntry[]> {
       entry: {
         id: `${r.user_id}_${r.spotify_id}`,
         user: profile?.username ?? 'unknown',
+        handle: profile?.handle ?? '@unknown',
         album: r.title ?? '',
         artist: r.artist ?? '',
         year: r.year ?? '',
@@ -998,6 +1010,7 @@ async function fetchFriendsRecentListened(uid: string): Promise<FriendEntry[]> {
       entry: {
         id: `relisten_${r.user_id}_${r.spotify_id}_${r.listened_at}`,
         user: profile?.username ?? 'unknown',
+        handle: profile?.handle ?? '@unknown',
         album: r.title ?? '',
         artist: r.artist ?? '',
         year: '',
@@ -1099,7 +1112,7 @@ function FriendActivityCard({
         </View>
       )}
       <Pressable onPress={(e) => { e.stopPropagation?.(); onUsernamePress(); }} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <Text style={{ color: '#D4A017', fontSize: 11, fontWeight: '700', flexShrink: 1 }} numberOfLines={1}>@{item.friend.username ?? 'user'}</Text>
+        <Text style={{ color: '#D4A017', fontSize: 11, fontWeight: '700', flexShrink: 1 }} numberOfLines={1}>{item.friend.handle}</Text>
         {item.friend.isPro && <ProBadge size="xs" />}
       </Pressable>
       <Text style={{ color: isDark ? '#f5e6c8' : '#1A0F0A', fontSize: 12, fontWeight: '600', lineHeight: 16 }} numberOfLines={2}>{itemName}</Text>
@@ -1276,7 +1289,7 @@ export default function HomeScreen() {
     openReview(item, true);
   }
 
-  function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+  function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null, commenterHandle?: string) {
     const tempId = `local_${Date.now()}`;
     const newComment: ReviewComment = {
       id:              tempId,
@@ -1285,6 +1298,7 @@ export default function HomeScreen() {
       replyToUsername: replyToUsername ?? null,
       userId:          user?.id ?? 'local',
       username:        commenterUsername ?? 'me',
+      handle:          commenterHandle ?? '@me',
       avatarUrl:       avatarUrl ?? null,
       body,
       createdAt:       'just now',
@@ -1619,7 +1633,7 @@ export default function HomeScreen() {
                     )}
                     <View style={{ flex: 1, gap: 3 }}>
                       <Pressable onPress={() => { setShowAllFriendActivity(false); navigateToProfile(item.friend.username ?? '', router); }} hitSlop={6}>
-                        <Text style={{ color: '#D4A017', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>@{item.friend.username ?? 'user'}</Text>
+                        <Text style={{ color: '#D4A017', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>{item.friend.handle}</Text>
                       </Pressable>
                       <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{itemName}</Text>
                       {itemSub ? <Text style={{ color: colors.subtext, fontSize: 12 }} numberOfLines={1}>{itemSub}</Text> : null}

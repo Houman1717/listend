@@ -251,6 +251,7 @@ export default function SessionsScreen() {
   const [dateEditMode,    setDateEditMode]    = useState(false);
   const [editingDateAlbum, setEditingDateAlbum] = useState<LoggedAlbum | null>(null);
   const [profileUsername, setProfileUsername] = useState('');
+  const [profileDisplayName, setProfileDisplayName] = useState('');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -258,11 +259,12 @@ export default function SessionsScreen() {
     if (!uid) return;
     supabase
       .from('profiles')
-      .select('username, avatar_url')
+      .select('username, display_name, avatar_url')
       .eq('id', uid)
       .single()
       .then(({ data }) => {
         if (data?.username) setProfileUsername(data.username);
+        setProfileDisplayName((data as any)?.display_name ?? '');
         if (data?.avatar_url) setProfileAvatarUrl(data.avatar_url);
       });
   }, [viewingOther, user?.id]);
@@ -534,6 +536,7 @@ export default function SessionsScreen() {
           album={selectedAlbum}
           reviewUserId={viewingOther || user!.id}
           username={profileUsername}
+          displayName={profileDisplayName}
           avatarUrl={profileAvatarUrl}
           isDark={isDark}
           colors={colors}

@@ -13,6 +13,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
+import { nameOrHandle } from '@/lib/userHandle';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -160,7 +161,7 @@ export default function NotificationsScreen() {
           read:           row.read,
           createdAt:      row.created_at,
           actorId:        row.actor_id                         ?? '',
-          actorName:      prof?.display_name || prof?.username || 'User',
+          actorName:      nameOrHandle(prof?.display_name, prof?.username, prof?.id, 'User'),
           actorUsername:  prof?.username                       ?? null,
           actorAvatarUrl: prof?.avatar_url                     ?? null,
           targetId:       row.target_id                        ?? null,

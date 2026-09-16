@@ -25,6 +25,7 @@ import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
+import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
 import { ProAttributionSheet } from '@/components/ProAttributionSheet';
@@ -529,7 +530,7 @@ export default function UserProfileScreen() {
             top_songs:   normaliseTopSongs(favData?.top_songs),
             top_artists: normaliseTopArtists(favData?.top_artists),
           });
-          navigation.setOptions({ title: prof.display_name || prof.username || 'Profile' });
+          navigation.setOptions({ title: nameOrHandle(prof.display_name, prof.username, viewedUserId, 'Profile') });
         }
 
         const [followersRes, followingRes] =
@@ -710,13 +711,13 @@ export default function UserProfileScreen() {
     if (!currentUserId || !viewedUserId) return;
 
     if (isBlockedByMe) {
-      Alert.alert('Unblock User', `Unblock ${profile?.display_name || profile?.username || 'this user'}?`, [
+      Alert.alert('Unblock User', `Unblock ${nameOrHandle(profile?.display_name, profile?.username, viewedUserId, 'this user')}?`, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Unblock', onPress: () => doUnblock(currentUserId) },
       ]);
     } else {
       Alert.alert(
-        profile?.display_name || profile?.username || 'User',
+        nameOrHandle(profile?.display_name, profile?.username, viewedUserId, 'User'),
         undefined,
         [
           { text: 'Report User', onPress: () => reportContent({ contentType: 'user', contentId: viewedUserId, reportedUser: viewedUserId, label: 'user' }) },
@@ -730,7 +731,7 @@ export default function UserProfileScreen() {
   function confirmBlock(currentUserId: string) {
     Alert.alert(
       'Block User',
-      `Block ${profile?.display_name || profile?.username || 'this user'}? They won't be able to see your profile or contact you.`,
+      `Block ${nameOrHandle(profile?.display_name, profile?.username, viewedUserId, 'this user')}? They won't be able to see your profile or contact you.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Block', style: 'destructive', onPress: () => doBlock(currentUserId) },
@@ -855,7 +856,8 @@ export default function UserProfileScreen() {
     );
   }
 
-  const name    = profile.display_name || profile.username || '';
+  const name    = nameOrHandle(profile.display_name, profile.username, viewedUserId, '');
+  const handle  = handleText(profile.username, viewedUserId);
   const initial = name.charAt(0).toUpperCase() || '?';
 
   // Blocked state — either direction
@@ -934,7 +936,7 @@ export default function UserProfileScreen() {
         </View>
 
         {/* Username */}
-        {profile.username ? <Text style={[s.username, { color: colors.subtext }]}>@{profile.username}</Text> : null}
+        {handle ? <Text style={[s.username, { color: colors.subtext }]}>{handle}</Text> : null}
 
         {/* Bio */}
         {profile.bio ? <Text style={[s.bio, { color: colors.subtext }]}>{profile.bio}</Text> : null}
@@ -1174,7 +1176,7 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="heart"      label="Liked Artists"   sub="Their favourites"               onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId,                     ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="bar-chart"  label="Stats"           sub="Listening insights"             onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId, displayName: profile?.display_name ?? profile?.username ?? '', viewedIsPro: profile?.is_pro ? '1' : '0', ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
+            <NavRow icon="bar-chart"  label="Stats"           sub="Listening insights"             onPress={() => router.push({ pathname: '/my-stats',         params: { userId: viewedUserId, displayName: nameOrHandle(profile?.display_name, profile?.username, viewedUserId, ''), viewedIsPro: profile?.is_pro ? '1' : '0', ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
           </View>
         </>
       )}
@@ -1193,6 +1195,7 @@ export default function UserProfileScreen() {
         album={selectedTopAlbum}
         reviewUserId={viewedUserId}
         username={profile?.username ?? ''}
+        displayName={profile?.display_name}
         avatarUrl={profile?.avatar_url}
         onClose={() => setSelectedTopAlbum(null)}
         onAlbumPress={() => {
@@ -1221,7 +1224,7 @@ export default function UserProfileScreen() {
         // otherwise the two modals fight over the presentation context.
         setTimeout(() => showPaywall(), 300);
       }}
-      displayName={profile?.display_name || profile?.username || 'This user'}
+      displayName={nameOrHandle(profile?.display_name, profile?.username, viewedUserId, 'This user')}
       themeKey={(profile?.pro_theme as any) ?? null}
     />
     </>

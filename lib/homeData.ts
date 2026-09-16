@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { handleOrName } from '@/lib/userHandle';
 import { ReviewTarget, parseReviewTargetId } from '@/lib/reviewTargets';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 
@@ -6,6 +7,8 @@ export type PopularReview = {
   id: string;
   userId: string;
   username: string;
+  /** "@handle" when the account picked one, else their display name. */
+  handle: string;
   avatarUrl?: string | null;
   isPro: boolean;
   albumTitle: string;
@@ -288,7 +291,7 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
       .in('user_id', userIds)
       .in('spotify_id', spotifyIds)
       .order('listened_at', { ascending: false }),
-    supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds),
+    supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', userIds),
   ]);
 
   const rowMap = new Map<string, any>();
@@ -308,7 +311,7 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
     if (!latestReListenReview.has(key) && rl.review) latestReListenReview.set(key, rl.review);
     reListenMap.set(`relisten_${key}_${rl.listened_at}`, rl);
   }
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, handle: handleOrName(p.username, p.display_name, p.id), avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
 
   const reviews: (PopularReview & { weeklyScore: number })[] = [];
   for (const { targetId, userId, spotifyId, listenedAt } of pairs) {
@@ -331,6 +334,7 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
       id: targetId,
       userId,
       username: prof?.username ?? 'user',
+      handle: prof?.handle ?? 'User',
       avatarUrl: prof?.avatarUrl ?? null,
       isPro: prof?.isPro ?? false,
       albumTitle: r.title ?? '',
@@ -359,6 +363,36 @@ export type HomeThisWeek = {
   popularReviews?: PopularReview[];
 };
 
+/**
+ * Fill in the `handle` the server doesn't send.
+ *
+ * /api/home/this-week returns each reviewer's `username` but not their display
+ * name, so a card built from that payload has no way to tell a real handle from
+ * an auto-generated placeholder. One small lookup on the reviewers' ids gives us
+ * both. If it fails, every card falls back to its plain "@username" — a stale
+ * handle is bad, a blank byline is worse.
+ */
+async function withHandles(reviews: PopularReview[]): Promise<PopularReview[]> {
+  if (!reviews.length) return reviews;
+  const userIds = [...new Set(reviews.map(r => r.userId).filter(Boolean))];
+  if (!userIds.length) return reviews.map(r => ({ ...r, handle: r.handle ?? `@${r.username}` }));
+
+  const { data: profiles, error } = await supabase
+    .from('profiles')
+    .select('id, username, display_name')
+    .in('id', userIds);
+
+  if (error || !profiles) {
+    console.warn('[Home] handle lookup failed, falling back to raw usernames:', error?.message);
+    return reviews.map(r => ({ ...r, handle: r.handle ?? `@${r.username}` }));
+  }
+
+  const handleById = new Map(
+    (profiles as any[]).map(p => [p.id as string, handleOrName(p.username, p.display_name, p.id)]),
+  );
+  return reviews.map(r => ({ ...r, handle: handleById.get(r.userId) ?? `@${r.username}` }));
+}
+
 // Single call for the four "This Week" home sections. The server aggregates and
 // caches them (rolling 7-day window), so the app no longer pulls ~2,000 raw rows
 // and de-dupes on-device every time Home gains focus. Falls back to the
@@ -377,7 +411,7 @@ export async function fetchHomeThisWeek(currentUserId?: string): Promise<HomeThi
       albums:         Array.isArray(data?.albums)         ? data.albums         : [],
       songs:          Array.isArray(data?.songs)          ? data.songs          : [],
       artists:        Array.isArray(data?.artists)        ? data.artists        : [],
-      popularReviews: Array.isArray(data?.popularReviews) ? data.popularReviews : [],
+      popularReviews: await withHandles(Array.isArray(data?.popularReviews) ? data.popularReviews : []),
     };
   } catch (err) {
     console.warn('[Home] this-week endpoint failed, using on-device fallback:', (err as Error).message);

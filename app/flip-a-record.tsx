@@ -28,6 +28,7 @@ import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePro } from '@/context/ProContext';
 import { supabase } from '@/lib/supabase';
+import { handleOrName } from '@/lib/userHandle';
 import { FLIP_POOL, FlipAlbum } from '@/constants/FlipPool';
 
 const API_URL   = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -720,7 +721,7 @@ export default function FlipARecordScreen() {
   const [artworkUrl, setArtworkUrl]            = useState('');
   const [spotifyId,  setSpotifyId]             = useState('');
   const [recentCache, setRecentCache]          = useState<Record<string, AlbumData>>({});
-  const [friendFlips, setFriendFlips]          = useState<{ userId: string; username: string; avatarUrl: string | null; albumTitle: string; albumArtist: string; streak: number }[]>([]);
+  const [friendFlips, setFriendFlips]          = useState<{ userId: string; username: string; handle: string; avatarUrl: string | null; albumTitle: string; albumArtist: string; streak: number }[]>([]);
 
   // Streaming sheet
   const [showStreamSheet, setShowStreamSheet] = useState(false);
@@ -809,7 +810,7 @@ export default function FlipARecordScreen() {
       const uniqueIds = [...new Set((flips as any[]).map(f => f.user_id))];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, avatar_url')
+        .select('id, username, display_name, avatar_url')
         .in('id', uniqueIds);
       if (cancelled) return;
 
@@ -851,6 +852,7 @@ export default function FlipARecordScreen() {
         result.push({
           userId:      flip.user_id,
           username:    p?.username ?? 'Someone',
+          handle:      handleOrName(p?.username, p?.display_name, p?.id, 'Someone'),
           avatarUrl:   p?.avatar_url ?? null,
           albumTitle:  flip.album_title,
           albumArtist: flip.album_artist ?? '',
@@ -1369,11 +1371,11 @@ export default function FlipARecordScreen() {
                   <ExpoImage source={{ uri: f.avatarUrl }} style={sf.friendAvatar} contentFit="cover" cachePolicy="disk" />
                 ) : (
                   <View style={[sf.friendAvatar, { backgroundColor: isDark ? '#2a1e14' : '#e8e0d0', justifyContent: 'center', alignItems: 'center' }]}>
-                    <Text style={{ color: '#D4A017', fontSize: 13, fontWeight: '700' }}>{f.username.charAt(0).toUpperCase()}</Text>
+                    <Text style={{ color: '#D4A017', fontSize: 13, fontWeight: '700' }}>{f.handle.replace(/^@/, '').charAt(0).toUpperCase()}</Text>
                   </View>
                 )}
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={[sf.friendName, { color: colors.text }]} numberOfLines={1}>@{f.username}</Text>
+                  <Text style={[sf.friendName, { color: colors.text }]} numberOfLines={1}>{f.handle}</Text>
                   <Text style={[sf.friendAlbum, { color: colors.subtext }]} numberOfLines={1}>
                     {f.albumTitle}{f.albumArtist ? ` · ${f.albumArtist}` : ''}
                   </Text>

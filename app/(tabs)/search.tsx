@@ -19,6 +19,7 @@ import { useAlbums, PendingAlbum, WantToListenAlbum } from '@/context/AlbumsCont
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
@@ -153,7 +154,7 @@ async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
         .select('playlist_id, spotify_id, position')
         .in('playlist_id', playlistIds)
         .order('position', { ascending: true }),
-      supabase.from('profiles').select('id, username').in('id', ownerIds),
+      supabase.from('profiles').select('id, username, display_name').in('id', ownerIds),
     ]);
 
     const pas: any[] = pasResult.data ?? [];
@@ -172,6 +173,9 @@ async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
     const usernameById = new Map<string, string>(
       (profilesResult.data ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
     );
+    const handleById = new Map<string, string>(
+      (profilesResult.data ?? []).map((p: any) => [p.id as string, handleOrName(p.username, p.display_name, p.id, '')])
+    );
 
     for (const p of pls as any[]) {
       const albumIds    = pas.filter((a: any) => a.playlist_id === p.id).map((a: any) => a.spotify_id as string);
@@ -183,7 +187,7 @@ async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
         albumCount:    albumIds.length,
         artworkUrls,
         ownerId:       p.user_id,
-        ownerUsername: usernameById.get(p.user_id) ?? '',
+        ownerUsername: handleById.get(p.user_id) ?? '',
         isFeatured:    false,
       });
     }
@@ -393,7 +397,7 @@ function PlaylistRow({
           <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>
             {item.isFeatured
               ? (item.description ?? '')
-              : `${item.albumCount === 1 ? '1 album' : `${item.albumCount} albums`}${item.ownerUsername ? `  ·  @${item.ownerUsername}` : ''}`
+              : `${item.albumCount === 1 ? '1 album' : `${item.albumCount} albums`}${item.ownerUsername ? `  ·  ${item.ownerUsername}` : ''}`
             }
           </Text>
         </View>
@@ -493,7 +497,7 @@ function UserRow({
   onPress: () => void;
   onSaveRecent: () => void;
 }) {
-  const name    = item.display_name || item.username || 'Unknown';
+  const name    = nameOrHandle(item.display_name, item.username, item.id, 'Unknown');
   const initial = name.charAt(0).toUpperCase();
 
   return (
@@ -517,8 +521,8 @@ function UserRow({
         {/* Text */}
         <View style={s.resultText}>
           <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{name}</Text>
-          {item.username ? (
-            <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
+          {handleText(item.username, item.id) ? (
+            <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>{handleText(item.username, item.id)}</Text>
           ) : null}
         </View>
         <FontAwesome name="chevron-right" size={13} color={isDark ? '#6B4C35' : '#A08060'} />
@@ -568,7 +572,7 @@ export default function SearchScreen() {
       kind:               'playlist',
       id:                 item.id,
       title:              item.name,
-      subtitle:           item.isFeatured ? (item.description ?? '') : (item.ownerUsername ? `@${item.ownerUsername}` : ''),
+      subtitle:           item.isFeatured ? (item.description ?? '') : (item.ownerUsername ?? ''),
       artworkUrl:         item.artworkUrls[0] ?? '',
       circular:           false,
       artworkUrls:        item.artworkUrls,
@@ -586,13 +590,13 @@ export default function SearchScreen() {
   }
 
   function saveUserRecent(item: UserProfile) {
-    const name = item.display_name || item.username || 'Unknown';
+    const name = nameOrHandle(item.display_name, item.username, item.id, 'Unknown');
     const entry: RecentItem = {
       kind:      'user',
       id:        item.id,
       userId:    item.id,
       title:     name,
-      subtitle:  item.username ? `@${item.username}` : '',
+      subtitle:  handleText(item.username, item.id) ?? '',
       artworkUrl: item.avatar_url ?? '',
       circular:  true,
     };

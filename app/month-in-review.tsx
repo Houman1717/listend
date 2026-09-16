@@ -348,6 +348,7 @@ export default function MonthInReviewScreen() {
   const [reviewAlbum, setReviewAlbum] = useState<LoggedAlbum | null>(null);
   const [ownUserId, setOwnUserId] = useState<string | null>(null);
   const [ownUsername, setOwnUsername] = useState('');
+  const [ownDisplayName, setOwnDisplayName] = useState('');
   const [ownAvatarUrl, setOwnAvatarUrl] = useState<string | null>(null);
   const [artistImages, setArtistImages] = useState<Record<string, string>>({});
 
@@ -389,8 +390,9 @@ export default function MonthInReviewScreen() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user?.id) return;
       setOwnUserId(session.user.id);
-      const { data } = await supabase.from('profiles').select('username, avatar_url').eq('id', session.user.id).single();
+      const { data } = await supabase.from('profiles').select('username, display_name, avatar_url').eq('id', session.user.id).single();
       if (data?.username) setOwnUsername(data.username);
+      setOwnDisplayName((data as any)?.display_name ?? '');
       if (data?.avatar_url) setOwnAvatarUrl(data.avatar_url);
     });
   }, [viewedUserId]);
@@ -422,6 +424,7 @@ export default function MonthInReviewScreen() {
           album={reviewAlbum}
           reviewUserId={viewedUserId ?? ownUserId ?? ''}
           username={viewedUserId ? (params.displayName ?? '') : ownUsername}
+          displayName={viewedUserId ? (params.displayName ?? '') : ownDisplayName}
           avatarUrl={viewedUserId ? null : ownAvatarUrl}
           onClose={() => setReviewAlbum(null)}
           onAlbumPress={() => { setReviewAlbum(null); setTimeout(() => goToAlbum(reviewAlbum), 300); }}

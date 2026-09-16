@@ -10,6 +10,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -123,7 +124,7 @@ export default function FollowersFollowingScreen() {
         <Text style={[s.empty, { color: colors.subtext }]}>{emptyLabel}</Text>
       )}
       renderItem={({ item }) => {
-        const name    = item.display_name || item.username || 'Unknown';
+        const name    = nameOrHandle(item.display_name, item.username, item.id, 'Unknown');
         const initial = name.charAt(0).toUpperCase();
         return (
           <Pressable
@@ -149,8 +150,8 @@ export default function FollowersFollowingScreen() {
                 <Text style={[s.name, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{name}</Text>
                 {item.is_pro && <ProBadge />}
               </View>
-              {item.username ? (
-                <Text style={[s.username, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
+              {handleText(item.username, item.id) ? (
+                <Text style={[s.username, { color: colors.subtext }]} numberOfLines={1}>{handleText(item.username, item.id)}</Text>
               ) : null}
             </View>
           </Pressable>

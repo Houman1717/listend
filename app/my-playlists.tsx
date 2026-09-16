@@ -22,6 +22,7 @@ import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum, Playlist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { handleOrName } from '@/lib/userHandle';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ function PlaylistCard({
         </Text>
         {byUsername ? (
           <Text style={[s.playlistMeta, { color: colors.tint }]} numberOfLines={1}>
-            by @{byUsername}
+            by {byUsername}
           </Text>
         ) : null}
         <Text style={[s.playlistMeta, { color: colors.subtext }]}>
@@ -305,10 +306,10 @@ async function buildLikedEntries(
       const ownerIds = [...new Set(pls.map((p: any) => p.user_id as string))];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username')
+        .select('id, username, display_name')
         .in('id', ownerIds);
       const usernameByUserId = new Map<string, string>(
-        (profiles ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
+        (profiles ?? []).map((p: any) => [p.id as string, handleOrName(p.username, p.display_name, p.id, '')])
       );
 
       for (const p of pls as any[]) {

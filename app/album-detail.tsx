@@ -27,6 +27,7 @@ import { useAuth } from '@/context/AuthContext';
 import { usePro } from '@/context/ProContext';
 import { reportContent } from '@/lib/reports';
 import { supabase } from '@/lib/supabase';
+import { handleOrName } from '@/lib/userHandle';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
@@ -110,6 +111,7 @@ type CommunityReview = {
   id:           string;   // `${userId}_${albumId}`
   userId:       string;
   username:     string;
+  displayName?: string | null;
   avatarUrl?:   string | null;
   isPro?:       boolean;
   rating:       number;
@@ -120,12 +122,18 @@ type CommunityReview = {
   commentCount: number;
 };
 
+/** The label to show on a review card — real "@handle", else display name. */
+function reviewHandle(r: Pick<CommunityReview, 'username' | 'displayName' | 'userId'>): string {
+  return handleOrName(r.username, r.displayName, r.userId);
+}
+
 type ReviewSort = 'popular' | 'newest' | 'rating';
 type ReviewTab  = 'all' | 'friends' | 'own';
 
 type FriendActivity = {
   userId:    string;
   username:  string;
+  displayName?: string | null;
   avatarUrl?: string | null;
   isPro?:    boolean;
   rating:    number;
@@ -476,13 +484,13 @@ function AlbumReviewCard({
           <View style={[arc.avatar, { backgroundColor: isOwn ? '#D4A017' : avatarColor(review.username), overflow: 'hidden' }]}>
             {review.avatarUrl
               ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-              : <Text style={arc.avatarLetter}>{review.username[0].toUpperCase()}</Text>
+              : <Text style={arc.avatarLetter}>{reviewHandle(review).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
             }
           </View>
           <View style={{ gap: 3 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={[arc.username, { color: '#D4A017' }]} numberOfLines={1}>
-                @{review.username}
+                {reviewHandle(review)}
               </Text>
               {review.isPro && <ProBadge size="xs" />}
             </View>
@@ -680,11 +688,11 @@ function AlbumSingleReviewModal({
               <View style={[arm.avatar, { backgroundColor: avatarColor(review.username), overflow: 'hidden' }]}>
                 {review.avatarUrl
                   ? <ExpoImage source={{ uri: review.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-                  : <Text style={arm.avatarLetter}>{review.username[0].toUpperCase()}</Text>}
+                  : <Text style={arm.avatarLetter}>{reviewHandle(review).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>}
               </View>
               <View style={{ gap: 3 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={arm.username}>@{review.username}</Text>
+                  <Text style={arm.username}>{reviewHandle(review)}</Text>
                   {review.isPro && <ProBadge size="xs" />}
                 </View>
                 {review.rating >= 1 && <VolumeBadge rating={review.rating} isDark={isDark} />}
@@ -797,13 +805,15 @@ export default function AlbumDetailScreen() {
   const { user } = useAuth();
   const { isPro: myIsPro } = usePro();
   const [myUsername,  setMyUsername]  = useState('');
+  const [myDisplayName, setMyDisplayName] = useState<string | null>(null);
   const [myAvatarUrl, setMyAvatarUrl] = useState<string | null>(null);
   const [myProfileLoaded, setMyProfileLoaded] = useState(false);
   useEffect(() => {
     if (!user?.id) return;
-    supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
+    supabase.from('profiles').select('username, display_name, avatar_url').eq('id', user.id).single()
       .then(({ data }) => {
         if (data?.username) setMyUsername(data.username);
+        setMyDisplayName((data as any)?.display_name ?? null);
         setMyAvatarUrl((data as any)?.avatar_url ?? null);
         setMyProfileLoaded(true);
       });
@@ -861,7 +871,7 @@ export default function AlbumDetailScreen() {
     setExpandedCommentsId(prev => prev === reviewId ? null : reviewId);
   }
 
-  function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+  function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null, commenterHandle?: string) {
     const tempId = `local_${Date.now()}`;
     const newComment: ReviewComment = {
       id:              tempId,
@@ -870,6 +880,7 @@ export default function AlbumDetailScreen() {
       replyToUsername: replyToUsername ?? null,
       userId:          user?.id ?? 'local',
       username:        commenterUsername ?? 'me',
+      handle:          commenterHandle ?? '@me',
       avatarUrl:       avatarUrl ?? null,
       body,
       createdAt:       'just now',
@@ -947,6 +958,7 @@ export default function AlbumDetailScreen() {
         id:           `${user.id}_${myAlbumId}`,
         userId:       user.id,
         username:     myUsername || 'me',
+        displayName:  myDisplayName,
         avatarUrl:    myAvatarUrl,
         isPro:        myIsPro,
         rating:       loggedAlbum!.lastRating ?? loggedAlbum!.rating,
@@ -1104,13 +1116,13 @@ export default function AlbumDetailScreen() {
       const targetIds = rows.map(r => `${r.user_id}_${r.spotify_id}`);
 
       const [{ data: profiles }, commentCounts] = await Promise.all([
-        supabase.from('profiles').select('id, username, avatar_url, is_pro').in('id', userIds),
+        supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', userIds),
         countReviewComments(targetIds),
       ]);
 
-      const profileMap = new Map<string, { username: string; avatarUrl: string | null; isPro: boolean }>();
+      const profileMap = new Map<string, { username: string; displayName: string | null; avatarUrl: string | null; isPro: boolean }>();
       for (const p of (profiles ?? []) as any[]) {
-        profileMap.set(p.id, { username: p.username ?? p.id, avatarUrl: p.avatar_url ?? null, isPro: !!(p.is_pro) });
+        profileMap.set(p.id, { username: p.username ?? p.id, displayName: p.display_name ?? null, avatarUrl: p.avatar_url ?? null, isPro: !!(p.is_pro) });
       }
 
       setCommunityReviews(rows.map((r: any) => {
@@ -1120,6 +1132,7 @@ export default function AlbumDetailScreen() {
           id:           targetId,
           userId:       r.user_id,
           username:     prof?.username ?? r.user_id,
+          displayName:  prof?.displayName ?? null,
           avatarUrl:    prof?.avatarUrl ?? null,
           isPro:        prof?.isPro ?? false,
           rating:       r.rating ?? 0,
@@ -1216,11 +1229,14 @@ export default function AlbumDetailScreen() {
 
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, avatar_url, is_pro')
+        .select('id, username, display_name, avatar_url, is_pro')
         .in('id', Array.from(allUserIds));
 
       const usernameMap = new Map<string, string>(
         (profiles ?? []).map((p: any) => [p.id, p.username])
+      );
+      const displayNameMap = new Map<string, string | null>(
+        (profiles ?? []).map((p: any) => [p.id, p.display_name ?? null])
       );
       const avatarMap = new Map<string, string | null>(
         (profiles ?? []).map((p: any) => [p.id, p.avatar_url ?? null])
@@ -1260,6 +1276,7 @@ export default function AlbumDetailScreen() {
         activities.push({
           userId:     row.user_id,
           username,
+          displayName: displayNameMap.get(row.user_id) ?? null,
           avatarUrl:  avatarMap.get(row.user_id) ?? null,
           isPro:      isProMap.get(row.user_id) ?? false,
           rating:     row.rating ?? 0,
@@ -1282,6 +1299,7 @@ export default function AlbumDetailScreen() {
         activities.push({
           userId:     uid,
           username,
+          displayName: displayNameMap.get(uid) ?? null,
           avatarUrl:  avatarMap.get(uid) ?? null,
           isPro:      isProMap.get(uid) ?? false,
           rating:     rl.rating,
@@ -1302,6 +1320,7 @@ export default function AlbumDetailScreen() {
         activities.push({
           userId:    row.user_id,
           username,
+          displayName: displayNameMap.get(row.user_id) ?? null,
           avatarUrl: avatarMap.get(row.user_id) ?? null,
           isPro:     isProMap.get(row.user_id) ?? false,
           rating:    0,
@@ -1776,6 +1795,7 @@ export default function AlbumDetailScreen() {
                       id:           reviewId,
                       userId:       friend.userId,
                       username:     friend.username,
+                      displayName:  friend.displayName ?? null,
                       avatarUrl:    friend.avatarUrl ?? undefined,
                       isPro:        friend.isPro ?? false,
                       rating:       displayRating,
@@ -1830,7 +1850,7 @@ export default function AlbumDetailScreen() {
                       {/* Username */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                         <Text style={[s.friendUsername, { color: colors.subtext }]} numberOfLines={1}>
-                          @{friend.username}
+                          {handleOrName(friend.username, friend.displayName, friend.userId)}
                         </Text>
                         {friend.isPro && <ProBadge size="xs" />}
                       </View>

@@ -12,6 +12,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { ProBadge } from '@/components/ProBadge';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
+import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 import { FLIP_POOL } from '@/constants/FlipPool';
 import { useFlip } from '@/context/FlipContext';
@@ -1144,7 +1145,7 @@ export default function MyStatsScreen() {
           .filter(Boolean)
           .map((p: any) => ({
             id: p.id,
-            displayName: p.display_name || p.username || '',
+            displayName: nameOrHandle(p.display_name, p.username, p.id, ''),
             username: p.username || '',
             avatarUrl: p.avatar_url ?? null,
             isPro: p.is_pro ?? false,
@@ -1174,7 +1175,7 @@ export default function MyStatsScreen() {
       return;
     }
     setCompareFriend({
-      id: data.id, displayName: data.display_name || data.username || '',
+      id: data.id, displayName: nameOrHandle(data.display_name, data.username, data.id, ''),
       username: data.username || '', avatarUrl: data.avatar_url ?? null, isPro: data.is_pro ?? false,
     });
     if (data.is_pro) {
@@ -1674,7 +1675,7 @@ export default function MyStatsScreen() {
                         <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{person.displayName}</Text>
                         {person.isPro && <ProBadge size="xs" />}
                       </View>
-                      {person.username ? <Text style={{ color: colors.subtext, fontSize: 12 }}>@{person.username}</Text> : null}
+                      {handleText(person.username, person.id) ? <Text style={{ color: colors.subtext, fontSize: 12 }}>{handleText(person.username, person.id)}</Text> : null}
                     </View>
                     <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
                   </Pressable>
@@ -1689,7 +1690,9 @@ export default function MyStatsScreen() {
                   ? <ExpoImage source={{ uri: compareFriend.avatarUrl }} style={{ width: 56, height: 56, borderRadius: 28 }} contentFit="cover" />
                   : <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}><FontAwesome name="user" size={24} color={SUBTEXT} /></View>}
                 <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{compareFriend.displayName}</Text>
-                <Text style={{ color: colors.subtext, fontSize: 13 }}>@{compareFriend.username}</Text>
+                {handleText(compareFriend.username, compareFriend.id)
+                  ? <Text style={{ color: colors.subtext, fontSize: 13 }}>{handleText(compareFriend.username, compareFriend.id)}</Text>
+                  : null}
                 <View style={{ marginTop: 8, backgroundColor: colors.background, borderRadius: 10, padding: 14, alignItems: 'center', gap: 4 }}>
                   <Text style={{ color: ACCENT, fontSize: 15, fontWeight: '700' }}>Pro required</Text>
                   <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center', lineHeight: 18 }}>This user doesn't have Pro — their stats aren't available for comparison.</Text>
@@ -1709,7 +1712,9 @@ export default function MyStatsScreen() {
                     <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{compareFriend.displayName}</Text>
                     <ProBadge />
                   </View>
-                  <Text style={{ color: colors.subtext, fontSize: 13 }}>@{compareFriend.username}</Text>
+                  {handleText(compareFriend.username, compareFriend.id)
+                    ? <Text style={{ color: colors.subtext, fontSize: 13 }}>{handleText(compareFriend.username, compareFriend.id)}</Text>
+                    : null}
                 </View>
 
                 {friendLoading

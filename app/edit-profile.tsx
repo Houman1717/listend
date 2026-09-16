@@ -19,6 +19,12 @@ import * as ImagePicker from 'expo-image-picker';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import {
+  normalizeUsername,
+  validateUsername,
+  checkUsernameAvailable,
+  USERNAME_MAX,
+} from '@/lib/userHandle';
 import { useColorScheme } from '@/context/ThemeContext';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
@@ -142,6 +148,12 @@ export default function EditProfileScreen() {
   // Form state
   const [displayName, setDisplayName] = useState('');
   const [username,    setUsername]    = useState('');
+  // The username exactly as it was loaded. Validation runs only when the user
+  // actually edits the field: an account still on an auto-generated placeholder
+  // ("s6hpjrhf7r_eb990498399b" — 24 chars) must still be able to save a bio
+  // change without being blocked by rules that placeholder was never held to.
+  const [loadedUsername, setLoadedUsername] = useState('');
+  const [usernameError,  setUsernameError]  = useState<string | null>(null);
   const [bio,         setBio]         = useState('');
 
 
@@ -175,6 +187,7 @@ export default function EditProfileScreen() {
         }
         setDisplayName(data.display_name ?? '');
         setUsername(   data.username     ?? '');
+        setLoadedUsername(data.username  ?? '');
         setBio(        data.bio          ?? '');
         setAvatarUri(  data.avatar_url   ?? null);
         setLoading(false);
@@ -189,6 +202,20 @@ export default function EditProfileScreen() {
     // failure — the form state would be blank and the upsert would wipe the
     // real profile (name + avatar).
     if (!user || loading || loadError) return;
+
+    const trimmedUsername = username.trim();
+    if (trimmedUsername !== loadedUsername) {
+      // Save lives in the header, so an inline error alone can be missed when
+      // the form is scrolled — surface it both ways.
+      const problem = validateUsername(trimmedUsername)
+        ?? await checkUsernameAvailable(trimmedUsername, user.id);
+      if (problem) {
+        setUsernameError(problem);
+        Alert.alert('Username', problem);
+        return;
+      }
+    }
+    setUsernameError(null);
     setSaving(true);
 
     try {
@@ -215,7 +242,7 @@ export default function EditProfileScreen() {
           {
             id:              user.id,
             display_name:    displayName.trim(),
-            username:        username.trim(),
+            username:        trimmedUsername,
             bio:             bio.trim(),
 
 
@@ -226,6 +253,7 @@ export default function EditProfileScreen() {
 
       if (error) throw error;
 
+      setLoadedUsername(trimmedUsername);
       if (finalAvatarUrl) setAvatarUri(finalAvatarUrl);
       setAvatarBase64(null);
 
@@ -239,7 +267,7 @@ export default function EditProfileScreen() {
     } finally {
       setSaving(false);
     }
-  }, [user, loading, loadError, displayName, username, bio, avatarUri, avatarBase64]);
+  }, [user, loading, loadError, displayName, username, loadedUsername, bio, avatarUri, avatarBase64]);
 
   // ── Inject Save button into header ───────────────────────────────────────
   useEffect(() => {
@@ -352,14 +380,18 @@ export default function EditProfileScreen() {
             <View style={s.fieldGroup}>
               <Text style={[s.label, { color: subtext }]}>USERNAME</Text>
               <TextInput
-                style={[s.input, { backgroundColor: cardBg, borderColor: border, color: text }]}
+                style={[s.input, { backgroundColor: cardBg, borderColor: usernameError ? '#c0392b' : border, color: text }]}
                 value={username}
-                onChangeText={setUsername}
+                onChangeText={(t) => { setUsername(normalizeUsername(t)); setUsernameError(null); }}
                 placeholder="username"
                 placeholderTextColor={subtext}
                 autoCapitalize="none"
                 autoCorrect={false}
+                maxLength={USERNAME_MAX}
               />
+              {usernameError ? (
+                <Text style={[s.charCount, { color: '#c0392b', marginTop: 6 }]}>{usernameError}</Text>
+              ) : null}
             </View>
 
             {/* Bio */}

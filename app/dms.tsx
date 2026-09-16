@@ -12,6 +12,7 @@ import { useState, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { nameOrHandle } from '@/lib/userHandle';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -120,7 +121,7 @@ export default function DMsScreen() {
         const profile = profileMap.get(partnerId);
         return {
           partnerId,
-          partnerName:      profile?.display_name || profile?.username || 'Unknown',
+          partnerName:      nameOrHandle(profile?.display_name, profile?.username, profile?.id, 'Unknown'),
           partnerUsername:  profile?.username  ?? null,
           partnerAvatarUrl: profile?.avatar_url ?? null,
           partnerIsPro:     !!(profile as any)?.is_pro,

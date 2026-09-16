@@ -116,11 +116,11 @@ function ReviewRow({
           <View style={[s.avatar, { backgroundColor: avatarColor(item.username), overflow: 'hidden' }]}>
             {item.avatarUrl
               ? <ExpoImage source={{ uri: item.avatarUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-              : <Text style={s.avatarLetter}>{item.username[0].toUpperCase()}</Text>
+              : <Text style={s.avatarLetter}>{prHandle(item).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
             }
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={[s.username, { color: '#D4A017' }]}>@{item.username}</Text>
+            <Text style={[s.username, { color: '#D4A017' }]}>{prHandle(item)}</Text>
             {item.isPro && <ProBadge size="xs" />}
           </View>
         </Pressable>
@@ -167,6 +167,13 @@ function ReviewRow({
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
+// Belt-and-braces: `handle` is filled in by homeData, but these cards are also
+// built from the /api/home/this-week payload, which has no such field. Never
+// render an empty byline because a field went missing upstream.
+function prHandle(r: PopularReview): string {
+  return r.handle || `@${r.username}`;
+}
 
 export default function PopularReviewsScreen() {
   const colorScheme = useColorScheme();
@@ -255,7 +262,7 @@ export default function PopularReviewsScreen() {
     }
   }
 
-  function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null) {
+  function handleAddComment(reviewId: string, body: string, parentId?: string | null, commenterUsername?: string, replyToUsername?: string, avatarUrl?: string | null, commenterHandle?: string) {
     const tempId = `pr_local_${Date.now()}`;
     const newComment: ReviewComment = {
       id:              tempId,
@@ -264,6 +271,7 @@ export default function PopularReviewsScreen() {
       replyToUsername: replyToUsername ?? null,
       userId:          user?.id ?? 'me',
       username:        commenterUsername ?? 'me',
+      handle:          commenterHandle ?? '@me',
       avatarUrl:       avatarUrl ?? null,
       body,
       createdAt:       'just now',
