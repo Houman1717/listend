@@ -5,6 +5,7 @@ import {
   Pressable,
   FlatList,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, Stack } from 'expo-router';
@@ -24,7 +25,7 @@ import { navigateToReviewNotification } from '@/lib/navigateToReviewNotification
 
 type NotificationItem = {
   id: string;
-  type: 'follow' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'like_reply' | 'comment' | 'comment_reply';
+  type: 'follow' | 'follow_request' | 'follow_accepted' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'like_reply' | 'comment' | 'comment_reply';
   read: boolean;
   createdAt: string;
   actorId: string;
@@ -38,7 +39,9 @@ type NotificationItem = {
 // ─── Row ──────────────────────────────────────────────────────────────────────
 
 const NOTIF_META: Record<NotificationItem['type'], { body: string; iconName: string; iconColor: string }> = {
-  follow:        { body: 'started following you',    iconName: 'user-plus', iconColor: '#D4A017' },
+  follow:          { body: 'started following you',        iconName: 'user-plus', iconColor: '#D4A017' },
+  follow_request:  { body: 'requested to follow you',      iconName: 'user-plus', iconColor: '#D4A017' },
+  follow_accepted: { body: 'accepted your follow request', iconName: 'check',     iconColor: '#D4A017' },
   message:       { body: 'sent you a message',       iconName: 'envelope',  iconColor: '#B8880F' },
   like_review:   { body: 'liked your review',        iconName: 'heart',     iconColor: '#D4A017' },
   like_playlist: { body: 'liked your playlist',      iconName: 'heart',     iconColor: '#D4A017' },
@@ -52,11 +55,15 @@ function NotifRow({
   item,
   onPress,
   onAvatarPress,
+  onRespond,
+  responding,
   colors,
 }: {
   item: NotificationItem;
   onPress: () => void;
   onAvatarPress: () => void;
+  onRespond: (accept: boolean) => void;
+  responding: boolean;
   colors: ReturnType<typeof themeToColors>;
 }) {
   const initial = item.actorName.charAt(0).toUpperCase();
@@ -96,6 +103,22 @@ function NotifRow({
         </Text>
         <Text style={[n.date, { color: colors.subtext }]}>{date}</Text>
       </View>
+      {item.type === 'follow_request' && (
+        <View style={n.requestBtns}>
+          <Pressable
+            onPress={() => onRespond(true)}
+            disabled={responding}
+            style={({ pressed }) => [n.requestBtn, { backgroundColor: colors.tint, opacity: pressed || responding ? 0.6 : 1 }]}>
+            <Text style={[n.requestBtnText, { color: '#fff' }]}>Confirm</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => onRespond(false)}
+            disabled={responding}
+            style={({ pressed }) => [n.requestBtn, { borderWidth: 1, borderColor: colors.border, opacity: pressed || responding ? 0.6 : 1 }]}>
+            <Text style={[n.requestBtnText, { color: colors.text }]}>Delete</Text>
+          </Pressable>
+        </View>
+      )}
       {!item.read && <View style={[n.dot, { backgroundColor: colors.tint }]} />}
     </Pressable>
   );
@@ -115,6 +138,24 @@ export default function NotificationsScreen() {
 
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [respondingIds, setRespondingIds] = useState<Set<string>>(new Set());
+
+  async function respondToRequest(item: NotificationItem, accept: boolean) {
+    if (respondingIds.has(item.id)) return;
+    setRespondingIds(prev => new Set(prev).add(item.id));
+    const { error } = await supabase.rpc('respond_follow_request', { p_requester: item.actorId, p_accept: accept });
+    setRespondingIds(prev => { const next = new Set(prev); next.delete(item.id); return next; });
+    if (error) {
+      console.error('[Notifications] respond_follow_request error:', error.message);
+      Alert.alert('Something went wrong', 'Please try again.');
+      return;
+    }
+    // Mirrors the server: accepting turns the row into "started following
+    // you", declining removes it.
+    setItems(prev => accept
+      ? prev.map(i => (i.id === item.id ? { ...i, type: 'follow' } : i))
+      : prev.filter(i => i.id !== item.id));
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -192,7 +233,7 @@ export default function NotificationsScreen() {
             <FontAwesome name="bell-o" size={32} color={colors.tint} />
           </View>
           <Text style={[n.emptyTitle, { color: colors.text }]}>No notifications yet</Text>
-          <Text style={[n.emptySub, { color: colors.subtext }]}>You'll see follow, message, and like notifications here.</Text>
+          <Text style={[n.emptySub, { color: colors.subtext }]}>You'll see follows, follow requests, messages, and likes here.</Text>
         </View>
       </>
     );
@@ -212,6 +253,8 @@ export default function NotificationsScreen() {
           <NotifRow
             item={item}
             colors={colors}
+            responding={respondingIds.has(item.id)}
+            onRespond={accept => respondToRequest(item, accept)}
             onAvatarPress={() => router.push({ pathname: '/user-profile', params: { userId: item.actorId } })}
             onPress={() => {
               if (item.type === 'message') {
@@ -265,6 +308,10 @@ const n = StyleSheet.create({
   date:  { fontSize: 12 },
 
   dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+
+  requestBtns:    { flexDirection: 'row', gap: 6, flexShrink: 0 },
+  requestBtn:     { paddingHorizontal: 12, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  requestBtnText: { fontSize: 13, fontWeight: '600' },
 
   sep: { height: StyleSheet.hairlineWidth, marginLeft: 79 },
 

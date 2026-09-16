@@ -170,11 +170,14 @@ export default function ArtistDetailScreen() {
   useEffect(() => {
     const id = resolvedId || artistName;
     if (!id) return;
+    // RPC so likes from private accounts still count (their liked_artists rows
+    // aren't readable to non-followers).
     supabase
-      .from('liked_artists')
-      .select('*', { count: 'exact', head: true })
-      .eq('artist_id', id)
-      .then(({ count }) => { if (count !== null) setArtistLikeCount(count); });
+      .rpc('artist_like_count', { p_artist_id: id })
+      .then(({ data, error }) => {
+        if (error) console.error('[ArtistDetail] artist_like_count error:', error.message);
+        else if (data != null) setArtistLikeCount(Number(data));
+      });
   }, [resolvedId, artistName]);
   const { loggedAlbums }               = useAlbums();
 

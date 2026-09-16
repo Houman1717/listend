@@ -1703,8 +1703,12 @@ async function computePopularReviewsThisWeek(since) {
       .in('spotify_id', spotifyIds)
       .order('listened_at', { ascending: false })
       .range(from, to)),
-    fetchAllRows((from, to) => supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', userIds).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro, is_private').in('id', userIds).range(from, to)),
   ]);
+
+  // Popular Reviews is one cached list shown to everyone, so a private
+  // account's reviews never appear in it — not even to their followers.
+  const privateUserIds = new Set((profiles ?? []).filter(p => p.is_private).map(p => p.id));
 
   const rowMap = new Map();
   for (const r of (reviewRows ?? [])) rowMap.set(`${r.user_id}_${r.spotify_id}`, r);
@@ -1732,6 +1736,7 @@ async function computePopularReviewsThisWeek(since) {
 
   const reviews = [];
   for (const { targetId, userId, spotifyId, listenedAt } of pairs) {
+    if (privateUserIds.has(userId)) continue;
     const baseKey = `${userId}_${spotifyId}`;
     const base    = rowMap.get(baseKey);
     const rl      = listenedAt ? reListenMap.get(targetId) : undefined;
@@ -4358,6 +4363,8 @@ app.get('/api/stats/artist-images', requireAuth, [
 
 const PUSH_TITLES = {
   follow:        'New follower',
+  follow_request:  'Follow request',
+  follow_accepted: 'Follow request accepted',
   message:       'New message',
   like_review:   'Someone liked your review',
   like_playlist: 'Someone liked your playlist',
@@ -4369,6 +4376,8 @@ const PUSH_TITLES = {
 
 const PUSH_BODIES = {
   follow:        name => `${name} started following you`,
+  follow_request:  name => `${name} requested to follow you`,
+  follow_accepted: name => `${name} accepted your follow request`,
   message:       name => `${name} sent you a message`,
   like_review:   name => `${name} liked your review`,
   like_playlist: name => `${name} liked your playlist`,

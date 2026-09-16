@@ -226,6 +226,9 @@ function AuthGate() {
         router.push('/flip-a-record');
       } else if (data.type === 'message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
+      } else if (data.type === 'follow_request') {
+        // Confirm/Delete live on the notifications screen.
+        router.push('/notifications');
       } else if ((data.type === 'like_review' || data.type === 'like_comment' || data.type === 'like_reply' || data.type === 'comment' || data.type === 'comment_reply') && data.targetId) {
         navigateToReviewNotification(router, data.targetId, data.type !== 'like_review', data.commentId ?? undefined);
       } else if (data.type === 'like_playlist' && data.targetId) {

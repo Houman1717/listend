@@ -467,6 +467,9 @@ export default function UserProfileScreen() {
   const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   const [isFollowing,    setIsFollowing]    = useState(false);
+  // Pending follow request to a private account — the follow only exists once
+  // they accept, so the private wall stays up until then.
+  const [isRequested,    setIsRequested]    = useState(false);
   const [isMutual,       setIsMutual]       = useState(false);
   const [followLoading,  setFollowLoading]  = useState(false);
   // null = unknown (never loaded / load failed) → rendered as "—", never as 0.
@@ -553,6 +556,17 @@ export default function UserProfileScreen() {
             .single();
           const currentFollowsViewed = !!outgoing && !outErr;
           setIsFollowing(currentFollowsViewed);
+
+          if (currentFollowsViewed) {
+            setIsRequested(false);
+          } else {
+            const { data: request } = await supabase
+              .from('follow_requests')
+              .select('id')
+              .match({ requester_id: currentUserId, target_id: viewedUserId })
+              .maybeSingle();
+            setIsRequested(!!request);
+          }
 
           const { data: incoming, error: inErr } = await supabase
             .from('follows')
@@ -658,12 +672,35 @@ export default function UserProfileScreen() {
   }, [isOwnProfile, profile, isBlockedByMe, colors.text]);
 
   // ── Follow / Unfollow ────────────────────────────────────────────────────────
-  async function handleFollow() {
+  function handleFollow() {
+    // Unfollowing a private account locks you out again until they re-approve.
+    if (isFollowing && profile?.is_private) {
+      Alert.alert(
+        `Unfollow ${nameOrHandle(profile.display_name, profile.username, viewedUserId, 'this user')}?`,
+        "Their account is private. If you change your mind, you'll have to request to follow them again.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Unfollow', style: 'destructive', onPress: () => toggleFollow() },
+        ],
+      );
+      return;
+    }
+    toggleFollow();
+  }
+
+  async function toggleFollow() {
     const currentUserId = user?.id ?? null;
     if (!currentUserId || !viewedUserId || followLoading) return;
     setFollowLoading(true);
 
-    if (isFollowing) {
+    if (isRequested) {
+      const { error } = await supabase
+        .from('follow_requests')
+        .delete()
+        .match({ requester_id: currentUserId, target_id: viewedUserId });
+      if (!error) setIsRequested(false);
+      else console.error('[UserProfile] cancel follow request error:', error);
+    } else if (isFollowing) {
       const { error } = await supabase
         .from('follows')
         .delete()
@@ -678,27 +715,22 @@ export default function UserProfileScreen() {
         console.error('[UserProfile] unfollow error:', error);
       }
     } else {
-      const { error } = await supabase
-        .from('follows')
-        .insert({ follower_id: currentUserId, following_id: viewedUserId });
-      if (!error) {
+      // follow_user decides server-side: private accounts get a pending
+      // request, everyone else a follow. It sends the notification too.
+      const { data: result, error } = await supabase.rpc('follow_user', { p_target: viewedUserId });
+      if (error) {
+        console.error('[UserProfile] follow error:', error);
+      } else if (result === 'requested') {
+        setIsRequested(true);
+      } else {
         setIsFollowing(true);
         setFollowersCount(n => (n == null ? null : n + 1));
-        supabase.from('notifications').insert({
-          user_id:  viewedUserId,
-          type:     'follow',
-          actor_id: currentUserId,
-        }).then(({ error: notifErr }) => {
-          if (notifErr) console.error('[UserProfile] notification insert error:', notifErr.message);
-        });
         const { data: incoming } = await supabase
           .from('follows')
           .select('id')
           .match({ follower_id: viewedUserId, following_id: currentUserId })
           .single();
         setIsMutual(!!incoming);
-      } else {
-        console.error('[UserProfile] follow insert error:', error);
       }
     }
 
@@ -745,6 +777,8 @@ export default function UserProfileScreen() {
     await Promise.all([
       supabase.from('follows').delete().match({ follower_id: currentUserId, following_id: viewedUserId }),
       supabase.from('follows').delete().match({ follower_id: viewedUserId, following_id: currentUserId }),
+      supabase.from('follow_requests').delete().match({ requester_id: currentUserId, target_id: viewedUserId }),
+      supabase.from('follow_requests').delete().match({ requester_id: viewedUserId, target_id: currentUserId }),
     ]);
     const { error } = await supabase
       .from('blocked_users')
@@ -752,6 +786,7 @@ export default function UserProfileScreen() {
     if (!error) {
       setIsBlockedByMe(true);
       setIsFollowing(false);
+      setIsRequested(false);
       setIsMutual(false);
     } else {
       console.error('[UserProfile] block error:', error);
@@ -945,6 +980,7 @@ export default function UserProfileScreen() {
         <View style={s.socialRow}>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
+            disabled={isPrivateWall}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'following' } })}>
             <Text style={[s.socialCount, { color: colors.text }]}>{displayCount(followingCount)}</Text>
             <Text style={[s.socialLabel, { color: colors.subtext }]}> Following</Text>
@@ -952,6 +988,7 @@ export default function UserProfileScreen() {
           <Text style={[s.socialDot, { color: colors.subtext }]}> · </Text>
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
+            disabled={isPrivateWall}
             onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'followers' } })}>
             <Text style={[s.socialCount, { color: colors.text }]}>{displayCount(followersCount)}</Text>
             <Text style={[s.socialLabel, { color: colors.subtext }]}> Followers</Text>
@@ -964,13 +1001,14 @@ export default function UserProfileScreen() {
             style={({ pressed }) => [
               s.followBtn,
               isFollowing && { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: profileAccent },
+              isRequested && { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.border },
               isMutual && s.followBtnMutual,
               { opacity: pressed || followLoading ? 0.7 : 1 },
             ]}
             onPress={handleFollow}
             disabled={followLoading}>
-            <Text style={[s.followBtnText, isFollowing && { color: profileAccent }]}>
-              {isFollowing ? 'Following' : 'Follow'}
+            <Text style={[s.followBtnText, isFollowing && { color: profileAccent }, isRequested && { color: colors.subtext }]}>
+              {isFollowing ? 'Following' : isRequested ? 'Requested' : 'Follow'}
             </Text>
           </Pressable>
 
@@ -988,7 +1026,11 @@ export default function UserProfileScreen() {
           <View style={s.privateWall}>
             <FontAwesome name="lock" size={32} color={colors.subtext} style={{ opacity: 0.35, marginBottom: 12 }} />
             <Text style={[s.wallTitle, { color: colors.text }]}>This account is private</Text>
-            <Text style={[s.wallSub, { color: colors.subtext }]}>Follow to see their library, reviews, and playlists.</Text>
+            <Text style={[s.wallSub, { color: colors.subtext }]}>
+              {isRequested
+                ? "You'll see their library, reviews, and playlists once they accept your request."
+                : 'Follow to see their library, reviews, and playlists.'}
+            </Text>
           </View>
         )}
 

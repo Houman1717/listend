@@ -954,6 +954,10 @@ export default function AlbumDetailScreen() {
 
   // Community reviews + likes
   const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
+  // Everyone else's latest rating, including private accounts whose reviews
+  // this viewer can't see — they still count toward the average anonymously.
+  // null = RPC not loaded/failed → fall back to the visible reviews.
+  const [otherRatings, setOtherRatings] = useState<number[] | null>(null);
   const [reviewLikesMap, setReviewLikesMap]     = useState<Map<string, LikeState>>(new Map());
   const pendingLikeToggles = useRef<Set<string>>(new Set());
 
@@ -1004,7 +1008,9 @@ export default function AlbumDetailScreen() {
 
   // All reviews including own — used for ratings average and preview
   const allReviews = ownReview ? [ownReview, ...communityReviews] : communityReviews;
-  const communityRatings = allReviews.filter(r => r.rating > 0).map(r => r.rating);
+  const communityRatings = otherRatings
+    ? (ownReview && ownReview.rating > 0 ? [ownReview.rating, ...otherRatings] : otherRatings)
+    : allReviews.filter(r => r.rating > 0).map(r => r.rating);
 
   // Preview: top 4 most popular — include own review so it can rank in
   const previewReviews = sortReviews(allReviews, 'popular').slice(0, 4);
@@ -1156,6 +1162,17 @@ export default function AlbumDetailScreen() {
     }
 
     loadCommunityReviews();
+
+    supabase
+      .rpc('album_community_ratings', { p_title: albumTitle, p_year: albumYear })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[album-detail] album_community_ratings error:', error.message);
+          setOtherRatings(null);
+        } else {
+          setOtherRatings(((data ?? []) as any[]).map(Number).filter(n => n > 0));
+        }
+      });
   }, [albumTitle, albumYear, user?.id]);
 
   // ── Fetch like state + sync counts into communityReviews ──────────────────
