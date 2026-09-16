@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
+import { isAutoUsername } from '@/lib/userHandle';
 import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 import { PostHogProvider } from 'posthog-react-native';
@@ -177,6 +178,38 @@ function AuthGate() {
       clearNeedsOnboarding();
     }
   }, [needsOnboarding, session, recoveryMode]);
+
+  // Accounts that signed up before the username step existed are still sitting on
+  // a placeholder. Force through only the ones whose profile is genuinely
+  // unusable — no real display name either, so the placeholder is all anyone can
+  // see. An account with a placeholder username but a real name looks fine today
+  // and gets the dismissible card on its own profile instead; interrupting those
+  // would be a lot of people for a problem they can't see.
+  //
+  // Accounts whose username is NULL don't need catching here: ensureProfile heals
+  // those on open and raises needsOnboarding, which the effect above handles.
+  const usernameCheckedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid || recoveryMode || needsOnboarding) return;
+    if (usernameCheckedFor.current === uid) return;   // once per session, not per focus
+    usernameCheckedFor.current = uid;
+
+    supabase
+      .from('profiles')
+      .select('username, display_name')
+      .eq('id', uid)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        // A failed read is "we couldn't tell", not "no username" — never trap
+        // someone behind a mandatory screen because the network blipped.
+        if (error || !data) return;
+        if (!isAutoUsername(data.username, uid)) return;
+        const name = (data.display_name ?? '').trim();
+        if (name && name !== data.username) return;
+        router.push('/choose-username');
+      });
+  }, [session?.user?.id, recoveryMode, needsOnboarding]);
 
   // Navigate to the right screen when user taps a push notification
   const handledResponseId = useRef<string | null>(null);

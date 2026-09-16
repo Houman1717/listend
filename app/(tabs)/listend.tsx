@@ -152,7 +152,7 @@ function ProfileHeader({
   refreshKey?: number;
 }) {
   const router  = useRouter();
-  const shownName = nameOrHandle(displayName, username, profileUserId, '');
+  const shownName = nameOrHandle(displayName, username, profileUserId, 'Listend user');
   const ownHandle = handleText(username, profileUserId);
   // Accounts created through Apple/Google before the mandatory username step
   // existed still carry an auto-generated placeholder. Their handle is hidden

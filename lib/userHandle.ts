@@ -44,8 +44,12 @@ export function nameOrHandle(
   fallback = 'User',
 ): string {
   const name = displayName?.trim();
-  if (name) return name;
-  if (!isAutoUsername(username, userId)) return username as string;
+  const auto = isAutoUsername(username, userId);
+  // A sign-in that supplies no name at all (Apple with name sharing off) seeds
+  // display_name from the generated username, so the placeholder can be sitting
+  // in BOTH columns. A display name that is just the placeholder is not a name.
+  if (name && !(auto && name === username)) return name;
+  if (!auto) return username as string;
   return fallback;
 }
 
@@ -60,7 +64,7 @@ export function handleOrName(
   userId?: string | null,
   fallback = 'User',
 ): string {
-  return handleText(username, userId) ?? (displayName?.trim() || fallback);
+  return handleText(username, userId) ?? nameOrHandle(displayName, username, userId, fallback);
 }
 
 // ─── Picking a username ──────────────────────────────────────────────────────

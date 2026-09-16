@@ -79,7 +79,12 @@ async function ensureProfile(user: User, isFreshLogin: boolean): Promise<boolean
     return false;
   }
 
-  const displayName: string = meta.display_name ?? meta.full_name ?? meta.name ?? username;
+  // Never seed display_name with a username we just invented: Apple sign-in with
+  // name sharing off supplies no name, and copying the placeholder here put the
+  // same random id in both columns, which is what surfaced on profiles as a
+  // "name". Leave it null and let the user set a real one.
+  const realName: string | null = meta.display_name ?? meta.full_name ?? meta.name ?? null;
+  const displayName: string | null = realName ?? (meta.username ? username : null);
   const { error: insertErr } = await supabase.from('profiles').insert({
     id:           user.id,
     username,

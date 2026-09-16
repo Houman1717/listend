@@ -276,7 +276,7 @@ export default function ProfileScreen() {
           </LinearGradient>
         )}
         <View style={s.nameBlock}>
-          <Text style={s.displayName}>{nameOrHandle(displayName, username, user?.id, '')}</Text>
+          <Text style={s.displayName}>{nameOrHandle(displayName, username, user?.id, 'Listend user')}</Text>
           {handleText(username, user?.id) ? <Text style={s.handle}>{handleText(username, user?.id)}</Text> : null}
         </View>
       </View>

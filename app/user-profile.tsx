@@ -856,7 +856,7 @@ export default function UserProfileScreen() {
     );
   }
 
-  const name    = nameOrHandle(profile.display_name, profile.username, viewedUserId, '');
+  const name    = nameOrHandle(profile.display_name, profile.username, viewedUserId, 'Listend user');
   const handle  = handleText(profile.username, viewedUserId);
   const initial = name.charAt(0).toUpperCase() || '?';
 
