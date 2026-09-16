@@ -41,3 +41,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Claude Code worktrees — local scratch checkouts, never part of the project.
+# These were tracked as gitlinks, which left the tree permanently dirty.
+.claude/worktrees/
+.claude/settings.local.json
