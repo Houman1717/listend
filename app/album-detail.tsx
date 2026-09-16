@@ -6,6 +6,7 @@ import {
   TextInput,
   ScrollView,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -857,6 +858,15 @@ export default function AlbumDetailScreen() {
   const modalScrollRef = useRef<ScrollView>(null);
   const reviewYPositions = useRef<Map<string, number>>(new Map());
   const editBlockYRef = useRef(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Android only — see the KeyboardAvoidingView below for why.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const onShow = Keyboard.addListener('keyboardDidShow', e => setKeyboardHeight(e.endCoordinates.height));
+    const onHide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => { onShow.remove(); onHide.remove(); };
+  }, []);
   const [showEditDateModal, setShowEditDateModal] = useState(false);
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
   const [expandedAlbumReview, setExpandedAlbumReview] = useState<CommunityReview | null>(null);
@@ -1491,9 +1501,21 @@ export default function AlbumDetailScreen() {
   const mutedText  = isDark ? '#7a5535' : '#a07850';
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}>
+    // Same fix as dm-conversation. This screen stays mounted under log-album,
+    // so it hears the keyboard used to write a review there. `behavior="height"`
+    // shrank it by keyboard + header and never gave the header part back, which
+    // left a white block under the album once you were returned here. Android
+    // now pads by the measured keyboard height instead (0 once it closes);
+    // edge-to-edge means the window never resizes for the IME on its own.
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
       <Stack.Screen
         options={{
+          // Paint the navigator's container in the theme so a stray gap can't
+          // show React Navigation's light-grey default behind the screen.
+          contentStyle: { backgroundColor: colors.background },
           headerRight: () => (
               <Pressable
                 onPress={() => setShowPlaylists(true)}
