@@ -83,6 +83,10 @@ const GB_STOREFRONT_IDS = new Set([
   '1556913225',
   '1556913228', '1556913229', '1556913230', '1556913231', '1556913232', '1556913233',
   '1556913234', '1556913235', '1556913236', '1556913237', '1556913238', '1556913239',
+  // Jorge Ben Jor — Força Bruta (1970)
+  '1402139880',
+  '1402140083', '1402140091', '1402140100', '1402140145', '1402140146', '1402140147',
+  '1402140450', '1402140456', '1402140458', '1402140459',
 ]);
 const storefrontFor = id => (GB_STOREFRONT_IDS.has(id) ? 'gb' : 'us');
 
@@ -165,6 +169,10 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'mybloodyvalentine::isntanything': {
     id: '1556913225', title: "Isn't Anything", artist: 'my bloody valentine', year: 1988,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
+  },
+  'jorgebenjor::forabruta': {
+    id: '1402139880', title: 'Força Bruta', artist: 'Jorge Ben Jor', year: 1970,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/bf/13/b2/bf13b2eb-a141-f0d2-4a8f-76448b17163e/18UMGIM38575.rgb.jpg/500x500bb.jpg',
   },
 };
 
@@ -599,6 +607,27 @@ app.get('/decades', async (req, res) => {
 
 // ── GET /search ───────────────────────────────────────────────────────────────
 
+// Album search only queries the `us` storefront, so the non-US-licensed albums
+// pinned in CANONICAL_ALBUM_OVERRIDES never come back from it. Prepend any
+// whose artist+title contains every word of the query. Applied on the way out
+// (not before caching) so results cached before an override was added pick it
+// up too. Accents are folded so "forca bruta" finds "Força Bruta".
+const foldForMatch = s => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+function withAlbumSearchOverrides(q, results) {
+  const words = foldForMatch(q).split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  if (words.join('').length < 3) return results; // a stray letter shouldn't match every override
+  const hits = Object.values(CANONICAL_ALBUM_OVERRIDES)
+    .filter(o => GB_STOREFRONT_IDS.has(o.id))
+    .filter(o => {
+      const haystack = foldForMatch(`${o.artist} ${o.title}`).replace(/[^a-z0-9]/g, '');
+      return words.every(w => haystack.includes(w));
+    })
+    .filter(o => !results.some(r => r.id === o.id))
+    .map(o => ({ id: o.id, title: o.title, artist: o.artist, year: o.year, artworkUrl: o.artworkUrl }));
+  return hits.length > 0 ? [...hits, ...results] : results;
+}
+
 app.get('/search', [
   query('q').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('q must be 200 characters or fewer'),
   query('type').trim(),
@@ -612,11 +641,13 @@ app.get('/search', [
 
   const CACHE_KEY = `search:${type}:${q.trim().toLowerCase()}`;
 
+  const withOverrides = results => (type === 'album' ? withAlbumSearchOverrides(q, results) : results);
+
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem) return res.json(withOverrides(mem));
 
   const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_10M); return res.json(db); }
+  if (db) { cacheSet(CACHE_KEY, db, TTL_10M); return res.json(withOverrides(db)); }
 
   try {
     const amType = type === 'album' ? 'albums' : type === 'track' ? 'songs' : 'artists';
@@ -677,7 +708,7 @@ app.get('/search', [
 
     cacheSet(CACHE_KEY, results, TTL_10M);
     await setCache(CACHE_KEY, results);
-    res.json(results);
+    res.json(withOverrides(results));
   } catch (err) {
     console.error('[/search]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
@@ -2279,7 +2310,7 @@ function normalizeGenreTags(rawTags) {
 async function fetchAppleMusicGenres(amId) {
   if (!amId) return [];
   try {
-    const data = await amFetch(`/catalog/us/albums/${amId}`);
+    const data = await amFetch(`/catalog/${storefrontFor(amId)}/albums/${amId}`);
     return (data?.data?.[0]?.attributes?.genreNames ?? []).filter(g => g !== 'Music');
   } catch { return []; }
 }
@@ -2709,6 +2740,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       url: 'https://music.apple.com/gb/album/isnt-anything/1556913225', type: 'album',
     },
   ],
+  '117436': [ // Jorge Ben Jor — Força Bruta isn't licensed for `us` (present on gb)
+    {
+      id: '1402139880', title: 'Força Bruta',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/bf/13/b2/bf13b2eb-a141-f0d2-4a8f-76448b17163e/18UMGIM38575.rgb.jpg/500x500bb.jpg',
+      year: 1970, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/gb/album/forca-bruta-feat-trio-mocoto/1402139880', type: 'album',
+    },
+  ],
 };
 
 // ── GET /catalog/artist/:id/albums ────────────────────────────────────────────
@@ -2906,7 +2945,7 @@ app.get(['/catalog/recommendations', '/spotify/recommendations'], [
 
     for (const trackId of trackIds) {
       try {
-        const songData = await amFetch(`/catalog/us/songs/${trackId}`);
+        const songData = await amFetch(`/catalog/${storefrontFor(trackId)}/songs/${trackId}`);
         const song = songData.data?.[0];
         if (!song) continue;
         const term = encodeURIComponent(`${song.attributes?.name ?? ''} ${song.attributes?.artistName ?? ''}`);
