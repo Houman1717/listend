@@ -111,6 +111,35 @@ const MANUAL_ALBUMS = [
       { number: 4, id: 'lst-follow-that-dream-t4', title: 'I’m Not the Marrying Kind', durationMs: 120000 },
     ],
   },
+  {
+    id: 'lst-viva-las-vegas',
+    title: 'Viva Las Vegas (Original Soundtrack)',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1964,
+    // only ever issued as a 4-track EP and later collectors' editions, so no
+    // streaming service carries the soundtrack itself
+    artworkUrl: 'https://coverartarchive.org/release-group/09e28543-c053-43e1-b336-405d647dd399/front-500',
+    // The 2003 soundtrack release. Its first 12 tracks are the film's songs —
+    // the 13 alternate takes that follow them on that disc are left out, being
+    // studio outtakes rather than part of the record people mean.
+    musicbrainzReleaseId: 'b1e133dc-a58f-4666-b279-a5cc036cdd93',
+    trackCount: 12,
+    tracks: [
+      { number: 1, id: 'lst-viva-las-vegas-t1', title: 'Viva Las Vegas', durationMs: 145000 },
+      { number: 2, id: 'lst-viva-las-vegas-t2', title: 'What’d I Say', durationMs: 183000 },
+      { number: 3, id: 'lst-viva-las-vegas-t3', title: 'If You Think I Don’t Need You', durationMs: 125000 },
+      { number: 4, id: 'lst-viva-las-vegas-t4', title: 'I Need Somebody to Lean On', durationMs: 177000 },
+      { number: 5, id: 'lst-viva-las-vegas-t5', title: 'C’mon Everybody', durationMs: 137000 },
+      { number: 6, id: 'lst-viva-las-vegas-t6', title: 'Today, Tomorrow and Forever', durationMs: 205000 },
+      { number: 7, id: 'lst-viva-las-vegas-t7', title: 'Santa Lucia', durationMs: 73000 },
+      { number: 8, id: 'lst-viva-las-vegas-t8', title: 'Do the Vega', durationMs: 144000 },
+      { number: 9, id: 'lst-viva-las-vegas-t9', title: 'Night Life', durationMs: 110000 },
+      { number: 10, id: 'lst-viva-las-vegas-t10', title: 'Yellow Rose of Texas / The Eyes of Texas', durationMs: 177000 },
+      { number: 11, id: 'lst-viva-las-vegas-t11', title: 'The Lady Loves Me', durationMs: 224000 },
+      { number: 12, id: 'lst-viva-las-vegas-t12', title: 'You’re the Boss', durationMs: 167000 },
+    ],
+  },
 ];
 
 const byAlbumId = new Map(MANUAL_ALBUMS.map(a => [a.id, a]));
