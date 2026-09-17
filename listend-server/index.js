@@ -11,6 +11,10 @@ const { sendPush } = require('./sendPush');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
+const {
+  MANUAL_ALBUMS, manualAlbumById, manualTrackById,
+  manualAlbumsByArtist, manualAlbumAsArtistItem,
+} = require('./manualAlbums');
 const { handleOrName } = require('./userHandle');
 const { GENRE_ALBUMS } = require('./genreData');
 const { DECADE_ALBUMS } = require('./decadeData');
@@ -175,6 +179,15 @@ const CANONICAL_ALBUM_OVERRIDES = {
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/bf/13/b2/bf13b2eb-a141-f0d2-4a8f-76448b17163e/18UMGIM38575.rgb.jpg/500x500bb.jpg',
   },
 };
+
+// Albums Listend carries itself (manualAlbums.js) pin exactly like the
+// us-unlicensed ones — without this, resolving one by title+artist would fall
+// through to an Apple Music search and land on a compilation instead.
+for (const a of MANUAL_ALBUMS) {
+  CANONICAL_ALBUM_OVERRIDES[`${normalizeKey(a.artist)}::${normalizeKey(a.title)}`] = {
+    id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl,
+  };
+}
 
 async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, fallbackArtworkUrl }) {
   const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
@@ -607,9 +620,10 @@ app.get('/decades', async (req, res) => {
 
 // ── GET /search ───────────────────────────────────────────────────────────────
 
-// Album search only queries the `us` storefront, so the non-US-licensed albums
-// pinned in CANONICAL_ALBUM_OVERRIDES never come back from it. Prepend any
-// whose artist+title contains every word of the query. Applied on the way out
+// Album search only queries the `us` storefront, so neither the non-US-licensed
+// albums pinned in CANONICAL_ALBUM_OVERRIDES nor the ones Listend carries
+// itself (manualAlbums.js) ever come back from it. Prepend any whose
+// artist+title contains every word of the query. Applied on the way out
 // (not before caching) so results cached before an override was added pick it
 // up too. Accents are folded so "forca bruta" finds "Força Bruta".
 const foldForMatch = s => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -618,7 +632,7 @@ function withAlbumSearchOverrides(q, results) {
   const words = foldForMatch(q).split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
   if (words.join('').length < 3) return results; // a stray letter shouldn't match every override
   const hits = Object.values(CANONICAL_ALBUM_OVERRIDES)
-    .filter(o => GB_STOREFRONT_IDS.has(o.id))
+    .filter(o => GB_STOREFRONT_IDS.has(o.id) || manualAlbumById(o.id))
     .filter(o => {
       const haystack = foldForMatch(`${o.artist} ${o.title}`).replace(/[^a-z0-9]/g, '');
       return words.every(w => haystack.includes(w));
@@ -2313,7 +2327,8 @@ function normalizeGenreTags(rawTags) {
 }
 
 async function fetchAppleMusicGenres(amId) {
-  if (!amId) return [];
+  if (!amId || manualAlbumById(amId)) return []; // an album we carry ourselves has no AM entry
+
   try {
     const data = await amFetch(`/catalog/${storefrontFor(amId)}/albums/${amId}`);
     return (data?.data?.[0]?.attributes?.genreNames ?? []).filter(g => g !== 'Music');
@@ -2592,6 +2607,19 @@ app.get(['/catalog/track/:id', '/spotify/track/:id'], [
   if (!id || id === 'undefined') {
     return res.status(400).json({ error: 'track id is required' });
   }
+  const manualTrack = manualTrackById(id);
+  if (manualTrack) {
+    return res.json({
+      id:          manualTrack.id,
+      title:       manualTrack.title,
+      artist:      manualTrack.album.artist,
+      artworkUrl:  manualTrack.album.artworkUrl,
+      albumId:     manualTrack.album.id,
+      albumTitle:  manualTrack.album.title,
+      releaseDate: String(manualTrack.album.year),
+    });
+  }
+
   const CACHE_KEY = `catalog_track_${id}`;
 
   const mem = cacheGet(CACHE_KEY);
@@ -2626,6 +2654,10 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
+
+  const manual = manualAlbumById(id);
+  if (manual) return res.json(manual.tracks.map(t => ({ ...t, featuredArtists: [] })));
+
   const CACHE_KEY = `catalog_album_tracks_${id}`;
 
   const mem = cacheGet(CACHE_KEY);
@@ -2854,7 +2886,10 @@ app.get(['/catalog/artist/:id/albums', '/spotify/artist/:id/albums'], [
       page++;
     }
 
-    const overrides = (ARTIST_ALBUM_OVERRIDES[id] ?? []).filter(o => !allItems.some(a => a.id === o.id));
+    const overrides = [
+      ...(ARTIST_ALBUM_OVERRIDES[id] ?? []),
+      ...manualAlbumsByArtist(id).map(manualAlbumAsArtistItem),
+    ].filter(o => !allItems.some(a => a.id === o.id));
     if (overrides.length > 0) {
       console.log(`[/catalog/artist/albums] merging ${overrides.length} manual override(s):`, overrides.map(o => o.title));
       allItems = allItems.concat(overrides);
@@ -2950,10 +2985,18 @@ app.get(['/catalog/recommendations', '/spotify/recommendations'], [
 
     for (const trackId of trackIds) {
       try {
-        const songData = await amFetch(`/catalog/${storefrontFor(trackId)}/songs/${trackId}`);
-        const song = songData.data?.[0];
-        if (!song) continue;
-        const term = encodeURIComponent(`${song.attributes?.name ?? ''} ${song.attributes?.artistName ?? ''}`);
+        // Tracks of a manually-carried album have no Apple Music song to look
+        // up, but their title + artist still make a usable search seed.
+        const manualTrack = manualTrackById(trackId);
+        let term;
+        if (manualTrack) {
+          term = encodeURIComponent(`${manualTrack.title} ${manualTrack.album.artist}`);
+        } else {
+          const songData = await amFetch(`/catalog/${storefrontFor(trackId)}/songs/${trackId}`);
+          const song = songData.data?.[0];
+          if (!song) continue;
+          term = encodeURIComponent(`${song.attributes?.name ?? ''} ${song.attributes?.artistName ?? ''}`);
+        }
         const searchData = await amFetch(`/catalog/us/search?term=${term}&types=albums&limit=6`);
         for (const item of (searchData.results?.albums?.data ?? [])) {
           if (seen.has(item.id)) continue;
@@ -2997,6 +3040,13 @@ app.get('/api/album-durations', [
   const result = {};
 
   await Promise.all(ids.map(async (id) => {
+    const manual = manualAlbumById(id);
+    if (manual) {
+      const manualMs = manual.tracks.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
+      if (manualMs > 0) result[id] = manualMs;
+      return;
+    }
+
     const CACHE_KEY = `catalog_album_tracks_${id}`;
     let tracks = cacheGet(CACHE_KEY);
     if (!tracks) tracks = await getCached(CACHE_KEY, TTL_24H);
@@ -4247,6 +4297,8 @@ app.get('/api/albums/streaming-links', [
 
   const db = await getCached(CACHE_KEY, TTL_7D);
   if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  if (manualAlbumById(appleId)) return res.json({ amazonMusic: null });
 
   try {
     const itunesUrl = `https://itunes.apple.com/${storefrontFor(appleId)}/album/id${appleId}`;

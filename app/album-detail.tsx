@@ -935,8 +935,13 @@ export default function AlbumDetailScreen() {
   const [amazonFetched, setAmazonFetched]     = useState(false);
   const [amazonTapped, setAmazonTapped]       = useState(false);
 
+  // Albums Listend carries itself (server-side manualAlbums.js) have an `lst-`
+  // id rather than an Apple Music one — they aren't on Apple Music at all, so
+  // an /album/<id> link would just 404. Hide the row for them instead.
+  const isManualAlbum = albumId.startsWith('lst-');
+
   const streamLinks = {
-    appleMusic:   `https://music.apple.com/us/album/${albumId}`,
+    appleMusic:   isManualAlbum ? null : `https://music.apple.com/us/album/${albumId}`,
     spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
     youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
     amazonMusic:  amazonMusicUrl,
@@ -2150,7 +2155,10 @@ export default function AlbumDetailScreen() {
               { key: 'spotify'      as const, label: 'Spotify',       icon: 'spotify'      as const, color: '#1DB954' },
               { key: 'youtubeMusic' as const, label: 'YouTube Music', icon: 'youtube-play' as const, color: '#FF0000' },
               { key: 'amazonMusic'  as const, label: 'Amazon Music',  icon: 'amazon'       as const, color: '#00A8E1' },
-            ]).filter(p => p.key !== 'amazonMusic' || !amazonFetched || amazonMusicUrl).map(platform => {
+            ])
+              .filter(p => p.key !== 'appleMusic'  || !isManualAlbum)
+              .filter(p => p.key !== 'amazonMusic' || !amazonFetched || amazonMusicUrl)
+              .map(platform => {
               const isAmazon  = platform.key === 'amazonMusic';
               const loading   = isAmazon && (amazonFetching || amazonTapped);
               const onPress   = isAmazon
