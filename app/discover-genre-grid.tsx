@@ -109,7 +109,7 @@ export default function GenreGridScreen() {
               <Text style={s.listenedPct}>{listenedPct}%</Text>
             </View>
             <Text style={[s.listenedSub, { color: isDark ? '#a07850' : '#7a5535' }]}>
-              {loggedInGrid} of {albums.length} albums listened
+              {loggedInGrid} of {albums.length} albums listend
             </Text>
           </View>
 

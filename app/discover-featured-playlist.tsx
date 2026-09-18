@@ -102,7 +102,7 @@ export default function FeaturedPlaylistScreen() {
                 <Text style={s.listenedPct}>{listenedPct}%</Text>
               </View>
               <Text style={[s.listenedSub, { color: isDark ? '#a07850' : '#7a5535' }]}>
-                {loggedInPlaylist} of {albums.length} albums listened
+                {loggedInPlaylist} of {albums.length} albums listend
               </Text>
             </View>
           )}

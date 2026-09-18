@@ -460,7 +460,7 @@ export default function ArtistDetailScreen() {
         ) : null}
         {listenedPct !== null && (
           <View style={sc.listenedWrap}>
-            <Text style={sc.listenedSub}>{listenedCount} of {totalAlbums} albums listened</Text>
+            <Text style={sc.listenedSub}>{listenedCount} of {totalAlbums} albums listend</Text>
             <View style={sc.listenedRow}>
               <FontAwesome name="headphones" size={13} color="#D4A017" />
               <Text style={sc.listenedPct}>{listenedPct}%</Text>
