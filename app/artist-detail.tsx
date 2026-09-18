@@ -120,6 +120,15 @@ function TrackRow({
   );
 }
 
+type ArtistRating = {
+  score: number | null;
+  eligible: boolean;
+  albumCount: number;
+  ratingCount: number;
+  minAlbums: number;
+  minRatings: number;
+};
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ArtistDetailScreen() {
@@ -158,6 +167,8 @@ export default function ArtistDetailScreen() {
   const [discography, setDiscography]     = useState<CatalogDiscography | null>(null);
   const [albumsLoading, setAlbumsLoading] = useState(true);
   const [albumsError, setAlbumsError]     = useState('');
+
+  const [artistRating, setArtistRating]   = useState<ArtistRating | null>(null);
 
   const [bioExpanded, setBioExpanded]     = useState(false);
   const [activeDiscTab, setActiveDiscTab] = useState<DiscTab>('albums');
@@ -279,6 +290,7 @@ export default function ArtistDetailScreen() {
       // ── Step 2: fetch top-tracks and albums in parallel ──────────────────────
       const tracksUrl = `${API_URL}/catalog/artist/${artistId}/top-tracks`;
       const albumsUrl = `${API_URL}/catalog/artist/${artistId}/albums`;
+      const ratingUrl = `${API_URL}/api/artist/${artistId}/rating?name=${encodeURIComponent(artistName)}`;
       console.log('[artist-detail] fetching top-tracks:', tracksUrl);
       console.log('[artist-detail] fetching albums:    ', albumsUrl);
 
@@ -299,6 +311,17 @@ export default function ArtistDetailScreen() {
         })
         .finally(() => { if (!cancelled) setTracksLoading(false); });
 
+      // Artist rating — derived server-side from community ratings of this
+      // artist's albums and EPs. Failure is silent: the section just stays
+      // hidden rather than showing an error next to the artist's name.
+      fetch(ratingUrl)
+        .then(r => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
+        .then(data => {
+          console.log('[artist-detail] rating:', data?.score, 'from', data?.albumCount, 'albums /', data?.ratingCount, 'ratings');
+          if (!cancelled && data && typeof data === 'object') setArtistRating(data as ArtistRating);
+        })
+        .catch(err => console.warn('[artist-detail] rating error:', String(err)));
+
       // Albums (grouped discography)
       fetch(albumsUrl)
         .then(r => {
@@ -318,7 +341,7 @@ export default function ArtistDetailScreen() {
         .catch(err => {
           const msg = String(err);
           console.warn('[artist-detail] albums error:', msg);
-          if (!cancelled) { setDiscography({ albums: [], singles: [], compilations: [] }); setAlbumsError(msg); }
+          if (!cancelled) { setDiscography({ albums: [], epsAndMixtapes: [], collections: [], live: [] }); setAlbumsError(msg); }
         })
         .finally(() => { if (!cancelled) setAlbumsLoading(false); });
     }
@@ -420,6 +443,27 @@ export default function ArtistDetailScreen() {
           </View>
         )}
         <Text style={[sc.name, { color: colors.text }]}>{artistName}</Text>
+        {/* Artist rating — community average across their albums and EPs */}
+        {artistRating?.eligible && artistRating.score !== null ? (
+          <View style={sc.ratingWrap}>
+            <Text style={sc.ratingLabel}>Artist Rating</Text>
+            <View style={sc.ratingRow}>
+              <FontAwesome name="volume-up" size={17} color="#D4A017" style={{ marginBottom: 7 }} />
+              <Text style={sc.ratingScore}>{artistRating.score.toFixed(1)}</Text>
+              <Text style={sc.ratingOutOf}>/10</Text>
+            </View>
+            <Text style={sc.ratingSub}>
+              across {artistRating.albumCount} {artistRating.albumCount === 1 ? 'album' : 'albums'}
+              {' · '}{artistRating.ratingCount} {artistRating.ratingCount === 1 ? 'rating' : 'ratings'}
+            </Text>
+          </View>
+        ) : artistRating && artistRating.ratingCount > 0 ? (
+          <Text style={sc.ratingLocked}>
+            {artistRating.albumCount < artistRating.minAlbums
+              ? `Artist rating unlocks once ${artistRating.minAlbums} of their albums have been rated`
+              : `Artist rating unlocks at ${artistRating.minRatings} ratings — ${artistRating.ratingCount} so far`}
+          </Text>
+        ) : null}
         {listenedPct !== null && (
           <View style={sc.listenedWrap}>
             <View style={sc.listenedRow}>
@@ -577,6 +621,13 @@ const sc = StyleSheet.create({
   avatarPlaceholder: { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' },
   avatarInitial: { color: '#D4A017', fontSize: 44, fontWeight: '700' },
   name: { marginTop: 14, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
+  ratingWrap:   { alignItems: 'center', marginTop: 12, gap: 1 },
+  ratingLabel:  { color: '#7a5535', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.1 },
+  ratingRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  ratingScore:  { color: '#D4A017', fontSize: 32, fontWeight: '800', letterSpacing: -0.5, lineHeight: 36 },
+  ratingOutOf:  { color: '#7a5535', fontSize: 14, fontWeight: '600', marginBottom: 6 },
+  ratingSub:    { color: '#7a5535', fontSize: 12, marginTop: 1 },
+  ratingLocked: { color: '#7a5535', fontSize: 12, marginTop: 12, textAlign: 'center', paddingHorizontal: 24, lineHeight: 17 },
   listenedWrap: { alignItems: 'center', marginTop: 8, gap: 3 },
   listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   listenedPct: { color: '#D4A017', fontSize: 15, fontWeight: '700' },

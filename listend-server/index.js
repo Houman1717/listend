@@ -377,6 +377,14 @@ function foldDiacritics(s) {
   return (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
+// Strips a trailing parenthetical/bracketed suffix — "Album (Deluxe Edition)"
+// and "Album [Remastered]" are the same record as "Album". Used both to dedupe
+// a discography and to match logged albums back onto it, so an edition suffix
+// on either side can't split one album's ratings across two buckets.
+const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
+
+const baseTitle = title => (title ?? '').replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
+
 // ── CORS ───────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
   'https://listend-production.up.railway.app',
@@ -2787,8 +2795,161 @@ const ARTIST_ALBUM_OVERRIDES = {
   ],
 };
 
+// ── Artist discography ────────────────────────────────────────────────────────
+// Builds the grouped discography { albums, epsAndMixtapes, collections, live }
+// for an Apple Music artist ID. Extracted out of the route below so the artist
+// rating endpoint can reuse the exact same bucketing — the rating has to be
+// built from the same albums/EPs the Discography tabs show, not from a second
+// opinion that drifts the moment either side is tweaked.
+
+async function buildArtistDiscography(id, bust = false) {
+  if (!id || id === 'undefined') {
+    const err = new Error('artist id is required and must not be "undefined"');
+    err.status = 400;
+    throw err;
+  }
+
+  const CACHE_KEY = `catalog_artist_albums_${id}`;
+
+  if (!bust) {
+    const mem = cacheGet(CACHE_KEY);
+    if (mem) { console.log('[artist-discography] cache hit (memory)'); return mem; }
+
+    const db = await getCached(CACHE_KEY, TTL_24H);
+    if (db) { console.log('[artist-discography] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return db; }
+  }
+
+  const toItem = item => {
+    const attrs = item.attributes ?? {};
+    return {
+      id:            item.id,
+      title:         attrs.name ?? '',
+      artworkUrl:    amArtwork(attrs.artwork),
+      year:          parseInt(attrs.releaseDate?.slice(0, 4) ?? '0', 10),
+      isSingle:      attrs.isSingle      ?? null,
+      isCompilation: attrs.isCompilation ?? null,
+      trackCount:    attrs.trackCount    ?? null,
+      url:           attrs.url           ?? '',
+      type:          (attrs.albumType ?? '').toLowerCase() || 'unknown',
+    };
+  };
+
+  // Allowlist: these titles always go into EPs & Mixtapes regardless of other flags
+  const TITLE_ALLOWLIST = [
+    'members only, vol.',
+    'a ghetto christmas carol',
+  ];
+  const inAllowlist = title => TITLE_ALLOWLIST.some(t => title.toLowerCase().includes(t));
+
+  const LIVE_RE       = /\b(live|concert|tour|session|performance)\b|apple(?:\s+music)?\s+presents|chopnotslop|chopped\s+not\s+slopped/i;
+  const COLLECTION_RE = /\b(greatest\s+hits?|highlights?|collection|deluxe)\b|best\s+of\b/i;
+  const EP_MIX_RE     = /\b(ep|mixtape|acoustic|acapella|a\s+cappella|remixes?|instrumental|karaoke)\b/i;
+
+  // Titles that match LIVE_RE by accident (word is part of the title, not a descriptor)
+  const LIVE_FALSE_POSITIVES = [
+    'live.love.a$ap',
+    'long.live.a$ap',
+  ];
+  const isLiveFalsePositive = title => LIVE_FALSE_POSITIVES.some(t => title.toLowerCase().includes(t));
+
+  // Returns which tab bucket an item belongs to
+  const categorize = item => {
+    const t = item.title;
+    if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
+    if (inAllowlist(t)) return 'epsAndMixtapes';
+    if (item.isCompilation === true || COLLECTION_RE.test(t)) return 'collections';
+    if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
+    if (item.url && item.url.toLowerCase().includes('/single/')) return 'epsAndMixtapes';
+    if (item.trackCount !== null && item.trackCount < 6) return 'epsAndMixtapes';
+    return 'albums';
+  };
+
+  let allItems = [];
+  let nextPath = `/catalog/us/artists/${id}/albums?limit=25`;
+  let page = 0;
+  const PAGE_CAP = 5;
+  while (nextPath && page < PAGE_CAP) {
+    console.log(`[/catalog/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
+    try {
+      const data = await amFetch(nextPath);
+      if (page === 0 && data.data?.length) {
+        data.data.slice(0, 3).forEach((item, i) => {
+          const a = item.attributes ?? {};
+          console.log(`[/catalog/artist/albums] item[${i}] attrs: name="${a.name}" isSingle=${a.isSingle} isCompilation=${a.isCompilation} trackCount=${a.trackCount} albumType="${a.albumType}" url="${a.url}"`);
+        });
+      }
+      allItems = allItems.concat((data.data ?? []).map(toItem));
+      nextPath = data.next ? data.next.replace('/v1', '') : null;
+    } catch (pageErr) {
+      console.warn(`[/catalog/artist/albums] page ${page + 1} failed, stopping pagination:`, pageErr.message);
+      nextPath = null;
+    }
+    page++;
+  }
+
+  const overrides = [
+    ...(ARTIST_ALBUM_OVERRIDES[id] ?? []),
+    ...manualAlbumsByArtist(id).map(manualAlbumAsArtistItem),
+  ].filter(o => !allItems.some(a => a.id === o.id));
+  if (overrides.length > 0) {
+    console.log(`[/catalog/artist/albums] merging ${overrides.length} manual override(s):`, overrides.map(o => o.title));
+    allItems = allItems.concat(overrides);
+  }
+
+  console.log(`[/catalog/artist/albums] ALL titles fetched (${allItems.length}):`, allItems.map(i => `"${i.title}" isSingle=${i.isSingle} isCompilation=${i.isCompilation} trackCount=${i.trackCount}`));
+
+  // Global singles exclusion — runs before tab categorisation
+  const isSingleRelease = item =>
+    item.isSingle === true ||
+    item.trackCount === 1 ||
+    /\s*-\s*single\b/i.test(item.title);
+  const nonSingles = allItems.filter(item => !isSingleRelease(item));
+  console.log(`[/catalog/artist/albums] ${allItems.length} total → ${nonSingles.length} after singles exclusion`);
+
+  // Bucket items into 4 tab categories
+  const buckets = { albums: [], epsAndMixtapes: [], collections: [], live: [] };
+  for (const item of nonSingles) buckets[categorize(item)].push(item);
+
+  // Deduplicate each bucket: same title (case-insensitive) + same year → keep higher trackCount
+  const dedupBucket = items => {
+    const map = new Map();
+    for (const item of items) {
+      const key = `${item.title.toLowerCase()}::${item.year}`;
+      const existing = map.get(key);
+      if (!existing || (item.trackCount ?? 0) > (existing.trackCount ?? 0)) map.set(key, item);
+    }
+    return [...map.values()];
+  };
+
+  // Albums get additional base-title dedup (strips parenthetical suffixes across years)
+  const albumBaseMap = new Map();
+  for (const item of buckets.albums) {
+    const key = baseTitle(item.title);
+    const existing = albumBaseMap.get(key);
+    if (!existing) { albumBaseMap.set(key, item); continue; }
+    const itemHasSuffix     = /[\(\[]/.test(item.title);
+    const existingHasSuffix = /[\(\[]/.test(existing.title);
+    if (!itemHasSuffix && existingHasSuffix) { albumBaseMap.set(key, item); continue; }
+    if (itemHasSuffix && !existingHasSuffix) continue;
+    if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { albumBaseMap.set(key, item); continue; }
+    if (item.year < existing.year) { albumBaseMap.set(key, item); }
+  }
+
+  const grouped = {
+    albums:         dedupBucket([...albumBaseMap.values()]),
+    epsAndMixtapes: dedupBucket(buckets.epsAndMixtapes),
+    collections:    dedupBucket(buckets.collections),
+    live:           dedupBucket(buckets.live),
+  };
+
+  console.log(`[artist-discography] success — albums:${grouped.albums.length} eps:${grouped.epsAndMixtapes.length} collections:${grouped.collections.length} live:${grouped.live.length}`);
+  cacheSet(CACHE_KEY, grouped, TTL_6H);
+  await setCache(CACHE_KEY, grouped);
+  return grouped;
+}
+
 // ── GET /catalog/artist/:id/albums ────────────────────────────────────────────
-// Returns discography grouped by type: { albums, singles, compilations }.
+// Returns discography grouped by type: { albums, epsAndMixtapes, collections, live }.
 
 app.get(['/catalog/artist/:id/albums', '/spotify/artist/:id/albums'], [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
@@ -2798,158 +2959,159 @@ app.get(['/catalog/artist/:id/albums', '/spotify/artist/:id/albums'], [
   const bust = req.query.bust === '1';
   console.log(`[/catalog/artist/albums] ── START id="${id}" bust=${bust}`);
 
-  if (!id || id === 'undefined') {
-    return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
-  }
-
-  const CACHE_KEY = `catalog_artist_albums_${id}`;
-
   try {
-    if (!bust) {
-      const mem = cacheGet(CACHE_KEY);
-      if (mem) { console.log('[/catalog/artist/albums] cache hit (memory)'); return res.json(mem); }
-
-      const db = await getCached(CACHE_KEY, TTL_24H);
-      if (db) { console.log('[/catalog/artist/albums] cache hit (db)'); cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
-    }
-
-    const toItem = item => {
-      const attrs = item.attributes ?? {};
-      return {
-        id:            item.id,
-        title:         attrs.name ?? '',
-        artworkUrl:    amArtwork(attrs.artwork),
-        year:          parseInt(attrs.releaseDate?.slice(0, 4) ?? '0', 10),
-        isSingle:      attrs.isSingle      ?? null,
-        isCompilation: attrs.isCompilation ?? null,
-        trackCount:    attrs.trackCount    ?? null,
-        url:           attrs.url           ?? '',
-        type:          (attrs.albumType ?? '').toLowerCase() || 'unknown',
-      };
-    };
-
-    // Strip parenthetical suffixes for deduplication key only
-    const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
-
-    const baseTitle = title => title.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
-
-    // Allowlist: these titles always go into EPs & Mixtapes regardless of other flags
-    const TITLE_ALLOWLIST = [
-      'members only, vol.',
-      'a ghetto christmas carol',
-    ];
-    const inAllowlist = title => TITLE_ALLOWLIST.some(t => title.toLowerCase().includes(t));
-
-    const LIVE_RE       = /\b(live|concert|tour|session|performance)\b|apple(?:\s+music)?\s+presents|chopnotslop|chopped\s+not\s+slopped/i;
-    const COLLECTION_RE = /\b(greatest\s+hits?|highlights?|collection|deluxe)\b|best\s+of\b/i;
-    const EP_MIX_RE     = /\b(ep|mixtape|acoustic|acapella|a\s+cappella|remixes?|instrumental|karaoke)\b/i;
-
-    // Titles that match LIVE_RE by accident (word is part of the title, not a descriptor)
-    const LIVE_FALSE_POSITIVES = [
-      'live.love.a$ap',
-      'long.live.a$ap',
-    ];
-    const isLiveFalsePositive = title => LIVE_FALSE_POSITIVES.some(t => title.toLowerCase().includes(t));
-
-    // Returns which tab bucket an item belongs to
-    const categorize = item => {
-      const t = item.title;
-      if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
-      if (inAllowlist(t)) return 'epsAndMixtapes';
-      if (item.isCompilation === true || COLLECTION_RE.test(t)) return 'collections';
-      if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
-      if (item.url && item.url.toLowerCase().includes('/single/')) return 'epsAndMixtapes';
-      if (item.trackCount !== null && item.trackCount < 6) return 'epsAndMixtapes';
-      return 'albums';
-    };
-
-    let allItems = [];
-    let nextPath = `/catalog/us/artists/${id}/albums?limit=25`;
-    let page = 0;
-    const PAGE_CAP = 5;
-    while (nextPath && page < PAGE_CAP) {
-      console.log(`[/catalog/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
-      try {
-        const data = await amFetch(nextPath);
-        if (page === 0 && data.data?.length) {
-          data.data.slice(0, 3).forEach((item, i) => {
-            const a = item.attributes ?? {};
-            console.log(`[/catalog/artist/albums] item[${i}] attrs: name="${a.name}" isSingle=${a.isSingle} isCompilation=${a.isCompilation} trackCount=${a.trackCount} albumType="${a.albumType}" url="${a.url}"`);
-          });
-        }
-        allItems = allItems.concat((data.data ?? []).map(toItem));
-        nextPath = data.next ? data.next.replace('/v1', '') : null;
-      } catch (pageErr) {
-        console.warn(`[/catalog/artist/albums] page ${page + 1} failed, stopping pagination:`, pageErr.message);
-        nextPath = null;
-      }
-      page++;
-    }
-
-    const overrides = [
-      ...(ARTIST_ALBUM_OVERRIDES[id] ?? []),
-      ...manualAlbumsByArtist(id).map(manualAlbumAsArtistItem),
-    ].filter(o => !allItems.some(a => a.id === o.id));
-    if (overrides.length > 0) {
-      console.log(`[/catalog/artist/albums] merging ${overrides.length} manual override(s):`, overrides.map(o => o.title));
-      allItems = allItems.concat(overrides);
-    }
-
-    console.log(`[/catalog/artist/albums] ALL titles fetched (${allItems.length}):`, allItems.map(i => `"${i.title}" isSingle=${i.isSingle} isCompilation=${i.isCompilation} trackCount=${i.trackCount}`));
-
-    // Global singles exclusion — runs before tab categorisation
-    const isSingleRelease = item =>
-      item.isSingle === true ||
-      item.trackCount === 1 ||
-      /\s*-\s*single\b/i.test(item.title);
-    const nonSingles = allItems.filter(item => !isSingleRelease(item));
-    console.log(`[/catalog/artist/albums] ${allItems.length} total → ${nonSingles.length} after singles exclusion`);
-
-    // Bucket items into 4 tab categories
-    const buckets = { albums: [], epsAndMixtapes: [], collections: [], live: [] };
-    for (const item of nonSingles) buckets[categorize(item)].push(item);
-
-    // Deduplicate each bucket: same title (case-insensitive) + same year → keep higher trackCount
-    const dedupBucket = items => {
-      const map = new Map();
-      for (const item of items) {
-        const key = `${item.title.toLowerCase()}::${item.year}`;
-        const existing = map.get(key);
-        if (!existing || (item.trackCount ?? 0) > (existing.trackCount ?? 0)) map.set(key, item);
-      }
-      return [...map.values()];
-    };
-
-    // Albums get additional base-title dedup (strips parenthetical suffixes across years)
-    const albumBaseMap = new Map();
-    for (const item of buckets.albums) {
-      const key = baseTitle(item.title);
-      const existing = albumBaseMap.get(key);
-      if (!existing) { albumBaseMap.set(key, item); continue; }
-      const itemHasSuffix     = /[\(\[]/.test(item.title);
-      const existingHasSuffix = /[\(\[]/.test(existing.title);
-      if (!itemHasSuffix && existingHasSuffix) { albumBaseMap.set(key, item); continue; }
-      if (itemHasSuffix && !existingHasSuffix) continue;
-      if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { albumBaseMap.set(key, item); continue; }
-      if (item.year < existing.year) { albumBaseMap.set(key, item); }
-    }
-
-    const grouped = {
-      albums:         dedupBucket([...albumBaseMap.values()]),
-      epsAndMixtapes: dedupBucket(buckets.epsAndMixtapes),
-      collections:    dedupBucket(buckets.collections),
-      live:           dedupBucket(buckets.live),
-    };
-
-    console.log(`[/catalog/artist/albums] success — albums:${grouped.albums.length} eps:${grouped.epsAndMixtapes.length} collections:${grouped.collections.length} live:${grouped.live.length}`);
-    cacheSet(CACHE_KEY, grouped, TTL_6H);
-    await setCache(CACHE_KEY, grouped);
-    res.json(grouped);
+    res.json(await buildArtistDiscography(id, bust));
   } catch (err) {
     const msg = err.message ?? String(err);
     console.error('[/catalog/artist/albums] ERROR:', msg);
     console.error('[/catalog/artist/albums] STACK:', err.stack);
-    res.status(500).json({ error: msg });
+    res.status(err.status ?? 500).json({ error: msg });
+  }
+});
+
+// ── Artist rating ─────────────────────────────────────────────────────────────
+// One score for an artist's body of work, derived from the ratings Listend
+// users gave their individual albums.
+//
+// Statistically the same shape as /api/discover/community-top-rated: a raw
+// average lets a barely-rated record swing an artist wildly — three 10s on an
+// obscure EP shouldn't outrank a catalogue with hundreds of ratings behind it —
+// so every average here is pulled toward the site-wide mean in proportion to
+// how little evidence backs it.
+//
+// Only studio albums and EPs/mixtapes count. Compilations and live records are
+// deliberately excluded: greatest-hits packages rate absurdly high and live
+// albums low, and neither says much about the artist's actual work.
+
+// Gate — below either threshold the score is withheld rather than shown shakily.
+const ARTIST_RATING_MIN_ALBUMS  = 3;
+const ARTIST_RATING_MIN_RATINGS = 10;
+
+// Shrinkage strengths, expressed in "ratings of an average release". At 5, an
+// album with 5 real ratings sits halfway between its own average and the mean.
+const ARTIST_RATING_ALBUM_PRIOR  = 5;
+const ARTIST_RATING_ARTIST_PRIOR = 5;
+
+// Every rated album in the app, keyed by folded base-title + artist, so an
+// artist's releases can be looked up without re-scanning user_albums on each
+// request. Cached 30 min like the other community aggregates — with a small
+// user base a handful of new ratings visibly moves an average.
+const ALBUM_RATING_INDEX_KEY = 'community:album-rating-index';
+
+async function getAlbumRatingIndex() {
+  const mem = cacheGet(ALBUM_RATING_INDEX_KEY);
+  if (mem) return mem;
+
+  const cached = await getCached(ALBUM_RATING_INDEX_KEY, TTL_30M);
+  if (cached) { cacheSet(ALBUM_RATING_INDEX_KEY, cached, TTL_30M); return cached; }
+
+  const rows = await fetchAllRows((from, to) => supabase
+    .from('user_albums')
+    .select('title, artist, rating')
+    .not('rating', 'is', null)
+    .gt('rating', 0)
+    .range(from, to));
+
+  // Null prototype so an album literally titled "__proto__" can't collide with
+  // Object.prototype. Survives the JSON round-trip through api_cache as a plain
+  // object, which is why every read below goes through hasOwnProperty.
+  const totals = Object.create(null);
+  let sum = 0;
+  let count = 0;
+  for (const r of (rows ?? [])) {
+    if (!r.title || !r.artist) continue;
+    const key = `${foldDiacritics(baseTitle(r.title))}::${foldDiacritics(r.artist)}`;
+    const e = totals[key] ?? (totals[key] = { total: 0, count: 0 });
+    e.total += r.rating;
+    e.count++;
+    sum += r.rating;
+    count++;
+  }
+
+  const index = { totals, globalMean: count > 0 ? sum / count : 0, ratingCount: count };
+  console.log(`[artist-rating] built album rating index — ${count} ratings across ${Object.keys(totals).length} albums, mean ${index.globalMean.toFixed(2)}`);
+  cacheSet(ALBUM_RATING_INDEX_KEY, index, TTL_30M);
+  await setCache(ALBUM_RATING_INDEX_KEY, index);
+  return index;
+}
+
+// ── GET /api/artist/:id/rating?name=<artist name> ─────────────────────────────
+// The artist name is needed because user_albums stores artist as free text —
+// matching is done on title+artist, the same join album-detail and the Discover
+// community lists use, not on catalog IDs (which fragment across reissues).
+//
+// Only memory-cached per artist: the expensive part is the shared rating index,
+// which is db-cached, and writing one api_cache row per artist would bloat it.
+
+app.get('/api/artist/:id/rating', [
+  param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
+  query('name').trim().notEmpty().withMessage('name is required').isLength({ max: 200 }),
+  validate,
+], async (req, res) => {
+  const { id } = req.params;
+  const name = req.query.name;
+  const artistKey = foldDiacritics(name);
+  const CACHE_KEY = `artist_rating_${id}_${artistKey}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+
+  try {
+    const [disc, index] = await Promise.all([
+      buildArtistDiscography(id),
+      getAlbumRatingIndex(),
+    ]);
+
+    const releases = [...(disc.albums ?? []), ...(disc.epsAndMixtapes ?? [])];
+    const rated = [];
+    const seen = new Set();
+    for (const release of releases) {
+      const key = `${foldDiacritics(baseTitle(release.title))}::${artistKey}`;
+      // A standard and a deluxe edition are one album, and one album gets one
+      // vote — otherwise a record reissued three times counts three times.
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!Object.prototype.hasOwnProperty.call(index.totals, key)) continue;
+      rated.push(index.totals[key]);
+    }
+
+    const ratingCount = rated.reduce((n, e) => n + e.count, 0);
+    const eligible =
+      rated.length >= ARTIST_RATING_MIN_ALBUMS && ratingCount >= ARTIST_RATING_MIN_RATINGS;
+
+    let score = null;
+    if (eligible) {
+      const mean = index.globalMean;
+      // Per release: shrink its own average toward the site-wide mean, so a
+      // thinly-rated deep cut barely moves off neutral.
+      const albumAvgs = rated.map(e =>
+        (e.total + mean * ARTIST_RATING_ALBUM_PRIOR) / (e.count + ARTIST_RATING_ALBUM_PRIOR));
+      // Then average those with equal weight per release, so the score reads as
+      // "how good is a typical record by this artist" rather than being decided
+      // by whichever one album everybody happened to log.
+      const raw = albumAvgs.reduce((a, b) => a + b, 0) / albumAvgs.length;
+      // Then shrink once more on the artist's total evidence, so an artist
+      // scraping past the gate can't sit at 9.8 off a dozen ratings.
+      const shrunk =
+        (raw * ratingCount + mean * ARTIST_RATING_ARTIST_PRIOR) /
+        (ratingCount + ARTIST_RATING_ARTIST_PRIOR);
+      score = Math.round(shrunk * 10) / 10;
+    }
+
+    const payload = {
+      score,
+      eligible,
+      albumCount: rated.length,
+      ratingCount,
+      minAlbums: ARTIST_RATING_MIN_ALBUMS,
+      minRatings: ARTIST_RATING_MIN_RATINGS,
+    };
+    console.log(`[artist-rating] id="${id}" name="${name}" → score=${score} albums=${rated.length} ratings=${ratingCount}`);
+    cacheSet(CACHE_KEY, payload, TTL_30M);
+    res.json(payload);
+  } catch (err) {
+    console.error('[/api/artist/rating]', err.message ?? err);
+    res.status(err.status ?? 500).json({ error: 'Internal server error' });
   }
 });
 
@@ -3244,6 +3406,26 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('[/api/admin/purge-discover-cache]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
+  }
+});
+
+// ── GET /api/admin/purge-artist-rating-cache ──────────────────────────────────
+
+app.get('/api/admin/purge-artist-rating-cache', requireAdmin, async (req, res) => {
+  try {
+    // The per-artist payloads are memory-only and keyed by artist, so they have
+    // to be swept by prefix; the shared index lives in both layers.
+    let swept = 0;
+    for (const key of [...memCache.keys()]) {
+      if (key.startsWith('artist_rating_')) { memCache.delete(key); swept++; }
+    }
+    cacheClear(ALBUM_RATING_INDEX_KEY);
+    await deleteCache(ALBUM_RATING_INDEX_KEY);
+    console.log(`[/api/admin/purge-artist-rating-cache] done — index + ${swept} artist payload(s).`);
+    res.json({ success: true, purgedArtists: swept });
+  } catch (err) {
+    console.error('[/api/admin/purge-artist-rating-cache]', err.message ?? err);
     res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
   }
 });
