@@ -2878,7 +2878,11 @@ async function buildArtistDiscography(id, bust = false) {
 
   const LIVE_RE       = /\b(live|concert|tour|session|performance)\b|apple(?:\s+music)?\s+presents|chopnotslop|chopped\s+not\s+slopped/i;
   const COLLECTION_RE = /\b(greatest\s+hits?|highlights?|collection|deluxe)\b|best\s+of\b/i;
-  const EP_MIX_RE     = /\b(ep|mixtape|acoustic|acapella|a\s+cappella|remixes?|instrumental|karaoke)\b/i;
+  // The dotted spelling needs its own alternative: \bep\b does not match "E.P.".
+  // It used to land in EPs anyway via the track-count rule, so the gap only
+  // showed once run time started promoting thin releases to albums — e.g.
+  // Godspeed's `The "Pretty Little Lightning Paw" E.P.`, four long tracks.
+  const EP_MIX_RE     = /\b(ep|mixtape|acoustic|acapella|a\s+cappella|remixes?|instrumental|karaoke)\b|\be\.\s?p\./i;
 
   // Titles that match LIVE_RE by accident (word is part of the title, not a descriptor)
   const LIVE_FALSE_POSITIVES = [
