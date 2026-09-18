@@ -127,7 +127,6 @@ type ArtistRating = {
   ratingCount: number;
   ratedAlbumCount: number;
   minAlbums: number;
-  minRatings: number;
   minAlbumRatings: number;
 };
 
@@ -456,18 +455,16 @@ export default function ArtistDetailScreen() {
           </View>
         ) : artistRating && artistRating.ratedAlbumCount > 0 ? (
           <Text style={sc.ratingLocked}>
-            {artistRating.albumCount < artistRating.minAlbums
-              ? `Discography score unlocks once ${artistRating.minAlbums} of their albums have ${artistRating.minAlbumRatings}+ ratings`
-              : `Discography score unlocks at ${artistRating.minRatings} ratings — ${artistRating.ratingCount} so far`}
+            {`Discography score unlocks once ${artistRating.minAlbums} of their albums have ${artistRating.minAlbumRatings}+ ratings`}
           </Text>
         ) : null}
         {listenedPct !== null && (
           <View style={sc.listenedWrap}>
+            <Text style={sc.listenedSub}>{listenedCount} of {totalAlbums} albums listened</Text>
             <View style={sc.listenedRow}>
               <FontAwesome name="headphones" size={13} color="#D4A017" />
               <Text style={sc.listenedPct}>{listenedPct}%</Text>
             </View>
-            <Text style={sc.listenedSub}>{listenedCount} of {totalAlbums} albums listened</Text>
           </View>
         )}
         {lastfmLoading ? (

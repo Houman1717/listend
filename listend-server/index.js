@@ -2991,13 +2991,15 @@ app.get(['/catalog/artist/:id/albums', '/spotify/artist/:id/albums'], [
 // ratings an album, close to exposing individual people's scores.
 const ARTIST_RATING_MIN_ALBUM_RATINGS = 5;
 
-// Gate — below either threshold the score is withheld rather than shown shakily.
-// Two albums is enough: the rating count is what carries the evidence, and
-// artists with short catalogues (Frank Ocean has two studio albums and 200+
-// ratings) were being hidden despite having more behind them than artists with
-// three thinly-rated ones.
-const ARTIST_RATING_MIN_ALBUMS  = 2;
-const ARTIST_RATING_MIN_RATINGS = 10;
+// Gate — below this the score is withheld rather than shown shakily. Two albums
+// is enough: artists with short catalogues (Frank Ocean has two studio albums
+// and 150+ ratings) were being hidden despite more evidence behind them than
+// artists with three thinly-rated ones.
+//
+// There is no separate total-ratings floor. Two qualifying albums already carry
+// at least 2 x ARTIST_RATING_MIN_ALBUM_RATINGS ratings between them, so any such
+// floor at or below that could never reject anything on its own.
+const ARTIST_RATING_MIN_ALBUMS = 2;
 
 // Shrinkage strength, in "ratings of an average release" — at 10, an artist
 // scraping past the gate sits halfway between their own average and the mean.
@@ -3094,8 +3096,7 @@ app.get('/api/artist/:id/rating', [
     }
 
     const ratingCount = rated.reduce((n, e) => n + e.count, 0);
-    const eligible =
-      rated.length >= ARTIST_RATING_MIN_ALBUMS && ratingCount >= ARTIST_RATING_MIN_RATINGS;
+    const eligible = rated.length >= ARTIST_RATING_MIN_ALBUMS;
 
     let score = null;
     if (eligible) {
@@ -3127,7 +3128,6 @@ app.get('/api/artist/:id/rating', [
       ratingCount,
       ratedAlbumCount,
       minAlbums: ARTIST_RATING_MIN_ALBUMS,
-      minRatings: ARTIST_RATING_MIN_RATINGS,
       minAlbumRatings: ARTIST_RATING_MIN_ALBUM_RATINGS,
     };
     console.log(`[artist-rating] id="${id}" name="${name}" → score=${score} albums=${rated.length}/${ratedAlbumCount} ratings=${ratingCount}`);
