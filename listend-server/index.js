@@ -358,7 +358,15 @@ function cacheClear(...keys) {
 // Supabase/PostgREST silently caps every response at 1000 rows regardless of
 // .limit() — so any query expecting more than 1000 rows (e.g. all-time
 // aggregations) must paginate with .range() or it silently drops the rest.
-async function fetchAllRows(buildQuery, pageSize = 1000, maxPages = 20) {
+//
+// maxPages is a runaway guard, not a limit anyone should hit. It used to be 20,
+// which capped every caller at 20,000 rows — and user_albums passed that long
+// ago (27,655 rated rows alone), so the all-time Discover aggregations were
+// silently ranking on about three quarters of the data with no error anywhere.
+// The loop stops as soon as a short page comes back, so date-filtered callers
+// still make exactly the requests they did before; only the ones that genuinely
+// have more rows than this see any change.
+async function fetchAllRows(buildQuery, pageSize = 1000, maxPages = 200) {
   let rows = [];
   for (let page = 0; page < maxPages; page++) {
     const from = page * pageSize;
