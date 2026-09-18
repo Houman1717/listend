@@ -2795,6 +2795,41 @@ const ARTIST_ALBUM_OVERRIDES = {
   ],
 };
 
+// Track count below which a release might be an EP — but only might. Anything
+// this thin gets its run time checked before being called one.
+const FEW_TRACKS = 6;
+// A thin release at least this long is an album, not an EP. Classic prog LPs run
+// 41-52 minutes over five tracks; EPs of the same track count are typically
+// 15-20. Nothing in between is common enough to be worth agonising over.
+const EP_MAX_RUN_MS = 25 * 60 * 1000;
+
+// Total run time for a handful of albums, in one batched Apple Music call.
+// Returns a Map of id → milliseconds, omitting anything it can't resolve; every
+// caller treats a missing entry as "unknown" and falls back to track count, so a
+// failure here degrades to the old behaviour rather than breaking the tabs.
+async function resolveShortRunTimes(items) {
+  const ids = items.map(i => i.id).filter(id => /^\d+$/.test(id));
+  if (ids.length === 0) return new Map();
+
+  const runTimes = new Map();
+  // Apple caps ids per request; these lists are tiny, but chunk anyway.
+  for (let i = 0; i < ids.length; i += 25) {
+    const chunk = ids.slice(i, i + 25);
+    try {
+      const data = await amFetch(`/catalog/us/albums?ids=${chunk.join(',')}&include=tracks`);
+      for (const album of (data.data ?? [])) {
+        const tracks = album.relationships?.tracks?.data ?? [];
+        if (tracks.length === 0) continue;
+        const total = tracks.reduce((ms, t) => ms + (t.attributes?.durationInMillis ?? 0), 0);
+        if (total > 0) runTimes.set(album.id, total);
+      }
+    } catch (err) {
+      console.warn('[artist-discography] run-time lookup failed, falling back to track count:', err.message ?? err);
+    }
+  }
+  return runTimes;
+}
+
 // ── Artist discography ────────────────────────────────────────────────────────
 // Builds the grouped discography { albums, epsAndMixtapes, collections, live }
 // for an Apple Music artist ID. Extracted out of the route below so the artist
@@ -2852,15 +2887,25 @@ async function buildArtistDiscography(id, bust = false) {
   ];
   const isLiveFalsePositive = title => LIVE_FALSE_POSITIVES.some(t => title.toLowerCase().includes(t));
 
-  // Returns which tab bucket an item belongs to
-  const categorize = item => {
+  // Returns which tab bucket an item belongs to. `shortRunTimes` maps an id to
+  // its total run time for the few releases thin enough that track count alone
+  // can't tell an EP from an album; see resolveShortRunTimes below.
+  const categorize = (item, shortRunTimes) => {
     const t = item.title;
     if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
     if (inAllowlist(t)) return 'epsAndMixtapes';
     if (item.isCompilation === true || COLLECTION_RE.test(t)) return 'collections';
     if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
     if (item.url && item.url.toLowerCase().includes('/single/')) return 'epsAndMixtapes';
-    if (item.trackCount !== null && item.trackCount < 6) return 'epsAndMixtapes';
+    if (item.trackCount !== null && item.trackCount < FEW_TRACKS) {
+      // Track count on its own files every prog record as an EP: Wish You Were
+      // Here, Animals and Atom Heart Mother are five tracks each and 41-52
+      // minutes long. An EP is short in time, not in track count, so ask the
+      // clock when we have it and only fall back to the count when we don't.
+      const runMs = shortRunTimes?.get(item.id);
+      if (runMs == null) return 'epsAndMixtapes';
+      return runMs >= EP_MAX_RUN_MS ? 'albums' : 'epsAndMixtapes';
+    }
     return 'albums';
   };
 
@@ -2906,9 +2951,21 @@ async function buildArtistDiscography(id, bust = false) {
   const nonSingles = allItems.filter(item => !isSingleRelease(item));
   console.log(`[/catalog/artist/albums] ${allItems.length} total → ${nonSingles.length} after singles exclusion`);
 
+  // Total run time for the handful of releases that are thin on tracks but might
+  // still be albums. Only these are looked up, in one batched call, so a typical
+  // artist costs nothing extra and the result is cached with the discography.
+  const shortRunTimes = await resolveShortRunTimes(
+    nonSingles.filter(item =>
+      item.trackCount !== null &&
+      item.trackCount < FEW_TRACKS &&
+      categorize(item, null) === 'epsAndMixtapes' &&
+      !inAllowlist(item.title) &&
+      !EP_MIX_RE.test(item.title)),
+  );
+
   // Bucket items into 4 tab categories
   const buckets = { albums: [], epsAndMixtapes: [], collections: [], live: [] };
-  for (const item of nonSingles) buckets[categorize(item)].push(item);
+  for (const item of nonSingles) buckets[categorize(item, shortRunTimes)].push(item);
 
   // Deduplicate each bucket: same title (case-insensitive) + same year → keep higher trackCount
   const dedupBucket = items => {
