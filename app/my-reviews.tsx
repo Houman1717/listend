@@ -17,7 +17,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect, Stack } from 'expo-rou
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
@@ -25,8 +25,10 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { handleOrName } from '@/lib/userHandle';
 import { parseReviewTargetId } from '@/lib/reviewTargets';
-import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
+import { SortBar, SortSheet, applySort, SortKey, COMMUNITY_SORTS, DURATION_SORTS } from '@/components/SortSheet';
 import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
+import { fetchAlbumDurations } from '@/lib/albumDurations';
+import { fetchAllRows } from '@/lib/supabaseQuery';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
@@ -62,7 +64,7 @@ type LikedReview  = LoggedAlbum & { ownerId: string; username: string; handle: s
 
 // ─── Review row ───────────────────────────────────────────────────────────────
 
-function ReviewRow({
+const ReviewRow = memo(function ReviewRow({
   album,
   colors,
   isDark,
@@ -77,17 +79,17 @@ function ReviewRow({
   album: LoggedAlbum;
   colors: ColorsShape;
   isDark: boolean;
-  onPress: () => void;
+  onPress: (album: any) => void;
   likeCount?: number;
   isLiked?: boolean;
-  onLike?: () => void;
+  onLike?: (album: any) => void;
   byUsername?: string;
   byHandle?: string;
   byUserIsPro?: boolean;
 }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onPress(album)}
       style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]}>
       {/* Thumbnail */}
       {album.artworkUrl ? (
@@ -130,7 +132,7 @@ function ReviewRow({
           <View style={s.likeRow}>
             {onLike !== undefined ? (
               // Interactive — viewer can toggle like
-              <Pressable onPress={onLike} hitSlop={8} style={s.likeBtn}>
+              <Pressable onPress={() => onLike(album)} hitSlop={8} style={s.likeBtn}>
                 <FontAwesome
                   name={isLiked ? 'heart' : 'heart-o'}
                   size={13}
@@ -154,7 +156,7 @@ function ReviewRow({
       </View>
     </Pressable>
   );
-}
+});
 
 // ─── Review detail modal ──────────────────────────────────────────────────────
 
@@ -373,6 +375,9 @@ function ReviewDetailModal({
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
+// A library big enough to need more pages than this isn't one we can render.
+const MAX_LIBRARY_PAGES = 20;
+
 const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a','#1a5a5a','#4a2818'];
 
 export default function MyReviewsScreen() {
@@ -380,12 +385,17 @@ export default function MyReviewsScreen() {
   const { isPro, proTheme: ownProTheme } = usePro();
   const { userId: paramUserId, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
   const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
-  const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
-    ? themeToColors(getProTheme(_themeKey))
-    : Colors[colorScheme ?? 'dark'];
+  // Memoised: themeToColors builds a fresh object every call, and a new colors
+  // object on every render would defeat the memo on every row.
+  const colors = useMemo(
+    () => (((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
+      ? themeToColors(getProTheme(_themeKey))
+      : Colors[colorScheme ?? 'dark']),
+    [paramUserId, paramProTheme, isPro, _themeKey, colorScheme],
+  );
   const isDark = colors.isDark;
   const router = useRouter();
-  const { loggedAlbums, updateDuration } = useAlbums();
+  const { loggedAlbums, updateDurations } = useAlbums();
   const { user } = useAuth();
 
   const viewingOther = paramUserId || null;
@@ -440,19 +450,24 @@ export default function MyReviewsScreen() {
     async function loadReviewsAndLikes() {
       // 1. Fetch the reviews (+ latest re-listen rating/review per album, so a
       // re-listen-only review still surfaces even when the original log has none)
-      const [{ data }, { data: reListenData }] = await Promise.all([
-        supabase
+      // Paged: a single select stops at PostgREST's 1000-row cap, which a heavy
+      // account passes on logs alone, and again on re-listens.
+      const [data, reListenData] = await Promise.all([
+        fetchAllRows<any>((from, to) => supabase
           .from('user_albums')
           .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms, is_relistened')
           .eq('user_id', viewingOther!)
-          .order('listened_at', { ascending: false }),
-        supabase
+          .order('listened_at', { ascending: false })
+          .range(from, to), MAX_LIBRARY_PAGES),
+        fetchAllRows<any>((from, to) => supabase
           .from('re_listens')
           .select('spotify_id, rating, review, listened_at')
           .eq('user_id', viewingOther!)
-          .order('listened_at', { ascending: false }),
+          .order('listened_at', { ascending: false })
+          .range(from, to), MAX_LIBRARY_PAGES),
       ]);
 
+      // null means the query failed — never write that back over real reviews.
       if (!data) return;
 
       const latestReListenRating = new Map<string, number>();
@@ -486,11 +501,12 @@ export default function MyReviewsScreen() {
       );
 
       // 2. Fetch all likes for this user's reviews (one query for counts + own state)
-      const { data: allLikes } = await supabase
+      const allLikes = await fetchAllRows<any>((from, to) => supabase
         .from('likes')
         .select('user_id, target_id')
         .eq('target_type', 'review')
-        .eq('target_owner_id', viewingOther!);
+        .eq('target_owner_id', viewingOther!)
+        .range(from, to), MAX_LIBRARY_PAGES);
 
       const newMap = new Map<string, LikeState>();
       for (const like of (allLikes ?? []) as any[]) {
@@ -667,7 +683,7 @@ export default function MyReviewsScreen() {
   }, [activeTab, viewingOther, user?.id, likedFetchTick]);
 
   // ── Unlike a review from the liked tab (own user) ─────────────────────────
-  async function handleUnlikeLikedReview(review: LikedReview) {
+  const handleUnlikeLikedReview = useCallback(async function (review: LikedReview) {
     if (!user) return;
     const targetId = review.targetId;
     setLikedReviews(prev => prev.filter(r => !(r.ownerId === review.ownerId && r.id === review.id)));
@@ -682,10 +698,11 @@ export default function MyReviewsScreen() {
       .eq('user_id', user.id)
       .eq('target_type', 'review')
       .eq('target_id', targetId);
-  }
+  // Only reads `user`; everything else goes through a setState updater.
+  }, [user]);
 
   // ── Toggle like on a review in another user's liked-reviews tab ───────────
-  async function handleToggleLikedReviewLike(review: LikedReview) {
+  const handleToggleLikedReviewLike = useCallback(async function (review: LikedReview) {
     if (!user) return;
     const targetId = review.targetId;
     const current  = likedLikesMap.get(targetId) ?? { liked: false, count: 0 };
@@ -705,10 +722,12 @@ export default function MyReviewsScreen() {
         target_id: targetId, target_owner_id: review.ownerId,
       });
     }
-  }
+  // likedLikesMap is read directly for the optimistic update, so it has to be a
+  // dep — it only changes when the rows need re-rendering anyway, not on typing.
+  }, [user, likedLikesMap]);
 
   // ── Toggle like on another user's review ─────────────────────────────────
-  async function handleToggleLike(album: LoggedAlbum) {
+  const handleToggleLike = useCallback(async function (album: LoggedAlbum) {
     if (!user || !viewingOther) return;
     const targetId = `${viewingOther}_${album.id}`;
     const current  = likesMap.get(targetId) ?? { liked: false, count: 0 };
@@ -762,54 +781,77 @@ export default function MyReviewsScreen() {
         });
       }
     }
-  }
+  // Same here: likesMap is read directly for the optimistic update and revert.
+  }, [user, viewingOther, likesMap]);
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const sourceReviews = viewingOther
-    ? otherReviews
-    : loggedAlbums.filter((a) => !!(a.lastReview ?? a.review));
+  // Memoised: the own-user branch builds a new array every call, so without this
+  // every memo below it re-runs on every render — including each keystroke.
+  const sourceReviews = useMemo(
+    () => (viewingOther ? otherReviews : loggedAlbums.filter((a) => !!(a.lastReview ?? a.review))),
+    [viewingOther, otherReviews, loggedAlbums],
+  );
 
   // ── Community stats (avg rating + popularity) — same source as My Listend ──
   const [communityStatsMap, setCommunityStatsMap] = useState<Map<string, CommunityStats>>(new Map());
 
+  // Loaded lazily — see COMMUNITY_SORTS. Keyed on list length so a list that
+  // grows while the screen is open re-asks, without looping on every render.
+  const statsForCount = useRef(-1);
   useEffect(() => {
-    if (sourceReviews.length === 0) return;
-    fetchCommunityStats(sourceReviews).then(setCommunityStatsMap);
+    if (!COMMUNITY_SORTS.has(sortKey)) return;
+    if (sourceReviews.length === 0 || statsForCount.current === sourceReviews.length) return;
+    statsForCount.current = sourceReviews.length;
+    fetchCommunityStats(sourceReviews)
+      .then(setCommunityStatsMap)
+      .catch(() => { statsForCount.current = -1; });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceReviews.length]);
+  }, [sortKey, sourceReviews.length]);
 
-  // Fetch durations for any reviewed album that doesn't have one yet
+  // Durations for any reviewed album that doesn't have one yet — also lazy, and
+  // batched both ways: the endpoint rejects a whole library's worth of ids in
+  // one query, and applying them one at a time re-rendered the list per album.
+  const durationsForCount = useRef(-1);
   useEffect(() => {
+    if (!DURATION_SORTS.has(sortKey)) return;
     const missing = sourceReviews.filter(a => !a.durationMs).map(a => a.id);
-    if (missing.length === 0) return;
-    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
-    fetch(`${API_URL}/api/album-durations?ids=${missing.join(',')}`)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then((data: Record<string, number>) => {
-        Object.entries(data).forEach(([id, ms]) => {
-          if (viewingOther) {
-            setOtherReviews(prev => prev.map(a => a.id === id ? { ...a, durationMs: ms } : a));
-          } else {
-            updateDuration(id, ms);
-          }
-        });
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceReviews.length, viewingOther]);
+    if (missing.length === 0 || durationsForCount.current === missing.length) return;
+    durationsForCount.current = missing.length;
 
-  const reviewed = useMemo(() => {
-    const enriched = sourceReviews.map(a => {
+    let cancelled = false;
+    (async () => {
+      const found = await fetchAlbumDurations(missing, () => cancelled);
+      if (cancelled || Object.keys(found).length === 0) return;
+
+      if (viewingOther) {
+        setOtherReviews(prev => prev.map(a => (found[a.id] ? { ...a, durationMs: found[a.id] } : a)));
+      } else {
+        updateDurations(found);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortKey, sourceReviews.length, viewingOther]);
+
+  // Sorting is kept out of the search memo so typing doesn't re-sort — and
+  // re-key — every review on every keystroke.
+  const sortedReviews = useMemo(() => {
+    if (shuffled) return shuffled;
+    const enriched = communityStatsMap.size === 0 ? sourceReviews : sourceReviews.map(a => {
       const stats = communityStatsMap.get(communityStatsKey(a.title, a.artist));
       return stats ? { ...a, communityAvgRating: stats.avg, communityRatingCount: stats.count } : a;
     });
-    const sorted = shuffled ?? applySort(enriched, sortKey);
-    if (!query.trim()) return sorted;
+    return applySort(enriched, sortKey);
+  }, [sourceReviews, sortKey, shuffled, communityStatsMap]);
+
+  const reviewed = useMemo(() => {
+    if (!query.trim()) return sortedReviews;
     const q = query.toLowerCase();
-    return sorted.filter(a =>
+    return sortedReviews.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [sourceReviews, sortKey, shuffled, query, communityStatsMap]);
+  }, [sortedReviews, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -822,6 +864,50 @@ export default function MyReviewsScreen() {
 
   // Build the target_id prefix used for likes map lookups
   const ownerId = viewingOther ?? user?.id ?? '';
+
+  // Both lists render through stable callbacks so the memo on ReviewRow can
+  // actually skip: an inline renderItem rebuilds every row's onPress/onLike on
+  // every render, which makes the memo compare unequal and do nothing.
+  const renderReviewRow = useCallback(({ item }: { item: LoggedAlbum }) => {
+    const likeState = likesMap.get(`${ownerId}_${item.id}`) ?? { liked: false, count: 0 };
+    return (
+      <ReviewRow
+        album={item}
+        colors={colors}
+        isDark={isDark}
+        onPress={setSelectedReview}
+        likeCount={likeState.count}
+        isLiked={likeState.liked}
+        onLike={viewingOther ? handleToggleLike : undefined}
+      />
+    );
+  }, [likesMap, ownerId, colors, isDark, viewingOther, handleToggleLike]);
+
+  const displayLikedReviews = useMemo(() => {
+    const q = queryLiked.trim().toLowerCase();
+    if (!q) return likedReviews;
+    return likedReviews.filter(r =>
+      r.title.toLowerCase().includes(q) || r.artist.toLowerCase().includes(q)
+    );
+  }, [likedReviews, queryLiked]);
+
+  const renderLikedRow = useCallback(({ item }: { item: LikedReview }) => {
+    const likeState = likedLikesMap.get(`${item.ownerId}_${item.id}`) ?? { liked: false, count: 0 };
+    return (
+      <ReviewRow
+        album={item}
+        colors={colors}
+        isDark={isDark}
+        byUsername={item.username}
+        byHandle={item.handle}
+        byUserIsPro={item.isPro}
+        onPress={setSelectedLiked}
+        likeCount={likeState.count}
+        isLiked={likeState.liked}
+        onLike={!viewingOther ? handleUnlikeLikedReview : handleToggleLikedReviewLike}
+      />
+    );
+  }, [likedLikesMap, colors, isDark, viewingOther, handleUnlikeLikedReview, handleToggleLikedReviewLike]);
 
   const isDarkBorder = isDark ? '#2e2018' : '#e8e8e8';
 
@@ -917,21 +1003,7 @@ export default function MyReviewsScreen() {
                 )}
               </View>
             )}
-            renderItem={({ item }) => {
-              const targetId  = `${ownerId}_${item.id}`;
-              const likeState = likesMap.get(targetId) ?? { liked: false, count: 0 };
-              return (
-                <ReviewRow
-                  album={item}
-                  colors={colors}
-                  isDark={isDark}
-                  onPress={() => setSelectedReview(item)}
-                  likeCount={likeState.count}
-                  isLiked={likeState.liked}
-                  onLike={viewingOther ? () => handleToggleLike(item) : undefined}
-                />
-              );
-            }}
+            renderItem={renderReviewRow}
           />
           <SortSheet
             visible={sheetOpen}
@@ -969,13 +1041,7 @@ export default function MyReviewsScreen() {
           </View>
         ) : (
           <FlatList
-            data={(() => {
-              const q = queryLiked.trim().toLowerCase();
-              if (!q) return likedReviews;
-              return likedReviews.filter(r =>
-                r.title.toLowerCase().includes(q) || r.artist.toLowerCase().includes(q)
-              );
-            })()}
+            data={displayLikedReviews}
             keyExtractor={(item) => `${item.ownerId}_${item.id}`}
             style={{ flex: 1 }}
             contentContainerStyle={s.listContent}
@@ -995,27 +1061,7 @@ export default function MyReviewsScreen() {
                 )}
               </View>
             )}
-            renderItem={({ item }) => {
-              const targetId  = `${item.ownerId}_${item.id}`;
-              const likeState = likedLikesMap.get(targetId) ?? { liked: false, count: 0 };
-              return (
-                <ReviewRow
-                  album={item}
-                  colors={colors}
-                  isDark={isDark}
-                  byUsername={item.username}
-                  byHandle={item.handle}
-                  byUserIsPro={item.isPro}
-                  onPress={() => setSelectedLiked(item)}
-                  likeCount={likeState.count}
-                  isLiked={likeState.liked}
-                  onLike={!viewingOther
-                    ? () => handleUnlikeLikedReview(item)
-                    : () => handleToggleLikedReviewLike(item)
-                  }
-                />
-              );
-            }}
+            renderItem={renderLikedRow}
           />
         )
       )}
