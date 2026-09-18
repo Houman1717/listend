@@ -3,13 +3,10 @@ import {
   View,
   Text,
   Pressable,
-  ScrollView,
+  FlatList,
   TextInput,
   Alert,
-  Modal,
-  Platform,
-  SafeAreaView,
-  KeyboardAvoidingView,
+  PixelRatio,
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -17,24 +14,36 @@ import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
+import { SortBar, SortSheet, applySort, SortKey, COMMUNITY_SORTS, DURATION_SORTS } from '@/components/SortSheet';
 import { fetchCommunityStats, communityStatsKey } from '@/lib/communityStats';
-import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { fetchAllRows } from '@/lib/supabaseQuery';
+import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { reportContent } from '@/lib/reports';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const PADDING = 16;
 const GAP     = 12;
 const COLS    = 3;
+// Height of the title + artist + badge block under each cover. Fixed, so every
+// grid row is exactly as tall as the next and the list can lay 900 albums out
+// arithmetically instead of measuring them. Measured: title 5+14, artist 1+13,
+// badges 3+13 = 49, plus slack for Android's taller bold metrics.
+//
+// Scaled by the device font scale, because Text scales with the OS text-size
+// setting by default — without this, a reader on large type overflows the row.
+// Read once at load, so a text-size change applies on next launch.
+const META_H = Math.ceil(54 * PixelRatio.getFontScale());
+
+// A library big enough to need more pages than this isn't one we can render.
+const MAX_LIBRARY_PAGES = 20;
 
 const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a','#1a5a5a','#4a2818'];
 
@@ -66,7 +75,7 @@ function VolumeBadge({ rating, showNumber, isDark, tint = '#D4A017' }: { rating:
 
 // ─── Album card ───────────────────────────────────────────────────────────────
 
-function AlbumCard({
+const AlbumCard = memo(function AlbumCard({
   album,
   cardWidth,
   colors,
@@ -77,12 +86,12 @@ function AlbumCard({
   cardWidth: number;
   colors: any;
   isDark: boolean;
-  onPress: () => void;
+  onPress: (album: LoggedAlbum) => void;
 }) {
   return (
     <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [s.card, { width: cardWidth, opacity: pressed ? 0.7 : 1 }]}>
+      onPress={() => onPress(album)}
+      style={({ pressed }) => [s.card, { width: cardWidth, height: cardWidth + META_H, opacity: pressed ? 0.7 : 1 }]}>
       {album.artworkUrl ? (
         <ExpoImage
           source={{ uri: album.artworkUrl }}
@@ -113,7 +122,7 @@ function AlbumCard({
       )}
     </Pressable>
   );
-}
+});
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -124,12 +133,18 @@ export default function MyListendScreen() {
   const { isPro, proTheme: ownProTheme } = usePro();
   const { userId: paramUserId, username: paramUsername, proTheme: paramProTheme } = useLocalSearchParams<{ userId?: string; username?: string; proTheme?: string }>();
   const _themeKey = !paramUserId ? ownProTheme : (paramProTheme ?? 'default');
-  const colors = ((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
-    ? themeToColors(getProTheme(_themeKey))
-    : Colors[colorScheme ?? 'dark'];
+  // Memoised: themeToColors builds a fresh object every call, and a new colors
+  // object on every render would defeat the memo on all 900 cards.
+  const colors = useMemo(
+    () => (((!paramUserId ? isPro : !!paramProTheme) && _themeKey !== 'default')
+      ? themeToColors(getProTheme(_themeKey))
+      : Colors[colorScheme ?? 'dark']),
+    [paramUserId, paramProTheme, isPro, _themeKey, colorScheme],
+  );
   const isDark = colors.isDark;
+  const rowHeight = cardWidth + META_H + GAP;
   const router = useRouter();
-  const { loggedAlbums, removeLoggedAlbum, updateDuration, undoLastReListenEntry } = useAlbums();
+  const { loggedAlbums, removeLoggedAlbum, updateDurations, undoLastReListenEntry } = useAlbums();
   const { user } = useAuth();
 
   const viewingOther = paramUserId || null;
@@ -165,20 +180,27 @@ export default function MyListendScreen() {
 
   useEffect(() => {
     if (!viewingOther) return;
-    Promise.all([
-      supabase
-        .from('user_albums')
-        .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms')
-        .eq('user_id', viewingOther)
-        .not('listened_at', 'is', null)
-        .order('listened_at', { ascending: false }),
-      supabase
-        .from('re_listens')
-        .select('spotify_id, rating, review, listened_at')
-        .eq('user_id', viewingOther)
-        .order('listened_at', { ascending: false }),
-    ]).then(([{ data: albums }, { data: reListens }]) => {
-      if (!albums) return;
+    let cancelled = false;
+
+    (async () => {
+      // Paged: a single select stops at PostgREST's 1000-row cap, which a
+      // heavy library is already brushing against.
+      const [albums, reListens] = await Promise.all([
+        fetchAllRows<any>((from, to) => supabase
+          .from('user_albums')
+          .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms')
+          .eq('user_id', viewingOther)
+          .not('listened_at', 'is', null)
+          .order('listened_at', { ascending: false })
+          .range(from, to), MAX_LIBRARY_PAGES),
+        fetchAllRows<any>((from, to) => supabase
+          .from('re_listens')
+          .select('spotify_id, rating, review, listened_at')
+          .eq('user_id', viewingOther)
+          .order('listened_at', { ascending: false })
+          .range(from, to), MAX_LIBRARY_PAGES),
+      ]);
+      if (cancelled || !albums) return;
 
       // Build per-album re-listen summary (rows already ordered newest-first)
       type RLSummary = { count: number; lastRating: number; lastReview?: string };
@@ -211,7 +233,9 @@ export default function MyListendScreen() {
           lastReview:    rl?.lastReview,
         };
       }));
-    });
+    })();
+
+    return () => { cancelled = true; };
   }, [viewingOther]);
 
   const sourceAlbums = viewingOther ? otherAlbums : loggedAlbums;
@@ -220,44 +244,64 @@ export default function MyListendScreen() {
   // popularity = distinct listeners (not just ratings), same as Discover ──────
   const [communityStatsMap, setCommunityStatsMap] = useState<Map<string, import('@/lib/communityStats').CommunityStats>>(new Map());
 
+  // Loaded lazily — see COMMUNITY_SORTS. Keyed on list length so a library that
+  // grows while the screen is open re-asks, without looping on every render.
+  const statsForCount = useRef(-1);
   useEffect(() => {
-    if (sourceAlbums.length === 0) return;
-    fetchCommunityStats(sourceAlbums).then(setCommunityStatsMap);
+    if (!COMMUNITY_SORTS.has(sortKey)) return;
+    if (sourceAlbums.length === 0 || statsForCount.current === sourceAlbums.length) return;
+    statsForCount.current = sourceAlbums.length;
+    fetchCommunityStats(sourceAlbums)
+      .then(setCommunityStatsMap)
+      .catch(() => { statsForCount.current = -1; });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceAlbums.length]);
+  }, [sortKey, sourceAlbums.length]);
 
-  // Fetch durations for any album in the list that doesn't have one yet
+  // Durations for any album that doesn't have one yet — also lazy, and batched
+  // both ways: the endpoint rejects a full library's worth of ids in one query,
+  // and applying the answers one at a time re-rendered the grid per album.
+  const durationsForCount = useRef(-1);
   useEffect(() => {
+    if (!DURATION_SORTS.has(sortKey)) return;
     const missing = sourceAlbums.filter(a => !a.durationMs).map(a => a.id);
-    if (missing.length === 0) return;
-    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
-    fetch(`${API_URL}/api/album-durations?ids=${missing.join(',')}`)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then((data: Record<string, number>) => {
-        Object.entries(data).forEach(([id, ms]) => {
-          if (viewingOther) {
-            setOtherAlbums(prev => prev.map(a => a.id === id ? { ...a, durationMs: ms } : a));
-          } else {
-            updateDuration(id, ms);
-          }
-        });
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceAlbums.length, viewingOther]);
+    if (missing.length === 0 || durationsForCount.current === missing.length) return;
+    durationsForCount.current = missing.length;
 
-  const displayAlbums = useMemo(() => {
-    const enriched = sourceAlbums.map(a => {
+    let cancelled = false;
+
+    (async () => {
+      const found = await fetchAlbumDurations(missing, () => cancelled);
+      if (cancelled || Object.keys(found).length === 0) return;
+
+      if (viewingOther) {
+        setOtherAlbums(prev => prev.map(a => (found[a.id] ? { ...a, durationMs: found[a.id] } : a)));
+      } else {
+        updateDurations(found);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortKey, sourceAlbums.length, viewingOther]);
+
+  // Sorting is kept out of the search memo so typing doesn't re-sort — and
+  // re-key — the whole library on every keystroke.
+  const sortedAlbums = useMemo(() => {
+    if (shuffled) return shuffled;
+    const enriched = communityStatsMap.size === 0 ? sourceAlbums : sourceAlbums.map(a => {
       const stats = communityStatsMap.get(communityStatsKey(a.title, a.artist));
       return stats ? { ...a, communityAvgRating: stats.avg, communityRatingCount: stats.count } : a;
     });
-    const sorted = shuffled ?? applySort(enriched, sortKey);
-    if (!query.trim()) return sorted;
+    return applySort(enriched, sortKey);
+  }, [sourceAlbums, sortKey, shuffled, communityStatsMap]);
+
+  const displayAlbums = useMemo(() => {
+    if (!query.trim()) return sortedAlbums;
     const q = query.toLowerCase();
-    return sorted.filter(a =>
+    return sortedAlbums.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [sourceAlbums, sortKey, shuffled, query, communityStatsMap]);
+  }, [sortedAlbums, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -272,9 +316,18 @@ export default function MyListendScreen() {
     navigateToAlbum(router, album);
   }
 
-  function handleAlbumPress(album: LoggedAlbum) {
-    setSelectedAlbum(album);
-  }
+  // Stable so the memoised cards don't all re-render when anything else moves.
+  const handleAlbumPress = useCallback((album: LoggedAlbum) => setSelectedAlbum(album), []);
+
+  const renderItem = useCallback(({ item }: { item: LoggedAlbum }) => (
+    <AlbumCard
+      album={item}
+      cardWidth={cardWidth}
+      colors={colors}
+      isDark={isDark}
+      onPress={handleAlbumPress}
+    />
+  ), [cardWidth, colors, isDark, handleAlbumPress]);
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
@@ -320,27 +373,30 @@ export default function MyListendScreen() {
           />
         </View>
       )}
-      <ScrollView contentContainerStyle={s.gridWrap} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {displayAlbums.length === 0 ? (
+      <FlatList
+        data={displayAlbums}
+        renderItem={renderItem}
+        // Keyed on the album, not its position (user_albums is unique per
+        // user+spotify_id), so filtering the list as you type reuses the cards
+        // that survive the filter instead of remounting every visible cover.
+        keyExtractor={(item) => item.id}
+        numColumns={COLS}
+        columnWrapperStyle={s.row}
+        contentContainerStyle={s.gridWrap}
+        // Every row is exactly rowHeight tall (see META_H), so the list can
+        // place all 900 albums without mounting or measuring a single one.
+        getItemLayout={(_, index) => ({ length: rowHeight, offset: rowHeight * index, index })}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
           <Text style={[s.emptyText, { color: colors.subtext }]}>
             {query.trim() ? `No albums matching "${query}"` : 'No albums logged yet — head to Search!'}
           </Text>
-        ) : (
-          <View style={s.grid}>
-            {displayAlbums.map((album, index) => (
-              <AlbumCard
-                key={`${album.id}-${index}`}
-                album={album}
-                cardWidth={cardWidth}
-                colors={colors}
-                isDark={isDark}
-                onPress={() => handleAlbumPress(album)}
-
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+        }
+      />
 
       <SortSheet
         visible={sheetOpen}
@@ -404,7 +460,7 @@ export default function MyListendScreen() {
 const s = StyleSheet.create({
   root:    { flex: 1 },
   gridWrap:{ padding: PADDING, paddingBottom: 48 },
-  grid:    { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  row:     { gap: GAP, marginBottom: GAP },
   card:    { gap: 0 },
   fallback:     { borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   fallbackText: { color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
@@ -418,59 +474,4 @@ const s = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   searchInput: { flex: 1, fontSize: 15, height: 36 },
-});
-
-// ─── Modal styles ─────────────────────────────────────────────────────────────
-
-const ml = StyleSheet.create({
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: { fontSize: 16, fontWeight: '700' },
-
-  body: { padding: 20 },
-
-  albumRow: { flexDirection: 'row', gap: 14, marginBottom: 20 },
-  art:      { width: 80, height: 80, borderRadius: 10 },
-  albumTitle:  { fontSize: 16, fontWeight: '700' },
-  albumArtist: { fontSize: 13 },
-  ratingRow:   { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-
-  authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  avatar:    { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  avatarLetter: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  username:     { color: '#D4A017', fontWeight: '600', fontSize: 14 },
-  listenedDate: { fontSize: 12 },
-
-  reviewText: { fontSize: 15, lineHeight: 22, fontStyle: 'italic', marginBottom: 20 },
-
-  likeCommentRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 10, marginBottom: 16,
-  },
-  likeBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
-  likeCount: { fontSize: 14, fontWeight: '600' },
-
-  commentsToggle: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, marginBottom: 12,
-  },
-  commentsToggleText: { fontSize: 14, fontWeight: '500' },
-
-  deleteBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginTop: 24, paddingVertical: 12, borderRadius: 10,
-    borderWidth: 1, borderColor: '#8B1A1A',
-  },
-  deleteBtnText: { color: '#8B1A1A', fontWeight: '600', fontSize: 14 },
-
-  undoRelistenBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginTop: 24, paddingVertical: 12, borderRadius: 10,
-    borderWidth: 1, borderColor: '#8B1A1A',
-  },
-  undoRelistenBtnText: { color: '#8B1A1A', fontWeight: '600', fontSize: 14 },
 });

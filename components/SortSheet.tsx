@@ -22,6 +22,14 @@ export type SortKey =
   | 'duration_long'   | 'duration_short'
   | 'shuffle';
 
+// Which sorts need data the library screens don't otherwise load. Nothing on a
+// card shows a community stat or a duration — they only ever decide the order —
+// so the screens fetch them the first time a sort asks, not on open.
+export const COMMUNITY_SORTS = new Set<SortKey>([
+  'avg_rating_high', 'avg_rating_low', 'num_ratings_high', 'num_ratings_low',
+]);
+export const DURATION_SORTS = new Set<SortKey>(['duration_long', 'duration_short']);
+
 type SortGroup = {
   label: string;
   a: { key: SortKey; label: string };

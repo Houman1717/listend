@@ -100,6 +100,7 @@ type AlbumsContextType = {
   updateReListenReview: (id: string, rating: number, review: string) => Promise<boolean>;
   updateListenedDate: (albumId: string, targetListenedAt: string | null, newDate: Date) => Promise<boolean>;
   updateDuration: (id: string, durationMs: number) => void;
+  updateDurations: (durations: Record<string, number>) => void;
   removeLoggedAlbum: (id: string) => void;
   removeReListenEntry: (albumId: string, listenedAt: string) => Promise<void>;
   undoLastReListenEntry: (albumId: string) => Promise<void>;
@@ -805,6 +806,37 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Bulk version, for the library screens that hydrate a whole grid's durations
+  // at once. Calling updateDuration in a loop over a 900-album library queued
+  // 900 renders and 900 UPDATEs; this applies them in one pass and writes them
+  // back a few at a time in the background.
+  function updateDurations(durations: Record<string, number>) {
+    const ids = Object.keys(durations);
+    if (ids.length === 0) return;
+
+    function apply<T extends { id: string; durationMs?: number }>(list: T[]): T[] {
+      return list.map((a) => (durations[a.id] ? { ...a, durationMs: durations[a.id] } : a));
+    }
+    setLoggedAlbums(apply);
+    setWantToListen(apply);
+
+    if (!user) return;
+    (async () => {
+      const WRITE_CHUNK = 20;
+      for (let i = 0; i < ids.length; i += WRITE_CHUNK) {
+        await Promise.all(ids.slice(i, i + WRITE_CHUNK).map((id) =>
+          supabase
+            .from('user_albums')
+            .update({ duration_ms: durations[id] })
+            .match({ user_id: user.id, spotify_id: id })
+            .then(({ error }) => {
+              if (error) console.warn('[AlbumsContext] updateDurations error:', error.message);
+            })
+        ));
+      }
+    })();
+  }
+
   function addTopAlbum(album: TopAlbum) {
     setTopAlbums((prev) => {
       if (prev.some(a => a?.id === album.id)) return prev;
@@ -1148,7 +1180,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
   return (
     <AlbumsContext.Provider value={{
-      loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, reListenMode, setReListenMode, updateReview, updateReListenReview, updateListenedDate, updateDuration, removeLoggedAlbum, removeReListenEntry, undoLastReListenEntry, removeReListenEntry, undoLastReListenEntry,
+      loggedAlbums, pendingAlbum, setPendingAlbum, logAlbum, reListenMode, setReListenMode, updateReview, updateReListenReview, updateListenedDate, updateDuration, updateDurations, removeLoggedAlbum, removeReListenEntry, undoLastReListenEntry,
       topAlbums, topSongs, topArtists,
       addTopAlbum, addTopAlbumAtSlot, removeTopAlbum, reorderTopAlbums,
       addTopSong, addTopSongAtSlot, removeTopSong, reorderTopSongs,

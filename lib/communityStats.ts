@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabaseQuery';
 
 export type CommunityStats = { avg: number; count: number };
 
@@ -6,6 +7,12 @@ export type CommunityStats = { avg: number; count: number };
 // needs at least this many community ratings before its average counts for
 // sorting, otherwise a single 9/10 outranks an album with 8 ratings at 8.8.
 const MIN_RATINGS = 5;
+
+// Chunk size for the title filter — small enough that the `.in(...)` list stays
+// well inside the URL length limit for a big library.
+const TITLES_PER_QUERY = 100;
+// A single chunk of 100 titles can't realistically exceed 10k community rows.
+const MAX_PAGES_PER_CHUNK = 10;
 
 // Strips accents/diacritics (e.g. "Björk" → "Bjork") so matches aren't missed
 // when the same artist/title comes back spelled differently across catalog
@@ -28,18 +35,36 @@ export async function fetchCommunityStats(
   const titles = [...new Set(items.map(i => i.title).filter(Boolean))];
   if (titles.length === 0) return new Map();
 
-  const [{ data: logs }, { data: relistens }] = await Promise.all([
-    supabase
+  // A 900-album library would put every title into one `.in(...)` filter, which
+  // overruns the request URL and then caps at the first 1000 matching rows.
+  // Ask in chunks, and page each chunk, so the numbers stay whole.
+  const chunks: string[][] = [];
+  for (let i = 0; i < titles.length; i += TITLES_PER_QUERY) {
+    chunks.push(titles.slice(i, i + TITLES_PER_QUERY));
+  }
+
+  const pages = await Promise.all(chunks.flatMap(chunk => [
+    fetchAllRows<any>((from, to) => supabase
       .from('user_albums')
       .select('title, artist, rating, user_id')
-      .in('title', titles)
-      .not('listened_at', 'is', null),
-    supabase
+      .in('title', chunk)
+      .not('listened_at', 'is', null)
+      .range(from, to), MAX_PAGES_PER_CHUNK),
+    fetchAllRows<any>((from, to) => supabase
       .from('re_listens')
       .select('title, artist, user_id')
-      .in('title', titles)
-      .not('listened_at', 'is', null),
-  ]);
+      .in('title', chunk)
+      .not('listened_at', 'is', null)
+      .range(from, to), MAX_PAGES_PER_CHUNK),
+  ]));
+
+  const logs: any[] = [];
+  const relistens: any[] = [];
+  pages.forEach((rows, i) => {
+    // flatMap above alternates user_albums, re_listens per chunk.
+    const target = i % 2 === 0 ? logs : relistens;
+    for (const row of rows ?? []) target.push(row);
+  });
 
   const acc = new Map<string, { sum: number; ratedCount: number; baseUsers: Set<string>; relistenUsers: Set<string> }>();
   const getEntry = (title: string, artist: string) => {
