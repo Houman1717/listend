@@ -2983,6 +2983,14 @@ app.get(['/catalog/artist/:id/albums', '/spotify/artist/:id/albums'], [
 // deliberately excluded: greatest-hits packages rate absurdly high and live
 // albums low, and neither says much about the artist's actual work.
 
+// An album must have this many ratings of its own before it contributes.
+// Deliberately the same number as MIN_RATINGS_TO_SHOW in app/album-detail.tsx:
+// that screen hides an album's average until 5 people have rated it, so without
+// a matching floor here the artist score publishes an average built entirely
+// out of figures the app refuses to show one screen over — and at one or two
+// ratings an album, close to exposing individual people's scores.
+const ARTIST_RATING_MIN_ALBUM_RATINGS = 5;
+
 // Gate — below either threshold the score is withheld rather than shown shakily.
 // Two albums is enough: the rating count is what carries the evidence, and
 // artists with short catalogues (Frank Ocean has two studio albums and 200+
@@ -3070,15 +3078,19 @@ app.get('/api/artist/:id/rating', [
 
     const releases = [...(disc.albums ?? []), ...(disc.epsAndMixtapes ?? [])];
     const rated = [];
+    let ratedAlbumCount = 0;
     const seen = new Set();
     for (const release of releases) {
       const key = `${foldDiacritics(baseTitle(release.title))}::${artistKey}`;
       // A standard and a deluxe edition are one album, and one album gets one
-      // vote — otherwise a record reissued three times counts three times.
+      // entry — otherwise a record reissued three times counts three times.
       if (seen.has(key)) continue;
       seen.add(key);
       if (!Object.prototype.hasOwnProperty.call(index.totals, key)) continue;
-      rated.push(index.totals[key]);
+      const entry = index.totals[key];
+      ratedAlbumCount++;
+      if (entry.count < ARTIST_RATING_MIN_ALBUM_RATINGS) continue;
+      rated.push(entry);
     }
 
     const ratingCount = rated.reduce((n, e) => n + e.count, 0);
@@ -3107,12 +3119,18 @@ app.get('/api/artist/:id/rating', [
     const payload = {
       score,
       eligible,
+      // albumCount/ratingCount describe what actually fed the score, so they
+      // only ever cover albums past the per-album floor. ratedAlbumCount counts
+      // every release with any ratings at all — the client needs it to tell
+      // "nobody has touched this artist" apart from "rated, but not enough yet".
       albumCount: rated.length,
       ratingCount,
+      ratedAlbumCount,
       minAlbums: ARTIST_RATING_MIN_ALBUMS,
       minRatings: ARTIST_RATING_MIN_RATINGS,
+      minAlbumRatings: ARTIST_RATING_MIN_ALBUM_RATINGS,
     };
-    console.log(`[artist-rating] id="${id}" name="${name}" → score=${score} albums=${rated.length} ratings=${ratingCount}`);
+    console.log(`[artist-rating] id="${id}" name="${name}" → score=${score} albums=${rated.length}/${ratedAlbumCount} ratings=${ratingCount}`);
     cacheSet(CACHE_KEY, payload, TTL_30M);
     res.json(payload);
   } catch (err) {

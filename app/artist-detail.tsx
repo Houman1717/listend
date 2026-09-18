@@ -125,8 +125,10 @@ type ArtistRating = {
   eligible: boolean;
   albumCount: number;
   ratingCount: number;
+  ratedAlbumCount: number;
   minAlbums: number;
   minRatings: number;
+  minAlbumRatings: number;
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -452,10 +454,10 @@ export default function ArtistDetailScreen() {
               <Text style={sc.ratingScore}>{artistRating.score.toFixed(1)}</Text>
             </View>
           </View>
-        ) : artistRating && artistRating.ratingCount > 0 ? (
+        ) : artistRating && artistRating.ratedAlbumCount > 0 ? (
           <Text style={sc.ratingLocked}>
             {artistRating.albumCount < artistRating.minAlbums
-              ? `Discography score unlocks once ${artistRating.minAlbums} of their albums have been rated`
+              ? `Discography score unlocks once ${artistRating.minAlbums} of their albums have ${artistRating.minAlbumRatings}+ ratings`
               : `Discography score unlocks at ${artistRating.minRatings} ratings — ${artistRating.ratingCount} so far`}
           </Text>
         ) : null}
