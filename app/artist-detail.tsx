@@ -209,6 +209,9 @@ export default function ArtistDetailScreen() {
   }).length;
   const listenedPct  = totalAlbums === 0 ? null : Math.round((listenedCount / totalAlbums) * 100);
 
+  const hasScore    = !!artistRating?.eligible && artistRating.score !== null;
+  const hasListened = listenedPct !== null;
+
   const sectionBg   = isDark ? '#1c1410' : '#f5f5f5';
   const borderColor = isDark ? '#2a1e14' : '#e8e8e8';
   const mutedText   = isDark ? '#7a5535' : '#a07850';
@@ -444,29 +447,39 @@ export default function ArtistDetailScreen() {
           </View>
         )}
         <Text style={[sc.name, { color: colors.text }]}>{artistName}</Text>
-        {/* Discography score — community average across their albums and EPs */}
-        {artistRating?.eligible && artistRating.score !== null ? (
-          <View style={sc.ratingWrap}>
-            <Text style={sc.ratingLabel}>Discography Score</Text>
-            <View style={sc.ratingRow}>
-              <FontAwesome name="volume-up" size={14} color="#D4A017" />
-              <Text style={sc.ratingScore}>{artistRating.score.toFixed(1)}</Text>
-            </View>
+        {/* Two stats side by side: what the community thinks of this artist on
+            the left, how much of them you've heard on the right. Stacked, the
+            two gold figures read as the same kind of number and the album
+            count captions whichever one it happens to sit under. */}
+        {(hasScore || hasListened) && (
+          <View style={sc.statsRow}>
+            {hasScore && (
+              <View style={sc.statCol}>
+                <Text style={sc.statLabel}>Discography Score</Text>
+                <View style={sc.statValueRow}>
+                  <FontAwesome name="volume-up" size={14} color="#D4A017" />
+                  <Text style={sc.statValue}>{artistRating!.score!.toFixed(1)}</Text>
+                </View>
+              </View>
+            )}
+            {hasScore && hasListened && <View style={sc.statDivider} />}
+            {hasListened && (
+              <View style={sc.statCol}>
+                <Text style={sc.statLabel}>You've Listend</Text>
+                <View style={sc.statValueRow}>
+                  <FontAwesome name="headphones" size={14} color="#D4A017" />
+                  <Text style={sc.statValue}>{listenedPct}<Text style={sc.statPct}>%</Text></Text>
+                </View>
+                <Text style={sc.statSub}>{listenedCount} of {totalAlbums} albums</Text>
+              </View>
+            )}
           </View>
-        ) : artistRating && artistRating.ratedAlbumCount > 0 ? (
+        )}
+        {!hasScore && artistRating && artistRating.ratedAlbumCount > 0 ? (
           <Text style={sc.ratingLocked}>
             {`Discography score unlocks once ${artistRating.minAlbums} of their albums have ${artistRating.minAlbumRatings}+ ratings`}
           </Text>
         ) : null}
-        {listenedPct !== null && (
-          <View style={sc.listenedWrap}>
-            <Text style={sc.listenedSub}>{listenedCount} of {totalAlbums} albums listend</Text>
-            <View style={sc.listenedRow}>
-              <FontAwesome name="headphones" size={13} color="#D4A017" />
-              <Text style={sc.listenedPct}>{listenedPct}%</Text>
-            </View>
-          </View>
-        )}
         {lastfmLoading ? (
           <ActivityIndicator size="small" color="#D4A017" style={{ marginTop: 8 }} />
         ) : lastfmError ? (
@@ -615,15 +628,26 @@ const sc = StyleSheet.create({
   avatarPlaceholder: { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' },
   avatarInitial: { color: '#D4A017', fontSize: 44, fontWeight: '700' },
   name: { marginTop: 14, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
-  ratingWrap:   { alignItems: 'center', marginTop: 10, gap: 3 },
-  ratingLabel:  { color: '#7a5535', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.1 },
-  ratingRow:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  ratingScore:  { color: '#D4A017', fontSize: 19, fontWeight: '800', letterSpacing: -0.3 },
+  // Each column takes exactly half the row via flex, rather than sizing to its
+  // own label — "DISCOGRAPHY SCORE" is much wider than "YOU'VE LISTEND", so
+  // content-sized columns put the divider off-centre and the whole header
+  // reads lopsided.
+  statsRow:     { flexDirection: 'row', alignItems: 'flex-start', alignSelf: 'stretch', marginTop: 12, paddingHorizontal: 8 },
+  statCol:      { flex: 1, alignItems: 'center', gap: 3 },
+  statLabel:    { color: '#7a5535', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.1, textAlign: 'center' },
+  statValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  statValue:    { color: '#D4A017', fontSize: 19, fontWeight: '800', letterSpacing: -0.3 },
+  // The % sign is set smaller than the numeral it follows. At a matched size it
+  // is one of the heaviest glyphs in the face — two rings and a slash at full
+  // cap height — so "0%" carried ~40% more ink than "8.5" (a period weighs
+  // almost nothing) and read as the larger number despite being the same pt.
+  // It also stops the column's width swinging between "0%" and "100%".
+  statPct:      { fontSize: 13, fontWeight: '800' },
+  statSub:      { color: '#7a5535', fontSize: 11 },
+  // Fixed height, vertically centred: stretching it made it overhang the
+  // two-line left column with nothing beside it.
+  statDivider:  { width: StyleSheet.hairlineWidth, height: 34, alignSelf: 'center', backgroundColor: '#7a5535', opacity: 0.3 },
   ratingLocked: { color: '#7a5535', fontSize: 12, marginTop: 10, textAlign: 'center', paddingHorizontal: 24, lineHeight: 17 },
-  listenedWrap: { alignItems: 'center', marginTop: 8, gap: 3 },
-  listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  listenedPct: { color: '#D4A017', fontSize: 15, fontWeight: '700' },
-  listenedSub: { color: '#7a5535', fontSize: 12 },
   listeners: { marginTop: 4, fontSize: 13 },
 
   // Error
