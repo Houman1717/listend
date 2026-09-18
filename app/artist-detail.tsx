@@ -443,25 +443,20 @@ export default function ArtistDetailScreen() {
           </View>
         )}
         <Text style={[sc.name, { color: colors.text }]}>{artistName}</Text>
-        {/* Artist rating — community average across their albums and EPs */}
+        {/* Discography score — community average across their albums and EPs */}
         {artistRating?.eligible && artistRating.score !== null ? (
           <View style={sc.ratingWrap}>
-            <Text style={sc.ratingLabel}>Artist Rating</Text>
+            <Text style={sc.ratingLabel}>Discography Score</Text>
             <View style={sc.ratingRow}>
-              <FontAwesome name="volume-up" size={17} color="#D4A017" style={{ marginBottom: 7 }} />
+              <FontAwesome name="volume-up" size={14} color="#D4A017" />
               <Text style={sc.ratingScore}>{artistRating.score.toFixed(1)}</Text>
-              <Text style={sc.ratingOutOf}>/10</Text>
             </View>
-            <Text style={sc.ratingSub}>
-              across {artistRating.albumCount} {artistRating.albumCount === 1 ? 'album' : 'albums'}
-              {' · '}{artistRating.ratingCount} {artistRating.ratingCount === 1 ? 'rating' : 'ratings'}
-            </Text>
           </View>
         ) : artistRating && artistRating.ratingCount > 0 ? (
           <Text style={sc.ratingLocked}>
             {artistRating.albumCount < artistRating.minAlbums
-              ? `Artist rating unlocks once ${artistRating.minAlbums} of their albums have been rated`
-              : `Artist rating unlocks at ${artistRating.minRatings} ratings — ${artistRating.ratingCount} so far`}
+              ? `Discography score unlocks once ${artistRating.minAlbums} of their albums have been rated`
+              : `Discography score unlocks at ${artistRating.minRatings} ratings — ${artistRating.ratingCount} so far`}
           </Text>
         ) : null}
         {listenedPct !== null && (
@@ -621,13 +616,11 @@ const sc = StyleSheet.create({
   avatarPlaceholder: { backgroundColor: '#2a1e14', justifyContent: 'center', alignItems: 'center' },
   avatarInitial: { color: '#D4A017', fontSize: 44, fontWeight: '700' },
   name: { marginTop: 14, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
-  ratingWrap:   { alignItems: 'center', marginTop: 12, gap: 1 },
+  ratingWrap:   { alignItems: 'center', marginTop: 10, gap: 3 },
   ratingLabel:  { color: '#7a5535', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.1 },
-  ratingRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  ratingScore:  { color: '#D4A017', fontSize: 32, fontWeight: '800', letterSpacing: -0.5, lineHeight: 36 },
-  ratingOutOf:  { color: '#7a5535', fontSize: 14, fontWeight: '600', marginBottom: 6 },
-  ratingSub:    { color: '#7a5535', fontSize: 12, marginTop: 1 },
-  ratingLocked: { color: '#7a5535', fontSize: 12, marginTop: 12, textAlign: 'center', paddingHorizontal: 24, lineHeight: 17 },
+  ratingRow:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  ratingScore:  { color: '#D4A017', fontSize: 19, fontWeight: '800', letterSpacing: -0.3 },
+  ratingLocked: { color: '#7a5535', fontSize: 12, marginTop: 10, textAlign: 'center', paddingHorizontal: 24, lineHeight: 17 },
   listenedWrap: { alignItems: 'center', marginTop: 8, gap: 3 },
   listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   listenedPct: { color: '#D4A017', fontSize: 15, fontWeight: '700' },
