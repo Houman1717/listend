@@ -2984,13 +2984,16 @@ app.get(['/catalog/artist/:id/albums', '/spotify/artist/:id/albums'], [
 // albums low, and neither says much about the artist's actual work.
 
 // Gate — below either threshold the score is withheld rather than shown shakily.
-const ARTIST_RATING_MIN_ALBUMS  = 3;
+// Two albums is enough: the rating count is what carries the evidence, and
+// artists with short catalogues (Frank Ocean has two studio albums and 200+
+// ratings) were being hidden despite having more behind them than artists with
+// three thinly-rated ones.
+const ARTIST_RATING_MIN_ALBUMS  = 2;
 const ARTIST_RATING_MIN_RATINGS = 10;
 
-// Shrinkage strengths, expressed in "ratings of an average release". At 5, an
-// album with 5 real ratings sits halfway between its own average and the mean.
-const ARTIST_RATING_ALBUM_PRIOR  = 5;
-const ARTIST_RATING_ARTIST_PRIOR = 5;
+// Shrinkage strength, in "ratings of an average release" — at 10, an artist
+// scraping past the gate sits halfway between their own average and the mean.
+const ARTIST_RATING_PRIOR = 10;
 
 // Every rated album in the app, keyed by folded base-title + artist, so an
 // artist's releases can be looked up without re-scanning user_albums on each
@@ -3005,12 +3008,15 @@ async function getAlbumRatingIndex() {
   const cached = await getCached(ALBUM_RATING_INDEX_KEY, TTL_30M);
   if (cached) { cacheSet(ALBUM_RATING_INDEX_KEY, cached, TTL_30M); return cached; }
 
+  // maxPages is raised well above fetchAllRows' default of 20: that caps at
+  // 20k rows, and there are already 27k+ rated rows, so the default silently
+  // dropped about a quarter of every artist's ratings.
   const rows = await fetchAllRows((from, to) => supabase
     .from('user_albums')
     .select('title, artist, rating')
     .not('rating', 'is', null)
     .gt('rating', 0)
-    .range(from, to));
+    .range(from, to), 1000, 200);
 
   // Null prototype so an album literally titled "__proto__" can't collide with
   // Object.prototype. Survives the JSON round-trip through api_cache as a plain
@@ -3081,20 +3087,20 @@ app.get('/api/artist/:id/rating', [
 
     let score = null;
     if (eligible) {
-      const mean = index.globalMean;
-      // Per release: shrink its own average toward the site-wide mean, so a
-      // thinly-rated deep cut barely moves off neutral.
-      const albumAvgs = rated.map(e =>
-        (e.total + mean * ARTIST_RATING_ALBUM_PRIOR) / (e.count + ARTIST_RATING_ALBUM_PRIOR));
-      // Then average those with equal weight per release, so the score reads as
-      // "how good is a typical record by this artist" rather than being decided
-      // by whichever one album everybody happened to log.
-      const raw = albumAvgs.reduce((a, b) => a + b, 0) / albumAvgs.length;
-      // Then shrink once more on the artist's total evidence, so an artist
-      // scraping past the gate can't sit at 9.8 off a dozen ratings.
+      // Pool every rating across the artist's releases, then shrink the result
+      // toward the site-wide mean on total evidence.
+      //
+      // This deliberately weights each release by how many people rated it,
+      // rather than giving every album an equal vote. Equal votes sound fairer
+      // but punish deep catalogues: The Beatles' 13 ratings-weighted albums
+      // average 8.1, yet letting Yellow Submarine (13 ratings) count as much as
+      // Abbey Road (104) dragged them to 7.7 — and Pink Floyd lost a full point
+      // the same way. Weighting by ratings tracks what the community actually
+      // listened to and thought, which is what the number claims to say.
+      const total = rated.reduce((sum, e) => sum + e.total, 0);
       const shrunk =
-        (raw * ratingCount + mean * ARTIST_RATING_ARTIST_PRIOR) /
-        (ratingCount + ARTIST_RATING_ARTIST_PRIOR);
+        (total + index.globalMean * ARTIST_RATING_PRIOR) /
+        (ratingCount + ARTIST_RATING_PRIOR);
       score = Math.round(shrunk * 10) / 10;
     }
 
