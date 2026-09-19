@@ -2896,6 +2896,7 @@ async function buildArtistDiscography(id, bust = false) {
   const LIVE_FALSE_POSITIVES = [
     'live.love.a$ap',
     'long.live.a$ap',
+    'live a little',   // Elvis — Live a Little, Love a Little
   ];
   const isLiveFalsePositive = title => LIVE_FALSE_POSITIVES.some(t => title.toLowerCase().includes(t));
 
@@ -2909,6 +2910,9 @@ async function buildArtistDiscography(id, bust = false) {
     if (item.isCompilation === true || COLLECTION_RE.test(t)) return 'collections';
     if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
     if (item.url && item.url.toLowerCase().includes('/single/')) return 'epsAndMixtapes';
+    // Albums Listend carries itself know their own run time (Apple has no entry
+    // to ask about), so the clock decides for them at any track count.
+    if (item.runMs != null) return item.runMs >= EP_MAX_RUN_MS ? 'albums' : 'epsAndMixtapes';
     if (item.trackCount !== null && item.trackCount < FEW_TRACKS) {
       // Track count on its own files every prog record as an EP: Wish You Were
       // Here, Animals and Atom Heart Mother are five tracks each and 41-52

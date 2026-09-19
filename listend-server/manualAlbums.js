@@ -351,7 +351,10 @@ const manualTrackById = id => byTrackId.get(id) ?? null;
 const manualAlbumsByArtist = appleArtistId =>
   MANUAL_ALBUMS.filter(a => a.appleArtistId === appleArtistId);
 
-// Shape the artist discography endpoint expects.
+// Shape the artist discography endpoint expects. `runMs` is carried because
+// these albums are never in Apple's catalog, so the discography's own run-time
+// lookup (which asks Apple) can't resolve them — without it a six-track EP
+// like Kid Galahad files as an album purely on track count.
 const manualAlbumAsArtistItem = a => ({
   id: a.id,
   title: a.title,
@@ -360,6 +363,7 @@ const manualAlbumAsArtistItem = a => ({
   isSingle: false,
   isCompilation: false,
   trackCount: a.trackCount,
+  runMs: a.tracks.reduce((ms, t) => ms + (t.durationMs ?? 0), 0),
   url: '',
   type: 'album',
 });
