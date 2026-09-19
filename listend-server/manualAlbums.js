@@ -140,6 +140,205 @@ const MANUAL_ALBUMS = [
       { number: 12, id: 'lst-viva-las-vegas-t12', title: 'You’re the Boss', durationMs: 167000 },
     ],
   },
+  {
+    id: 'lst-love-me-tender',
+    title: 'Love Me Tender',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1956,
+    // the 1956 debut EP; only later compilations of the same name reached streaming
+    artworkUrl: 'https://coverartarchive.org/release-group/d5e19821-e8c6-3d1e-9be1-ec0836218795/front-500',
+    musicbrainzReleaseId: 'dfbc35d8-7d00-4d7d-adf6-ddf20ccd10e5',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-love-me-tender-t1', title: 'Love Me Tender', durationMs: 165000 },
+      { number: 2, id: 'lst-love-me-tender-t2', title: 'Let Me', durationMs: 128489 },
+      { number: 3, id: 'lst-love-me-tender-t3', title: 'Poor Boy', durationMs: 136119 },
+      { number: 4, id: 'lst-love-me-tender-t4', title: 'We’re Gonna Move', durationMs: 152129 },
+    ],
+  },
+  {
+    id: 'lst-jailhouse-rock',
+    title: 'Jailhouse Rock',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1957,
+    // the 1957 EP; streaming only carries modern hits compilations using the name
+    artworkUrl: 'https://coverartarchive.org/release-group/214fb8f8-bdee-3a96-ba46-e833f73de94f/front-500',
+    musicbrainzReleaseId: 'd6be7b74-e68b-4dfb-b24b-624115979948',
+    trackCount: 5,
+    tracks: [
+      { number: 1, id: 'lst-jailhouse-rock-t1', title: 'Jailhouse Rock', durationMs: 145000 },
+      { number: 2, id: 'lst-jailhouse-rock-t2', title: 'Young and Beautiful', durationMs: 120000 },
+      { number: 3, id: 'lst-jailhouse-rock-t3', title: 'I Want to Be Free', durationMs: 134000 },
+      { number: 4, id: 'lst-jailhouse-rock-t4', title: 'Don’t Leave Me Now', durationMs: 90000 },
+      { number: 5, id: 'lst-jailhouse-rock-t5', title: '(You’re So Square) Baby I Don’t Care', durationMs: 110000 },
+    ],
+  },
+  {
+    id: 'lst-flaming-star',
+    title: 'Elvis by Request: Flaming Star',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1961,
+    // the 1961 EP; "Elvis Sings Flaming Star" on Apple Music is a different 1969 album
+    artworkUrl: 'https://coverartarchive.org/release-group/4b4eb9ac-65ec-3542-b7ec-a403cbf55603/front-500',
+    musicbrainzReleaseId: 'df68b2c5-ebc9-4d2e-8d1a-7c6b8b0e717f',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-flaming-star-t1', title: 'Flaming Star', durationMs: 147147 },
+      { number: 2, id: 'lst-flaming-star-t2', title: 'Summer Kisses, Winter Tears', durationMs: 142244 },
+      { number: 3, id: 'lst-flaming-star-t3', title: 'Are You Lonesome Tonight', durationMs: 188273 },
+      { number: 4, id: 'lst-flaming-star-t4', title: 'It’s Now or Never', durationMs: 196840 },
+    ],
+  },
+  {
+    id: 'lst-tickle-me',
+    title: 'Tickle Me',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1965,
+    // the 1965 EP; a Vol. 2 EP followed a month later and is not carried here
+    artworkUrl: 'https://coverartarchive.org/release-group/96771b31-0dd0-4e15-ac4b-64db30eaca49/front-500',
+    musicbrainzReleaseId: '688d6153-0386-4a08-a0a7-7e860aadafb7',
+    trackCount: 5,
+    tracks: [
+      { number: 1, id: 'lst-tickle-me-t1', title: 'I Feel That I’ve Known You Forever', durationMs: 99000 },
+      { number: 2, id: 'lst-tickle-me-t2', title: 'Slowly but Surely', durationMs: 131000 },
+      { number: 3, id: 'lst-tickle-me-t3', title: 'Night Rider', durationMs: 127000 },
+      { number: 4, id: 'lst-tickle-me-t4', title: 'Put the Blame on Me', durationMs: 120000 },
+      { number: 5, id: 'lst-tickle-me-t5', title: 'Dirty, Dirty Feeling', durationMs: 93467 },
+    ],
+  },
+  {
+    id: 'lst-kid-galahad',
+    title: 'Kid Galahad',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1962,
+    // the 1962 six-track soundtrack EP
+    artworkUrl: 'https://coverartarchive.org/release-group/e0022bfc-d10a-472c-9525-b6c786885694/front-500',
+    musicbrainzReleaseId: 'd49822d0-7e8c-4f27-b690-27b435180895',
+    trackCount: 6,
+    tracks: [
+      { number: 1, id: 'lst-kid-galahad-t1', title: 'King of the Whole Wide World', durationMs: 163000 },
+      { number: 2, id: 'lst-kid-galahad-t2', title: 'This Is Living', durationMs: 105000 },
+      { number: 3, id: 'lst-kid-galahad-t3', title: 'Riding the Rainbow', durationMs: 99000 },
+      { number: 4, id: 'lst-kid-galahad-t4', title: 'Home Is Where the Heart Is', durationMs: 154000 },
+      { number: 5, id: 'lst-kid-galahad-t5', title: 'I Got Lucky', durationMs: 132000 },
+      { number: 6, id: 'lst-kid-galahad-t6', title: 'A Whistling Tune', durationMs: 199000 },
+    ],
+  },
+  {
+    id: 'lst-easy-come-easy-go',
+    title: 'Easy Come, Easy Go',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1967,
+    // the 1967 six-track soundtrack EP
+    artworkUrl: 'https://coverartarchive.org/release-group/d76f03ae-a76a-4d5c-99e5-089889d5f703/front-500',
+    musicbrainzReleaseId: '5a29f0d7-bb47-429a-bcac-97d28bb51711',
+    trackCount: 6,
+    tracks: [
+      { number: 1, id: 'lst-easy-come-easy-go-t1', title: 'Easy Come, Easy Go', durationMs: 134543 },
+      { number: 2, id: 'lst-easy-come-easy-go-t2', title: 'The Love Machine', durationMs: 169560 },
+      { number: 3, id: 'lst-easy-come-easy-go-t3', title: 'Yoga Is as Yoga Does', durationMs: 130257 },
+      { number: 4, id: 'lst-easy-come-easy-go-t4', title: 'You Gotta Stop', durationMs: 139450 },
+      { number: 5, id: 'lst-easy-come-easy-go-t5', title: 'Sing You Children', durationMs: 133667 },
+      { number: 6, id: 'lst-easy-come-easy-go-t6', title: 'I’ll Take Love', durationMs: 135751 },
+    ],
+  },
+  {
+    id: 'lst-wild-in-the-country',
+    title: 'Wild in the Country (Original Soundtrack)',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1961,
+    // the film's five songs; the 2008 collectors' edition appends 22 alternate takes
+    artworkUrl: 'https://coverartarchive.org/release-group/628a2f6c-9d0e-47a6-89af-ac3630e80dcf/front-500',
+    musicbrainzReleaseId: 'fe0b1414-55ce-4847-9c12-da33cdd26e53',
+    trackCount: 5,
+    tracks: [
+      { number: 1, id: 'lst-wild-in-the-country-t1', title: 'Wild in the Country', durationMs: 115000 },
+      { number: 2, id: 'lst-wild-in-the-country-t2', title: 'Lonely Man', durationMs: 166000 },
+      { number: 3, id: 'lst-wild-in-the-country-t3', title: 'I Slipped, I Stumbled, I Fell', durationMs: 97000 },
+      { number: 4, id: 'lst-wild-in-the-country-t4', title: 'In My Way', durationMs: 85000 },
+      { number: 5, id: 'lst-wild-in-the-country-t5', title: 'Forget Me Never', durationMs: 98000 },
+    ],
+  },
+  {
+    id: 'lst-live-a-little-love-a-little',
+    title: 'Live a Little, Love a Little (Original Soundtrack)',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1968,
+    // the film's four songs; the 2015 collectors' edition appends 17 alternate takes
+    artworkUrl: 'https://coverartarchive.org/release-group/beda6f91-4337-499a-8766-2fe826ebc71e/front-500',
+    musicbrainzReleaseId: 'b1f16237-b076-4dac-a5f8-016237c1bc28',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-live-a-little-love-a-little-t1', title: 'Wonderful World', durationMs: 134000 },
+      { number: 2, id: 'lst-live-a-little-love-a-little-t2', title: 'Edge of Reality', durationMs: 199000 },
+      { number: 3, id: 'lst-live-a-little-love-a-little-t3', title: 'A Little Less Conversation', durationMs: 137000 },
+      { number: 4, id: 'lst-live-a-little-love-a-little-t4', title: 'Almost in Love', durationMs: 187000 },
+    ],
+  },
+  {
+    id: 'lst-stay-away-joe',
+    title: 'Stay Away, Joe (Original Soundtrack)',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1968,
+    // the film's seven songs; the 2013 collectors' edition appends 14 alternate takes
+    artworkUrl: 'https://coverartarchive.org/release-group/533893ac-ac71-4457-b03c-483c5123913f/front-500',
+    musicbrainzReleaseId: '1df133bd-66af-440f-8b26-a68ba6dc36e3',
+    trackCount: 7,
+    tracks: [
+      { number: 1, id: 'lst-stay-away-joe-t1', title: 'Stay Away', durationMs: 144000 },
+      { number: 2, id: 'lst-stay-away-joe-t2', title: 'Stay Away, Joe', durationMs: 100000 },
+      { number: 3, id: 'lst-stay-away-joe-t3', title: 'Dominic', durationMs: 112000 },
+      { number: 4, id: 'lst-stay-away-joe-t4', title: 'All I Needed Was the Rain', durationMs: 109000 },
+      { number: 5, id: 'lst-stay-away-joe-t5', title: 'Goin’ Home', durationMs: 150000 },
+      { number: 6, id: 'lst-stay-away-joe-t6', title: 'Too Much Monkey Business', durationMs: 153000 },
+      { number: 7, id: 'lst-stay-away-joe-t7', title: 'U.S. Male', durationMs: 168000 },
+    ],
+  },
+  {
+    id: 'lst-trouble-with-girls',
+    title: 'The Trouble with Girls (Original Soundtrack)',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1969,
+    // never released on its own — assembled from the 1995 four-film compilation, whose cover this borrows
+    artworkUrl: 'https://coverartarchive.org/release-group/99553396-bf51-3e83-b1e4-a5615932ef2e/front-500',
+    musicbrainzReleaseId: '978f0866-8648-4317-ba4c-d1b221b9824e',
+    trackCount: 6,
+    tracks: [
+      { number: 1, id: 'lst-trouble-with-girls-t1', title: 'Clean Up Your Own Backyard', durationMs: 189160 },
+      { number: 2, id: 'lst-trouble-with-girls-t2', title: 'Swing Down, Sweet Chariot', durationMs: 136040 },
+      { number: 3, id: 'lst-trouble-with-girls-t3', title: 'Signs of the Zodiac', durationMs: 140160 },
+      { number: 4, id: 'lst-trouble-with-girls-t4', title: 'Almost', durationMs: 109640 },
+      { number: 5, id: 'lst-trouble-with-girls-t5', title: 'The Whiffenpoof Song', durationMs: 31960 },
+      { number: 6, id: 'lst-trouble-with-girls-t6', title: 'Violet', durationMs: 52506 },
+    ],
+  },
+  {
+    id: 'lst-change-of-habit',
+    title: 'Change of Habit (Original Soundtrack)',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1969,
+    // never released on its own — the four songs from the film, off the 2015 compilation of the same name
+    artworkUrl: 'https://coverartarchive.org/release-group/c6f35f7c-b454-497e-b042-79f029c41a23/front-500',
+    musicbrainzReleaseId: '972a665f-b1da-47c2-9ced-cf0e17e4d28b',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-change-of-habit-t1', title: 'Change of Habit', durationMs: 200000 },
+      { number: 2, id: 'lst-change-of-habit-t2', title: 'Have a Happy', durationMs: 143000 },
+      { number: 3, id: 'lst-change-of-habit-t3', title: 'Rubberneckin’', durationMs: 134000 },
+      { number: 4, id: 'lst-change-of-habit-t4', title: 'Let Us Pray', durationMs: 180000 },
+    ],
+  },
 ];
 
 const byAlbumId = new Map(MANUAL_ALBUMS.map(a => [a.id, a]));
