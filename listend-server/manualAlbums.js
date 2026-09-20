@@ -339,6 +339,25 @@ const MANUAL_ALBUMS = [
       { number: 4, id: 'lst-change-of-habit-t4', title: 'Let Us Pray', durationMs: 180000 },
     ],
   },
+  {
+    id: 'lst-charro',
+    title: 'Charro!',
+    artist: 'Elvis Presley',
+    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    year: 1969,
+    // Charro! and the cut-from-the-film Let's Forget About the Stars were the
+    // film's recordings; Memories was the single's other side. Cover is that
+    // 1969 single's sleeve — no Charro! film sleeve exists in the Cover Art
+    // Archive to use instead.
+    artworkUrl: 'https://coverartarchive.org/release-group/5a8ef98c-1f03-44f1-8d92-90232a513888/front-500',
+    musicbrainzReleaseId: 'd803dbe8-f4d3-43ad-8f69-d59a7edbe34e',
+    trackCount: 3,
+    tracks: [
+      { number: 1, id: 'lst-charro-t1', title: 'Charro!', durationMs: 167266 },
+      { number: 2, id: 'lst-charro-t2', title: 'Let\u2019s Forget About the Stars', durationMs: 150640 },
+      { number: 3, id: 'lst-charro-t3', title: 'Memories', durationMs: 186000 },
+    ],
+  },
 ];
 
 const byAlbumId = new Map(MANUAL_ALBUMS.map(a => [a.id, a]));
