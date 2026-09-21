@@ -12,8 +12,8 @@ const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
 const {
-  MANUAL_ALBUMS, manualAlbumById, manualTrackById,
-  manualAlbumsByArtist, manualAlbumAsArtistItem,
+  MANUAL_ALBUMS, MANUAL_ARTISTS, manualAlbumById, manualTrackById,
+  manualArtistById, manualAlbumsByArtist, manualAlbumAsArtistItem,
 } = require('./manualAlbums');
 const { handleOrName } = require('./userHandle');
 const { GENRE_ALBUMS } = require('./genreData');
@@ -658,6 +658,23 @@ function withAlbumSearchOverrides(q, results) {
   return hits.length > 0 ? [...hits, ...results] : results;
 }
 
+// Same idea for artists Listend carries itself (manualAlbums.js). Apple's
+// artist search returns *someone* for any name — for In The Panchine it's
+// Noyz Narcos, a guest on their record — and the artist page opens the first
+// result, so a manual artist has to come first or the wrong page opens.
+function withArtistSearchOverrides(q, results) {
+  const words = foldForMatch(q).split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  if (words.join('').length < 3) return results;
+  const hits = MANUAL_ARTISTS
+    .filter(a => {
+      const haystack = foldForMatch(a.name).replace(/[^a-z0-9]/g, '');
+      return words.every(w => haystack.includes(w));
+    })
+    .filter(a => !results.some(r => r.id === a.id))
+    .map(a => ({ id: a.id, name: a.name, genre: a.genre, artworkUrl: a.artworkUrl }));
+  return hits.length > 0 ? [...hits, ...results] : results;
+}
+
 app.get('/search', [
   query('q').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('q must be 200 characters or fewer'),
   query('type').trim(),
@@ -671,7 +688,10 @@ app.get('/search', [
 
   const CACHE_KEY = `search:${type}:${q.trim().toLowerCase()}`;
 
-  const withOverrides = results => (type === 'album' ? withAlbumSearchOverrides(q, results) : results);
+  const withOverrides = results =>
+    type === 'album'  ? withAlbumSearchOverrides(q, results)  :
+    type === 'artist' ? withArtistSearchOverrides(q, results) :
+    results;
 
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(withOverrides(mem));
@@ -2715,6 +2735,25 @@ app.get(['/catalog/artist/:id/top-tracks', '/spotify/artist/:id/top-tracks'], [
     return res.status(400).json({ error: 'artist id is required and must not be "undefined"' });
   }
 
+  if (manualArtistById(id)) {
+    const tracks = manualAlbumsByArtist(id)
+      .flatMap(a => a.tracks.map(t => ({ ...t, album: a })))
+      .slice(0, 5)
+      .map((t, i) => {
+        const totalSec = Math.round((t.durationMs ?? 0) / 1000);
+        return {
+          number:     i + 1,
+          id:         t.id,
+          title:      t.title,
+          artworkUrl: t.album.artworkUrl,
+          albumTitle: t.album.title,
+          durationMs: t.durationMs || null,
+          duration:   t.durationMs ? `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, '0')}` : null,
+        };
+      });
+    return res.json(tracks);
+  }
+
   const CACHE_KEY = `am_artist_top_tracks_${id}`;
 
   try {
@@ -2926,7 +2965,9 @@ async function buildArtistDiscography(id, bust = false) {
   };
 
   let allItems = [];
-  let nextPath = `/catalog/us/artists/${id}/albums?limit=25`;
+  // A manual artist has no Apple Music entry; their albums arrive via the
+  // manual-album merge below, so skip straight past the catalog pagination.
+  let nextPath = manualArtistById(id) ? null : `/catalog/us/artists/${id}/albums?limit=25`;
   let page = 0;
   const PAGE_CAP = 5;
   while (nextPath && page < PAGE_CAP) {

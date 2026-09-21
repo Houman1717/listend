@@ -21,7 +21,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-tin-machine-ii',
     title: 'Tin Machine II',
     artist: 'Tin Machine',
-    appleArtistId: '14685821',        // the artist IS on Apple Music — only this record is missing
+    artistId: '14685821',        // the artist IS on Apple Music — only this record is missing
     year: 1991,
     // not reissued since its original label folded
     artworkUrl: 'https://coverartarchive.org/release-group/8451f040-a435-35c4-860e-14de48a4725a/front-500',
@@ -47,7 +47,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-soul-rebels',
     title: 'Soul Rebels',
     artist: 'Bob Marley & The Wailers',
-    appleArtistId: '3174628',        // the artist IS on Apple Music — only this record is missing
+    artistId: '3174628',        // the artist IS on Apple Music — only this record is missing
     year: 1970,
     // the Lee Perry-era recordings have contested ownership
     artworkUrl: 'https://coverartarchive.org/release-group/58637e09-dec9-4023-80ff-734da967301c/front-500',
@@ -72,7 +72,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-exmilitary',
     title: 'Exmilitary',
     artist: 'Death Grips',
-    appleArtistId: '437819641',        // the artist IS on Apple Music — only this record is missing
+    artistId: '437819641',        // the artist IS on Apple Music — only this record is missing
     year: 2011,
     // built on uncleared samples, so it was released free instead
     artworkUrl: 'https://coverartarchive.org/release-group/f1f6c7e2-7848-4554-b36c-2190e1d6bfb0/front-500',
@@ -98,7 +98,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-follow-that-dream',
     title: 'Follow That Dream',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1962,
     // the 1962 EP is on Spotify but was never put on Apple Music
     artworkUrl: 'https://coverartarchive.org/release-group/d5f8a3fb-4a98-440b-9d8f-232040c9526e/front-500',
@@ -115,7 +115,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-viva-las-vegas',
     title: 'Viva Las Vegas (Original Soundtrack)',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1964,
     // only ever issued as a 4-track EP and later collectors' editions, so no
     // streaming service carries the soundtrack itself
@@ -144,7 +144,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-love-me-tender',
     title: 'Love Me Tender',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1956,
     // the 1956 debut EP; only later compilations of the same name reached streaming
     artworkUrl: 'https://coverartarchive.org/release-group/d5e19821-e8c6-3d1e-9be1-ec0836218795/front-500',
@@ -161,7 +161,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-jailhouse-rock',
     title: 'Jailhouse Rock',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1957,
     // the 1957 EP; streaming only carries modern hits compilations using the name
     artworkUrl: 'https://coverartarchive.org/release-group/214fb8f8-bdee-3a96-ba46-e833f73de94f/front-500',
@@ -179,7 +179,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-flaming-star',
     title: 'Elvis by Request: Flaming Star',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1961,
     // the 1961 EP; "Elvis Sings Flaming Star" on Apple Music is a different 1969 album
     artworkUrl: 'https://coverartarchive.org/release-group/4b4eb9ac-65ec-3542-b7ec-a403cbf55603/front-500',
@@ -196,7 +196,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-tickle-me',
     title: 'Tickle Me',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1965,
     // the 1965 EP; a Vol. 2 EP followed a month later and is not carried here
     artworkUrl: 'https://coverartarchive.org/release-group/96771b31-0dd0-4e15-ac4b-64db30eaca49/front-500',
@@ -214,7 +214,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-kid-galahad',
     title: 'Kid Galahad',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1962,
     // the 1962 six-track soundtrack EP
     artworkUrl: 'https://coverartarchive.org/release-group/e0022bfc-d10a-472c-9525-b6c786885694/front-500',
@@ -233,7 +233,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-easy-come-easy-go',
     title: 'Easy Come, Easy Go',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1967,
     // the 1967 six-track soundtrack EP
     artworkUrl: 'https://coverartarchive.org/release-group/d76f03ae-a76a-4d5c-99e5-089889d5f703/front-500',
@@ -252,7 +252,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-wild-in-the-country',
     title: 'Wild in the Country (Original Soundtrack)',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1961,
     // the film's five songs; the 2008 collectors' edition appends 22 alternate takes
     artworkUrl: 'https://coverartarchive.org/release-group/628a2f6c-9d0e-47a6-89af-ac3630e80dcf/front-500',
@@ -270,7 +270,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-live-a-little-love-a-little',
     title: 'Live a Little, Love a Little (Original Soundtrack)',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1968,
     // the film's four songs; the 2015 collectors' edition appends 17 alternate takes
     artworkUrl: 'https://coverartarchive.org/release-group/beda6f91-4337-499a-8766-2fe826ebc71e/front-500',
@@ -287,7 +287,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-stay-away-joe',
     title: 'Stay Away, Joe (Original Soundtrack)',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1968,
     // the film's seven songs; the 2013 collectors' edition appends 14 alternate takes
     artworkUrl: 'https://coverartarchive.org/release-group/533893ac-ac71-4457-b03c-483c5123913f/front-500',
@@ -307,7 +307,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-trouble-with-girls',
     title: 'The Trouble with Girls (Original Soundtrack)',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1969,
     // never released on its own — assembled from the 1995 four-film compilation, whose cover this borrows
     artworkUrl: 'https://coverartarchive.org/release-group/99553396-bf51-3e83-b1e4-a5615932ef2e/front-500',
@@ -326,7 +326,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-change-of-habit',
     title: 'Change of Habit (Original Soundtrack)',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1969,
     // never released on its own — the four songs from the film, off the 2015 compilation of the same name
     artworkUrl: 'https://coverartarchive.org/release-group/c6f35f7c-b454-497e-b042-79f029c41a23/front-500',
@@ -343,7 +343,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-charro',
     title: 'Charro!',
     artist: 'Elvis Presley',
-    appleArtistId: '197443',        // the artist IS on Apple Music — only this record is missing
+    artistId: '197443',        // the artist IS on Apple Music — only this record is missing
     year: 1969,
     // Charro! and the cut-from-the-film Let's Forget About the Stars were the
     // film's recordings; Memories was the single's other side. Cover is that
@@ -358,17 +358,64 @@ const MANUAL_ALBUMS = [
       { number: 3, id: 'lst-charro-t3', title: 'Memories', durationMs: 186000 },
     ],
   },
+  {
+    id: 'lst-in-the-panchine',
+    title: 'In The Panchine',
+    artist: 'In The Panchine',
+    artistId: 'lst-artist-in-the-panchine', // not on Apple Music either — see MANUAL_ARTISTS
+    year: 2005,
+    // Roman rap crew's self-released debut (Truceklan circle); never on streaming.
+    // Tracklist from MusicBrainz, where the 2019 vinyl reissue confirms the
+    // closing skit. MusicBrainz has no track lengths, so those come from the
+    // full-album YouTube upload the suggestion linked (to the nearest 5s).
+    artworkUrl: 'https://coverartarchive.org/release-group/a68913ae-35d1-49fb-aecf-252e370cfc9a/front-500',
+    musicbrainzReleaseId: '1b22b872-dd0c-471b-8b2f-ee4e4e9a45b3',
+    trackCount: 14,
+    tracks: [
+      { number: 1,  id: 'lst-in-the-panchine-t1',  title: 'Deadly Combination (feat. Noyz Narcos)', durationMs: 315000 },
+      { number: 2,  id: 'lst-in-the-panchine-t2',  title: '13 PM', durationMs: 315000 },
+      { number: 3,  id: 'lst-in-the-panchine-t3',  title: 'Gemellooo', durationMs: 235000 },
+      { number: 4,  id: 'lst-in-the-panchine-t4',  title: 'Mr. G. (feat. Meloni)', durationMs: 305000 },
+      { number: 5,  id: 'lst-in-the-panchine-t5',  title: 'Verano Zombi (feat. Noyz Narcos)', durationMs: 250000 },
+      { number: 6,  id: 'lst-in-the-panchine-t6',  title: 'Stolen Car (feat. Metal Carter)', durationMs: 385000 },
+      { number: 7,  id: 'lst-in-the-panchine-t7',  title: 'Fuori Misura', durationMs: 205000 },
+      { number: 8,  id: 'lst-in-the-panchine-t8',  title: 'In the Panchina (feat. Gel)', durationMs: 285000 },
+      { number: 9,  id: 'lst-in-the-panchine-t9',  title: 'Never Do the Spia (feat. Evelina)', durationMs: 220000 },
+      { number: 10, id: 'lst-in-the-panchine-t10', title: 'Far Away from Problemi (feat. DJ Lollobar)', durationMs: 235000 },
+      { number: 11, id: 'lst-in-the-panchine-t11', title: 'I Push My Rap, Dude (Parioli vs Caffarella)', durationMs: 215000 },
+      { number: 12, id: 'lst-in-the-panchine-t12', title: 'Chicoria (Dirty)', durationMs: 190000 },
+      { number: 13, id: 'lst-in-the-panchine-t13', title: 'Loosin\u2019 Pazienza', durationMs: 405000 },
+      { number: 14, id: 'lst-in-the-panchine-t14', title: 'Skit', durationMs: 90000 },
+    ],
+  },
+];
+
+// ── Manually curated artists ──────────────────────────────────────────────────
+// For the rare record whose artist isn't on Apple Music at all. Without an
+// entry here, tapping the artist on the album page runs an Apple Music artist
+// search by name and opens whoever ranks first — for In The Panchine that's
+// Noyz Narcos, a guest on the record. With one, artist search returns this
+// entry first and the artist page shows the albums below via their artistId.
+const MANUAL_ARTISTS = [
+  {
+    id: 'lst-artist-in-the-panchine',
+    name: 'In The Panchine',
+    genre: 'Hip-Hop/Rap',
+    artworkUrl: 'https://coverartarchive.org/release-group/a68913ae-35d1-49fb-aecf-252e370cfc9a/front-500',
+  },
 ];
 
 const byAlbumId = new Map(MANUAL_ALBUMS.map(a => [a.id, a]));
+const byArtistId = new Map(MANUAL_ARTISTS.map(a => [a.id, a]));
 const byTrackId = new Map(
   MANUAL_ALBUMS.flatMap(a => a.tracks.map(t => [t.id, { ...t, album: a }]))
 );
 
 const manualAlbumById = id => byAlbumId.get(id) ?? null;
 const manualTrackById = id => byTrackId.get(id) ?? null;
-const manualAlbumsByArtist = appleArtistId =>
-  MANUAL_ALBUMS.filter(a => a.appleArtistId === appleArtistId);
+const manualArtistById = id => byArtistId.get(id) ?? null;
+const manualAlbumsByArtist = artistId =>
+  MANUAL_ALBUMS.filter(a => a.artistId === artistId);
 
 // Shape the artist discography endpoint expects. `runMs` is carried because
 // these albums are never in Apple's catalog, so the discography's own run-time
@@ -389,6 +436,8 @@ const manualAlbumAsArtistItem = a => ({
 
 module.exports = {
   MANUAL_ALBUMS,
+  MANUAL_ARTISTS,
+  manualArtistById,
   manualAlbumById,
   manualTrackById,
   manualAlbumsByArtist,
