@@ -75,24 +75,49 @@ async function attachSongArtists(tracks) {
 
 // ── Storefront overrides ──────────────────────────────────────────────────────
 // A handful of catalog IDs (albums + their tracks) aren't licensed for the
-// `us` Apple Music storefront but are fully available on `gb` — resolve just
-// these specific IDs against `gb` instead of the default `us` everywhere a
-// catalog lookup takes an id. Everything else keeps using `us`.
-const GB_STOREFRONT_IDS = new Set([
-  // my bloody valentine — loveless (1991)
+// `us` Apple Music storefront but are fully available elsewhere — resolve just
+// these specific IDs against that storefront instead of the default `us`
+// everywhere a catalog lookup takes an id. Everything else keeps using `us`.
+const NON_US_STOREFRONT_IDS = new Map();
+const pinStorefront = (storefront, ids) => {
+  for (const id of ids) NON_US_STOREFRONT_IDS.set(id, storefront);
+};
+
+// my bloody valentine — loveless (1991)
+pinStorefront('gb', [
   '1556921230',
   '1556921231', '1556921232', '1556921233', '1556921234', '1556921235', '1556921236',
   '1556921237', '1556921238', '1556921239', '1556921240', '1556921241',
-  // my bloody valentine — isn't anything (1988)
+]);
+// my bloody valentine — isn't anything (1988)
+pinStorefront('gb', [
   '1556913225',
   '1556913228', '1556913229', '1556913230', '1556913231', '1556913232', '1556913233',
   '1556913234', '1556913235', '1556913236', '1556913237', '1556913238', '1556913239',
-  // Jorge Ben Jor — Força Bruta (1970)
+]);
+// Jorge Ben Jor — Força Bruta (1970)
+pinStorefront('gb', [
   '1402139880',
   '1402140083', '1402140091', '1402140100', '1402140145', '1402140146', '1402140147',
   '1402140450', '1402140456', '1402140458', '1402140459',
 ]);
-const storefrontFor = id => (GB_STOREFRONT_IDS.has(id) ? 'gb' : 'us');
+// Fabri Fibra — Turbe giovanili (2002). The original; only the 20th-anniversary
+// re-recording is licensed for `us`, and the discography's base-title dedup
+// prefers this untitled-suffix original over it.
+pinStorefront('it', [
+  '1440767333',
+  '1440767336', '1440767338', '1440767339', '1440767340', '1440767342', '1440767344',
+  '1440767345', '1440767347', '1440767591', '1440767598', '1440767599', '1440767603',
+  '1440767604', '1440767605', '1440767606', '1440767608', '1440767610', '1440767614',
+]);
+// Fabri Fibra — Chi Vuole Essere Fabri Fibra ? (2009)
+pinStorefront('it', [
+  '1442532919',
+  '1442533301', '1442533306', '1442533311', '1442533321', '1442533578', '1442533589',
+  '1442533592', '1442533597', '1442533781', '1442533787',
+]);
+
+const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
 // ── Canonical album resolution ────────────────────────────────────────────────
 // Pins one Apple Music catalog ID per (artist, title) so independently-seeded
@@ -173,6 +198,14 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'mybloodyvalentine::isntanything': {
     id: '1556913225', title: "Isn't Anything", artist: 'my bloody valentine', year: 1988,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
+  },
+  'fabrifibra::turbegiovanili': {
+    id: '1440767333', title: 'Turbe giovanili', artist: 'Fabri Fibra', year: 2002,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6f/66/ee/6f66ee1b-fd42-1397-d222-f284115c8b5a/00602527404899.rgb.jpg/500x500bb.jpg',
+  },
+  'fabrifibra::chivuoleesserefabrifibra': {
+    id: '1442532919', title: 'Chi Vuole Essere Fabri Fibra ?', artist: 'Fabri Fibra', year: 2009,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/ad/1e/08/ad1e085d-b976-9a79-7a0a-b5e715bd2854/00602527028484.rgb.jpg/500x500bb.jpg',
   },
   'jorgebenjor::forabruta': {
     id: '1402139880', title: 'Força Bruta', artist: 'Jorge Ben Jor', year: 1970,
@@ -648,7 +681,7 @@ function withAlbumSearchOverrides(q, results) {
   const words = foldForMatch(q).split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
   if (words.join('').length < 3) return results; // a stray letter shouldn't match every override
   const hits = Object.values(CANONICAL_ALBUM_OVERRIDES)
-    .filter(o => GB_STOREFRONT_IDS.has(o.id) || manualAlbumById(o.id))
+    .filter(o => NON_US_STOREFRONT_IDS.has(o.id) || manualAlbumById(o.id))
     .filter(o => {
       const haystack = foldForMatch(`${o.artist} ${o.title}`).replace(/[^a-z0-9]/g, '');
       return words.every(w => haystack.includes(w));
@@ -2818,7 +2851,7 @@ const ARTIST_ALBUM_OVERRIDES = {
   ],
   '206711': [ // my bloody valentine — loveless + isn't anything aren't licensed
     // for the `us` storefront (present on `gb`/`ca`/etc.); ids listed in
-    // GB_STOREFRONT_IDS above so tracks/durations/streaming-links still resolve.
+    // pinned to `gb` above so tracks/durations/streaming-links still resolve.
     {
       id: '1556921230', title: 'loveless',
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/4c/e1/51/4ce15131-7ac5-daf5-bf62-0202f27d691d/887830015998.png/500x500bb.jpg',
@@ -2830,6 +2863,20 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
       year: 1988, isSingle: false, isCompilation: false, trackCount: 12,
       url: 'https://music.apple.com/gb/album/isnt-anything/1556913225', type: 'album',
+    },
+  ],
+  '137080341': [ // Fabri Fibra — neither is licensed for `us` (both present on it)
+    {
+      id: '1440767333', title: 'Turbe giovanili',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6f/66/ee/6f66ee1b-fd42-1397-d222-f284115c8b5a/00602527404899.rgb.jpg/500x500bb.jpg',
+      year: 2002, isSingle: false, isCompilation: false, trackCount: 19,
+      url: 'https://music.apple.com/it/album/turbe-giovanili/1440767333', type: 'album',
+    },
+    {
+      id: '1442532919', title: 'Chi Vuole Essere Fabri Fibra ?',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/ad/1e/08/ad1e085d-b976-9a79-7a0a-b5e715bd2854/00602527028484.rgb.jpg/500x500bb.jpg',
+      year: 2009, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/it/album/chi-vuole-essere-fabri-fibra/1442532919', type: 'album',
     },
   ],
   '117436': [ // Jorge Ben Jor — Força Bruta isn't licensed for `us` (present on gb)
