@@ -411,6 +411,21 @@ async function fetchAllRows(buildQuery, pageSize = 1000, maxPages = 200) {
   return rows;
 }
 
+// fetchAllRows for an `.in(column, ids)` filter over a list that can grow
+// without bound. PostgREST puts the list in the URL, and past ~16 KB the
+// gateway rejects the request outright — Node surfaces that as a bare
+// "TypeError: fetch failed" (UND_ERR_HEADERS_OVERFLOW). 325 review target_ids
+// in one week was enough to 500 /api/home/this-week on every request. Chunks
+// run sequentially so a big list doesn't fan out into a burst of queries.
+async function fetchAllRowsIn(ids, buildQuery, chunkSize = 100) {
+  let rows = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    rows = rows.concat(await fetchAllRows((from, to) => buildQuery(chunk, from, to)));
+  }
+  return rows;
+}
+
 // Strips accents/diacritics (e.g. "Björk" → "Bjork") so title/artist grouping
 // keys aren't split just because different catalog sources spell a name
 // differently.
@@ -1742,11 +1757,11 @@ async function computePopularReviewsThisWeek(since) {
   const candidateIds = new Set([...weeklyLikeCounts.keys(), ...commentCounts.keys()]);
   if (candidateIds.size === 0) return [];
 
-  const totalLikeRows = await fetchAllRows((from, to) => supabase
+  const totalLikeRows = await fetchAllRowsIn([...candidateIds], (ids, from, to) => supabase
     .from('likes')
     .select('target_id')
     .eq('target_type', 'review')
-    .in('target_id', [...candidateIds])
+    .in('target_id', ids)
     .range(from, to));
 
   const likeCounts = new Map();
@@ -1755,10 +1770,10 @@ async function computePopularReviewsThisWeek(since) {
   // Weekly comments decide ranking, but the card shows the all-time total —
   // same as likes. Showing only this week's comments made a review with older
   // comments read "0 comments" on the card, then "2" once opened.
-  const totalCommentRows = await fetchAllRows((from, to) => supabase
+  const totalCommentRows = await fetchAllRowsIn([...candidateIds], (ids, from, to) => supabase
     .from('review_comments')
     .select('review_id')
-    .in('review_id', [...candidateIds])
+    .in('review_id', ids)
     .range(from, to));
 
   const totalCommentCounts = new Map();
@@ -1772,21 +1787,23 @@ async function computePopularReviewsThisWeek(since) {
   const userIds    = [...new Set(pairs.map(p => p.userId))];
   const spotifyIds = [...new Set(pairs.map(p => p.spotifyId))];
 
+  // Chunked by user, so each user's re-listens land in one chunk and the
+  // newest-first order the "latest re-listen" maps below rely on still holds.
   const [reviewRows, relistenRows, profiles] = await Promise.all([
-    fetchAllRows((from, to) => supabase
+    fetchAllRowsIn(userIds, (ids, from, to) => supabase
       .from('user_albums')
       .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, is_relistened')
-      .in('user_id', userIds)
+      .in('user_id', ids)
       .in('spotify_id', spotifyIds)
       .range(from, to)),
-    fetchAllRows((from, to) => supabase
+    fetchAllRowsIn(userIds, (ids, from, to) => supabase
       .from('re_listens')
       .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
-      .in('user_id', userIds)
+      .in('user_id', ids)
       .in('spotify_id', spotifyIds)
       .order('listened_at', { ascending: false })
       .range(from, to)),
-    fetchAllRows((from, to) => supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro, is_private').in('id', userIds).range(from, to)),
+    fetchAllRowsIn(userIds, (ids, from, to) => supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro, is_private').in('id', ids).range(from, to)),
   ]);
 
   // Popular Reviews is one cached list shown to everyone, so a private
