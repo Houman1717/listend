@@ -519,6 +519,21 @@ export default function DiscoverScreen() {
         />
       </Section>
 
+      {/* ── New Releases ── */}
+      <Section title="New Releases">
+        {sectionsLoading && newReleases.length === 0 ? (
+          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-new-releases' as any)} />
+        ) : (
+          <AlbumRow
+            data={newReleases}
+            isDark={isDark}
+            loggedIds={loggedIds}
+            onAlbumPress={goToAlbum}
+            onSeeMore={() => router.push('/discover-new-releases' as any)}
+          />
+        )}
+      </Section>
+
       {/* ── Featured Playlists ── */}
       <View style={s.section}>
         <View style={fp.sectionHeader}>
@@ -549,21 +564,6 @@ export default function DiscoverScreen() {
           />
         )}
       </View>
-
-      {/* ── New Releases ── */}
-      <Section title="New Releases">
-        {sectionsLoading && newReleases.length === 0 ? (
-          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-new-releases' as any)} />
-        ) : (
-          <AlbumRow
-            data={newReleases}
-            isDark={isDark}
-            loggedIds={loggedIds}
-            onAlbumPress={goToAlbum}
-            onSeeMore={() => router.push('/discover-new-releases' as any)}
-          />
-        )}
-      </Section>
 
       {/* ── Top Artists ── */}
       <Section title="Top Artists">
