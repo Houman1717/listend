@@ -5,10 +5,10 @@
 const NEW_RELEASE_ALBUMS = [
   { artist: 'Taylor Swift',           title: 'The Life of a Showgirl: The Encore' },
   { artist: 'Tinashe',                title: 'Popstar' },
+  { artist: 'Leon Bridges',           title: 'Happiness Anytime' },
   { artist: 'Nothing But Thieves',    title: 'Stray Dogs' },
   { artist: 'M83',                    title: 'I Wrote You a Letter' },
   { artist: 'Blondshell',             title: 'Violins' },
-  { artist: 'Leon Bridges',           title: 'Happiness Anytime' },
   { artist: 'Miley Cyrus',            title: 'Bass Persuades' },
   { artist: 'beabadoobee',            title: 'Pylon' },
   { artist: 'Carly Rae Jepsen',       title: 'Day and Night' },
