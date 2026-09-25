@@ -9,7 +9,7 @@ const cron = require('node-cron');
 const supabase = require('./db');
 const { sendPush } = require('./sendPush');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
-const { getCached, setCache, deleteCache, deleteCachePrefix, TTL_24H, TTL_7D } = require('./cache');
+const { getCached, setCache, deleteCache, deleteCachePrefix, pruneExpiredCache, TTL_24H, TTL_7D } = require('./cache');
 const generateAppleToken = require('./utils/appleToken');
 const {
   MANUAL_ALBUMS, MANUAL_ARTISTS, manualAlbumById, manualTrackById,
@@ -4294,6 +4294,23 @@ cron.schedule('0 6 * * 1', async () => {
   await deleteCache('discover:coming-soon');
   console.log('[cron:weekly] coming-soon cache cleared — will re-fetch on next request.');
 });
+
+// Daily 4:30 am, plus once shortly after boot — delete api_cache rows too old for
+// any TTL to serve (see pruneExpiredCache). The guard stops a slow run and the
+// next trigger from overlapping.
+let cachePruneRunning = false;
+async function runCachePrune() {
+  if (cachePruneRunning) return;
+  cachePruneRunning = true;
+  try {
+    const deleted = await pruneExpiredCache();
+    console.log(`[cron:cache-prune] Deleted ${deleted} expired api_cache rows.`);
+  } finally {
+    cachePruneRunning = false;
+  }
+}
+cron.schedule('30 4 * * *', runCachePrune);
+setTimeout(runCachePrune, 2 * 60 * 1000);
 
 // ── POST /api/upload-avatar ───────────────────────────────────────────────────
 // Accepts { user_id, image_base64 }, uploads to the 'avatars' bucket using the
