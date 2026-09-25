@@ -3,6 +3,12 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Taylor Swift',           title: 'The Life of a Showgirl: The Encore' },
+  { artist: 'Tinashe',                title: 'Popstar' },
+  { artist: 'Nothing But Thieves',    title: 'Stray Dogs' },
+  { artist: 'M83',                    title: 'I Wrote You a Letter' },
+  { artist: 'Blondshell',             title: 'Violins' },
+  { artist: 'Leon Bridges',           title: 'Happiness Anytime' },
   { artist: 'Miley Cyrus',            title: 'Bass Persuades' },
   { artist: 'beabadoobee',            title: 'Pylon' },
   { artist: 'Carly Rae Jepsen',       title: 'Day and Night' },
@@ -12,13 +18,11 @@ const NEW_RELEASE_ALBUMS = [
   { artist: 'Erykah Badu & The Alchemist', title: 'Before The World Blows' },
   { artist: 'Interpol',               title: 'This Mirror Weighs a Ton' },
   { artist: 'Denzel Curry & Kenny Beats', title: 'II' },
-  { artist: 'Jorja Smith',            title: 'What Are the Odds' },
   { artist: 'Phoebe Bridgers',        title: 'Lost Weekend' },
   { artist: 'Trippie Redd',           title: 'NDA' },
   { artist: 'ROLE MODEL',             title: 'Chuck Timely & The Hourglass' },
   { artist: 'Ravyn Lenae',            title: 'Blue Island' },
   { artist: 'Ariana Grande',          title: 'Petal' },
-  { artist: 'Shaboozey',              title: 'The Outlaw Cherie Lee & Other Western Tales' },
   { artist: 'The Strokes',            title: 'Reality Awaits' },
   { artist: 'Charli xcx',             title: 'Music, Fashion, Film' },
   { artist: 'Tyla',                   title: 'A*POP' },
