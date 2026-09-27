@@ -217,8 +217,12 @@ const CANONICAL_ALBUM_OVERRIDES = {
 // us-unlicensed ones — without this, resolving one by title+artist would fall
 // through to an Apple Music search and land on a compilation instead.
 for (const a of MANUAL_ALBUMS) {
+  // An album inherits its artist's aliases too, so searching "GY!BE" in the
+  // album tab finds their records and not just the artist.
+  const artistAliases = MANUAL_ARTISTS.find(x => x.id === a.artistId)?.aliases ?? [];
   CANONICAL_ALBUM_OVERRIDES[`${normalizeKey(a.artist)}::${normalizeKey(a.title)}`] = {
-    id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl,
+    id: a.id, title: a.title, artist: a.artist, year: a.year,
+    artworkUrl: a.artworkUrl, aliases: [...(a.aliases ?? []), ...artistAliases],
   };
 }
 
@@ -698,7 +702,8 @@ function withAlbumSearchOverrides(q, results) {
   const hits = Object.values(CANONICAL_ALBUM_OVERRIDES)
     .filter(o => NON_US_STOREFRONT_IDS.has(o.id) || manualAlbumById(o.id))
     .filter(o => {
-      const haystack = foldForMatch(`${o.artist} ${o.title}`).replace(/[^a-z0-9]/g, '');
+      const haystack = foldForMatch(`${o.artist} ${o.title} ${(o.aliases ?? []).join(' ')}`)
+        .replace(/[^a-z0-9]/g, '');
       return words.every(w => haystack.includes(w));
     })
     .filter(o => !results.some(r => r.id === o.id))
@@ -715,7 +720,8 @@ function withArtistSearchOverrides(q, results) {
   if (words.join('').length < 3) return results;
   const hits = MANUAL_ARTISTS
     .filter(a => {
-      const haystack = foldForMatch(a.name).replace(/[^a-z0-9]/g, '');
+      const haystack = foldForMatch(`${a.name} ${(a.aliases ?? []).join(' ')}`)
+        .replace(/[^a-z0-9]/g, '');
       return words.every(w => haystack.includes(w));
     })
     .filter(a => !results.some(r => r.id === a.id))

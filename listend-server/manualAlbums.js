@@ -13,6 +13,9 @@
 // duration sort and the album-length display work the same as for real
 // Apple Music albums.
 //
+// `aliases` on an album or artist adds extra spellings that search should
+// match — the displayed title never changes.
+//
 // To add one: find the release on MusicBrainz, take its release-group id for
 // the cover and its release id for the tracklist, and append an entry below.
 
@@ -388,6 +391,156 @@ const MANUAL_ALBUMS = [
       { number: 14, id: 'lst-in-the-panchine-t14', title: 'Skit', durationMs: 90000 },
     ],
   },
+  {
+    id: 'lst-f-sharp-a-sharp-infinity',
+    title: 'F♯ A♯ ∞',
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 1997,
+    // the 1998 CD edition's three-track running order, not the two-side LP
+    artworkUrl: 'https://coverartarchive.org/release-group/01d06c6e-a4e6-3d8b-8a45-42a598fe87d7/front-500',
+    musicbrainzReleaseId: '771ae005-6f8b-4831-9350-c3a7fdcb2442',
+    trackCount: 3,
+    tracks: [
+      { number: 1, id: 'lst-f-sharp-a-sharp-infinity-t1', title: 'The Dead Flag Blues', durationMs: 987960 },
+      { number: 2, id: 'lst-f-sharp-a-sharp-infinity-t2', title: 'East Hastings', durationMs: 1078240 },
+      { number: 3, id: 'lst-f-sharp-a-sharp-infinity-t3', title: 'Providence', durationMs: 1742426 },
+    ],
+  },
+  {
+    id: 'lst-slow-riot',
+    title: 'Slow Riot for New Zerø Kanada',
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 1999,
+    // two tracks, 28 minutes — an EP by name, album length by the clock
+    artworkUrl: 'https://coverartarchive.org/release-group/7a474ed2-8f4a-3295-8943-68818da3af3e/front-500',
+    musicbrainzReleaseId: '215c3fe0-faf3-39b8-af0f-29f3918d84aa',
+    trackCount: 2,
+    tracks: [
+      { number: 1, id: 'lst-slow-riot-t1', title: 'Moya', durationMs: 651626 },
+      { number: 2, id: 'lst-slow-riot-t2', title: 'BBF3', durationMs: 1065133 },
+    ],
+  },
+  {
+    id: 'lst-lift-your-skinny-fists',
+    title: 'Lift Your Skinny Fists Like Antennas to Heaven',
+    aliases: ['Lift Yr. Skinny Fists Like Antennas to Heaven'],
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 2000,
+    // double album; the two discs' tracks are numbered 1-4 here. Titled as most people write it — Constellation's own spelling is "Lift Yr. Skinny Fists"
+    artworkUrl: 'https://coverartarchive.org/release-group/3822abb6-ca53-3ae1-a4ec-7718cb321e9b/front-500',
+    musicbrainzReleaseId: 'e51e1f8b-62ba-388f-8567-0c051b575351',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-lift-your-skinny-fists-t1', title: 'Storm', durationMs: 1352413 },
+      { number: 2, id: 'lst-lift-your-skinny-fists-t2', title: 'Static', durationMs: 1355946 },
+      { number: 3, id: 'lst-lift-your-skinny-fists-t3', title: 'Sleep', durationMs: 1397746 },
+      { number: 4, id: 'lst-lift-your-skinny-fists-t4', title: 'Antennas to Heaven', durationMs: 1137586 },
+    ],
+  },
+  {
+    id: 'lst-yanqui-uxo',
+    title: 'Yanqui U.X.O.',
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 2002,
+    artworkUrl: 'https://coverartarchive.org/release-group/fc3cf08c-3273-3af3-84ed-ab9782a72505/front-500',
+    musicbrainzReleaseId: '82999f50-b427-4b7a-8dca-947acb143b22',
+    trackCount: 3,
+    tracks: [
+      { number: 1, id: 'lst-yanqui-uxo-t1', title: '09‐15‐00', durationMs: 1363240 },
+      { number: 2, id: 'lst-yanqui-uxo-t2', title: 'rockets fall on Rocket Falls', durationMs: 1242973 },
+      { number: 3, id: 'lst-yanqui-uxo-t3', title: 'motherfucker=redeemer', durationMs: 1885746 },
+    ],
+  },
+  {
+    id: 'lst-allelujah-dont-bend-ascend',
+    title: 'ALLELUJAH! DON’T BEND! ASCEND!',
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 2012,
+    // the band styles it with a leading apostrophe
+    artworkUrl: 'https://coverartarchive.org/release-group/62959180-8405-41f9-8fb8-1e18a5e8902d/front-500',
+    musicbrainzReleaseId: 'aaffb153-587a-4804-b78e-2072229991d4',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-allelujah-dont-bend-ascend-t1', title: 'Mladic', durationMs: 1199533 },
+      { number: 2, id: 'lst-allelujah-dont-bend-ascend-t2', title: 'Their Helicopters’ Sing', durationMs: 390053 },
+      { number: 3, id: 'lst-allelujah-dont-bend-ascend-t3', title: 'We Drift Like Worried Fire', durationMs: 1207293 },
+      { number: 4, id: 'lst-allelujah-dont-bend-ascend-t4', title: 'Strung Like Lights at Thee Printemps Erable', durationMs: 391880 },
+    ],
+  },
+  {
+    id: 'lst-asunder-sweet',
+    title: 'Asunder, Sweet and Other Distress',
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 2015,
+    // the band wraps the title in quotes
+    artworkUrl: 'https://coverartarchive.org/release-group/c74035da-e212-4048-abed-40a7b5343e9a/front-500',
+    musicbrainzReleaseId: '888586a9-9a76-47c4-a315-9d004220e0ae',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-asunder-sweet-t1', title: 'Peasantry or ‘Light! Inside of Light!’', durationMs: 628000 },
+      { number: 2, id: 'lst-asunder-sweet-t2', title: 'Lambs’ Breath', durationMs: 592000 },
+      { number: 3, id: 'lst-asunder-sweet-t3', title: 'Asunder, Sweet', durationMs: 373000 },
+      { number: 4, id: 'lst-asunder-sweet-t4', title: 'Piss Crowns Are Trebled', durationMs: 830000 },
+    ],
+  },
+  {
+    id: 'lst-luciferian-towers',
+    title: 'Luciferian Towers',
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 2017,
+    // the band wraps the title in quotes
+    artworkUrl: 'https://coverartarchive.org/release-group/bd835044-cd62-4f30-8447-438232763075/front-500',
+    musicbrainzReleaseId: '58d1168f-26bd-456b-8def-a105e67af199',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-luciferian-towers-t1', title: 'Undoing a Luciferian Towers', durationMs: 467000 },
+      { number: 2, id: 'lst-luciferian-towers-t2', title: 'Bosses Hang', durationMs: 885000 },
+      { number: 3, id: 'lst-luciferian-towers-t3', title: 'Fam/Famine', durationMs: 404000 },
+      { number: 4, id: 'lst-luciferian-towers-t4', title: 'Anthem for No State', durationMs: 878000 },
+    ],
+  },
+  {
+    id: 'lst-gds-pee-at-states-end',
+    title: 'G_d’s Pee AT STATE’S END!',
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 2021,
+    // tracks 1 and 3 are suites, titled here as the record lists them
+    artworkUrl: 'https://coverartarchive.org/release-group/3805cfb2-b333-4ed0-a696-019666cca5d7/front-500',
+    musicbrainzReleaseId: 'f14ccc14-d919-419e-b627-f658845f147b',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-gds-pee-at-states-end-t1', title: 'A Military Alphabet (five eyes all blind) (4521.0kHz 6730.0kHz 4109.09kHz) / Job’s Lament / First of the Last Glaciers / where we break how we shine (ROCKETS FOR MARY)', durationMs: 1222320 },
+      { number: 2, id: 'lst-gds-pee-at-states-end-t2', title: 'Fire at Static Valley', durationMs: 358413 },
+      { number: 3, id: 'lst-gds-pee-at-states-end-t3', title: '“GOVERNMENT CAME” (9980.0kHz 3617.1kHz 4521.0 kHz) / Cliffs Gaze / cliffs’ gaze at empty waters’ rise / ASHES TO SEA or NEARER TO THEE', durationMs: 1187840 },
+      { number: 4, id: 'lst-gds-pee-at-states-end-t4', title: 'OUR SIDE HAS TO WIN (for D.H.)', durationMs: 390080 },
+    ],
+  },
+  {
+    id: 'lst-no-title-as-of-13-february-2024',
+    title: 'NO TITLE AS OF 13 FEBRUARY 2024 28,340 DEAD',
+    artist: 'Godspeed You! Black Emperor',
+    artistId: 'lst-artist-godspeed-you-black-emperor',
+    year: 2024,
+    artworkUrl: 'https://coverartarchive.org/release-group/7df4cbb0-30ed-4fed-9383-dd5fe3dbff30/front-500',
+    musicbrainzReleaseId: '38b276d0-b05f-48f0-bb4b-19adf8ce3c49',
+    trackCount: 6,
+    tracks: [
+      { number: 1, id: 'lst-no-title-as-of-13-february-2024-t1', title: 'SUN IS A HOLE SUN IS VAPORS', durationMs: 331666 },
+      { number: 2, id: 'lst-no-title-as-of-13-february-2024-t2', title: 'BABYS IN A THUNDERCLOUD', durationMs: 816706 },
+      { number: 3, id: 'lst-no-title-as-of-13-february-2024-t3', title: 'RAINDROPS CAST IN LEAD', durationMs: 797413 },
+      { number: 4, id: 'lst-no-title-as-of-13-february-2024-t4', title: 'BROKEN SPIRES AT DEAD KAPITAL', durationMs: 214693 },
+      { number: 5, id: 'lst-no-title-as-of-13-february-2024-t5', title: 'PALE SPECTATOR TAKES PHOTOGRAPHS', durationMs: 677066 },
+      { number: 6, id: 'lst-no-title-as-of-13-february-2024-t6', title: 'GREY RUBBLE – GREEN SHOOTS', durationMs: 413960 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
@@ -397,6 +550,16 @@ const MANUAL_ALBUMS = [
 // Noyz Narcos, a guest on the record. With one, artist search returns this
 // entry first and the artist page shows the albums below via their artistId.
 const MANUAL_ARTISTS = [
+  {
+    // Constellation keeps the catalogue off Apple Music entirely (Bandcamp
+    // only), so the band, not just one record, has to live here.
+    id: 'lst-artist-godspeed-you-black-emperor',
+    name: 'Godspeed You! Black Emperor',
+    // What people actually type when they can't find them.
+    aliases: ['GY!BE', 'GYBE'],
+    genre: 'Rock',
+    artworkUrl: 'https://coverartarchive.org/release-group/3822abb6-ca53-3ae1-a4ec-7718cb321e9b/front-500',
+  },
   {
     id: 'lst-artist-in-the-panchine',
     name: 'In The Panchine',
