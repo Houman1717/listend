@@ -252,8 +252,22 @@ async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, 
     .eq('normalized_key', normalizedKey)
     .maybeSingle();
 
+  // The key is title+artist only, so artists with several self-titled records
+  // share one: Weezer's 2026 album is catalogued as plain "Weezer", the same
+  // key its 1994 debut uses and the one Teal (2019) had been cached under —
+  // so logging the new album silently wrote a Teal row instead. When the
+  // caller already holds a specific catalog id whose release year disagrees
+  // with the canonical pick, it's a different record, not another edition of
+  // the same one: keep the caller's id. (±1 tolerates regional release dates
+  // straddling New Year.)
+  const yearConflicts = r =>
+    fallbackId && fallbackYear && r?.year && r.id !== fallbackId && Math.abs(r.year - fallbackYear) > 1;
+  const asFallback = () =>
+    ({ id: fallbackId, title, artist, year: fallbackYear, artworkUrl: fallbackArtworkUrl ?? '' });
+
   if (existing) {
-    return { id: existing.canonical_id, title: existing.title, artist: existing.artist, year: existing.year, artworkUrl: existing.artwork_url };
+    const cached = { id: existing.canonical_id, title: existing.title, artist: existing.artist, year: existing.year, artworkUrl: existing.artwork_url };
+    return yearConflicts(cached) ? asFallback() : cached;
   }
 
   let resolved = null;
@@ -261,7 +275,14 @@ async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, 
   try {
     const q = encodeURIComponent(`${artist} ${title}`);
     const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=10`);
-    const candidates = data.results?.albums?.data ?? [];
+    const rawCandidates = data.results?.albums?.data ?? [];
+    // Same-year candidates first (stable), so every branch below prefers the
+    // record the caller actually meant when several share a title.
+    const releaseYear = item => parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10);
+    const candidates = fallbackYear
+      ? [...rawCandidates].sort((a, b) =>
+          (Math.abs(releaseYear(a) - fallbackYear) <= 1 ? 0 : 1) - (Math.abs(releaseYear(b) - fallbackYear) <= 1 ? 0 : 1))
+      : rawCandidates;
 
     if (candidates.length > 0) {
       const nt = normalizeKey(title);
@@ -334,7 +355,9 @@ async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, 
     if (upsertErr) console.error('[resolveCanonicalAlbum] cache upsert error:', upsertErr.message);
   }
 
-  return resolved;
+  // The pick stays cached as the key's canonical entry; this caller just
+  // keeps their own, differently-dated record.
+  return yearConflicts(resolved) ? asFallback() : resolved;
 }
 
 const app = express();
@@ -443,7 +466,18 @@ function foldDiacritics(s) {
 // on either side can't split one album's ratings across two buckets.
 const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
 
-const baseTitle = title => (title ?? '').replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
+// Except a "(… Album)" nickname, which is the title itself: every Weezer
+// self-titled record is "Weezer (Blue/Green/Red/White/Teal/Black Album)",
+// and stripping that folded all six into one discography entry. Any edition
+// suffix after it ("Weezer (Red Album) [Deluxe Edition]") still goes.
+const NAMED_ALBUM_RE = /^.*?[\(\[]([^()\[\]]*\balbum)\s*[\)\]]/i;
+
+const baseTitle = title => {
+  const t = title ?? '';
+  const named = t.match(NAMED_ALBUM_RE);
+  if (named && !hasQualifier(named[1])) return named[0].trim().toLowerCase();
+  return t.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
+};
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
