@@ -110,6 +110,11 @@ pinStorefront('it', [
   '1440767345', '1440767347', '1440767591', '1440767598', '1440767599', '1440767603',
   '1440767604', '1440767605', '1440767606', '1440767608', '1440767610', '1440767614',
 ]);
+// Fabri Fibra — Applausi Per Fibra - EP (2006)
+pinStorefront('it', [
+  '1445125411',
+  '1445125416', '1445125418', '1445125419', '1445125573',
+]);
 // Fabri Fibra — Chi Vuole Essere Fabri Fibra ? (2009)
 pinStorefront('it', [
   '1442532919',
@@ -253,6 +258,10 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'fabrifibra::turbegiovanili': {
     id: '1440767333', title: 'Turbe giovanili', artist: 'Fabri Fibra', year: 2002,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6f/66/ee/6f66ee1b-fd42-1397-d222-f284115c8b5a/00602527404899.rgb.jpg/500x500bb.jpg',
+  },
+  'fabrifibra::applausiperfibraep': {
+    id: '1445125411', title: 'Applausi Per Fibra - EP', artist: 'Fabri Fibra', year: 2006,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/2b/8e/98/2b8e9884-c957-42f0-b7a8-ce4ff3c84597/00602498780053.rgb.jpg/500x500bb.jpg',
   },
   'fabrifibra::chivuoleesserefabrifibra': {
     id: '1442532919', title: 'Chi Vuole Essere Fabri Fibra ?', artist: 'Fabri Fibra', year: 2009,
@@ -3073,6 +3082,12 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6f/66/ee/6f66ee1b-fd42-1397-d222-f284115c8b5a/00602527404899.rgb.jpg/500x500bb.jpg',
       year: 2002, isSingle: false, isCompilation: false, trackCount: 19,
       url: 'https://music.apple.com/it/album/turbe-giovanili/1440767333', type: 'album',
+    },
+    {
+      id: '1445125411', title: 'Applausi Per Fibra - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/2b/8e/98/2b8e9884-c957-42f0-b7a8-ce4ff3c84597/00602498780053.rgb.jpg/500x500bb.jpg',
+      year: 2006, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/it/album/applausi-per-fibra-ep/1445125411', type: 'album',
     },
     {
       id: '1442532919', title: 'Chi Vuole Essere Fabri Fibra ?',
