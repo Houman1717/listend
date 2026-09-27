@@ -117,6 +117,57 @@ pinStorefront('it', [
   '1442533592', '1442533597', '1442533781', '1442533787',
 ]);
 
+// Verdena — Wow (2011)
+pinStorefront('it', [
+  '1442395552',
+  '1442395555', '1442395563', '1442395565', '1442395568', '1442395569', '1442395632',
+  '1442395633', '1442395635', '1442395640', '1442395641', '1442395642', '1442395644',
+  '1442395647', '1442395651', '1442395652', '1442395660', '1442395842', '1442395847',
+  '1442395851', '1442395852', '1442395858', '1442395862', '1442395869', '1442396055',
+  '1442396060', '1442396068', '1442396073',
+]);
+// Verdena — Il suicidio dei samurai (2004)
+pinStorefront('it', [
+  '1443998256',
+  '1443998258', '1443998444', '1443998445', '1443998447', '1443998449', '1443998452',
+  '1443998453', '1443998455', '1443998463', '1443998465', '1443998470',
+]);
+// Verdena — Valvonauta - EP (1999)
+pinStorefront('it', [
+  '1445115972',
+  '1445115988', '1445115992', '1445115998', '1445116171',
+]);
+// Verdena — Viba - EP (2000)
+pinStorefront('it', [
+  '1443377495',
+  '1443378021', '1443378191', '1443378196', '1443378202',
+]);
+// Verdena — Spaceman - EP (2001)
+pinStorefront('it', [
+  '1442490156',
+  '1442490271', '1442490279', '1442490552', '1442490556',
+]);
+// Verdena — Miami safari - EP (2002)
+pinStorefront('it', [
+  '1445119582',
+  '1445119585', '1445119589', '1445119594', '1445119633', '1445119635',
+]);
+// Verdena — Luna - EP (2004)
+pinStorefront('it', [
+  '1445134816',
+  '1445134827', '1445134832', '1445135008', '1445135012', '1445135013',
+]);
+// Verdena — Canos - EP (2007)
+pinStorefront('it', [
+  '1443332712',
+  '1443332717', '1443332721', '1443332724', '1443332726', '1443332730', '1443332733',
+]);
+// Verdena — Split - EP (2016)
+pinStorefront('it', [
+  '1444586649',
+  '1444586727', '1444586738', '1444586740', '1444586925',
+]);
+
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
 // ── Canonical album resolution ────────────────────────────────────────────────
@@ -206,6 +257,42 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'fabrifibra::chivuoleesserefabrifibra': {
     id: '1442532919', title: 'Chi Vuole Essere Fabri Fibra ?', artist: 'Fabri Fibra', year: 2009,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/ad/1e/08/ad1e085d-b976-9a79-7a0a-b5e715bd2854/00602527028484.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::wow': {
+    id: '1442395552', title: 'Wow', artist: 'Verdena', year: 2011,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/36/60/e4/3660e4dd-deec-01e5-06a0-ef5fef98a0f7/00602527613536.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::ilsuicidiodeisamurai': {
+    id: '1443998256', title: 'Il suicidio dei samurai', artist: 'Verdena', year: 2004,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/3b/89/63/3b8963c0-9cce-03f6-14e9-bb95139fbb62/00602498159446.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::valvonautaep': {
+    id: '1445115972', title: 'Valvonauta - EP', artist: 'Verdena', year: 1999,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/26/6f/06/266f0624-448b-83c9-5def-62174f80906e/00602527483245.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::vibaep': {
+    id: '1443377495', title: 'Viba - EP', artist: 'Verdena', year: 2000,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/da/24/40/da24404d-90cc-aed6-8858-47d38c7fc438/00602527483252.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::spacemanep': {
+    id: '1442490156', title: 'Spaceman - EP', artist: 'Verdena', year: 2001,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/fd/f1/d7/fdf1d78a-42ca-2b6c-abf9-6f92d970a9bb/00602527483269.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::miamisafariep': {
+    id: '1445119582', title: 'Miami safari - EP', artist: 'Verdena', year: 2002,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/62/ec/89/62ec89c9-3c88-a05b-c7ba-f91075c2cc37/00731458897927.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::lunaep': {
+    id: '1445134816', title: 'Luna - EP', artist: 'Verdena', year: 2004,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/e0/37/02/e03702dd-d905-140e-1646-98d71052f2fa/00602498159460.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::canosep': {
+    id: '1443332712', title: 'Canos - EP', artist: 'Verdena', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/9c/14/b3/9c14b339-53a4-f094-90ea-4ab04b8ba091/00602517390287.rgb.jpg/500x500bb.jpg',
+  },
+  'verdena::splitep': {
+    id: '1444586649', title: 'Split - EP', artist: 'Verdena', year: 2016,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/37/7d/ef/377defa0-e34c-1941-b909-254ce2b2f734/00602557116946.rgb.jpg/500x500bb.jpg',
   },
   'jorgebenjor::forabruta': {
     id: '1402139880', title: 'Força Bruta', artist: 'Jorge Ben Jor', year: 1970,
@@ -2920,6 +3007,64 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
       year: 1988, isSingle: false, isCompilation: false, trackCount: 12,
       url: 'https://music.apple.com/gb/album/isnt-anything/1556913225', type: 'album',
+    },
+  ],
+  '24329193': [ // Verdena — Italian releases Apple never licensed for `us`.
+    // Il suicidio dei samurai is the 2004 original; `us` carries only the 2024
+    // remaster, which the discography's base-title dedup drops in its favour.
+    {
+      id: '1442395552', title: 'Wow',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/36/60/e4/3660e4dd-deec-01e5-06a0-ef5fef98a0f7/00602527613536.rgb.jpg/500x500bb.jpg',
+      year: 2011, isSingle: false, isCompilation: false, trackCount: 27,
+      url: 'https://music.apple.com/it/album/wow/1442395552', type: 'album',
+    },
+    {
+      id: '1443998256', title: 'Il suicidio dei samurai',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/3b/89/63/3b8963c0-9cce-03f6-14e9-bb95139fbb62/00602498159446.rgb.jpg/500x500bb.jpg',
+      year: 2004, isSingle: false, isCompilation: false, trackCount: 11,
+      url: 'https://music.apple.com/it/album/il-suicidio-dei-samurai/1443998256', type: 'album',
+    },
+    {
+      id: '1445115972', title: 'Valvonauta - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/26/6f/06/266f0624-448b-83c9-5def-62174f80906e/00602527483245.rgb.jpg/500x500bb.jpg',
+      year: 1999, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/it/album/valvonauta-ep/1445115972', type: 'album',
+    },
+    {
+      id: '1443377495', title: 'Viba - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/da/24/40/da24404d-90cc-aed6-8858-47d38c7fc438/00602527483252.rgb.jpg/500x500bb.jpg',
+      year: 2000, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/it/album/viba-ep/1443377495', type: 'album',
+    },
+    {
+      id: '1442490156', title: 'Spaceman - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/fd/f1/d7/fdf1d78a-42ca-2b6c-abf9-6f92d970a9bb/00602527483269.rgb.jpg/500x500bb.jpg',
+      year: 2001, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/it/album/spaceman-ep/1442490156', type: 'album',
+    },
+    {
+      id: '1445119582', title: 'Miami safari - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/62/ec/89/62ec89c9-3c88-a05b-c7ba-f91075c2cc37/00731458897927.rgb.jpg/500x500bb.jpg',
+      year: 2002, isSingle: false, isCompilation: false, trackCount: 5,
+      url: 'https://music.apple.com/it/album/miami-safari-ep/1445119582', type: 'album',
+    },
+    {
+      id: '1445134816', title: 'Luna - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/e0/37/02/e03702dd-d905-140e-1646-98d71052f2fa/00602498159460.rgb.jpg/500x500bb.jpg',
+      year: 2004, isSingle: false, isCompilation: false, trackCount: 5,
+      url: 'https://music.apple.com/it/album/luna-ep/1445134816', type: 'album',
+    },
+    {
+      id: '1443332712', title: 'Canos - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/9c/14/b3/9c14b339-53a4-f094-90ea-4ab04b8ba091/00602517390287.rgb.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 6,
+      url: 'https://music.apple.com/it/album/canos-ep/1443332712', type: 'album',
+    },
+    {
+      id: '1444586649', title: 'Split - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/37/7d/ef/377defa0-e34c-1941-b909-254ce2b2f734/00602557116946.rgb.jpg/500x500bb.jpg',
+      year: 2016, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/it/album/split-ep/1444586649', type: 'album',
     },
   ],
   '137080341': [ // Fabri Fibra — neither is licensed for `us` (both present on it)
