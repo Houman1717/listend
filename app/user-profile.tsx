@@ -20,7 +20,7 @@ import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { countOrNull, displayCount } from '@/lib/supabaseQuery';
+import { countOrNull, displayCount, fetchAllRows } from '@/lib/supabaseQuery';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
@@ -39,6 +39,8 @@ import { LoggedAlbum } from '@/context/AlbumsContext';
 const API_URL     = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const ACCENT      = '#D4A017';
 const AVATAR_SIZE = 80;
+// Upper bound for paging a user's library (20 × 1000 rows), same as My Listend.
+const MAX_LIBRARY_PAGES = 20;
 
 const FAV_GAP      = 3;
 const FAV_SLOTS    = 5;
@@ -585,18 +587,22 @@ export default function UserProfileScreen() {
           setIsBlockedByThem(!!blockedByThem);
         }
 
-        const [{ data: userAlbums }, { data: relistenRows }] = await Promise.all([
-          supabase
+        // Paged — a single select is capped at 1000 rows by PostgREST, which
+        // froze heavy accounts' Albums / This Year stats at exactly 1000.
+        const [userAlbums, relistenRows] = await Promise.all([
+          fetchAllRows<any>((from, to) => supabase
             .from('user_albums')
             .select('spotify_id, title, artist, artwork_url, rating, review, year, listened_at, is_relistened')
             .eq('user_id', viewedUserId)
             .not('listened_at', 'is', null)
-            .order('listened_at', { ascending: false }),
-          supabase
+            .order('listened_at', { ascending: false })
+            .range(from, to), MAX_LIBRARY_PAGES),
+          fetchAllRows<any>((from, to) => supabase
             .from('re_listens')
             .select('spotify_id, rating, review, listened_at')
             .eq('user_id', viewedUserId)
-            .order('listened_at', { ascending: true }),
+            .order('listened_at', { ascending: true })
+            .range(from, to), MAX_LIBRARY_PAGES),
         ]);
 
         if (userAlbums) {
