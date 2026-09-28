@@ -72,8 +72,20 @@ export const PRO_FEATURES = [
   { icon: 'random',           label: 'Flip Every Hour',       sub: 'Flip a Record every hour — free accounts are limited to once every 12 hours' },
   { icon: 'paint-brush',      label: 'Custom Profile Themes', sub: 'Give your profile a unique look that visitors can see' },
   { icon: 'checkmark-circle', label: 'Pro Verified Tick',     sub: 'Gold verified badge next to your name on every review', isIonicon: true },
-  { icon: 'bolt',             label: 'More Coming Soon',      sub: 'Priority access to every future Pro perk' },
 ];
+
+// "Save 40%" for the annual plan against 12 months of the monthly one.
+function annualSavingPercent(packages: PurchasesPackage[]): number | null {
+  const annual  = packages.find(p => p.packageType === 'ANNUAL');
+  const monthly = packages.find(p => p.packageType === 'MONTHLY');
+  if (!annual || !monthly || monthly.product.price <= 0) return null;
+  const pct = Math.round((1 - annual.product.price / (monthly.product.price * 12)) * 100);
+  return pct > 0 ? pct : null;
+}
+
+function periodSuffix(pkg: PurchasesPackage): string {
+  return pkg.packageType === 'ANNUAL' ? '/year' : pkg.packageType === 'MONTHLY' ? '/month' : '';
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -87,7 +99,11 @@ export function ProPaywallModal() {
   const [selectedPkg, setSelectedPkg] = useState<PurchasesPackage | null>(null);
 
   const packages   = offerings?.current?.availablePackages ?? [];
-  const activePkg  = selectedPkg ?? packages[0] ?? null;
+  const activePkg  = selectedPkg
+    ?? packages.find(p => p.packageType === 'ANNUAL')
+    ?? packages[0]
+    ?? null;
+  const savingPct  = annualSavingPercent(packages);
 
   async function handlePurchase() {
     if (!activePkg) return;
@@ -119,7 +135,7 @@ export function ProPaywallModal() {
       onRequestClose={hidePaywall}>
 
       <SafeAreaView style={[s.screen, { backgroundColor: c.bg }]}>
-          <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
             {/* ── Close button ── */}
             <View style={s.closeRow}>
@@ -138,7 +154,7 @@ export function ProPaywallModal() {
               </View>
               <Text style={[s.heroTitle, { color: c.text }]}>Listend Pro</Text>
               <Text style={[s.heroSub, { color: c.textMuted }]}>
-                Unlock insights. Stand out. Own your listening.
+                See your taste in numbers, and make your profile yours.
               </Text>
             </View>
 
@@ -151,11 +167,11 @@ export function ProPaywallModal() {
                 </View>
                 <Text style={[s.statsFeatureTitle, { color: c.text }]}>My Stats</Text>
                 <Text style={[s.statsFeatureSub, { color: c.textMuted }]}>
-                  Your full listening history, broken down. See every genre you've explored, every decade
-                  you've obsessed over, how your taste stacks up against the community, and the real
-                  story behind your listening — all in one beautifully designed dashboard.
+                  Your listening history, broken down.
                 </Text>
               </View>
+
+              <Text style={[s.exampleLabel, { color: c.textDim }]}>EXAMPLE</Text>
 
               {/* Mini stats strip */}
               <View style={[s.miniStatsRow, { borderColor: c.border }]}>
@@ -224,45 +240,46 @@ export function ProPaywallModal() {
               </View>
             </View>
 
-            {/* ── Package selector / Coming Soon ── */}
+          </ScrollView>
+
+          {/* ── Pinned footer: plans + CTA are always visible without scrolling ── */}
+          <View style={[s.footer, { backgroundColor: c.bg, borderTopColor: c.border }]}>
             {isLoading ? (
-              <ActivityIndicator color={c.accent} style={{ marginTop: 32 }} />
+              <ActivityIndicator color={c.accent} style={{ marginVertical: 24 }} />
             ) : packages.length > 0 ? (
               <>
-                <Text style={[s.sectionLabel, { color: c.textDim }]}>CHOOSE A PLAN</Text>
                 <View style={s.packageList}>
                   {packages.map(pkg => {
                     const isActive = activePkg?.identifier === pkg.identifier;
+                    const isAnnual = pkg.packageType === 'ANNUAL';
                     return (
                       <Pressable
                         key={pkg.identifier}
                         onPress={() => setSelectedPkg(pkg)}
                         style={[
-                          s.packageRow,
+                          s.packageCard,
                           {
                             backgroundColor: isActive ? c.surfaceActive : c.surface,
                             borderColor: isActive ? c.accent : c.border,
                           },
                         ]}>
-                        <View style={s.packageInfo}>
-                          <Text style={[s.packageTitle, { color: isActive ? c.text : c.textMuted }]}>
-                            {pkg.packageType === 'ANNUAL'  ? 'Annual'  :
-                             pkg.packageType === 'MONTHLY' ? 'Monthly' :
-                             pkg.product.title}
-                          </Text>
-                          {pkg.packageType === 'ANNUAL' && (
-                            <View style={[s.saveBadge, { backgroundColor: c.accent }]}>
-                              <Text style={[s.saveBadgeText, { color: c.onAccent }]}>BEST VALUE</Text>
-                            </View>
-                          )}
-                        </View>
+                        {isAnnual && savingPct !== null && (
+                          <View style={[s.saveBadge, { backgroundColor: c.accent }]}>
+                            <Text style={[s.saveBadgeText, { color: c.onAccent }]}>SAVE {savingPct}%</Text>
+                          </View>
+                        )}
+                        <Text style={[s.packageTitle, { color: isActive ? c.text : c.textMuted }]}>
+                          {isAnnual ? 'Yearly' : pkg.packageType === 'MONTHLY' ? 'Monthly' : pkg.product.title}
+                        </Text>
                         <Text style={[s.packagePrice, { color: isActive ? c.accent : c.textMuted }]}>
                           {pkg.product.priceString}
-                          <Text style={s.packagePeriod}>
-                            {pkg.packageType === 'ANNUAL'  ? '/yr' :
-                             pkg.packageType === 'MONTHLY' ? '/mo' : ''}
-                          </Text>
+                          <Text style={s.packagePeriod}>{periodSuffix(pkg)}</Text>
                         </Text>
+                        {isAnnual && pkg.product.pricePerMonthString && (
+                          <Text style={[s.packageSub, { color: c.textDim }]}>
+                            {pkg.product.pricePerMonthString}/month
+                          </Text>
+                        )}
                       </Pressable>
                     );
                   })}
@@ -280,15 +297,15 @@ export function ProPaywallModal() {
                     {purchasing
                       ? <ActivityIndicator color={c.onAccent} />
                       : <Text style={[s.ctaText, { color: c.onAccent }]}>
-                          Subscribe — {activePkg?.product.priceString}
+                          Start Pro — {activePkg?.product.priceString}{activePkg ? periodSuffix(activePkg) : ''}
                         </Text>
                     }
                   </LinearGradient>
                 </Pressable>
 
-                <Pressable onPress={handleRestore} style={s.dismissBtn} disabled={purchasing}>
-                  <Text style={[s.dismissText, { color: c.textDim }]}>Restore Purchases</Text>
-                </Pressable>
+                <Text style={[s.renewText, { color: c.textDim }]}>
+                  Renews automatically. Cancel anytime in Settings.
+                </Text>
               </>
             ) : (
               <View style={[s.priceBlock, { backgroundColor: c.surface, borderColor: c.border }]}>
@@ -310,24 +327,25 @@ export function ProPaywallModal() {
               </View>
             )}
 
-            {/* ── Legal links (required by App Store guideline 3.1.2) ── */}
+            {/* ── Restore + legal links (legal required by App Store guideline 3.1.2) ── */}
             <View style={s.legalRow}>
+              {packages.length > 0 && (
+                <>
+                  <Pressable onPress={handleRestore} disabled={purchasing}>
+                    <Text style={[s.legalLink, { color: c.textDim }]}>Restore</Text>
+                  </Pressable>
+                  <Text style={[s.legalSep, { color: c.textDimmer }]}>·</Text>
+                </>
+              )}
               <Pressable onPress={() => Linking.openURL('https://houman1717.github.io/listend-policys/privacy.html')}>
-                <Text style={[s.legalLink, { color: c.textDim }]}>Privacy Policy</Text>
+                <Text style={[s.legalLink, { color: c.textDim }]}>Privacy</Text>
               </Pressable>
               <Text style={[s.legalSep, { color: c.textDimmer }]}>·</Text>
               <Pressable onPress={() => Linking.openURL('https://houman1717.github.io/listend-policys/terms.html')}>
-                <Text style={[s.legalLink, { color: c.textDim }]}>Terms of Use</Text>
+                <Text style={[s.legalLink, { color: c.textDim }]}>Terms</Text>
               </Pressable>
             </View>
-
-            <Pressable
-              onPress={hidePaywall}
-              style={[s.dismissBtn, { paddingTop: packages.length > 0 ? 0 : 16 }]}>
-              <Text style={[s.dismissText, { color: c.textDimmer }]}>Maybe Later</Text>
-            </Pressable>
-
-          </ScrollView>
+          </View>
       </SafeAreaView>
     </Modal>
   );
@@ -339,7 +357,12 @@ const s = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  scroll: { paddingBottom: 40 },
+  scroll: { paddingBottom: 24 },
+
+  footer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 14,
+  },
 
   closeRow: {
     alignItems: 'flex-end',
@@ -417,6 +440,13 @@ const s = StyleSheet.create({
   statsFeatureSub: {
     fontSize: 13,
     lineHeight: 19,
+  },
+  exampleLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: 6,
   },
 
   miniStatsRow: {
@@ -521,27 +551,27 @@ const s = StyleSheet.create({
   swatchName: { fontSize: 9, fontWeight: '600' },
 
   packageList: {
+    flexDirection: 'row',
     paddingHorizontal: 20,
     gap: 10,
-    marginBottom: 4,
   },
-  packageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+  packageCard: {
+    flex: 1,
+    paddingTop: 16,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
     borderRadius: 14,
     borderWidth: 1.5,
-  },
-  packageInfo: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   packageTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
+    marginBottom: 2,
+  },
+  packageSub: {
+    fontSize: 11,
+    marginTop: 2,
   },
   packagePrice: {
     fontSize: 16,
@@ -552,6 +582,8 @@ const s = StyleSheet.create({
     fontWeight: '400',
   },
   saveBadge: {
+    position: 'absolute',
+    top: -9,
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -574,8 +606,14 @@ const s = StyleSheet.create({
   priceAmount: { fontSize: 28, fontWeight: '800', letterSpacing: 0.3 },
   priceSub:    { fontSize: 12, marginTop: 6, textAlign: 'center' },
 
+  renewText: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
   ctaBtn: {
-    marginTop: 20,
+    marginTop: 12,
     marginHorizontal: 20,
     borderRadius: 14,
     overflow: 'hidden',
@@ -589,11 +627,6 @@ const s = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.3,
   },
-  dismissBtn: {
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  dismissText: { fontSize: 14 },
 
   legalRow: {
     flexDirection: 'row',
