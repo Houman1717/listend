@@ -14,6 +14,7 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
+import { ProLockedSection } from '@/components/ProLockedSection';
 
 const CARD_BG = '#2E2018';
 const BORDER  = '#2a1e14';
@@ -261,9 +262,12 @@ function VolumeBadge({ rating, tint = ACCENT }: { rating: number; tint?: string 
 
 export default function MonthInReviewScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme: ownProTheme } = usePro();
+  const { isPro, proLoaded, proTheme: ownProTheme } = usePro();
   const params = useLocalSearchParams<{ year?: string; month?: string; userId?: string; displayName?: string; proTheme?: string }>();
   const viewedUserId = params.userId ?? null;
+  // Only gate your own recap. Another user's is already their content to share,
+  // and proLoaded keeps the lock off a subscriber while Pro status resolves.
+  const recapLocked = !viewedUserId && proLoaded && !isPro;
   const activeThemeKey = viewedUserId
     ? (params.proTheme || 'default')
     : (isPro ? ownProTheme : 'default');
@@ -498,6 +502,15 @@ export default function MonthInReviewScreen() {
                     textColor={txt} subtextColor={sub} borderColor={cardBorder}
                   />
                 </View>
+
+                {/* Everything past the hero and the stats strip is Pro. Free users
+                    still get those two cards with their real numbers, so the push
+                    notification that opens this screen isn't a bare paywall. */}
+                <ProLockedSection
+                  locked={recapLocked}
+                  colors={{ background: colors.background, text: txt, subtext: sub }}
+                  title="5 more sections inside"
+                  sub="Your most active day, highest rated, top artists, top genres and how you rated everything.">
 
                 {/* ── Day of Week ── */}
                 <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -737,6 +750,8 @@ export default function MonthInReviewScreen() {
                       ))}
                   </View>
                 </View>
+
+                </ProLockedSection>
               </>
             )}
           </>

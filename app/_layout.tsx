@@ -24,6 +24,7 @@ import { NotificationsProvider } from '@/context/NotificationsContext';
 import { LikedArtistsProvider } from '@/context/LikedArtistsContext';
 import { LikedFeaturedPlaylistsProvider } from '@/context/LikedFeaturedPlaylistsContext';
 import { FavoritesSyncer } from '@/components/FavoritesSyncer';
+import { MonthlyRecapScheduler } from '@/components/MonthlyRecapScheduler';
 import { ProProvider } from '@/context/ProContext';
 import { RevenueCatProvider } from '@/context/RevenueCatContext';
 import { ProPaywallModal } from '@/components/ProPaywallModal';
@@ -224,6 +225,11 @@ function AuthGate() {
       if (!data?.type) return;
       if (data.type === 'flip_cooldown') {
         router.push('/flip-a-record');
+      } else if (data.type === 'month_in_review') {
+        router.push({
+          pathname: '/month-in-review',
+          params: { year: String(data.year), month: String(data.month) },
+        } as any);
       } else if (data.type === 'message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
       } else if (data.type === 'follow_request') {
@@ -311,6 +317,7 @@ function ThemedApp() {
         <AuthGate />
         <AnalyticsIdentity />
         <FavoritesSyncer />
+        <MonthlyRecapScheduler />
         <OfflineBanner />
         <ProPaywallModal />
         <Stack screenOptions={{ headerBackTitle: '', headerBackButtonDisplayMode: 'minimal' }}>

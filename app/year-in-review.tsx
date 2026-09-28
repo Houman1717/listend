@@ -15,6 +15,7 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
+import { ProLockedSection } from '@/components/ProLockedSection';
 
 // ─── Style constants (match my-stats.tsx) ─────────────────────────────────────
 
@@ -429,9 +430,10 @@ function MilestoneCard({ album, label, onPress, colors }: {
 
 export default function YearInReviewScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proTheme: ownProTheme } = usePro();
+  const { isPro, proLoaded, proTheme: ownProTheme } = usePro();
   const params = useLocalSearchParams<{ userId?: string; displayName?: string; proTheme?: string }>();
   const viewedUserId = params.userId ?? null;
+  const recapLocked = !viewedUserId && proLoaded && !isPro;
   const activeThemeKey = viewedUserId
     ? (params.proTheme || 'default')
     : (isPro ? ownProTheme : 'default');
@@ -681,6 +683,14 @@ export default function YearInReviewScreen() {
                     borderColor={cardBorder}
                   />
                 </View>
+
+                {/* Pro from here down — the hero and stats strip stay free so the
+                    year still opens on something real. */}
+                <ProLockedSection
+                  locked={recapLocked}
+                  colors={{ background: colors.background, text: txt, subtext: sub }}
+                  title="Your full year is inside"
+                  sub="Monthly activity, highest rated, milestones, decades, top artists and top genres.">
 
                 {/* ── Monthly Activity ── */}
                 <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -1070,6 +1080,8 @@ export default function YearInReviewScreen() {
                     <Text style={{ color: sub, fontSize: 12, marginTop: 4 }}>Tap a genre to see albums</Text>
                   </View>
                 )}
+
+                </ProLockedSection>
               </>
             )}
           </>
