@@ -11,9 +11,30 @@ const MONTH_NAMES = [
 
 export type RecapStats = { albums: number; hours: number };
 
-/** 9am local on the 1st of the month after `from`. */
-function nextFirstOfMonth(from: Date): Date {
-  return new Date(from.getFullYear(), from.getMonth() + 1, 1, 9, 0, 0, 0);
+/**
+ * The next 9am-on-the-1st that hasn't happened yet.
+ *
+ * Deliberately not "the 1st of next month": opening the app at 8am on the 1st
+ * would then re-book for a month later and cancel the notification an hour
+ * before it fires. This keeps today's when it's still ahead of us.
+ */
+function nextRecapDate(from: Date): Date {
+  const thisMonth = new Date(from.getFullYear(), from.getMonth(), 1, 9, 0, 0, 0);
+  return thisMonth > from
+    ? thisMonth
+    : new Date(from.getFullYear(), from.getMonth() + 1, 1, 9, 0, 0, 0);
+}
+
+/**
+ * When the next recap fires and which month it covers — always the month that
+ * just ended, derived from the fire date rather than from "now". The scheduler
+ * calls this too, so the counts it gathers are always for the month the copy
+ * names, including in the 8am-on-the-1st window where those differ.
+ */
+export function recapTarget(now: Date = new Date()): { fireAt: Date; year: number; month: number } {
+  const fireAt = nextRecapDate(now);
+  const covered = new Date(fireAt.getFullYear(), fireAt.getMonth() - 1, 1);
+  return { fireAt, year: covered.getFullYear(), month: covered.getMonth() };
 }
 
 function plural(n: number, word: string) {
@@ -48,8 +69,7 @@ export async function scheduleMonthlyRecapNotification(stats: RecapStats | null)
     return;
   }
 
-  const now = new Date();
-  const fireAt = nextFirstOfMonth(now);
+  const { fireAt, year, month } = recapTarget();
   const signature = `${fireAt.toISOString()}|${stats.albums}|${stats.hours}`;
 
   const existing = await AsyncStorage.getItem(SIGNATURE_KEY);
@@ -57,14 +77,11 @@ export async function scheduleMonthlyRecapNotification(stats: RecapStats | null)
 
   await cancelMonthlyRecapNotification();
 
-  // The month being recapped is the one we're in now, not the one we fire in.
-  const monthName = MONTH_NAMES[now.getMonth()];
-
   const id = await Notifications.scheduleNotificationAsync({
     content: {
-      title: `Your ${monthName} is ready`,
+      title: `Your ${MONTH_NAMES[month]} is ready`,
       body: buildBody(stats),
-      data: { type: 'month_in_review', year: now.getFullYear(), month: now.getMonth() },
+      data: { type: 'month_in_review', year, month },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
