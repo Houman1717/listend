@@ -18,6 +18,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, Shared
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { ColorsShape } from '@/constants/Colors';
@@ -763,7 +764,7 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   const router = useRouter();
   const { signOut, user } = useAuth();
   const { preference, setPreference } = useTheme();
-  const { isPro, showPaywall, proTheme: activeProTheme } = usePro();
+  const { isPro, proLoaded, showPaywall, proTheme: activeProTheme } = usePro();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -856,6 +857,26 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
           </Pressable>
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
+
+          {/* Profile Theme — free users see the picker with locked themes */}
+          {proLoaded && (
+            <>
+              <Pressable
+                style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+                onPress={() => { onClose(); router.push('/profile-theme'); }}>
+                <View style={ss.iconWrap}>
+                  <Ionicons name="color-palette-outline" size={17} color={accentColor} />
+                </View>
+                <Text style={[ss.rowLabel, { color: labelColor }]}>Profile Theme</Text>
+                {isPro
+                  ? <FontAwesome name="chevron-right" size={13} color={segTextColor} />
+                  : <View style={[ss.proBadgeInline, { backgroundColor: accentColor }]}><Text style={ss.proBadgeText}>PRO</Text></View>
+                }
+              </Pressable>
+
+              <View style={[ss.separator, { backgroundColor: sepColor }]} />
+            </>
+          )}
 
           {/* Privacy */}
           <Pressable

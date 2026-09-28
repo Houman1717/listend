@@ -364,6 +364,7 @@ function ThemedApp() {
           <Stack.Screen name="privacy-settings" options={{ title: 'Privacy', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="blocked-users" options={{ title: 'Blocked Users', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="pro-settings" options={{ title: 'Listend Pro', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="profile-theme" options={{ title: 'Profile Theme', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
         </Stack>
       </NavThemeProvider>
     </FlipProvider>

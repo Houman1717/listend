@@ -67,7 +67,7 @@ const STAT_CARDS = [
   { value: '94',  label: 'Artists' },
 ];
 
-const FEATURES = [
+export const PRO_FEATURES = [
   { icon: 'list',             label: 'Unlimited Playlists',   sub: 'Create as many playlists as you like — free accounts are limited to 3' },
   { icon: 'random',           label: 'Flip Every Hour',       sub: 'Flip a Record every hour — free accounts are limited to once every 12 hours' },
   { icon: 'paint-brush',      label: 'Custom Profile Themes', sub: 'Give your profile a unique look that visitors can see' },
@@ -187,7 +187,7 @@ export function ProPaywallModal() {
             {/* ── Also Included ── */}
             <Text style={[s.sectionLabel, { color: c.textDim }]}>ALSO INCLUDED</Text>
             <View style={s.featureList}>
-              {FEATURES.map(f => (
+              {PRO_FEATURES.map(f => (
                 <View key={f.icon} style={s.featureRow}>
                   <View style={[s.featureIcon, { backgroundColor: c.surface2, borderColor: c.border }]}>
                     {f.isIonicon
