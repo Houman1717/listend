@@ -541,6 +541,49 @@ const MANUAL_ALBUMS = [
       { number: 6, id: 'lst-no-title-as-of-13-february-2024-t6', title: 'GREY RUBBLE – GREEN SHOOTS', durationMs: 413960 },
     ],
   },
+  {
+    id: 'lst-animal-religioso',
+    title: 'Animal Religioso',
+    artist: 'Genuflexión',
+    artistId: '1456200095',        // the band IS on Apple Music — these two records aren't
+    year: 2016,
+    // Apple Music carries only Apoteosis Fallida and Padre de Todos los
+    // Abismos. Dated 2016 on both MusicBrainz and Metal Archives; the 2015 in
+    // the suggestion is most likely their Promo 2015 single.
+    artworkUrl: 'https://coverartarchive.org/release-group/276eed8e-6976-46f3-8ffc-d3195702750e/front-500',
+    musicbrainzReleaseId: 'e4447eb5-0620-44fb-82de-24d954735fe0',
+    trackCount: 7,
+    tracks: [
+      { number: 1, id: 'lst-animal-religioso-t1', title: 'Animal religioso', durationMs: 344000 },
+      { number: 2, id: 'lst-animal-religioso-t2', title: 'A imagen y semejanza de mis necesidades', durationMs: 357000 },
+      { number: 3, id: 'lst-animal-religioso-t3', title: 'Vulneravilidad emocional de un dios', durationMs: 359000 },
+      { number: 4, id: 'lst-animal-religioso-t4', title: 'Esclavo en templos interiores', durationMs: 348000 },
+      { number: 5, id: 'lst-animal-religioso-t5', title: 'Adoración de la deidad que creé creyendo', durationMs: 338000 },
+      { number: 6, id: 'lst-animal-religioso-t6', title: 'Universo mental', durationMs: 304000 },
+      { number: 7, id: 'lst-animal-religioso-t7', title: 'Genuflexión', durationMs: 349000 },
+    ],
+  },
+  {
+    id: 'lst-donde-la-razon-posa-su-fuego',
+    title: 'Donde La Razón Posa Su Fuego',
+    artist: 'Genuflexión',
+    artistId: '1456200095',
+    year: 2024,
+    // MusicBrainz has the tracklist but no lengths for this one; those come
+    // from the album's Spotify listing, which matches its running order.
+    artworkUrl: 'https://coverartarchive.org/release-group/8a2d4f69-4d74-4a4a-aba5-10dd7bb49e8c/front-500',
+    musicbrainzReleaseId: 'c5ad06ac-112e-44c1-8aec-4d51af9c621f',
+    trackCount: 7,
+    tracks: [
+      { number: 1, id: 'lst-donde-la-razon-posa-su-fuego-t1', title: 'Donde la razón posa su fuego', durationMs: 263125 },
+      { number: 2, id: 'lst-donde-la-razon-posa-su-fuego-t2', title: 'Teogonía', durationMs: 297375 },
+      { number: 3, id: 'lst-donde-la-razon-posa-su-fuego-t3', title: 'La escritura del dios', durationMs: 295616 },
+      { number: 4, id: 'lst-donde-la-razon-posa-su-fuego-t4', title: 'Ajna', durationMs: 126250 },
+      { number: 5, id: 'lst-donde-la-razon-posa-su-fuego-t5', title: 'Vástago de fuego y penumbra', durationMs: 347625 },
+      { number: 6, id: 'lst-donde-la-razon-posa-su-fuego-t6', title: 'Desobediencia del primer hombre', durationMs: 314875 },
+      { number: 7, id: 'lst-donde-la-razon-posa-su-fuego-t7', title: 'Fervor de fe', durationMs: 256625 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
