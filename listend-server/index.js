@@ -283,6 +283,20 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1440767333', title: 'Turbe giovanili', artist: 'Fabri Fibra', year: 2002,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6f/66/ee/6f66ee1b-fd42-1397-d222-f284115c8b5a/00602527404899.rgb.jpg/500x500bb.jpg',
   },
+  // Apple has this record but never linked it to Invisible, so it reached
+  // neither the discography nor search. Keyed under both spellings of the
+  // title: normalizeKey strips the accent from "Jardín" rather than folding it,
+  // so the accented and plain spellings key differently.
+  'invisible::eljardindelospresentes': {
+    id: '401686454', title: 'El Jardin de los Presentes', artist: 'Invisible', year: 1976,
+    aliases: ['El Jardín de los Presentes'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/44/f2/db/mzi.guvztiab.jpg/500x500bb.jpg',
+  },
+  'invisible::eljardndelospresentes': {
+    id: '401686454', title: 'El Jardin de los Presentes', artist: 'Invisible', year: 1976,
+    aliases: ['El Jardín de los Presentes'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/44/f2/db/mzi.guvztiab.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],
@@ -872,8 +886,12 @@ const searchKey = s => foldForMatch(s).replace(/[^\p{L}\p{N}]/gu, '');
 function withAlbumSearchOverrides(q, results) {
   const words = foldForMatch(q).split(/\s+/).map(searchKey).filter(Boolean);
   if (words.join('').length < 3) return results; // a stray letter shouldn't match every override
+  // Every entry here is an album deliberately pinned because Apple's own
+  // search mishandles it — off-storefront, carried by us, or (Invisible's El
+  // Jardin de los Presentes) simply never returned for its own title.
+  const seenIds = new Set();
   const hits = Object.values(CANONICAL_ALBUM_OVERRIDES)
-    .filter(o => NON_US_STOREFRONT_IDS.has(o.id) || manualAlbumById(o.id))
+    .filter(o => { if (seenIds.has(o.id)) return false; seenIds.add(o.id); return true; })
     .filter(o => {
       const haystack = searchKey(`${o.artist} ${o.title} ${(o.aliases ?? []).join(' ')}`);
       return words.every(w => haystack.includes(w));
@@ -3084,6 +3102,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
       year: 1988, isSingle: false, isCompilation: false, trackCount: 12,
       url: 'https://music.apple.com/gb/album/isnt-anything/1556913225', type: 'album',
+    },
+  ],
+  '24836656': [ // Invisible — Apple has the album but doesn't list it under the artist
+    {
+      id: '401686454', title: 'El Jardin de los Presentes',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/44/f2/db/mzi.guvztiab.jpg/500x500bb.jpg',
+      year: 1976, isSingle: false, isCompilation: false, trackCount: 8,
+      url: 'https://music.apple.com/us/album/el-jardin-de-los-presentes/401686454', type: 'album',
     },
   ],
   '74566445': [ // 高中正義 (Masayoshi Takanaka) — jp-only releases
