@@ -864,15 +864,18 @@ app.get('/decades', async (req, res) => {
 // (not before caching) so results cached before an override was added pick it
 // up too. Accents are folded so "forca bruta" finds "Força Bruta".
 const foldForMatch = s => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+// Keeps letters and digits of every script, so a Japanese or Cyrillic query
+// still has something to match on — stripping to [a-z0-9] emptied "虹伝説" and
+// no search in a non-Latin script could ever hit these albums.
+const searchKey = s => foldForMatch(s).replace(/[^\p{L}\p{N}]/gu, '');
 
 function withAlbumSearchOverrides(q, results) {
-  const words = foldForMatch(q).split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  const words = foldForMatch(q).split(/\s+/).map(searchKey).filter(Boolean);
   if (words.join('').length < 3) return results; // a stray letter shouldn't match every override
   const hits = Object.values(CANONICAL_ALBUM_OVERRIDES)
     .filter(o => NON_US_STOREFRONT_IDS.has(o.id) || manualAlbumById(o.id))
     .filter(o => {
-      const haystack = foldForMatch(`${o.artist} ${o.title} ${(o.aliases ?? []).join(' ')}`)
-        .replace(/[^a-z0-9]/g, '');
+      const haystack = searchKey(`${o.artist} ${o.title} ${(o.aliases ?? []).join(' ')}`);
       return words.every(w => haystack.includes(w));
     })
     .filter(o => !results.some(r => r.id === o.id))
@@ -892,12 +895,12 @@ const MANUAL_TRACKS = MANUAL_ALBUMS.flatMap(a => a.tracks.map(t => ({
 })));
 
 function withTrackSearchOverrides(q, results) {
-  const words = foldForMatch(q).split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  const words = foldForMatch(q).split(/\s+/).map(searchKey).filter(Boolean);
   if (words.join('').length < 3) return results;
   const hits = MANUAL_TRACKS
     .filter(t => {
       // Album title included so "exmilitary beware" finds the right Beware.
-      const haystack = foldForMatch(`${t.artist} ${t.title} ${t.albumTitle}`).replace(/[^a-z0-9]/g, '');
+      const haystack = searchKey(`${t.artist} ${t.title} ${t.albumTitle}`);
       return words.every(w => haystack.includes(w));
     })
     .filter(t => !results.some(r => r.id === t.id))
@@ -911,12 +914,11 @@ function withTrackSearchOverrides(q, results) {
 // Noyz Narcos, a guest on their record — and the artist page opens the first
 // result, so a manual artist has to come first or the wrong page opens.
 function withArtistSearchOverrides(q, results) {
-  const words = foldForMatch(q).split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  const words = foldForMatch(q).split(/\s+/).map(searchKey).filter(Boolean);
   if (words.join('').length < 3) return results;
   const hits = MANUAL_ARTISTS
     .filter(a => {
-      const haystack = foldForMatch(`${a.name} ${(a.aliases ?? []).join(' ')}`)
-        .replace(/[^a-z0-9]/g, '');
+      const haystack = searchKey(`${a.name} ${(a.aliases ?? []).join(' ')}`);
       return words.every(w => haystack.includes(w));
     })
     .filter(a => !results.some(r => r.id === a.id))
