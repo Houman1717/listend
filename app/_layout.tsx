@@ -28,7 +28,12 @@ import { MonthlyRecapScheduler } from '@/components/MonthlyRecapScheduler';
 import { ProProvider } from '@/context/ProContext';
 import { RevenueCatProvider } from '@/context/RevenueCatContext';
 import { ProPaywallModal } from '@/components/ProPaywallModal';
+import { HeaderBackButton, needsJsBackButton } from '@/components/HeaderBackButton';
 import { configureGoogleSignIn } from '@/lib/auth/googleAuth';
+
+// presentation: 'modal' screens open their own native nav controller and show
+// no back button — never give them one.
+const MODAL_ROUTES = new Set(['modal', 'log-album', 'album-detail', 'pick-item']);
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -320,7 +325,17 @@ function ThemedApp() {
         <MonthlyRecapScheduler />
         <OfflineBanner />
         <ProPaywallModal />
-        <Stack screenOptions={{ headerBackTitle: '', headerBackButtonDisplayMode: 'minimal' }}>
+        <Stack
+          screenOptions={({ navigation, route }) => ({
+            headerBackTitle: '',
+            headerBackButtonDisplayMode: 'minimal',
+            // iOS 26 native back button is dead on RNScreens 4.16 — see HeaderBackButton.
+            ...(needsJsBackButton && !MODAL_ROUTES.has(route.name) && {
+              headerLeft: ({ canGoBack, tintColor }: { canGoBack?: boolean; tintColor?: string }) =>
+                canGoBack ? <HeaderBackButton onPress={() => navigation.goBack()} tintColor={tintColor} /> : null,
+            }),
+          })}
+        >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="signup" options={{ headerShown: false }} />
