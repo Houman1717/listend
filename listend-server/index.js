@@ -42,14 +42,17 @@ async function attachSongArtists(tracks) {
   const missing = tracks.filter(t => t.id && !t.artist);
   if (missing.length === 0) return tracks;
 
+  // A song off an album Listend carries itself has no Apple id to look up, and
+  // mixing one into a batch would cost the whole chunk its names.
+  const names = new Map();
   const byStorefront = new Map();
   for (const t of missing) {
+    const manual = manualTrackById(t.id);
+    if (manual) { names.set(t.id, manual.album.artist); continue; }
     const sf = storefrontFor(t.id);
     if (!byStorefront.has(sf)) byStorefront.set(sf, []);
     byStorefront.get(sf).push(t.id);
   }
-
-  const names = new Map();
   await Promise.all(Array.from(byStorefront.entries()).map(async ([sf, ids]) => {
     // Apple caps the ids param, so chunk well under it.
     for (let i = 0; i < ids.length; i += 100) {
@@ -841,6 +844,32 @@ function withAlbumSearchOverrides(q, results) {
   return hits.length > 0 ? [...hits, ...results] : results;
 }
 
+// Songs from those albums, so they can be picked as a Top 5 song — the picker
+// searches type=track, which only ever asked Apple, so none of them could be.
+const MANUAL_TRACKS = MANUAL_ALBUMS.flatMap(a => a.tracks.map(t => ({
+  id: t.id,
+  title: t.title,
+  artist: a.artist,
+  artworkUrl: a.artworkUrl,
+  releaseDate: String(a.year),
+  albumTitle: a.title,
+})));
+
+function withTrackSearchOverrides(q, results) {
+  const words = foldForMatch(q).split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  if (words.join('').length < 3) return results;
+  const hits = MANUAL_TRACKS
+    .filter(t => {
+      // Album title included so "exmilitary beware" finds the right Beware.
+      const haystack = foldForMatch(`${t.artist} ${t.title} ${t.albumTitle}`).replace(/[^a-z0-9]/g, '');
+      return words.every(w => haystack.includes(w));
+    })
+    .filter(t => !results.some(r => r.id === t.id))
+    .slice(0, 10)
+    .map(({ albumTitle, ...t }) => t);
+  return hits.length > 0 ? [...hits, ...results] : results;
+}
+
 // Same idea for artists Listend carries itself (manualAlbums.js). Apple's
 // artist search returns *someone* for any name — for In The Panchine it's
 // Noyz Narcos, a guest on their record — and the artist page opens the first
@@ -875,6 +904,7 @@ app.get('/search', [
   const withOverrides = results =>
     type === 'album'  ? withAlbumSearchOverrides(q, results)  :
     type === 'artist' ? withArtistSearchOverrides(q, results) :
+    type === 'track'  ? withTrackSearchOverrides(q, results)  :
     results;
 
   const mem = cacheGet(CACHE_KEY);
