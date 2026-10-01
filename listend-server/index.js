@@ -176,6 +176,27 @@ pinStorefront('it', [
   '1444586727', '1444586738', '1444586740', '1444586925',
 ]);
 
+// 高中正義 (Masayoshi Takanaka) — SUPER STUDIO LIVE! (1980)
+pinStorefront('jp', [
+  '910928809',
+  '910928820', '910928821', '910928822', '910928823', '910928824', '910928825',
+  '910928826', '910928827', '910928828', '910928830',
+]);
+// 高中正義 — 虹伝説 -The Rainbow Goblins- (1981; Apple's jp entry carries a 1986
+// reissue date, but MusicBrainz dates the record 1981-03-10)
+pinStorefront('jp', [
+  '1444174484',
+  '1444174488', '1444174494', '1444174496', '1444174498', '1444174499', '1444174501',
+  '1444174505', '1444174506', '1444174509', '1444174632', '1444174633', '1444174637',
+  '1444174639', '1444174640',
+]);
+// 高中正義 — 夏道 (2009)
+pinStorefront('jp', [
+  '1793109857',
+  '1793109980', '1793110129', '1793110147', '1793110151', '1793110154', '1793110373',
+  '1793110386', '1793110390', '1793110397', '1793110525',
+]);
+
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
 // ── Canonical album resolution ────────────────────────────────────────────────
@@ -261,6 +282,21 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'fabrifibra::turbegiovanili': {
     id: '1440767333', title: 'Turbe giovanili', artist: 'Fabri Fibra', year: 2002,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6f/66/ee/6f66ee1b-fd42-1397-d222-f284115c8b5a/00602527404899.rgb.jpg/500x500bb.jpg',
+  },
+  '高中正義::therainbowgoblins': {
+    id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
+    aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/a2/33/3b/a2333b15-c21e-7979-cfd0-5e42c2fa362d/00602498911693.rgb.jpg/500x500bb.jpg',
+  },
+  '高中正義::superstudiolive': {
+    id: '910928809', title: 'SUPER STUDIO LIVE!', artist: '高中正義', year: 1980,
+    aliases: ['Masayoshi Takanaka'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music5/v4/4b/61/be/4b61beb4-d52e-6f62-387e-fdf3fb3f6e36/SUPER_STUDIO_LIVE_mid.jpg/500x500bb.jpg',
+  },
+  '高中正義::夏道': {
+    id: '1793109857', title: '夏道', artist: '高中正義', year: 2009,
+    aliases: ['Masayoshi Takanaka', 'Natsumichi'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/db/9f/d4/db9fd471-7d57-cb46-4007-1cdaa24c0f40/199066487341.jpg/500x500bb.jpg',
   },
   'fabrifibra::applausiperfibraep': {
     id: '1445125411', title: 'Applausi Per Fibra - EP', artist: 'Fabri Fibra', year: 2006,
@@ -3046,6 +3082,26 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
       year: 1988, isSingle: false, isCompilation: false, trackCount: 12,
       url: 'https://music.apple.com/gb/album/isnt-anything/1556913225', type: 'album',
+    },
+  ],
+  '74566445': [ // 高中正義 (Masayoshi Takanaka) — jp-only releases
+    {
+      id: '1444174484', title: '虹伝説 -The Rainbow Goblins-',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/a2/33/3b/a2333b15-c21e-7979-cfd0-5e42c2fa362d/00602498911693.rgb.jpg/500x500bb.jpg',
+      year: 1981, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/jp/album/%E8%99%B9%E4%BC%9D%E8%AA%AC-the-rainbow-goblins/1444174484', type: 'album',
+    },
+    {
+      id: '910928809', title: 'SUPER STUDIO LIVE!',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music5/v4/4b/61/be/4b61beb4-d52e-6f62-387e-fdf3fb3f6e36/SUPER_STUDIO_LIVE_mid.jpg/500x500bb.jpg',
+      year: 1980, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/jp/album/super-studio-live/910928809', type: 'album',
+    },
+    {
+      id: '1793109857', title: '夏道',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/db/9f/d4/db9fd471-7d57-cb46-4007-1cdaa24c0f40/199066487341.jpg/500x500bb.jpg',
+      year: 2009, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/jp/album/%E5%A4%8F%E9%81%93/1793109857', type: 'album',
     },
   ],
   '24329193': [ // Verdena — Italian releases Apple never licensed for `us`.
