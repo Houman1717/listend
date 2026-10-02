@@ -297,6 +297,17 @@ const CANONICAL_ALBUM_OVERRIDES = {
     aliases: ['El Jardín de los Presentes'],
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/44/f2/db/mzi.guvztiab.jpg/500x500bb.jpg',
   },
+  // Released 2026-10-02 and already in the catalog by id, but Apple's search
+  // index hadn't picked it up yet, so populate-new-releases couldn't find it.
+  // Keyed under both spellings of the artist: normalizeKey strips the "é".
+  'victoriamont::frequencyoflove': {
+    id: '6791645195', title: 'Frequency Of Love', artist: 'Victoria Monét', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/61/fa/63/61fa635a-fc24-b63a-00eb-a88371c28eab/196874323458.jpg/500x500bb.jpg',
+  },
+  'victoriamonet::frequencyoflove': {
+    id: '6791645195', title: 'Frequency Of Love', artist: 'Victoria Monét', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/61/fa/63/61fa635a-fc24-b63a-00eb-a88371c28eab/196874323458.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],
