@@ -2981,6 +2981,17 @@ async function cacheAlbumTracks(key, tracks) {
   await setCache(key, tracks);
 }
 
+// Albums whose catalog tracklist runs past the real record. Drake's explicit
+// HABIBTI (FOMO) is the 15-track album followed by nine unlabelled repeats
+// (16–24), and it's the only explicit edition Apple carries — the 15-track
+// one is the clean release. Applied on every read, cached or fresh, so a
+// tracklist cached before the cap existed is trimmed too.
+const TRACKLIST_CAPS = {
+  '6818209777': 15,
+};
+const capTracklist = (id, tracks) =>
+  TRACKLIST_CAPS[id] && Array.isArray(tracks) ? tracks.slice(0, TRACKLIST_CAPS[id]) : tracks;
+
 app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
@@ -2993,10 +3004,10 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   const CACHE_KEY = `catalog_album_tracks_${id}`;
 
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem) return res.json(capTracklist(id, mem));
 
   const db = await getCached(CACHE_KEY, TTL_24H);
-  if (tracksComplete(db)) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (tracksComplete(db)) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(capTracklist(id, db)); }
 
   try {
     const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/tracks`);
@@ -3008,7 +3019,7 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
       featuredArtists: [],
     }));
     await cacheAlbumTracks(CACHE_KEY, tracks);
-    res.json(tracks);
+    res.json(capTracklist(id, tracks));
   } catch (err) {
     console.error('[/catalog/album/tracks]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
@@ -3770,7 +3781,7 @@ app.get('/api/album-durations', [
         return;
       }
     }
-    const totalMs = (tracks ?? []).reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
+    const totalMs = (capTracklist(id, tracks) ?? []).reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
     if (totalMs > 0) result[id] = totalMs;
   }));
 
