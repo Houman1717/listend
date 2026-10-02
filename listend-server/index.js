@@ -3122,6 +3122,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       url: 'https://music.apple.com/us/album/the-real-me/6784327271', type: 'album',
     },
   ],
+  '271256': [ // Drake — released 2026-10-01 but not yet linked under the artist
+    {
+      id: '6818209777', title: 'HABIBTI (FOMO)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/bb/45/62/bb4562a3-45a2-539c-b557-a18ea060a476/26UMGIM63616.rgb.jpg/500x500bb.jpg',
+      year: 2026, isSingle: false, isCompilation: false, trackCount: 15,
+      url: 'https://music.apple.com/us/album/habibti-fomo/6818209777', type: 'album',
+    },
+  ],
   '206711': [ // my bloody valentine — loveless + isn't anything aren't licensed
     // for the `us` storefront (present on `gb`/`ca`/etc.); ids listed in
     // pinned to `gb` above so tracks/durations/streaming-links still resolve.
