@@ -4,8 +4,8 @@
 
 const NEW_RELEASE_ALBUMS = [
   { artist: 'Drake',                  title: 'HABIBTI (FOMO)' },
-  { artist: 'Victoria Monét',         title: 'Frequency Of Love' },
   { artist: 'Quavo',                  title: 'QRÖMELIFE' },
+  { artist: 'Victoria Monét',         title: 'Frequency Of Love' },
   { artist: 'Taylor Swift',           title: 'The Life of a Showgirl: The Encore' },
   { artist: 'Tinashe',                title: 'Popstar' },
   { artist: 'Leon Bridges',           title: 'Happiness Anytime' },

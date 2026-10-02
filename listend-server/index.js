@@ -3335,6 +3335,14 @@ async function buildArtistDiscography(id, bust = false) {
   ];
   const inAllowlist = title => TITLE_ALLOWLIST.some(t => title.toLowerCase().includes(t));
 
+  // Expanded editions whose title doesn't say "deluxe". Left to the album
+  // rules they land in Albums, where the base-title dedup folds them into the
+  // original and they vanish from the profile entirely.
+  const COLLECTION_TITLES = [
+    'habibti (fomo)',   // Drake's expanded HABIBTI
+  ];
+  const inCollectionTitles = title => COLLECTION_TITLES.includes(title.toLowerCase());
+
   const LIVE_RE       = /\b(live|concert|tour|session|performance)\b|apple(?:\s+music)?\s+presents|chopnotslop|chopped\s+not\s+slopped/i;
   const COLLECTION_RE = /\b(greatest\s+hits?|highlights?|collection|deluxe)\b|best\s+of\b/i;
   // The dotted spelling needs its own alternative: \bep\b does not match "E.P.".
@@ -3358,7 +3366,7 @@ async function buildArtistDiscography(id, bust = false) {
     const t = item.title;
     if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
     if (inAllowlist(t)) return 'epsAndMixtapes';
-    if (item.isCompilation === true || COLLECTION_RE.test(t)) return 'collections';
+    if (item.isCompilation === true || COLLECTION_RE.test(t) || inCollectionTitles(t)) return 'collections';
     if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
     if (item.url && item.url.toLowerCase().includes('/single/')) return 'epsAndMixtapes';
     // Albums Listend carries itself know their own run time (Apple has no entry
