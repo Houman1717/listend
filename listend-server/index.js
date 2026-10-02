@@ -2968,6 +2968,19 @@ app.get(['/catalog/track/:id', '/spotify/track/:id'], [
   }
 });
 
+// Pre-order albums list their unreleased tracks with no duration, so a
+// tracklist cached before release day totals a few minutes (Quavo's
+// QRÖMELIFE showed 8 min of 37) and stays stuck there for the cache TTL.
+// Only a fully-timed tracklist is final: an incomplete one is held in memory
+// for 10 minutes and never persisted, and one already in Supabase is ignored.
+const tracksComplete = tracks => Array.isArray(tracks) && tracks.every(t => (t.durationMs ?? 0) > 0);
+
+async function cacheAlbumTracks(key, tracks) {
+  if (!tracksComplete(tracks)) { cacheSet(key, tracks, TTL_10M); return; }
+  cacheSet(key, tracks, TTL_6H);
+  await setCache(key, tracks);
+}
+
 app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
@@ -2983,7 +2996,7 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   if (mem) return res.json(mem);
 
   const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (tracksComplete(db)) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
   try {
     const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/tracks`);
@@ -2994,8 +3007,7 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
       durationMs: t.attributes?.durationInMillis ?? 0,
       featuredArtists: [],
     }));
-    cacheSet(CACHE_KEY, tracks, TTL_6H);
-    await setCache(CACHE_KEY, tracks);
+    await cacheAlbumTracks(CACHE_KEY, tracks);
     res.json(tracks);
   } catch (err) {
     console.error('[/catalog/album/tracks]', err.message ?? err);
@@ -3738,7 +3750,10 @@ app.get('/api/album-durations', [
 
     const CACHE_KEY = `catalog_album_tracks_${id}`;
     let tracks = cacheGet(CACHE_KEY);
-    if (!tracks) tracks = await getCached(CACHE_KEY, TTL_24H);
+    if (!tracks) {
+      const db = await getCached(CACHE_KEY, TTL_24H);
+      if (tracksComplete(db)) tracks = db;
+    }
     if (!tracks) {
       try {
         const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/tracks`);
@@ -3749,8 +3764,7 @@ app.get('/api/album-durations', [
           durationMs: t.attributes?.durationInMillis ?? 0,
           featuredArtists: [],
         }));
-        cacheSet(CACHE_KEY, tracks, TTL_6H);
-        await setCache(CACHE_KEY, tracks);
+        await cacheAlbumTracks(CACHE_KEY, tracks);
       } catch (err) {
         console.warn(`[/api/album-durations] failed for ${id}:`, err.message ?? err);
         return;
