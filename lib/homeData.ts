@@ -224,8 +224,15 @@ export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
 // caller's own like is applied client-side via the optimistic `likedReviews` set
 // (`likeCount + (liked ? 1 : 0)`), so leaving it in the server count here would
 // double-count it once a refetch picks up the now-persisted like row.
+// Popular Reviews only considers reviews written within this window — keep in
+// sync with POPULAR_REVIEW_MAX_AGE_MS in listend-server.
+const POPULAR_REVIEW_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+// Reviews rated this or lower (out of 10) are left out of Popular Reviews.
+const POPULAR_REVIEW_LOW_RATING_MAX = 3;
+
 export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promise<PopularReview[]> {
   const since = weekAgo();
+  const reviewCutoff = Date.now() - POPULAR_REVIEW_MAX_AGE_MS;
 
   const [{ data: likeRows }, { data: commentRows }] = await Promise.all([
     supabase.from('likes').select('target_id, user_id').eq('target_type', 'review').gte('created_at', since),
@@ -282,12 +289,12 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
   const [{ data: reviewRows }, { data: relistenRows }, { data: profiles }] = await Promise.all([
     supabase
       .from('user_albums')
-      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, is_relistened')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, is_relistened, created_at')
       .in('user_id', userIds)
       .in('spotify_id', spotifyIds),
     supabase
       .from('re_listens')
-      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at, created_at')
       .in('user_id', userIds)
       .in('spotify_id', spotifyIds)
       .order('listened_at', { ascending: false }),
@@ -302,18 +309,22 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
   // re-listen (with the original log unrated/unreviewed) must still surface.
   const latestReListenRating = new Map<string, number>();
   const latestReListenReview = new Map<string, string>();
+  const latestReListenReviewAt = new Map<string, string>();
   // Also keyed by the exact re-listen target_id, so a like on one specific
   // re-listen review resolves to that re-listen's own rating/review.
   const reListenMap = new Map<string, any>();
   for (const rl of (relistenRows ?? []) as any[]) {
     const key = `${rl.user_id}_${rl.spotify_id}`;
     if (!latestReListenRating.has(key) && rl.rating) latestReListenRating.set(key, rl.rating);
-    if (!latestReListenReview.has(key) && rl.review) latestReListenReview.set(key, rl.review);
+    if (!latestReListenReview.has(key) && rl.review) {
+      latestReListenReview.set(key, rl.review);
+      latestReListenReviewAt.set(key, rl.created_at);
+    }
     reListenMap.set(`relisten_${key}_${rl.listened_at}`, rl);
   }
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id as string, { username: p.username as string | null, handle: handleOrName(p.username, p.display_name, p.id), avatarUrl: p.avatar_url as string | null, isPro: !!(p.is_pro) }]));
 
-  const reviews: (PopularReview & { weeklyScore: number })[] = [];
+  const reviews: (PopularReview & { weeklyScore: number; writtenAt: string })[] = [];
   for (const { targetId, userId, spotifyId, listenedAt } of pairs) {
     const baseKey = `${userId}_${spotifyId}`;
     const base    = rowMap.get(baseKey);
@@ -323,9 +334,18 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
       ? (rl?.review ?? '')
       : ((base.is_relistened ? latestReListenReview.get(baseKey) : undefined) ?? base.review ?? '');
     if (!review) continue;
+    // Only reviews written in the last two weeks qualify, so a handful of old
+    // reviews can't camp at the top just because they're the most seen.
+    const writtenAt = listenedAt
+      ? rl?.created_at
+      : (base.is_relistened && latestReListenReview.has(baseKey) ? latestReListenReviewAt.get(baseKey) : base.created_at);
+    if (!writtenAt || Date.parse(writtenAt) < reviewCutoff) continue;
     const rating = listenedAt
       ? (rl?.rating ?? 0)
       : ((base.is_relistened ? latestReListenRating.get(baseKey) : undefined) ?? base.rating ?? 0);
+    // Home doesn't lead with takedowns: rated 1–3 is left out of this row (still
+    // shown everywhere else). 0 means unrated, which still qualifies.
+    if (rating >= 1 && rating <= POPULAR_REVIEW_LOW_RATING_MAX) continue;
     const r = base ?? rl;
     const prof = profileMap.get(userId);
     const weeklyLikes = weeklyLikeCounts.get(targetId) ?? 0;
@@ -346,11 +366,13 @@ export async function fetchPopularReviewsThisWeek(currentUserId?: string): Promi
       likeCount: (likeCounts.get(targetId) ?? 0) - (currentUserLikedIds.has(targetId) ? 1 : 0),
       commentCount: totalCommentCounts.get(targetId) ?? 0,
       weeklyScore: weeklyLikes + weeklyComments,
+      writtenAt,
     });
   }
 
-  reviews.sort((a, b) => b.weeklyScore - a.weeklyScore);
-  return reviews.slice(0, 30).map(({ weeklyScore, ...r }) => r);
+  // Equal engagement → newer review first.
+  reviews.sort((a, b) => (b.weeklyScore - a.weeklyScore) || (Date.parse(b.writtenAt) - Date.parse(a.writtenAt)));
+  return reviews.slice(0, 30).map(({ weeklyScore, writtenAt, ...r }) => r);
 }
 
 // Each section is the fetched array, or `undefined` if that section failed to
