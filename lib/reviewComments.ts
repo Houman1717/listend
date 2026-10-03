@@ -66,9 +66,37 @@ export async function insertReviewComment(
   return newCommentId;
 }
 
+// Most earlier commenters notified when a review's owner answers in the main box.
+const OWNER_REPLY_MAX_RECIPIENTS = 20;
+
 // Notifies the parent comment's author on a reply, or the review's owner on a
 // top-level comment. Never notifies someone about their own action.
 async function notifyForComment(reviewId: string, actorId: string, parentCommentId: string | null, commentId: string) {
+  // A review's owner usually answers commenters in the main comment box rather
+  // than tapping Reply, which would notify nobody (the top-level "comment"
+  // notification goes to the owner — themselves). Treat it as a reply to
+  // everyone who has already commented.
+  if (!parentCommentId && reviewOwnerId(reviewId) === actorId) {
+    const { data: earlier, error: earlierErr } = await supabase
+      .from('review_comments')
+      .select('user_id')
+      .eq('review_id', reviewId)
+      .neq('user_id', actorId)
+      .neq('id', commentId);
+    if (earlierErr) { console.error('[notifyForComment] commenters', earlierErr.message); return; }
+    const recipients = [...new Set((earlier ?? []).map((r: any) => r.user_id as string))].slice(0, OWNER_REPLY_MAX_RECIPIENTS);
+    if (!recipients.length) return;
+    const { error } = await supabase.from('notifications').insert(recipients.map(user_id => ({
+      user_id,
+      type:       'comment_reply',
+      actor_id:   actorId,
+      target_id:  reviewId,
+      comment_id: commentId,
+    })));
+    if (error) console.error('[notifyForComment]', error.message);
+    return;
+  }
+
   let recipientId: string | null = null;
 
   if (parentCommentId) {
