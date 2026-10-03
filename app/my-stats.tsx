@@ -12,11 +12,15 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { ProBadge } from '@/components/ProBadge';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabaseQuery';
 import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 import { FLIP_POOL } from '@/constants/FlipPool';
 import { useFlip } from '@/context/FlipContext';
 import { LinearGradient } from 'expo-linear-gradient';
+
+// Album titles per `.in('title', …)` request for community averages — keeps URLs short.
+const COMMUNITY_TITLE_CHUNK = 80;
 
 const MAIN_GENRES = new Set([
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
@@ -981,15 +985,29 @@ export default function MyStatsScreen() {
     const ratedAlbums = loggedAlbums.filter(a => effectiveRating(a) > 0);
     if (ratedAlbums.length === 0) return;
     const run = async (excludeUid: string) => {
-      // Match by title+year (not spotify_id) — different users may have different AM IDs for same album
-      const { data } = await supabase
-        .from('user_albums')
-        .select('title, year, rating')
-        .gt('rating', 0)
-        .neq('user_id', excludeUid);
+      // Match by title+year (not spotify_id) — different users may have different AM IDs for same album.
+      // Only fetch ratings for the titles this user rated, in chunks, every page:
+      // an unfiltered select is capped at 1000 rows by PostgREST, which sampled
+      // ~2% of all ratings and left almost every album under MIN_COMMUNITY.
+      const titles = [...new Set(ratedAlbums.map(a => a.title).filter(Boolean))];
+      const chunks: string[][] = [];
+      for (let i = 0; i < titles.length; i += COMMUNITY_TITLE_CHUNK) chunks.push(titles.slice(i, i + COMMUNITY_TITLE_CHUNK));
+      const pages = await Promise.all(chunks.map(chunk => fetchAllRows<{ title: string | null; year: number | null; rating: number }>(
+        (from, to) => supabase
+          .from('user_albums')
+          .select('title, year, rating')
+          .in('title', chunk)
+          .gt('rating', 0)
+          .neq('user_id', excludeUid)
+          .range(from, to),
+        20,
+      )));
+      // A failed chunk would undercount — keep whatever we showed before.
+      if (pages.some(p => p === null)) return;
+      const data = pages.flatMap(p => p ?? []);
       // Build community map keyed by title_lower::year
       const communityMap: Record<string, number[]> = {};
-      for (const row of data ?? []) {
+      for (const row of data) {
         const key = `${(row.title ?? '').toLowerCase()}::${row.year ?? 0}`;
         if (!communityMap[key]) communityMap[key] = [];
         communityMap[key].push(row.rating);
