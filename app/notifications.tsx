@@ -171,6 +171,7 @@ export default function NotificationsScreen() {
       .from('notifications')
       .select('id, type, read, created_at, actor_id, target_id, comment_id')
       .eq('user_id', user.id)
+      .neq('type', 'message')
       .order('created_at', { ascending: false })
       .limit(50);
 
