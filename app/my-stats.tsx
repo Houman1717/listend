@@ -1379,8 +1379,10 @@ export default function MyStatsScreen() {
     );
   }
 
-  // ── Own Pro gate — tease with one real, unlocked number, then blur the rest ──
-  if (!isPro) {
+  // ── Own Pro gate — tease with one real, unlocked number, then blur the rest.
+  //    Only for your own stats: viewing a Pro user's stats is free for everyone
+  //    (the viewed user's Pro status is checked above). ──
+  if (!viewedUserId && !isPro) {
     const c = Colors[colorScheme ?? 'dark'];
     // Everything below the hero stays locked. Labels are real so the preview is
     // honest about what's inside; the values are masked.
@@ -1885,7 +1887,7 @@ export default function MyStatsScreen() {
 
         {/* ── Hero Stats ────────────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
-          <Text style={[s.cardTitle, { color: colors.textMuted, paddingHorizontal: 18, paddingTop: 18, marginBottom: 0 }]}>MY STATS</Text>
+          <Text style={[s.cardTitle, { color: colors.textMuted, paddingHorizontal: 18, paddingTop: 18, marginBottom: 0 }]}>{viewedUserId ? 'STATS' : 'MY STATS'}</Text>
           <StatRow stats={heroStats.slice(0, 3)} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: cardBorder, marginHorizontal: 8 }} />
           <StatRow stats={heroStats.slice(3)} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
@@ -1900,7 +1902,7 @@ export default function MyStatsScreen() {
             style={({ pressed }) => [s.card, { flex: 1, backgroundColor: cardBg, borderColor: cardBorder, gap: 6, opacity: pressed ? 0.7 : 1 }]}>
             <FontAwesome name="calendar" size={18} color={colors.tint} />
             <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 4 }}>Year in Review</Text>
-            <Text style={{ color: colors.subtext, fontSize: 12 }}>Deep dive into your year</Text>
+            <Text style={{ color: colors.subtext, fontSize: 12 }}>{viewedUserId ? 'Deep dive into their year' : 'Deep dive into your year'}</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push(viewedUserId
@@ -1937,7 +1939,7 @@ export default function MyStatsScreen() {
           <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <Text style={[s.cardTitle, { color: colors.textMuted }]}>RATED VS COMMUNITY</Text>
             {!hasComparison && (
-              <EmptyState text="Your ratings will be compared to the community once enough listeners have rated the same albums." />
+              <EmptyState text={`${viewedUserId ? 'Their' : 'Your'} ratings will be compared to the community once enough listeners have rated the same albums.`} />
             )}
 
             {/* Rated Higher */}
