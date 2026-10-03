@@ -302,19 +302,21 @@ function Chip({ label, onPress, isDark }: { label: string; onPress: () => void; 
 
 // ─── Bird's-eye turntable icon ────────────────────────────────────────────────
 
-function TurntableIcon() {
+// White lines vanish on the light card, so light mode draws in warm brown.
+function TurntableIcon({ isDark }: { isDark: boolean }) {
+  const ink = isDark ? '255,255,255' : '107,76,53';
   return (
     <View style={{ width: 40, height: 40 }}>
       <View style={{
         position: 'absolute', top: 0, left: 0, width: 40, height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.13)',
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.55)',
+        backgroundColor: `rgba(${ink},0.13)`,
+        borderWidth: 1.5, borderColor: `rgba(${ink},0.55)`,
       }} />
       <View style={{
         position: 'absolute', top: 6, left: 6, width: 28, height: 28,
         borderRadius: 14, borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.25)', backgroundColor: 'transparent',
+        borderColor: `rgba(${ink},0.25)`, backgroundColor: 'transparent',
       }} />
       <View style={{
         position: 'absolute', top: 14, left: 14, width: 12, height: 12,
@@ -326,12 +328,12 @@ function TurntableIcon() {
       }} />
       <View style={{
         position: 'absolute', top: 2, left: 28, width: 2, height: 20,
-        borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.9)',
+        borderRadius: 1, backgroundColor: `rgba(${ink},0.9)`,
         transform: [{ rotate: '37deg' }],
       }} />
       <View style={{
         position: 'absolute', top: 1, left: 32, width: 6, height: 6,
-        borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.85)',
+        borderRadius: 3, backgroundColor: `rgba(${ink},0.85)`,
       }} />
     </View>
   );
@@ -352,7 +354,7 @@ function FlipEntryCard({ onPress, isDark }: { onPress: () => void; isDark: boole
 
       <View style={se.iconWrap}>
         <View style={{ transform: [{ scale: 0.85 }] }}>
-          <TurntableIcon />
+          <TurntableIcon isDark={isDark} />
         </View>
       </View>
 
