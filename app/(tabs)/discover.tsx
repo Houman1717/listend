@@ -350,22 +350,22 @@ function FlipEntryCard({ onPress, isDark }: { onPress: () => void; isDark: boole
 
       <View style={se.accentBar} />
 
-      <View style={se.topRow}>
-        <View style={se.iconWrap}>
+      <View style={se.iconWrap}>
+        <View style={{ transform: [{ scale: 0.85 }] }}>
           <TurntableIcon />
-        </View>
-        <View style={se.badge}>
-          <Text style={se.badgeText}>{FLIP_POOL.length.toLocaleString()} Albums</Text>
         </View>
       </View>
 
       <View style={se.textBlock}>
         <Text style={[se.title, { color: titleCol }]}>Flip a Record</Text>
-        <Text style={[se.subtitle, { color: subtitleCol }]}>Discover a random album from our must-hear list</Text>
+        <Text style={[se.subtitle, { color: subtitleCol }]} numberOfLines={2}>
+          Get a random album from {FLIP_POOL.length.toLocaleString()} must hears
+        </Text>
       </View>
 
-      <View style={se.bottomRow}>
-        <Text style={se.cta}>Try it →</Text>
+      <View style={se.ctaPill}>
+        <FontAwesome name="random" size={12} color="#FFFFFF" />
+        <Text style={se.ctaText}>Flip</Text>
       </View>
     </Pressable>
   );
@@ -690,11 +690,14 @@ const fp = StyleSheet.create({
 
 const se = StyleSheet.create({
   card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     borderRadius: 16,
     overflow: 'hidden',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    gap: 14,
+    paddingLeft: 18,
+    paddingRight: 14,
+    paddingVertical: 14,
     shadowColor: '#D4A017',
     shadowOpacity: 0.25,
     shadowRadius: 16,
@@ -709,35 +712,29 @@ const se = StyleSheet.create({
     backgroundColor: '#D4A017',
   },
 
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   iconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+    width: 46,
+    height: 46,
+    borderRadius: 12,
     backgroundColor: 'rgba(232,150,58,0.15)',
     borderWidth: 1,
     borderColor: 'rgba(232,150,58,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  badge: {
-    backgroundColor: 'rgba(232,150,58,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(232,150,58,0.4)',
+
+  textBlock: { flex: 1, gap: 2 },
+  title:     { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  subtitle:  { fontSize: 13, lineHeight: 17 },
+
+  ctaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#D4A017',
     borderRadius: 100,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  badgeText: { fontSize: 11, fontWeight: '700', color: '#D4A017', letterSpacing: 0.2 },
-
-  textBlock: { gap: 5 },
-  title:     { fontSize: 20, fontWeight: '800', color: '#f5e6c8', letterSpacing: -0.4 },
-  subtitle:  { fontSize: 13, color: 'rgba(245,230,200,0.55)', lineHeight: 18 },
-
-  bottomRow: { flexDirection: 'row', alignItems: 'center' },
-  cta:       { fontSize: 13, fontWeight: '700', color: '#D4A017', letterSpacing: 0.1 },
+  ctaText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.1 },
 });
