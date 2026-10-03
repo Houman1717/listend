@@ -799,11 +799,23 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   function handleDeleteAccount() {
     onClose();
     setTimeout(() => {
+      // Deleting the account can't cancel a store subscription — Apple/Google
+      // keep billing it — so Pro users get pointed at the store first.
+      const storeName = Platform.OS === 'ios' ? 'App Store' : 'Google Play';
+      const subscriptionsUrl = Platform.OS === 'ios'
+        ? 'https://apps.apple.com/account/subscriptions'
+        : 'https://play.google.com/store/account/subscriptions?package=com.houman.listend';
+      const baseMessage = 'This is permanent and cannot be undone. All your listens, reviews, playlists, and profile data will be deleted immediately.';
       Alert.alert(
         'Delete Account',
-        'This is permanent and cannot be undone. All your listens, reviews, playlists, and profile data will be deleted immediately.',
+        isPro
+          ? `${baseMessage}\n\nDeleting your account does NOT cancel Listend Pro. If you have a subscription, cancel it in ${storeName} first or you'll keep being charged.`
+          : baseMessage,
         [
           { text: 'Cancel', style: 'cancel' },
+          ...(isPro
+            ? [{ text: 'Manage Subscription', onPress: () => { Linking.openURL(subscriptionsUrl); } }]
+            : []),
           {
             text: 'Delete My Account',
             style: 'destructive',
