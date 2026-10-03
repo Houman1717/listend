@@ -498,6 +498,21 @@ export default function DiscoverScreen() {
         )}
       </Section>
 
+      {/* ── Top Rated Albums ── */}
+      <Section title="Top Rated Albums">
+        {sectionsLoading && topRated.length === 0 ? (
+          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-top-rated' as any)} />
+        ) : (
+          <AlbumRow
+            data={topRated}
+            isDark={isDark}
+            loggedIds={loggedIds}
+            onAlbumPress={goToAlbum}
+            onSeeMore={() => router.push('/discover-top-rated' as any)}
+          />
+        )}
+      </Section>
+
       {/* ── Popular Albums ── */}
       <Section title="Popular Albums">
         {sectionsLoading && popular.length === 0 ? (
@@ -543,21 +558,6 @@ export default function DiscoverScreen() {
           />
         )}
       </View>
-
-      {/* ── Top Rated Albums ── */}
-      <Section title="Top Rated Albums">
-        {sectionsLoading && topRated.length === 0 ? (
-          <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-top-rated' as any)} />
-        ) : (
-          <AlbumRow
-            data={topRated}
-            isDark={isDark}
-            loggedIds={loggedIds}
-            onAlbumPress={goToAlbum}
-            onSeeMore={() => router.push('/discover-top-rated' as any)}
-          />
-        )}
-      </Section>
 
       {/* ── Top Songs ── */}
       <Section title="Top Songs">
