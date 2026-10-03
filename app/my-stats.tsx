@@ -22,6 +22,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 // Album titles per `.in('title', …)` request for community averages — keeps URLs short.
 const COMMUNITY_TITLE_CHUNK = 80;
 
+// Previews on the stats cards; "See all" opens the full ranking.
+const STATS_GRID_ARTISTS = 9;
+const STATS_TOP_GENRES   = 6;
+
+// Artists vs Community: an album counts once it has this many community
+// ratings (same floor as the artist-detail Artist Rating), an artist needs this
+// many such albums, and shows once your average differs by at least MIN_DIFF.
+const ARTIST_COMP_MIN_ALBUM_RATINGS = 5;
+const ARTIST_COMP_MIN_ALBUMS        = 2;
+const ARTIST_COMP_MIN_DIFF          = 0.5;
+type ArtistCompEntry = { artist: string; mine: number; community: number; delta: number; albums: LoggedAlbum[] };
+
 const MAIN_GENRES = new Set([
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
   'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
@@ -206,6 +218,79 @@ const rm = StyleSheet.create({
   cardArtist: { fontSize: 11, marginTop: 1 },
   cardRating: { fontSize: 11, fontWeight: '700', marginTop: 2 },
 });
+
+// ─── Ranked List Modal ("See all" for artists / genres) ──────────────────────
+
+type RankedItem = { key: string; label: string; value: string; imageUrl?: string; onPress: () => void };
+
+function RankedListModal({ title, items, showImages, onClose, themeColors }: {
+  title: string | null;
+  items: RankedItem[];
+  showImages: boolean;
+  onClose: () => void;
+  themeColors?: ModalColors;
+}) {
+  const insets = useSafeAreaInsets();
+  const bg     = themeColors?.background ?? '#161616';
+  const txt    = themeColors?.text       ?? TEXT;
+  const sub    = themeColors?.subtext    ?? SUBTEXT;
+  const border = themeColors?.border     ?? BORDER;
+  return (
+    <Modal visible={title !== null} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={rm.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[rm.sheet, { backgroundColor: bg, borderTopColor: border, paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
+          <View style={[rm.handle, { backgroundColor: border }]} />
+          <View style={rm.header}>
+            <Text style={[rm.title, { color: txt, flex: 1, marginRight: 12 }]}>{title}</Text>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <FontAwesome name="times" size={16} color={sub} />
+            </Pressable>
+          </View>
+          <FlatList
+            data={items}
+            keyExtractor={item => item.key}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+            ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}
+            renderItem={({ item, index }) => (
+              <Pressable onPress={item.onPress} style={({ pressed }) => [rk.row, { opacity: pressed ? 0.6 : 1 }]}>
+                <Text style={[rk.rank, { color: sub }]}>{index + 1}</Text>
+                {showImages && (item.imageUrl ? (
+                  <ExpoImage source={{ uri: item.imageUrl }} style={rk.avatar} contentFit="cover" cachePolicy="disk" />
+                ) : (
+                  <View style={[rk.avatar, { backgroundColor: INITIAL_COLORS[item.label.charCodeAt(0) % INITIAL_COLORS.length], alignItems: 'center', justifyContent: 'center' }]}>
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>{item.label.trim().charAt(0).toUpperCase()}</Text>
+                  </View>
+                ))}
+                <Text style={[rk.label, { color: txt }]} numberOfLines={1}>{item.label}</Text>
+                <Text style={[rk.value, { color: sub }]}>{item.value}</Text>
+                <FontAwesome name="chevron-right" size={11} color={sub} />
+              </Pressable>
+            )}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const rk = StyleSheet.create({
+  row:    { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  rank:   { width: 24, fontSize: 13, fontWeight: '700', textAlign: 'right' },
+  avatar: { width: 40, height: 40, borderRadius: 20 },
+  label:  { flex: 1, fontSize: 15, fontWeight: '600' },
+  value:  { fontSize: 13, fontWeight: '500' },
+});
+
+function SeeAllButton({ label, tint, onPress }: { label: string; tint: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={8} style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, opacity: pressed ? 0.6 : 1 })}>
+      <Text style={{ color: tint, fontSize: 14, fontWeight: '700' }}>{label}</Text>
+      <FontAwesome name="chevron-right" size={11} color={tint} />
+    </Pressable>
+  );
+}
 
 // ─── Artist List Modal ────────────────────────────────────────────────────────
 
@@ -769,6 +854,7 @@ export default function MyStatsScreen() {
   const [selectedRating, setSelectedRating]   = useState<number | null>(null);
   const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
   const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
+  const [rankedModal,    setRankedModal]      = useState<'artists' | 'genres' | null>(null);
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
 
@@ -887,7 +973,8 @@ export default function MyStatsScreen() {
     if (!album.artist) continue;
     artistCounts.set(album.artist, (artistCounts.get(album.artist) ?? 0) + 1);
   }
-  const topArtists     = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 9);
+  const allArtistsByCount = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const topArtists     = allArtistsByCount.slice(0, STATS_GRID_ARTISTS);
   const maxArtistCount = topArtists[0]?.[1] ?? 1;
 
   // ── Highest rated artists ─────────────────────────────────────────────────
@@ -897,11 +984,11 @@ export default function MyStatsScreen() {
     if (!artistRatings.has(album.artist)) artistRatings.set(album.artist, []);
     artistRatings.get(album.artist)!.push(effectiveRating(album));
   }
-  const topRatedArtists = [...artistRatings.entries()]
+  const allRatedArtists = [...artistRatings.entries()]
     .filter(([, ratings]) => ratings.length >= 2)
     .map(([artist, ratings]) => [artist, ratings.reduce((s, r) => s + r, 0) / ratings.length] as [string, number])
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 9);
+    .sort((a, b) => b[1] - a[1]);
+  const topRatedArtists = allRatedArtists.slice(0, STATS_GRID_ARTISTS);
 
   // ── Favourite genres ──────────────────────────────────────────────────────
   const genreCounts = new Map<string, number>();
@@ -909,7 +996,8 @@ export default function MyStatsScreen() {
     const genre = (album.genreTags ?? []).find(t => MAIN_GENRES.has(t));
     if (genre) genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1);
   }
-  const topGenres     = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const allGenres     = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const topGenres     = allGenres.slice(0, STATS_TOP_GENRES);
   const maxGenreCount = topGenres[0]?.[1] ?? 1;
   const totalTagged   = loggedAlbums.filter(a => (a.genreTags ?? []).some(t => MAIN_GENRES.has(t))).length;
 
@@ -923,10 +1011,10 @@ export default function MyStatsScreen() {
       genreRatings.get(genre)!.push(effectiveRating(album));
     }
   }
-  const topRatedGenres = [...genreRatings.entries()]
+  const allRatedGenres = [...genreRatings.entries()]
     .map(([genre, ratings]) => [genre, ratings.reduce((s, r) => s + r, 0) / ratings.length] as [string, number])
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
+    .sort((a, b) => b[1] - a[1]);
+  const topRatedGenres = allRatedGenres.slice(0, STATS_TOP_GENRES);
 
 
   // Fetch artist images using the same /search?type=artist call that artist-detail uses
@@ -950,7 +1038,7 @@ export default function MyStatsScreen() {
       for (const r of results) {
         if (r.status === 'fulfilled' && r.value.url) images[r.value.name] = r.value.url;
       }
-      if (Object.keys(images).length > 0) setArtistImages(images);
+      if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
     });
   }, [loggedAlbums]);
 
@@ -1109,6 +1197,114 @@ export default function MyStatsScreen() {
   compHigher.sort((a, b) => b.delta - a.delta);
   compLower.sort((a, b) => b.delta - a.delta);
   const hasComparison = compHigher.length > 0 || compLower.length > 0;
+
+  // ── Artist comparison (your avg for an artist vs the community's) ─────────
+  // Apples to apples: only albums you rated that also have community ratings,
+  // and the community side pools every rating on those same albums (as the
+  // artist-detail Artist Rating does) rather than averaging album averages.
+  const artistCompGroups = new Map<string, { mine: number[]; communitySum: number; communityCount: number; albums: LoggedAlbum[] }>();
+  for (const album of loggedAlbums) {
+    if (!album.artist || effectiveRating(album) <= 0) continue;
+    const c = communityAvgs[album.id];
+    if (!c || c.count < ARTIST_COMP_MIN_ALBUM_RATINGS) continue;
+    const g = artistCompGroups.get(album.artist) ?? { mine: [], communitySum: 0, communityCount: 0, albums: [] };
+    g.mine.push(effectiveRating(album));
+    g.communitySum   += c.avg * c.count;
+    g.communityCount += c.count;
+    g.albums.push(album);
+    artistCompGroups.set(album.artist, g);
+  }
+  const artistHigher: ArtistCompEntry[] = [];
+  const artistLower:  ArtistCompEntry[] = [];
+  for (const [artist, g] of artistCompGroups) {
+    if (g.albums.length < ARTIST_COMP_MIN_ALBUMS) continue;
+    const mine      = g.mine.reduce((sum, r) => sum + r, 0) / g.mine.length;
+    const community = g.communitySum / g.communityCount;
+    const delta     = mine - community;
+    if (delta >= ARTIST_COMP_MIN_DIFF)  artistHigher.push({ artist, mine, community, delta, albums: g.albums });
+    if (delta <= -ARTIST_COMP_MIN_DIFF) artistLower.push({ artist, mine, community, delta, albums: g.albums });
+  }
+  artistHigher.sort((a, b) => b.delta - a.delta);
+  artistLower.sort((a, b) => a.delta - b.delta);
+
+  // ── Full rankings for the "See all" sheet ────────────────────────────────
+  const artistAlbumsFor = (artist: string, ratedOnly: boolean) =>
+    loggedAlbums.filter(a => a.artist === artist && (!ratedOnly || effectiveRating(a) > 0));
+  const openArtistAlbums = (artist: string, ratedOnly: boolean) => setListModal({
+    title: artist,
+    albums: artistAlbumsFor(artist, ratedOnly),
+    onTitlePress: () => {
+      setListModal(null);
+      setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist, artworkUrl: artistImages[artist] ?? '' } } as any), 300);
+    },
+  });
+  const genreOf = (a: LoggedAlbum) => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t));
+  // Closing the ranked sheet before opening the album sheet — two RN Modals
+  // can't be presented at once on iOS.
+  const fromRanked = (open: () => void) => { setRankedModal(null); setTimeout(open, 300); };
+  const rankedArtistItems: RankedItem[] = (artistView === 'listend' ? allArtistsByCount : allRatedArtists).map(([artist, v]) => ({
+    key: artist,
+    label: artist,
+    value: artistView === 'listend' ? `${v} album${v !== 1 ? 's' : ''}` : `${v.toFixed(1)} avg`,
+    imageUrl: artistImages[artist],
+    onPress: () => fromRanked(() => openArtistAlbums(artist, artistView === 'rated')),
+  }));
+  const rankedGenreItems: RankedItem[] = (genreView === 'listend' ? allGenres : allRatedGenres).map(([genre, v]) => ({
+    key: genre,
+    label: genre,
+    value: genreView === 'listend' ? `${v} album${v !== 1 ? 's' : ''}` : `${v.toFixed(1)} avg`,
+    onPress: () => fromRanked(() => setListModal({
+      title: genre,
+      albums: loggedAlbums.filter(a => genreOf(a) === genre && (genreView === 'listend' || effectiveRating(a) > 0)),
+    })),
+  }));
+
+  // Photos for the full artist list, fetched only once the sheet is opened.
+  useEffect(() => {
+    if (rankedModal !== 'artists') return;
+    const names = (artistView === 'listend' ? allArtistsByCount : allRatedArtists).map(([a]) => a).filter(n => !artistImages[n]);
+    if (names.length === 0) return;
+    let cancelled = false;
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+    (async () => {
+      // Small batches so a 100-artist library doesn't fire 100 searches at once.
+      for (let i = 0; i < names.length && !cancelled; i += 6) {
+        const batch = names.slice(i, i + 6);
+        const results = await Promise.allSettled(batch.map(name =>
+          fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
+            .then(r => r.ok ? r.json() : [])
+            .then((res: { artworkUrl: string }[]) => ({ name, url: res[0]?.artworkUrl ?? '' }))
+        ));
+        if (cancelled) return;
+        const images: Record<string, string> = {};
+        for (const r of results) if (r.status === 'fulfilled' && r.value.url) images[r.value.name] = r.value.url;
+        if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rankedModal, artistView]);
+
+  // Photos for compared artists that aren't already in the top-artist grids.
+  const artistCompNamesKey = [...artistHigher, ...artistLower].map(e => e.artist).sort().join('|');
+  useEffect(() => {
+    const names = artistCompNamesKey ? artistCompNamesKey.split('|').filter(n => !artistImages[n]) : [];
+    if (names.length === 0) return;
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+    Promise.allSettled(names.map(name =>
+      fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
+        .then(r => r.ok ? r.json() : [])
+        .then((results: { artworkUrl: string }[]) => ({ name, url: results[0]?.artworkUrl ?? '' }))
+        .catch(() => ({ name, url: '' }))
+    )).then(results => {
+      const images: Record<string, string> = {};
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.url) images[r.value.name] = r.value.url;
+      }
+      if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artistCompNamesKey]);
 
   // ── Playlist progress ─────────────────────────────────────────────────────
   const loggedSet = new Set(
@@ -1522,6 +1718,17 @@ export default function MyStatsScreen() {
         albums={selectedAlbums}
         onClose={() => setSelectedRating(null)}
         onAlbumPress={handleAlbumPress}
+        themeColors={colors}
+      />
+      <RankedListModal
+        title={rankedModal === 'artists'
+          ? (artistView === 'listend' ? 'Most Listend Artists' : 'Highest Rated Artists')
+          : rankedModal === 'genres'
+            ? (genreView === 'listend' ? 'Most Listend Genres' : 'Highest Rated Genres')
+            : null}
+        items={rankedModal === 'artists' ? rankedArtistItems : rankedModal === 'genres' ? rankedGenreItems : []}
+        showImages={rankedModal === 'artists'}
+        onClose={() => setRankedModal(null)}
         themeColors={colors}
       />
       <AlbumListModal
@@ -2029,6 +2236,7 @@ export default function MyStatsScreen() {
             // Chunk into explicit rows of 3 so layout never wraps unexpectedly
             const rows: [string, string][][] = [];
             for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
+            const total = artistView === 'listend' ? allArtistsByCount.length : allRatedArtists.length;
             return (
               <View style={{ gap: 16 }}>
                 {rows.map((row, ri) => (
@@ -2042,24 +2250,63 @@ export default function MyStatsScreen() {
                         cardW={cardW}
                         textColor={colors.text}
                         subtextColor={colors.subtext}
-                        onPress={() => setListModal({
-                          title: artist,
-                          albums: artistView === 'listend'
-                            ? loggedAlbums.filter(a => a.artist === artist)
-                            : loggedAlbums.filter(a => a.artist === artist && effectiveRating(a) > 0),
-                          onTitlePress: () => {
-                            setListModal(null);
-                            setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: artist, artworkUrl: artistImages[artist] ?? '' } } as any), 300);
-                          },
-                        })}
+                        onPress={() => openArtistAlbums(artist, artistView === 'rated')}
                       />
                     ))}
                   </View>
                 ))}
+                {total > items.length && (
+                  <SeeAllButton label={`See all ${total} artists`} tint={colors.tint} onPress={() => setRankedModal('artists')} />
+                )}
               </View>
             );
           })()}
         </View>
+
+        {/* ── Artists vs Community ───────────────────────────────────────── */}
+        {ratedAlbums.length > 0 && (
+          <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text style={[s.cardTitle, { color: colors.textMuted }]}>ARTISTS VS COMMUNITY</Text>
+            {artistHigher.length === 0 && artistLower.length === 0 ? (
+              <EmptyState text={`${viewedUserId ? 'Their' : 'Your'} artist ratings will be compared to the community once enough listeners have rated 2+ of the same artist's albums.`} />
+            ) : (
+              ([
+                { key: 'higher', entries: artistHigher, label: 'Rated Higher', sub: `${artistHigher.length} above avg`, color: GROW_CLR, icon: 'arrow-up' },
+                { key: 'lower',  entries: artistLower,  label: 'Rated Lower',  sub: `${artistLower.length} below avg`,  color: FADE_CLR, icon: 'arrow-down' },
+              ] as const).filter(g => g.entries.length > 0).map((g, i) => (
+                <View key={g.key} style={[rl.section, i > 0 && { marginTop: 8 }]}>
+                  <View style={rl.sectionHeader}>
+                    <View style={[rl.sectionBadge, { backgroundColor: g.color }]}>
+                      <FontAwesome name={g.icon} size={9} color="#fff" />
+                    </View>
+                    <Text style={[rl.sectionTitle, { color: colors.text }]}>{g.label}</Text>
+                    <Text style={[rl.sectionSub, { color: SUBTEXT }]}>{g.sub}</Text>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
+                    {g.entries.map(entry => (
+                      <ArtistComparisonCard
+                        key={entry.artist}
+                        entry={entry}
+                        imageUrl={artistImages[entry.artist]}
+                        youLabel={viewedUserId ? (params.displayName || 'Them') : 'You'}
+                        textColor={colors.text}
+                        subtextColor={colors.subtext}
+                        onPress={() => setListModal({
+                          title: entry.artist,
+                          albums: entry.albums,
+                          onTitlePress: () => {
+                            setListModal(null);
+                            setTimeout(() => router.push({ pathname: '/artist-detail', params: { name: entry.artist, artworkUrl: artistImages[entry.artist] ?? '' } } as any), 300);
+                          },
+                        })}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              ))
+            )}
+          </View>
+        )}
 
         {/* ── Most Listend Genres ────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -2097,6 +2344,9 @@ export default function MyStatsScreen() {
                     })}
                   />
                 ))}
+                {allGenres.length > topGenres.length && (
+                  <SeeAllButton label={`See all ${allGenres.length} genres`} tint={colors.tint} onPress={() => setRankedModal('genres')} />
+                )}
                 <Text style={s.footnote}>Based on {totalTagged} of {loggedAlbums.length} logged albums</Text>
               </>
             ) : (
@@ -2124,6 +2374,9 @@ export default function MyStatsScreen() {
                     })}
                   />
                 ))}
+                {allRatedGenres.length > topRatedGenres.length && (
+                  <SeeAllButton label={`See all ${allRatedGenres.length} genres`} tint={colors.tint} onPress={() => setRankedModal('genres')} />
+                )}
                 <Text style={s.footnote}>Based on rated albums only</Text>
               </>
             ) : (
@@ -2437,6 +2690,38 @@ function ComparisonCard({ album, communityAvg, onPress, tint = ACCENT, textColor
       <Text style={[cc.title, { color: textColor }]} numberOfLines={2}>{album.title}</Text>
       <VolumeBadge rating={effectiveRating(album)} tint={tint} />
       <Text style={[cc.communityAvg, { color: subtextColor }]}>Community: {communityAvg.toFixed(1)}</Text>
+    </Pressable>
+  );
+}
+
+// ─── Artist comparison card ───────────────────────────────────────────────────
+
+function ArtistComparisonCard({ entry, imageUrl, youLabel, onPress, textColor = TEXT, subtextColor = SUBTEXT }: {
+  entry: ArtistCompEntry;
+  imageUrl?: string;
+  youLabel: string;
+  onPress: () => void;
+  textColor?: string;
+  subtextColor?: string;
+}) {
+  const isHigher = entry.delta > 0;
+  const initial  = entry.artist.trim().charAt(0).toUpperCase();
+  const bgColor  = INITIAL_COLORS[entry.artist.charCodeAt(0) % INITIAL_COLORS.length];
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [cc.card, { opacity: pressed ? 0.75 : 1 }]}>
+      {imageUrl ? (
+        <ExpoImage source={{ uri: imageUrl }} style={[cc.art, { borderRadius: 55 }]} contentFit="cover" cachePolicy="disk" />
+      ) : (
+        <View style={[cc.art, { borderRadius: 55, backgroundColor: bgColor, alignItems: 'center', justifyContent: 'center' }]}>
+          <Text style={{ color: '#fff', fontSize: 34, fontWeight: '800' }}>{initial}</Text>
+        </View>
+      )}
+      <View style={[cc.deltaBadge, { top: 2, right: 2, backgroundColor: isHigher ? GROW_CLR : FADE_CLR }]}>
+        <Text style={cc.deltaBadgeText}>{isHigher ? '+' : ''}{entry.delta.toFixed(1)}</Text>
+      </View>
+      <Text style={[cc.title, { color: textColor, textAlign: 'center' }]} numberOfLines={2}>{entry.artist}</Text>
+      <Text style={[cc.communityAvg, { color: textColor, textAlign: 'center' }]} numberOfLines={1}>{youLabel}: {entry.mine.toFixed(1)}</Text>
+      <Text style={[cc.communityAvg, { color: subtextColor, textAlign: 'center' }]}>Community: {entry.community.toFixed(1)}</Text>
     </Pressable>
   );
 }
