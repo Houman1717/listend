@@ -160,7 +160,7 @@ export default function DiscoverGenresScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Genres' }} />
+      <Stack.Screen options={{ title: 'Genres', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <FlatList
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.content}

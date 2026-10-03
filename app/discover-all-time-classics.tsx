@@ -34,7 +34,7 @@ export default function DiscoverAllTimeClassicsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'All-Time Classics' }} />
+      <Stack.Screen options={{ title: 'All-Time Classics', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}

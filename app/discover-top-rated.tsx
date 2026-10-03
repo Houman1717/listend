@@ -41,7 +41,7 @@ export default function DiscoverTopRatedScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Top Rated Albums' }} />
+      <Stack.Screen options={{ title: 'Top Rated Albums', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}

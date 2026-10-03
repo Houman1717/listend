@@ -94,7 +94,7 @@ export default function DiscoverResultsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: title ?? 'Discover' }} />
+      <Stack.Screen options={{ title: title ?? 'Discover', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator color="#D4A017" size="large" />

@@ -41,7 +41,7 @@ export default function DiscoverMostPopularScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Popular Albums' }} />
+      <Stack.Screen options={{ title: 'Popular Albums', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}
