@@ -1973,10 +1973,17 @@ function parseReviewTargetId(targetId) {
   return { targetId, userId, spotifyId, listenedAt: null };
 }
 
-// Popular = likes/comments *received* this week, regardless of when the review
-// was written. Returned likeCount is the review's all-time total MINUS the
+// Popular Reviews only considers reviews written within this window.
+const POPULAR_REVIEW_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+// Reviews rated this or lower (out of 10) are left out of Popular Reviews.
+const POPULAR_REVIEW_LOW_RATING_MAX = 3;
+
+// Popular = likes/comments *received* this week, among reviews written in the
+// last two weeks. Returned likeCount is the review's all-time total MINUS the
 // caller's own like (subtracted per-request in the route, not here).
+
 async function computePopularReviewsThisWeek(since) {
+  const reviewCutoff = Date.now() - POPULAR_REVIEW_MAX_AGE_MS;
   const [likeRows, commentRows] = await Promise.all([
     fetchAllRows((from, to) => supabase.from('likes').select('target_id, user_id').eq('target_type', 'review').gte('created_at', since).range(from, to)),
     fetchAllRows((from, to) => supabase.from('review_comments').select('review_id').gte('created_at', since).range(from, to)),
@@ -2025,13 +2032,13 @@ async function computePopularReviewsThisWeek(since) {
   const [reviewRows, relistenRows, profiles] = await Promise.all([
     fetchAllRowsIn(userIds, (ids, from, to) => supabase
       .from('user_albums')
-      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, is_relistened')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, is_relistened, created_at')
       .in('user_id', ids)
       .in('spotify_id', spotifyIds)
       .range(from, to)),
     fetchAllRowsIn(userIds, (ids, from, to) => supabase
       .from('re_listens')
-      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at')
+      .select('user_id, spotify_id, title, artist, year, artwork_url, rating, review, listened_at, created_at')
       .in('user_id', ids)
       .in('spotify_id', spotifyIds)
       .order('listened_at', { ascending: false })
@@ -2048,13 +2055,17 @@ async function computePopularReviewsThisWeek(since) {
 
   const latestReListenRating = new Map();
   const latestReListenReview = new Map();
+  const latestReListenReviewAt = new Map();
   // Also keyed by the exact re-listen target_id, so a like on one specific
   // re-listen review resolves to that re-listen's own rating/review.
   const reListenMap = new Map();
   for (const rl of (relistenRows ?? [])) {
     const key = `${rl.user_id}_${rl.spotify_id}`;
     if (!latestReListenRating.has(key) && rl.rating) latestReListenRating.set(key, rl.rating);
-    if (!latestReListenReview.has(key) && rl.review) latestReListenReview.set(key, rl.review);
+    if (!latestReListenReview.has(key) && rl.review) {
+      latestReListenReview.set(key, rl.review);
+      latestReListenReviewAt.set(key, rl.created_at);
+    }
     reListenMap.set(`relisten_${key}_${rl.listened_at}`, rl);
   }
   const profileMap = new Map((profiles ?? []).map(p => [p.id, {
@@ -2078,9 +2089,18 @@ async function computePopularReviewsThisWeek(since) {
       ? (rl?.review ?? '')
       : ((base.is_relistened ? latestReListenReview.get(baseKey) : undefined) ?? base.review ?? '');
     if (!review) continue;
+    // Only reviews written in the last two weeks qualify, so a handful of old
+    // reviews can't camp at the top just because they're the most seen.
+    const writtenAt = listenedAt
+      ? rl?.created_at
+      : (base.is_relistened && latestReListenReview.has(baseKey) ? latestReListenReviewAt.get(baseKey) : base.created_at);
+    if (!writtenAt || Date.parse(writtenAt) < reviewCutoff) continue;
     const rating = listenedAt
       ? (rl?.rating ?? 0)
       : ((base.is_relistened ? latestReListenRating.get(baseKey) : undefined) ?? base.rating ?? 0);
+    // Home doesn't lead with takedowns: rated 1–3 is left out of this row (still
+    // shown everywhere else). 0 means unrated, which still qualifies.
+    if (rating >= 1 && rating <= POPULAR_REVIEW_LOW_RATING_MAX) continue;
     const r = base ?? rl;
     const prof = profileMap.get(userId);
     const weeklyLikes = weeklyLikeCounts.get(targetId) ?? 0;
@@ -2101,11 +2121,13 @@ async function computePopularReviewsThisWeek(since) {
       likeCount: likeCounts.get(targetId) ?? 0,
       commentCount: totalCommentCounts.get(targetId) ?? 0,
       weeklyScore: weeklyLikes + weeklyComments,
+      writtenAt,
     });
   }
 
-  reviews.sort((a, b) => b.weeklyScore - a.weeklyScore);
-  return reviews.slice(0, 30).map(({ weeklyScore, ...r }) => r);
+  // Equal engagement → newer review first.
+  reviews.sort((a, b) => (b.weeklyScore - a.weeklyScore) || (Date.parse(b.writtenAt) - Date.parse(a.writtenAt)));
+  return reviews.slice(0, 30).map(({ weeklyScore, writtenAt, ...r }) => r);
 }
 
 async function computeHomeThisWeek() {
