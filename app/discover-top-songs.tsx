@@ -37,7 +37,7 @@ export default function DiscoverTopSongsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Top Songs' }} />
+      <Stack.Screen options={{ title: 'Top Songs', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <SongInfoModal
         song={activeSong}
         onClose={() => setActiveSong(null)}

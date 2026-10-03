@@ -30,7 +30,7 @@ export default function DiscoverComingSoonScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Coming Soon' }} />
+      <Stack.Screen options={{ title: 'Coming Soon', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}

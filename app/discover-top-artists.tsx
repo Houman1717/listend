@@ -37,7 +37,7 @@ export default function DiscoverTopArtistsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Top Artists' }} />
+      <Stack.Screen options={{ title: 'Top Artists', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       {loading ? (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <ActivityIndicator color="#D4A017" style={{ marginTop: 48 }} />

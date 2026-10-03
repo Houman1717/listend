@@ -70,7 +70,7 @@ export default function FeaturedPlaylistScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: name ?? 'Playlist' }} />
+      <Stack.Screen options={{ title: name ?? 'Playlist', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}

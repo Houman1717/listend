@@ -34,7 +34,7 @@ export default function DiscoverNewReleasesScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'New Releases' }} />
+      <Stack.Screen options={{ title: 'New Releases', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}

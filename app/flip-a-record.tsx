@@ -1008,7 +1008,7 @@ export default function FlipARecordScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Flip a Record' }} />
+      <Stack.Screen options={{ title: 'Flip a Record', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false, contentStyle: { backgroundColor: colors.background } }} />
 
       {/* ── Streaming sheet ────────────────────────────────────────────────── */}
       <Modal visible={showStreamSheet} transparent animationType="slide" onRequestClose={() => setShowStreamSheet(false)}>

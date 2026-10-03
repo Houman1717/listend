@@ -30,7 +30,7 @@ export default function DiscoverRecommendedScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Recommended For You' }} />
+      <Stack.Screen options={{ title: 'Recommended For You', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={s.gridWrap}

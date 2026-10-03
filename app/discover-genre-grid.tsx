@@ -91,7 +91,7 @@ export default function GenreGridScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: genre ?? 'Genre' }} />
+      <Stack.Screen options={{ title: genre ?? 'Genre', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
 
       {loading ? (
         <View style={[s.centered, { backgroundColor: colors.background }]}>
@@ -141,9 +141,9 @@ export default function GenreGridScreen() {
 
 const s = StyleSheet.create({
   centered:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  gridWrap:    { padding: PADDING, paddingBottom: 48 },
+  gridWrap:    { padding: PADDING, paddingTop: 4, paddingBottom: 48 },
   grid:        { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-  statsHeader: { alignItems: 'center', paddingTop: 8, paddingBottom: 16, gap: 4 },
+  statsHeader: { alignItems: 'center', paddingBottom: 16, gap: 4 },
   listenedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   listenedPct: { color: '#D4A017', fontSize: 15, fontWeight: '700' },
   listenedSub: { fontSize: 13 },
