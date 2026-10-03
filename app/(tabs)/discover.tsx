@@ -474,28 +474,32 @@ export default function DiscoverScreen() {
         )}
       </Section>
 
-      {/* ── Top Artists ── */}
-      <Section title="Top Artists">
-        {sectionsLoading && topArtists.length === 0 ? (
-          <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
-        ) : (
+      {/* ── Browse: genre + decade chips under one compact heading ── */}
+      <Section title="Browse">
+        <View style={{ gap: 10 }}>
           <FlatList
             horizontal
-            data={topArtists.slice(0, 10)}
-            keyExtractor={(item) => item.id}
+            data={GENRES}
+            keyExtractor={(item) => item}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.row}
+            contentContainerStyle={s.chipRow}
+            ListHeaderComponent={<Text style={[s.chipRowLabel, { color: colors.subtext }]}>GENRE</Text>}
             renderItem={({ item }) => (
-              <ArtistCard
-                item={item}
-                isDark={isDark}
-                onPress={() => router.push({ pathname: '/artist-detail', params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl } } as any)}
-              />
+              <Chip label={GENRE_DISPLAY_NAMES[item] ?? item} isDark={isDark} onPress={() => router.push({ pathname: '/discover-genre-grid', params: { genre: item } } as any)} />
             )}
-            ListFooterComponent={<SeeMoreButton onPress={() => router.push('/discover-top-artists' as any)} isDark={isDark} size={ARTIST_SIZE} circular />}
-            ListFooterComponentStyle={{ marginLeft: 12 }}
           />
-        )}
+          <FlatList
+            horizontal
+            data={DECADES}
+            keyExtractor={(item) => item}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.chipRow}
+            ListHeaderComponent={<Text style={[s.chipRowLabel, { color: colors.subtext }]}>DECADE</Text>}
+            renderItem={({ item }) => (
+              <Chip label={item} isDark={isDark} onPress={() => router.push({ pathname: '/discover-decade-grid', params: { decade: item } } as any)} />
+            )}
+          />
+        </View>
       </Section>
 
       {/* ── Top Rated Albums ── */}
@@ -524,6 +528,30 @@ export default function DiscoverScreen() {
             loggedIds={loggedIds}
             onAlbumPress={goToAlbum}
             onSeeMore={() => router.push('/discover-most-popular' as any)}
+          />
+        )}
+      </Section>
+
+      {/* ── Top Artists ── */}
+      <Section title="Top Artists">
+        {sectionsLoading && topArtists.length === 0 ? (
+          <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
+        ) : (
+          <FlatList
+            horizontal
+            data={topArtists.slice(0, 10)}
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.row}
+            renderItem={({ item }) => (
+              <ArtistCard
+                item={item}
+                isDark={isDark}
+                onPress={() => router.push({ pathname: '/artist-detail', params: { id: item.id, name: item.name, artworkUrl: item.artworkUrl } } as any)}
+              />
+            )}
+            ListFooterComponent={<SeeMoreButton onPress={() => router.push('/discover-top-artists' as any)} isDark={isDark} size={ARTIST_SIZE} circular />}
+            ListFooterComponentStyle={{ marginLeft: 12 }}
           />
         )}
       </Section>
@@ -584,34 +612,6 @@ export default function DiscoverScreen() {
         )}
       </Section>
 
-      {/* ── Genre chips ── */}
-      <Section title="Genres">
-        <FlatList
-          horizontal
-          data={GENRES}
-          keyExtractor={(item) => item}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.row}
-          renderItem={({ item }) => (
-            <Chip label={GENRE_DISPLAY_NAMES[item] ?? item} isDark={isDark} onPress={() => router.push({ pathname: '/discover-genre-grid', params: { genre: item } } as any)} />
-          )}
-        />
-      </Section>
-
-      {/* ── By Decade chips ── */}
-      <Section title="By Decade">
-        <FlatList
-          horizontal
-          data={DECADES}
-          keyExtractor={(item) => item}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.row}
-          renderItem={({ item }) => (
-            <Chip label={item} isDark={isDark} onPress={() => router.push({ pathname: '/discover-decade-grid', params: { decade: item } } as any)} />
-          )}
-        />
-      </Section>
-
     </ScrollView>
     </>
   );
@@ -646,8 +646,11 @@ const s = StyleSheet.create({
   seeMoreBtn:  { justifyContent: 'center', alignItems: 'center' },
   seeMoreText: { fontSize: 13, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2 },
 
-  chip:     { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth },
-  chipText: { fontSize: 15, fontWeight: '600' },
+  chip:         { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth },
+  chipText:     { fontSize: 13, fontWeight: '600' },
+  chipRow:      { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
+  // Fixed width so the GENRE / DECADE chips start on the same vertical line
+  chipRowLabel: { width: 58, fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
 });
 
 // ─── Featured Playlist card styles ───────────────────────────────────────────
