@@ -1209,38 +1209,41 @@ export default function ListendScreen() {
     }
   }, [user]);
 
-  // Inject bell + hamburger into the tab header, and sync header bg to the active pro theme
+  // Inject DMs + bell + hamburger into the tab header, and sync header bg to the active pro theme
   const openSettings = useCallback(() => setSettingsVisible(true), []);
   const headerIconColor = colors.text;
+  const headerBtnStyle = { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' } as const;
+  const headerDotStyle = {
+    position: 'absolute', top: 5, right: 5,
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: '#D4A017',
+  } as const;
   useEffect(() => {
     navigation.setOptions({
       headerStyle: { backgroundColor: colors.background },
       headerTintColor: colors.text,
       headerRight: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginRight: 16 }}>
+        // Equal 36×36 boxes so the three glyphs (different natural widths)
+        // sit on an even rhythm; dots anchor to the box, not the glyph.
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 8 }}>
+          {/* DMs icon with unread badge */}
+          <Pressable onPress={() => router.push('/dms')} hitSlop={6} style={headerBtnStyle}>
+            <FontAwesome name="paper-plane-o" size={18} color={headerIconColor} />
+            {unreadDMCount > 0 && <View style={headerDotStyle} />}
+          </Pressable>
           {/* Bell icon with unread badge */}
-          <Pressable
-            onPress={() => router.push('/notifications')}
-            hitSlop={12}
-            style={{ position: 'relative' }}>
+          <Pressable onPress={() => router.push('/notifications')} hitSlop={6} style={headerBtnStyle}>
             <FontAwesome name="bell-o" size={20} color={headerIconColor} />
-            {unreadCount > 0 && (
-              <View style={{
-                position: 'absolute',
-                top: -4, right: -4,
-                width: 8, height: 8, borderRadius: 4,
-                backgroundColor: '#D4A017',
-              }} />
-            )}
+            {unreadCount > 0 && <View style={headerDotStyle} />}
           </Pressable>
           {/* Hamburger */}
-          <Pressable onPress={openSettings} hitSlop={12}>
+          <Pressable onPress={openSettings} hitSlop={6} style={headerBtnStyle}>
             <FontAwesome name="bars" size={20} color={headerIconColor} />
           </Pressable>
         </View>
       ),
     });
-  }, [navigation, openSettings, unreadCount, router, headerIconColor, colors.background, colors.text]);
+  }, [navigation, openSettings, unreadCount, unreadDMCount, router, headerIconColor, colors.background, colors.text]);
 
   const reviewCount = loggedAlbums.filter((a) => !!(a.lastReview ?? a.review)).length;
 
@@ -1424,7 +1427,7 @@ export default function ListendScreen() {
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="heart"      label="Liked Artists"   sub={`${likedArtists.length} artists`}                                            onPress={() => router.push('/liked-artists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="comments"   label="DMs"             sub="Messages"                                                                    onPress={() => router.push('/dms')} badge={unreadDMCount} />
+        <NavRow colors={colors} icon="paper-plane-o" label="DMs"          sub="Messages"                                                                    onPress={() => router.push('/dms')} badge={unreadDMCount} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         {/* Always navigate — my-stats renders its own tease for free users, which
             sells better than firing the paywall straight off this row. */}

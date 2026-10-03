@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -15,7 +16,9 @@ Notifications.setNotificationHandler({
 });
 
 type NotificationsContextType = {
+  /** Unread bell notifications — everything except DMs. */
   unreadCount: number;
+  /** Unread DMs — shown on the DMs icon, never on the bell. */
   unreadDMCount: number;
   markAllRead: () => Promise<void>;
   /** Mark all unread 'message' notifications from a specific actor as read. */
@@ -43,6 +46,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', uid)
+        .neq('type', 'message')
         .eq('read', false),
       supabase
         .from('notifications')
@@ -82,9 +86,18 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
     channelRef.current = channel;
 
+    // Realtime alone can miss inserts (socket dropped while backgrounded), so
+    // also recount when the app comes back to the foreground or a push lands.
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') fetchUnreadCount(uid);
+    });
+    const pushSub = Notifications.addNotificationReceivedListener(() => fetchUnreadCount(uid));
+
     return () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
+      appStateSub.remove();
+      pushSub.remove();
     };
   }, [user?.id]);
 
@@ -92,18 +105,19 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   // shouldSetBadge in the notification handler only lets iOS increment it on
   // delivery, it never decrements on its own when notifications are read.
   useEffect(() => {
-    Notifications.setBadgeCountAsync(unreadCount).catch(() => {});
-  }, [unreadCount]);
+    Notifications.setBadgeCountAsync(unreadCount + unreadDMCount).catch(() => {});
+  }, [unreadCount, unreadDMCount]);
 
+  // Bell only — DMs stay unread until their conversation is opened.
   async function markAllRead() {
     if (!user) return;
     await supabase
       .from('notifications')
       .update({ read: true })
       .eq('user_id', user.id)
+      .neq('type', 'message')
       .eq('read', false);
     setUnreadCount(0);
-    setUnreadDMCount(0);
   }
 
   async function markMessagesRead(actorId: string) {

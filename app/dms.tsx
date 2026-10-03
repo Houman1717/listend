@@ -8,9 +8,10 @@ import {
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { nameOrHandle } from '@/lib/userHandle';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -51,9 +52,13 @@ export default function DMsScreen() {
 
   const { user } = useAuth();
   const router   = useRouter();
+  const { unreadDMCount } = useNotifications();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading,       setLoading]       = useState(true);
+  // Partners with an unread 'message' notification — the same rows that drive
+  // the DMs dot, cleared by markMessagesRead when the conversation is opened.
+  const [unreadPartnerIds, setUnreadPartnerIds] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
@@ -61,9 +66,34 @@ export default function DMsScreen() {
     }, [user])
   );
 
-  async function loadConversations() {
+  // A DM arriving while this screen is open bumps the count — reload quietly
+  // so the new conversation surfaces at the top, marked unread.
+  const lastDMCount = useRef(unreadDMCount);
+  useEffect(() => {
+    if (unreadDMCount > lastDMCount.current) loadConversations(true);
+    lastDMCount.current = unreadDMCount;
+  }, [unreadDMCount]);
+
+  async function loadUnreadPartners(uid: string) {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('actor_id')
+      .eq('user_id', uid)
+      .eq('type', 'message')
+      .eq('read', false);
+    // A failed read keeps the last known state rather than marking everything read.
+    if (error) {
+      console.error('[DMs] unread fetch error:', error.message);
+      return;
+    }
+    setUnreadPartnerIds(new Set((data ?? []).map((r: any) => r.actor_id as string)));
+  }
+
+  async function loadConversations(silent = false) {
     if (!user) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
+
+    loadUnreadPartners(user.id);
 
     const { data: msgs, error: msgsErr } = await supabase
       .from('messages')
@@ -185,15 +215,20 @@ export default function DMsScreen() {
       )}
       renderItem={({ item }) => {
         const initial = item.partnerName.charAt(0).toUpperCase();
+        const unread  = unreadPartnerIds.has(item.partnerId) && item.lastMessage.sender_id !== user?.id;
         return (
           <Pressable
             style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() =>
+            onPress={() => {
+              // Clear locally now; the conversation screen marks it read server-side.
+              if (unread) {
+                setUnreadPartnerIds(prev => { const next = new Set(prev); next.delete(item.partnerId); return next; });
+              }
               router.push({
                 pathname: '/dm-conversation',
                 params: { userId: item.partnerId },
-              })
-            }>
+              });
+            }}>
             <Pressable onPress={() => router.push({ pathname: '/user-profile', params: { userId: item.partnerId } })} hitSlop={4}>
               {item.partnerAvatarUrl ? (
                 <ExpoImage source={{ uri: item.partnerAvatarUrl }} style={s.avatar}
@@ -210,14 +245,21 @@ export default function DMsScreen() {
                 onPress={() => router.push({ pathname: '/user-profile', params: { userId: item.partnerId } })}
                 hitSlop={4}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}>
-                <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{item.partnerName}</Text>
+                <Text style={[s.name, { color: colors.text }, unread && { fontWeight: '800' }]} numberOfLines={1}>{item.partnerName}</Text>
                 {item.partnerIsPro && <ProBadge size="xs" />}
               </Pressable>
-              <Text style={[s.preview, { color: colors.subtext }]} numberOfLines={1}>{previewText(item.lastMessage)}</Text>
+              <Text
+                style={[s.preview, { color: unread ? colors.text : colors.subtext }, unread && { fontWeight: '600' }]}
+                numberOfLines={1}>
+                {previewText(item.lastMessage)}
+              </Text>
             </View>
-            <Text style={[s.time, { color: colors.subtext }]}>
-              {formatTime(item.lastMessage.created_at)}
-            </Text>
+            <View style={s.meta}>
+              <Text style={[s.time, { color: unread ? '#D4A017' : colors.subtext }, unread && { fontWeight: '600' }]}>
+                {formatTime(item.lastMessage.created_at)}
+              </Text>
+              {unread && <View style={s.unreadDot} />}
+            </View>
           </Pressable>
         );
       }}
@@ -266,7 +308,9 @@ const s = StyleSheet.create({
   name:     { fontSize: 15, fontWeight: '600' },
   preview:  { fontSize: 13 },
 
-  time: { fontSize: 12, alignSelf: 'flex-start', marginTop: 2 },
+  meta:      { alignSelf: 'stretch', alignItems: 'flex-end', justifyContent: 'space-between', paddingVertical: 2 },
+  time:      { fontSize: 12 },
+  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#D4A017', marginBottom: 4 },
 
   emptyWrap: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 40 },
   emptyIconRing: {
