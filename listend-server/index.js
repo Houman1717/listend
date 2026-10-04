@@ -350,23 +350,14 @@ async function syncArtistImageOverrides() {
     // it was picked with, so these need reading and rewriting rather than a
     // column update. Containment narrows it to the handful of profiles that
     // actually picked this artist.
+    // profiles.top_artists is `json`, not `jsonb`, so a containment query on it
+    // errors outright — the only way in is to read the rows. Gated on the
+    // fingerprint so this costs one pass per change to the table above, not one
+    // per deploy. 224 profiles had the black square the first time it ran.
     const profiles = new Map();
-    for (const match of [...o.ids.map(id => ({ id })), ...o.names.map(name => ({ name }))]) {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, top_artists')
-        .contains('top_artists', [match]);
-      if (error) { console.warn('[artist-images] contains() on top_artists:', error.message); summary.errors.push(`contains: ${error.message}`); break; }
-      for (const row of data ?? []) profiles.set(row.id, row);
-    }
-    // Containment needs the column to be jsonb and the stored keys to match
-    // exactly; when it finds nothing, page through instead rather than leave
-    // somebody's Top 5 showing the image we are trying to replace.
-    if (profiles.size === 0 && unchanged) {
+    if (unchanged) {
       summary.scanSkipped = true;
-      console.log('[artist-images] overrides unchanged since last sync — skipping the profiles scan');
-    }
-    if (profiles.size === 0 && !unchanged) {
+    } else {
       for (let from = 0; from < 20000; from += 1000) {
         const { data, error } = await supabase
           .from('profiles')
