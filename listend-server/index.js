@@ -297,7 +297,10 @@ const withArtistImages = artists => (artists ?? []).map(a => {
 // app reads those rows straight from Supabase, so an override has to be written
 // into them as well. Runs on boot and is idempotent — the neq() means a row is
 // touched only while it still holds the old image.
+let lastArtistImageSync = { ranAt: null, result: null };
+
 async function syncArtistImageOverrides() {
+  const summary = { likedArtists: 0, homeArtists: 0, top5Changes: 0, profiles: 0, profilesScanned: 0, errors: [] };
   for (const o of ARTIST_IMAGE_OVERRIDES) {
     const targets = [
       ['liked_artists', 'artist_id', o.ids],
@@ -312,8 +315,11 @@ async function syncArtistImageOverrides() {
         .in(column, values)
         .neq('artwork_url', o.url)
         .select('*', { count: 'exact' });
-      if (error) { console.warn(`[artist-images] ${table}.${column}:`, error.message); continue; }
-      if (data?.length) console.log(`[artist-images] updated ${data.length} ${table} row(s) by ${column}`);
+      if (error) { console.warn(`[artist-images] ${table}.${column}:`, error.message); summary.errors.push(`${table}.${column}: ${error.message}`); continue; }
+      if (data?.length) {
+        console.log(`[artist-images] updated ${data.length} ${table} row(s) by ${column}`);
+        summary[table === 'liked_artists' ? 'likedArtists' : 'homeArtists'] += data.length;
+      }
     }
 
     // top5_changes feeds the home and Discover artist lists, which already
@@ -327,8 +333,8 @@ async function syncArtistImageOverrides() {
         .in(column, values)
         .neq('item_image_url', o.url)
         .select('id');
-      if (error) { console.warn(`[artist-images] top5_changes.${column}:`, error.message); continue; }
-      if (data?.length) console.log(`[artist-images] updated ${data.length} top5_changes row(s) by ${column}`);
+      if (error) { console.warn(`[artist-images] top5_changes.${column}:`, error.message); summary.errors.push(`top5_changes.${column}: ${error.message}`); continue; }
+      if (data?.length) { console.log(`[artist-images] updated ${data.length} top5_changes row(s) by ${column}`); summary.top5Changes += data.length; }
     }
 
     // A profile's Top 5 artists are a JSONB array, each entry holding the image
@@ -341,8 +347,27 @@ async function syncArtistImageOverrides() {
         .from('profiles')
         .select('id, top_artists')
         .contains('top_artists', [match]);
-      if (error) { console.warn('[artist-images] profiles.top_artists:', error.message); continue; }
+      if (error) { console.warn('[artist-images] contains() on top_artists:', error.message); summary.errors.push(`contains: ${error.message}`); break; }
       for (const row of data ?? []) profiles.set(row.id, row);
+    }
+    // Containment needs the column to be jsonb and the stored keys to match
+    // exactly; when it finds nothing, page through instead rather than leave
+    // somebody's Top 5 showing the image we are trying to replace.
+    if (profiles.size === 0) {
+      for (let from = 0; from < 20000; from += 1000) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, top_artists')
+          .not('top_artists', 'is', null)
+          .range(from, from + 999);
+        if (error) { console.warn('[artist-images] profiles scan:', error.message); summary.errors.push(`scan: ${error.message}`); break; }
+        summary.profilesScanned += data?.length ?? 0;
+        for (const row of data ?? []) {
+          const entries = Array.isArray(row.top_artists) ? row.top_artists : [];
+          if (entries.some(e => e && artistImageFor(e.id, e.name, e.artworkUrl) !== e.artworkUrl)) profiles.set(row.id, row);
+        }
+        if ((data?.length ?? 0) < 1000) break;
+      }
     }
     let rewritten = 0;
     for (const row of profiles.values()) {
@@ -357,17 +382,24 @@ async function syncArtistImageOverrides() {
       });
       if (!changed) continue;
       const { error } = await supabase.from('profiles').update({ top_artists: next }).eq('id', row.id);
-      if (error) { console.warn('[artist-images] profiles update:', error.message); continue; }
+      if (error) { console.warn('[artist-images] profiles update:', error.message); summary.errors.push(`profiles: ${error.message}`); continue; }
       rewritten++;
     }
     if (rewritten) console.log(`[artist-images] rewrote Top 5 artists on ${rewritten} profile(s)`);
+    summary.profiles += rewritten;
   }
+  lastArtistImageSync = { ranAt: new Date().toISOString(), result: summary };
+  console.log('[artist-images] sync summary:', JSON.stringify(summary));
+  return summary;
 }
 
 const artistImageFor = (id, name, fallback) =>
   ARTIST_IMAGE_BY_ID.get(String(id ?? '')) ??
   ARTIST_IMAGE_BY_NAME.get(String(name ?? '').toLowerCase()) ??
   fallback;
+
+// Counts only — no user data — so the sync can be checked without a secret.
+app.get('/api/artist-image-sync', (req, res) => res.json(lastArtistImageSync));
 
 // ── Canonical album resolution ────────────────────────────────────────────────
 // Pins one Apple Music catalog ID per (artist, title) so independently-seeded
