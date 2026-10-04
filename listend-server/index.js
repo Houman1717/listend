@@ -258,6 +258,33 @@ pinStorefront('it', [
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
+// ── Artist image overrides ────────────────────────────────────────────────────
+// Apple's artist artwork is whatever the artist's team supplies, and some of it
+// is a blank square: Kanye West's is solid black and the "Ye" entry solid white,
+// which reads as a broken image everywhere Listend shows an artist. Override
+// those with a real photograph. Keyed by Apple artist id and, because several
+// call sites know only a name, by name as well.
+//
+// Public-domain or openly-licensed photographs only.
+const ARTIST_IMAGE_OVERRIDES = [
+  {
+    ids: ['2715720', '1714710847'],   // "Kanye West" (black) and "Ye" (white)
+    names: ['Kanye West', 'Ye'],
+    // David Shankbone, 2009 — public domain
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Kanye_West_at_the_2009_Tribeca_Film_Festival_%28crop_2%29.jpg/500px-Kanye_West_at_the_2009_Tribeca_Film_Festival_%28crop_2%29.jpg',
+  },
+];
+const ARTIST_IMAGE_BY_ID = new Map(
+  ARTIST_IMAGE_OVERRIDES.flatMap(o => o.ids.map(id => [id, o.url]))
+);
+const ARTIST_IMAGE_BY_NAME = new Map(
+  ARTIST_IMAGE_OVERRIDES.flatMap(o => o.names.map(n => [n.toLowerCase(), o.url]))
+);
+const artistImageFor = (id, name, fallback) =>
+  ARTIST_IMAGE_BY_ID.get(String(id ?? '')) ??
+  ARTIST_IMAGE_BY_NAME.get(String(name ?? '').toLowerCase()) ??
+  fallback;
+
 // ── Canonical album resolution ────────────────────────────────────────────────
 // Pins one Apple Music catalog ID per (artist, title) so independently-seeded
 // lists (genre, decade, etc.) and album logging all agree on the same album,
@@ -1116,12 +1143,15 @@ app.get('/search', [
         releaseDate: item.attributes?.releaseDate?.slice(0, 4) ?? '',
       }));
     } else {
-      results = (data.results?.artists?.data ?? []).map(item => ({
-        id: item.id,
-        name: item.attributes?.name ?? '',
-        genre: item.attributes?.genreNames?.[0] ?? '',
-        artworkUrl: artworkUrl(item.attributes?.artwork),
-      }));
+      results = (data.results?.artists?.data ?? []).map(item => {
+        const name = item.attributes?.name ?? '';
+        return {
+          id: item.id,
+          name,
+          genre: item.attributes?.genreNames?.[0] ?? '',
+          artworkUrl: artistImageFor(item.id, name, artworkUrl(item.attributes?.artwork)),
+        };
+      });
     }
 
     cacheSet(CACHE_KEY, results, TTL_10M);
@@ -1787,7 +1817,7 @@ app.get('/api/discover/community-top-artists', async (req, res) => {
             .then(r => r.ok ? r.json() : null)
             .then(data => {
               const hit = data?.results?.artists?.data?.[0];
-              return { name: a.name, id: hit?.id ?? '', artworkUrl: (hit?.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500') };
+              return { name: a.name, id: hit?.id ?? '', artworkUrl: artistImageFor(hit?.id, a.name, (hit?.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500')) };
             })
             .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
         )
@@ -2007,7 +2037,7 @@ async function computeTopArtistsThisWeek(since) {
           .then(r => r.ok ? r.json() : null)
           .then(data => {
             const hit = data?.results?.artists?.data?.[0];
-            return { name: a.name, id: hit?.id ?? '', artworkUrl: (hit?.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500') };
+            return { name: a.name, id: hit?.id ?? '', artworkUrl: artistImageFor(hit?.id, a.name, (hit?.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500')) };
           })
           .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
       )
@@ -2341,7 +2371,7 @@ app.get('/discover/top-artists', async (req, res) => {
             id:         match.id,
             name:       match.attributes?.name ?? name,
             genre:      match.attributes?.genreNames?.[0] ?? '',
-            artworkUrl: amArtwork(match.attributes?.artwork),
+            artworkUrl: artistImageFor(match.id, match.attributes?.name ?? name, amArtwork(match.attributes?.artwork)),
           };
         } catch { return null; }
       }));
@@ -2521,7 +2551,7 @@ app.get('/lastfm/artist', [
         if (i === 0) {
           console.log(`[/lastfm/artist] first similar artist Apple Music result (${s.name}):`, JSON.stringify(hit));
         }
-        const imageUrl = amArtwork(hit?.attributes?.artwork) || null;
+        const imageUrl = artistImageFor(hit?.id, s.name, amArtwork(hit?.attributes?.artwork) || null);
         console.log(`[/lastfm/artist] similar artist "${s.name}" imageUrl: ${imageUrl}`);
         return { name: s.name, url: s.url, imageUrl };
       })
@@ -4656,7 +4686,7 @@ app.get('/api/admin/fix-liked-artist-ids', requireAdmin, async (req, res) => {
         }
 
         const realId = hit.id;
-        const artworkUrl = (hit.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500');
+        const artworkUrl = artistImageFor(hit.id, hit.attributes?.name, (hit.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500'));
 
         // Per-user, not bulk by badId — if one user already separately has a
         // correctly-liked row for the real artist, only THAT user's duplicate
@@ -5340,7 +5370,7 @@ async function fetchArtistImage(artistName) {
     const exactWithArt = artists.find(a => a.attributes?.name?.toLowerCase() === nameLower && a.attributes?.artwork?.url);
     const anyWithArt   = artists.find(a => a.attributes?.artwork?.url);
     const match        = exactWithArt ?? anyWithArt ?? artists[0];
-    const url = match ? amArtwork(match.attributes?.artwork) : null;
+    const url = artistImageFor(match?.id, artistName, match ? amArtwork(match.attributes?.artwork) : null);
     cacheSet(CACHE_KEY, url, TTL_7D);
     if (url) await setCache(CACHE_KEY, url);
     return url;
