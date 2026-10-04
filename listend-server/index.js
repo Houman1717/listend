@@ -299,8 +299,17 @@ const withArtistImages = artists => (artists ?? []).map(a => {
 // touched only while it still holds the old image.
 let lastArtistImageSync = { ranAt: null, result: null };
 
+// The profiles fallback reads every row, which is real egress to repeat on each
+// deploy for nothing. Fingerprint the override table and skip the scan while it
+// is unchanged — the column updates below stay, being cheap and filtered.
+const ARTIST_IMAGE_SIGNATURE = require('crypto')
+  .createHash('sha1').update(JSON.stringify(ARTIST_IMAGE_OVERRIDES)).digest('hex').slice(0, 12);
+const ARTIST_IMAGE_SIG_KEY = 'artist_image_overrides_signature';
+
 async function syncArtistImageOverrides() {
-  const summary = { likedArtists: 0, homeArtists: 0, top5Changes: 0, profiles: 0, profilesScanned: 0, errors: [] };
+  const summary = { likedArtists: 0, homeArtists: 0, top5Changes: 0, profiles: 0, profilesScanned: 0, scanSkipped: false, errors: [] };
+  const seenSignature = await getCached(ARTIST_IMAGE_SIG_KEY, TTL_7D).catch(() => null);
+  const unchanged = seenSignature === ARTIST_IMAGE_SIGNATURE;
   for (const o of ARTIST_IMAGE_OVERRIDES) {
     const targets = [
       ['liked_artists', 'artist_id', o.ids],
@@ -353,7 +362,11 @@ async function syncArtistImageOverrides() {
     // Containment needs the column to be jsonb and the stored keys to match
     // exactly; when it finds nothing, page through instead rather than leave
     // somebody's Top 5 showing the image we are trying to replace.
-    if (profiles.size === 0) {
+    if (profiles.size === 0 && unchanged) {
+      summary.scanSkipped = true;
+      console.log('[artist-images] overrides unchanged since last sync — skipping the profiles scan');
+    }
+    if (profiles.size === 0 && !unchanged) {
       for (let from = 0; from < 20000; from += 1000) {
         const { data, error } = await supabase
           .from('profiles')
@@ -388,7 +401,8 @@ async function syncArtistImageOverrides() {
     if (rewritten) console.log(`[artist-images] rewrote Top 5 artists on ${rewritten} profile(s)`);
     summary.profiles += rewritten;
   }
-  lastArtistImageSync = { ranAt: new Date().toISOString(), result: summary };
+  if (summary.errors.length === 0) await setCache(ARTIST_IMAGE_SIG_KEY, ARTIST_IMAGE_SIGNATURE).catch(() => {});
+  lastArtistImageSync = { ranAt: new Date().toISOString(), result: summary, signature: ARTIST_IMAGE_SIGNATURE };
   console.log('[artist-images] sync summary:', JSON.stringify(summary));
   return summary;
 }
