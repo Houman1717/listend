@@ -59,6 +59,10 @@ const baseTitle = t => normalizeKey((t ?? '').replace(/\s*[([].*[)\]]\s*$/, ''))
 // samurai, hidden behind its 2024 remaster; Fabri Fibra's Turbe giovanili).
 const EDITION_QUALIFIERS = /\b(remaster(ed)?|anniversary|anniversario|reissue|edition|edizione|deluxe|expanded|versione)\b/i;
 
+// iTunes doesn't expose Apple's isCompilation flag, and the pinned entry has to
+// carry one or a best-of files under Albums. Title is all there is to go on.
+const COMPILATION_TITLE = /\b(best|collection|collezione|essential|anthology|antologia|greatest|hits|raccolta|singles|rarities|b-sides)\b/i;
+
 const artwork = r => (r.artworkUrl100 ?? '').replace('100x100bb', '500x500bb');
 const esc = s => (s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 const year = r => (r.releaseDate ?? '').slice(0, 4);
@@ -146,6 +150,10 @@ async function main() {
   }
 
   const line = r => `${r.storefront}  ${year(r)}  ${String(r.trackCount).padStart(2)}tr  ${r.collectionName}  [${r.collectionId}]`;
+  const comps = keep.filter(r => COMPILATION_TITLE.test(r.collectionName));
+  if (comps.length) {
+    console.log(`Treating as compilations (they file under Collections): ${comps.map(r => r.collectionName).join(', ')}\n`);
+  }
   console.log(`Missing from us — ${keep.length} to pin:`);
   keep.forEach(r => {
     console.log('  ' + line(r));
@@ -186,7 +194,7 @@ async function main() {
     console.log(`    {
       id: '${r.collectionId}', title: '${esc(r.collectionName)}',
       artworkUrl: '${artwork(r)}',
-      year: ${year(r)}, isSingle: false, isCompilation: false, trackCount: ${r.trackCount},
+      year: ${year(r)}, isSingle: false, isCompilation: ${COMPILATION_TITLE.test(r.collectionName)}, trackCount: ${r.trackCount},
       url: '${(r.collectionViewUrl ?? '').split('?')[0]}', type: 'album',
     },`);
   }

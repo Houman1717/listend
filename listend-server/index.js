@@ -197,6 +197,65 @@ pinStorefront('jp', [
   '1793110386', '1793110390', '1793110397', '1793110525',
 ]);
 
+// Prozac+ — Acido Acida (1998)
+pinStorefront('it', [
+  '723408924',
+  '723409035', '723409042', '723409085', '723409087', '723409089', '723409095',
+  '723409097', '723409100', '723409104', '723409108', '723409114', '723409121',
+  '723409123', '723409125',
+]);
+// Prozac+ — Testa Plastica (1998)
+pinStorefront('it', [
+  '724235741',
+  '724235764', '724235766', '724235768', '724235771', '724235773', '724235850',
+  '724235858', '724235859', '724235862', '724235863', '724235864', '724235866',
+  '724235867',
+]);
+// Prozac+ — 3 Prozac+ (2000)
+pinStorefront('it', [
+  '724904764',
+  '724905114', '724905215', '724905231', '724905240', '724905261', '724905325',
+  '724905433', '724905441', '724905622', '724905629', '724905646', '724905825',
+  '724905848',
+]);
+// Prozac+ — Miodio (2002)
+pinStorefront('it', [
+  '713867071',
+  '713867072', '713867073', '713867075', '713867076', '713867077', '713867078',
+  '713867079', '713867080', '713867081', '713867082', '713867083', '713867084',
+  '713867087', '713867091',
+]);
+// Prozac+ — Prozac+: The Best (2007)
+pinStorefront('it', [
+  '713485902',
+  '713485985', '713485986', '713485987', '713485988', '713485995', '713485996',
+  '713485997', '713485998', '713486005', '713486016', '713486083', '713486084',
+  '713486085', '713486086', '713486087', '713486089', '713486091', '713486092',
+  '713486093', '713486094', '713486095', '713486096',
+]);
+// Prozac+ — The EMI Album Collection (2011)
+pinStorefront('it', [
+  '713948896',
+  '713948913', '713948916', '713948920', '713949024', '713949027', '713949030',
+  '713949032', '713949035', '713949037', '713949040', '713949081', '713949089',
+  '713949091', '713949093', '713949095', '713949097', '713949098', '713949100',
+  '713949102', '713949103', '713949113', '713949115', '713949117', '713949119',
+  '713949121', '713949122', '713949131', '713949158', '713949167', '713949172',
+  '713949175', '713949178', '713949218', '713949220', '713949228', '713949229',
+  '713949233', '713949279', '713949359', '713949361', '713949362', '713949364',
+  '713949367', '713949373', '713949378', '713949386', '713949390', '713949393',
+  '713949395', '713949426', '713949433', '713949446', '713949448', '713949451',
+  '713949452', '713949460', '713949464', '713949475', '713949482', '713949508',
+  '713949516', '713949521', '713949525', '713949530', '713949536', '713949548',
+  '713949554',
+]);
+// Prozac+ — Essential (2012)
+pinStorefront('it', [
+  '713582680',
+  '713582716', '713582721', '713582728', '713582731', '713582739', '713582747',
+  '713582754', '713582761', '713582792', '713582801', '713582834', '713582846',
+]);
+
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
 // ── Canonical album resolution ────────────────────────────────────────────────
@@ -287,6 +346,34 @@ const CANONICAL_ALBUM_OVERRIDES = {
   // neither the discography nor search. Keyed under both spellings of the
   // title: normalizeKey strips the accent from "Jardín" rather than folding it,
   // so the accented and plain spellings key differently.
+  'prozac+::acidoacida': {
+    id: '723408924', title: 'Acido Acida', artist: 'Prozac+', year: 1998,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/3c/99/9f/3c999fc1-d20b-f883-ed2a-810a8e51ace3/00724349319752.jpg/500x500bb.jpg',
+  },
+  'prozac+::testaplastica': {
+    id: '724235741', title: 'Testa Plastica', artist: 'Prozac+', year: 1998,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/59/79/d6/5979d6fe-2f9b-6967-cd98-2be54fd96fdc/00724382380856.jpg/500x500bb.jpg',
+  },
+  'prozac+::3prozac+': {
+    id: '724904764', title: '3 Prozac+', artist: 'Prozac+', year: 2000,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/0b/b0/0c/0bb00c6c-939f-243e-8651-249c13bce64b/00724352505159.jpg/500x500bb.jpg',
+  },
+  'prozac+::miodio': {
+    id: '713867071', title: 'Miodio', artist: 'Prozac+', year: 2002,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/a7/9b/7b/a79b7b94-a1af-442c-477a-27c2d0121bf1/00724353818357.jpg/500x500bb.jpg',
+  },
+  'prozac+::prozac+thebest': {
+    id: '713485902', title: 'Prozac+: The Best', artist: 'Prozac+', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/93/a8/e7/93a8e71b-73eb-e563-fc38-05b3f2ab54d2/00094638710653.jpg/500x500bb.jpg',
+  },
+  'prozac+::theemialbumcollection': {
+    id: '713948896', title: 'The EMI Album Collection', artist: 'Prozac+', year: 2011,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/25/6c/17/256c17c7-3ea4-5183-5c57-188d6aed67a3/05099908388155.jpg/500x500bb.jpg',
+  },
+  'prozac+::essential': {
+    id: '713582680', title: 'Essential', artist: 'Prozac+', year: 2012,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d8/c1/48/d8c14825-8a27-cad0-d740-3fec774f15ac/05099962411554.jpg/500x500bb.jpg',
+  },
   'invisible::eljardindelospresentes': {
     id: '401686454', title: 'El Jardin de los Presentes', artist: 'Invisible', year: 1976,
     aliases: ['El Jardín de los Presentes'],
@@ -3166,6 +3253,50 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ed/21/ad/ed21ad88-eead-909a-5303-e8d02fd2fed1/887830015868.png/500x500bb.jpg',
       year: 1988, isSingle: false, isCompilation: false, trackCount: 12,
       url: 'https://music.apple.com/gb/album/isnt-anything/1556913225', type: 'album',
+    },
+  ],
+  '16542987': [ // Prozac+ — not licensed for `us`
+    {
+      id: '723408924', title: 'Acido Acida',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/3c/99/9f/3c999fc1-d20b-f883-ed2a-810a8e51ace3/00724349319752.jpg/500x500bb.jpg',
+      year: 1998, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/it/album/acido-acida/723408924', type: 'album',
+    },
+    {
+      id: '724235741', title: 'Testa Plastica',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/59/79/d6/5979d6fe-2f9b-6967-cd98-2be54fd96fdc/00724382380856.jpg/500x500bb.jpg',
+      year: 1998, isSingle: false, isCompilation: false, trackCount: 13,
+      url: 'https://music.apple.com/it/album/testa-plastica/724235741', type: 'album',
+    },
+    {
+      id: '724904764', title: '3 Prozac+',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/0b/b0/0c/0bb00c6c-939f-243e-8651-249c13bce64b/00724352505159.jpg/500x500bb.jpg',
+      year: 2000, isSingle: false, isCompilation: false, trackCount: 13,
+      url: 'https://music.apple.com/it/album/3-prozac/724904764', type: 'album',
+    },
+    {
+      id: '713867071', title: 'Miodio',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/a7/9b/7b/a79b7b94-a1af-442c-477a-27c2d0121bf1/00724353818357.jpg/500x500bb.jpg',
+      year: 2002, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/it/album/miodio/713867071', type: 'album',
+    },
+    {
+      id: '713485902', title: 'Prozac+: The Best',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/93/a8/e7/93a8e71b-73eb-e563-fc38-05b3f2ab54d2/00094638710653.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: true, trackCount: 22,
+      url: 'https://music.apple.com/it/album/prozac-the-best/713485902', type: 'album',
+    },
+    {
+      id: '713948896', title: 'The EMI Album Collection',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/25/6c/17/256c17c7-3ea4-5183-5c57-188d6aed67a3/05099908388155.jpg/500x500bb.jpg',
+      year: 2011, isSingle: false, isCompilation: true, trackCount: 67,
+      url: 'https://music.apple.com/it/album/the-emi-album-collection/713948896', type: 'album',
+    },
+    {
+      id: '713582680', title: 'Essential',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d8/c1/48/d8c14825-8a27-cad0-d740-3fec774f15ac/05099962411554.jpg/500x500bb.jpg',
+      year: 2012, isSingle: false, isCompilation: true, trackCount: 12,
+      url: 'https://music.apple.com/it/album/essential/713582680', type: 'album',
     },
   ],
   '24836656': [ // Invisible — Apple has the album but doesn't list it under the artist
