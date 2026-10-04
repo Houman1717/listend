@@ -482,8 +482,6 @@ export default function ArtistDetailScreen() {
         ) : null}
         {lastfmLoading ? (
           <ActivityIndicator size="small" color="#D4A017" style={{ marginTop: 8 }} />
-        ) : lastfmError ? (
-          <Text style={[sc.errorText, { color: '#f87171' }]} numberOfLines={2}>{lastfmError}</Text>
         ) : null}
       </View>
 
@@ -508,7 +506,7 @@ export default function ArtistDetailScreen() {
         {tracksLoading ? (
           <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
         ) : tracksError ? (
-          <Text style={[sc.errorText, { color: '#f87171' }]}>{tracksError}</Text>
+          <Text style={[sc.empty, { color: mutedText }]}>No tracks available</Text>
         ) : topTracks && topTracks.length > 0 ? (
           topTracks.slice(0, 5).map((track, i) => (
             <TrackRow
@@ -531,7 +529,7 @@ export default function ArtistDetailScreen() {
         {albumsLoading ? (
           <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
         ) : albumsError ? (
-          <Text style={[sc.errorText, { color: '#f87171' }]}>{albumsError}</Text>
+          <Text style={[sc.empty, { color: mutedText }]}>Couldn't load this discography</Text>
         ) : (
           <>
             {/* Tab pills */}

@@ -2497,6 +2497,16 @@ app.get('/lastfm/artist', [
     const json = await resp.json();
     console.log(`[/lastfm/artist] Last.fm response keys:`, Object.keys(json));
 
+    // Error 6 is "artist not found", an ordinary outcome for a band too small
+    // for Last.fm (Prozac+, Genuflexión) rather than a failure. Answer with an
+    // empty payload so the page simply has no bio, instead of a 500 the artist
+    // screen prints in red across the artwork.
+    if (json.error === 6) {
+      console.log(`[/lastfm/artist] not on Last.fm — "${artistName}"`);
+      const empty = { name: artistName, listeners: 0, bio: '', tags: [], similar: [] };
+      cacheSet(CACHE_KEY, empty, TTL_6H);
+      return res.json(empty);
+    }
     if (json.error) throw new Error(`Last.fm error ${json.error}: ${json.message}`);
 
     const a = json.artist;
@@ -2580,6 +2590,12 @@ app.get('/lastfm/album', [
     console.log(`[/lastfm/album] Last.fm HTTP status: ${lfmResp.status}`);
     if (!lfmResp.ok) throw new Error(`Last.fm album.getinfo → ${lfmResp.status}`);
     const json = await lfmResp.json();
+    if (json.error === 6) {
+      console.log(`[/lastfm/album] not on Last.fm — "${artistName} - ${albumName}"`);
+      const empty = { name: albumName, artist: artistName, listeners: 0, description: geniusDesc || '', tags: [] };
+      cacheSet(CACHE_KEY, empty, TTL_6H);
+      return res.json(empty);
+    }
     if (json.error) throw new Error(`Last.fm error ${json.error}: ${json.message}`);
 
     const al = json.album;
