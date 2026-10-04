@@ -315,6 +315,52 @@ async function syncArtistImageOverrides() {
       if (error) { console.warn(`[artist-images] ${table}.${column}:`, error.message); continue; }
       if (data?.length) console.log(`[artist-images] updated ${data.length} ${table} row(s) by ${column}`);
     }
+
+    // top5_changes feeds the home and Discover artist lists, which already
+    // override on the way out — rewrite the stored image anyway so the two
+    // agree if anything else ever reads the column.
+    for (const [column, values] of [['item_id', o.ids], ['item_name', o.names]]) {
+      const { data, error } = await supabase
+        .from('top5_changes')
+        .update({ item_image_url: o.url })
+        .eq('category', 'artists')
+        .in(column, values)
+        .neq('item_image_url', o.url)
+        .select('id');
+      if (error) { console.warn(`[artist-images] top5_changes.${column}:`, error.message); continue; }
+      if (data?.length) console.log(`[artist-images] updated ${data.length} top5_changes row(s) by ${column}`);
+    }
+
+    // A profile's Top 5 artists are a JSONB array, each entry holding the image
+    // it was picked with, so these need reading and rewriting rather than a
+    // column update. Containment narrows it to the handful of profiles that
+    // actually picked this artist.
+    const profiles = new Map();
+    for (const match of [...o.ids.map(id => ({ id })), ...o.names.map(name => ({ name }))]) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, top_artists')
+        .contains('top_artists', [match]);
+      if (error) { console.warn('[artist-images] profiles.top_artists:', error.message); continue; }
+      for (const row of data ?? []) profiles.set(row.id, row);
+    }
+    let rewritten = 0;
+    for (const row of profiles.values()) {
+      const entries = Array.isArray(row.top_artists) ? row.top_artists : [];
+      let changed = false;
+      const next = entries.map(e => {
+        if (!e) return e;
+        const url = artistImageFor(e.id, e.name, e.artworkUrl);
+        if (url === e.artworkUrl) return e;
+        changed = true;
+        return { ...e, artworkUrl: url };
+      });
+      if (!changed) continue;
+      const { error } = await supabase.from('profiles').update({ top_artists: next }).eq('id', row.id);
+      if (error) { console.warn('[artist-images] profiles update:', error.message); continue; }
+      rewritten++;
+    }
+    if (rewritten) console.log(`[artist-images] rewrote Top 5 artists on ${rewritten} profile(s)`);
   }
 }
 
