@@ -2400,11 +2400,13 @@ const TOP_ARTIST_NAMES = [
 app.get('/discover/top-artists', async (req, res) => {
   const CACHE_KEY = 'discover:top-artists';
 
+  // This list caches for a week, so the override runs on the cached copies —
+  // otherwise a changed image waits days to appear here.
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem) return res.json(withArtistImages(mem));
 
   const db = await getCached(CACHE_KEY, TTL_7D);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(withArtistImages(db)); }
 
   try {
     const results = [];
