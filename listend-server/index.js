@@ -10,6 +10,7 @@ const supabase = require('./db');
 const { sendPush } = require('./sendPush');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, pruneExpiredCache, TTL_24H, TTL_7D } = require('./cache');
+const path = require('path');
 const generateAppleToken = require('./utils/appleToken');
 const {
   MANUAL_ALBUMS, MANUAL_ARTISTS, manualAlbumById, manualTrackById,
@@ -258,6 +259,9 @@ pinStorefront('it', [
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
+// Absolute base for images this server hosts itself, under public/.
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? 'https://listend-production.up.railway.app').replace(/\/$/, '');
+
 // ── Artist image overrides ────────────────────────────────────────────────────
 // Apple's artist artwork is whatever the artist's team supplies, and some of it
 // is a blank square: Kanye West's is solid black and the "Ye" entry solid white,
@@ -270,8 +274,7 @@ const ARTIST_IMAGE_OVERRIDES = [
   {
     ids: ['2715720', '1714710847'],   // "Kanye West" (black) and "Ye" (white)
     names: ['Kanye West', 'Ye'],
-    // David Shankbone, 2009 — public domain
-    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Kanye_West_at_the_2009_Tribeca_Film_Festival_%28crop_2%29.jpg/500px-Kanye_West_at_the_2009_Tribeca_Film_Festival_%28crop_2%29.jpg',
+    url: `${PUBLIC_BASE_URL}/static/artists/kanye-west.jpg`,
   },
 ];
 const ARTIST_IMAGE_BY_ID = new Map(
@@ -287,6 +290,31 @@ const withArtistImages = artists => (artists ?? []).map(a => {
   const url = artistImageFor(a?.id, a?.name, a?.artworkUrl);
   return url === a?.artworkUrl ? a : { ...a, artworkUrl: url };
 });
+
+// liked_artists and home_artists store an artwork url at write time, and the
+// app reads those rows straight from Supabase, so an override has to be written
+// into them as well. Runs on boot and is idempotent — the neq() means a row is
+// touched only while it still holds the old image.
+async function syncArtistImageOverrides() {
+  for (const o of ARTIST_IMAGE_OVERRIDES) {
+    const targets = [
+      ['liked_artists', 'artist_id', o.ids],
+      ['liked_artists', 'name',      o.names],
+      ['home_artists',  'spotify_id', o.ids],
+      ['home_artists',  'name',       o.names],
+    ];
+    for (const [table, column, values] of targets) {
+      const { data, error } = await supabase
+        .from(table)
+        .update({ artwork_url: o.url })
+        .in(column, values)
+        .neq('artwork_url', o.url)
+        .select('*', { count: 'exact' });
+      if (error) { console.warn(`[artist-images] ${table}.${column}:`, error.message); continue; }
+      if (data?.length) console.log(`[artist-images] updated ${data.length} ${table} row(s) by ${column}`);
+    }
+  }
+}
 
 const artistImageFor = (id, name, fallback) =>
   ARTIST_IMAGE_BY_ID.get(String(id ?? '')) ??
@@ -780,6 +808,13 @@ app.use((req, res, next) => {
 
 // Parse JSON bodies — limit raised to 10 MB to handle base64-encoded images
 app.use(express.json({ limit: '10mb' }));
+
+// Images Listend hosts itself (public/artists/…), for the few artists whose
+// Apple artwork is unusable. Long cache: the files change only on deploy.
+app.use('/static', express.static(path.join(__dirname, 'public'), {
+  maxAge: '7d',
+  fallthrough: false,
+}));
 
 // ── Auth middleware ────────────────────────────────────────────────────────────
 // Verifies the Supabase JWT from the Authorization header and attaches req.user.
@@ -5474,6 +5509,10 @@ app.post('/api/webhook/notification', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Listend server listening on port ${PORT}`);
+
+  // Write artist image overrides into the rows that store their own copy.
+  syncArtistImageOverrides().catch(err =>
+    console.warn('[artist-images] sync failed:', err.message ?? err));
 
   // Seed any genres in genreData.js that aren't yet in the DB.
   // Runs once on startup — safe to redeploy, upsert is idempotent.
