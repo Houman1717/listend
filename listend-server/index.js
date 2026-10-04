@@ -1057,6 +1057,13 @@ function withTrackSearchOverrides(q, results) {
 // Noyz Narcos, a guest on their record — and the artist page opens the first
 // result, so a manual artist has to come first or the wrong page opens.
 function withArtistSearchOverrides(q, results) {
+  // Artist search is cached for a day, so an image override has to be applied
+  // on the way out too — otherwise a cached row keeps Apple's blank square
+  // until the cache expires.
+  results = results.map(r => {
+    const url = artistImageFor(r.id, r.name, r.artworkUrl);
+    return url === r.artworkUrl ? r : { ...r, artworkUrl: url };
+  });
   const words = foldForMatch(q).split(/\s+/).map(searchKey).filter(Boolean);
   if (words.join('').length < 3) return results;
   const hits = MANUAL_ARTISTS
