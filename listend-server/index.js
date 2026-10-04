@@ -3543,6 +3543,9 @@ async function buildArtistDiscography(id, bust = false) {
     const t = item.title;
     if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
     if (inAllowlist(t)) return 'epsAndMixtapes';
+    // A mixtape belongs with the EPs however long it runs — Exmilitary and
+    // nostalgia, ULTRA are 49 and 42 minutes, so the clock calls them albums.
+    if (item.isMixtape) return 'epsAndMixtapes';
     if (item.isCompilation === true || COLLECTION_RE.test(t) || inCollectionTitles(t)) return 'collections';
     if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
     if (item.url && item.url.toLowerCase().includes('/single/')) return 'epsAndMixtapes';

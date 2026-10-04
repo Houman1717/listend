@@ -14,7 +14,9 @@
 // Apple Music albums.
 //
 // `aliases` on an album or artist adds extra spellings that search should
-// match — the displayed title never changes.
+// match — the displayed title never changes. `isCompilation` and `isMixtape`
+// put a record in the Collections or EPs & Mixtapes tab of the artist page;
+// without either, running time decides.
 //
 // To add one: find the release on MusicBrainz, take its release-group id for
 // the cover and its release id for the tracklist, and append an entry below.
@@ -75,6 +77,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-exmilitary',
     title: 'Exmilitary',
     artist: 'Death Grips',
+    isMixtape: true,              // billed as a mixtape; files under EPs & Mixtapes
     artistId: '437819641',        // the artist IS on Apple Music — only this record is missing
     year: 2011,
     // built on uncleared samples, so it was released free instead
@@ -666,6 +669,7 @@ const MANUAL_ALBUMS = [
     id: 'lst-nostalgia-ultra',
     title: 'nostalgia, ULTRA',
     artist: 'Frank Ocean',
+    isMixtape: true,              // self-released mixtape, not a Def Jam album
     artistId: '442122051',
     year: 2011,
     // the 2011 mixtape, never licensed to streaming over its samples
@@ -771,6 +775,7 @@ const manualAlbumAsArtistItem = a => ({
   year: a.year,
   isSingle: false,
   isCompilation: a.isCompilation === true,
+  isMixtape: a.isMixtape === true,
   trackCount: a.trackCount,
   runMs: a.tracks.reduce((ms, t) => ms + (t.durationMs ?? 0), 0),
   url: '',
