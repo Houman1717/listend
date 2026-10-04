@@ -280,6 +280,14 @@ const ARTIST_IMAGE_BY_ID = new Map(
 const ARTIST_IMAGE_BY_NAME = new Map(
   ARTIST_IMAGE_OVERRIDES.flatMap(o => o.names.map(n => [n.toLowerCase(), o.url]))
 );
+// Lists of artists get their images from stored rows as often as from Apple, and
+// most are cached for hours, so run the override over the outgoing list rather
+// than only where Apple's response is first read.
+const withArtistImages = artists => (artists ?? []).map(a => {
+  const url = artistImageFor(a?.id, a?.name, a?.artworkUrl);
+  return url === a?.artworkUrl ? a : { ...a, artworkUrl: url };
+});
+
 const artistImageFor = (id, name, fallback) =>
   ARTIST_IMAGE_BY_ID.get(String(id ?? '')) ??
   ARTIST_IMAGE_BY_NAME.get(String(name ?? '').toLowerCase()) ??
@@ -856,12 +864,12 @@ app.get('/home', async (req, res) => {
         artworkUrl: r.artwork_url,
         releaseDate: r.year ? String(r.year) : undefined,
       })),
-      artists: (artistsRes.data ?? []).map(r => ({
+      artists: withArtistImages((artistsRes.data ?? []).map(r => ({
         id: r.spotify_id,
         name: r.name,
         artworkUrl: r.artwork_url,
         genre: r.genre ?? '',
-      })),
+      }))),
     };
 
     cacheSet(CACHE_KEY, payload, TTL_6H);
@@ -1749,11 +1757,13 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
 app.get('/api/discover/community-top-artists', async (req, res) => {
   const CACHE_KEY = 'discover:community-top-artists';
 
+  // Image overrides run on the cached copies too, or a day-old row keeps
+  // serving Apple's blank square.
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem) return res.json(withArtistImages(mem));
 
   const db = await getCached(CACHE_KEY, TTL_6H);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(db); }
+  if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(withArtistImages(db)); }
 
   try {
     const [likedRows, top5Rows, albumRows] = await Promise.all([
@@ -1846,7 +1856,7 @@ app.get('/api/discover/community-top-artists', async (req, res) => {
       }
     }
 
-    const results = ranked;
+    const results = withArtistImages(ranked);
 
     cacheSet(CACHE_KEY, results, TTL_1H);
     await setCache(CACHE_KEY, results);
@@ -2281,6 +2291,8 @@ app.get('/api/home/this-week', async (req, res) => {
       cacheSet(CACHE_KEY, base, TTL_10M);
       await setCache(CACHE_KEY, base);
     }
+    // Overrides on the way out, so a cached payload can't serve a blank image.
+    if (base?.artists) base = { ...base, artists: withArtistImages(base.artists) };
 
     let popularReviews = base.popularReviews ?? [];
     if (userId && popularReviews.length) {
