@@ -398,9 +398,6 @@ const artistImageFor = (id, name, fallback) =>
   ARTIST_IMAGE_BY_NAME.get(String(name ?? '').toLowerCase()) ??
   fallback;
 
-// Counts only — no user data — so the sync can be checked without a secret.
-app.get('/api/artist-image-sync', (req, res) => res.json(lastArtistImageSync));
-
 // ── Canonical album resolution ────────────────────────────────────────────────
 // Pins one Apple Music catalog ID per (artist, title) so independently-seeded
 // lists (genre, decade, etc.) and album logging all agree on the same album,
@@ -895,6 +892,10 @@ app.use('/static', express.static(path.join(__dirname, 'public'), {
   maxAge: '7d',
   fallthrough: false,
 }));
+
+// Counts only — no user data — so the artist image sync can be checked without
+// a secret. Declared here, below `const app`, not beside the sync itself.
+app.get('/api/artist-image-sync', (req, res) => res.json(lastArtistImageSync));
 
 // ── Auth middleware ────────────────────────────────────────────────────────────
 // Verifies the Supabase JWT from the Authorization header and attaches req.user.
