@@ -274,7 +274,9 @@ const ARTIST_IMAGE_OVERRIDES = [
   {
     ids: ['2715720', '1714710847'],   // "Kanye West" (black) and "Ye" (white)
     names: ['Kanye West', 'Ye'],
-    url: `${PUBLIC_BASE_URL}/static/artists/kanye-west.jpg`,
+    // ?v bumps whenever the file is recropped — the path is cached for a week
+    // by the server and by whatever already fetched it.
+    url: `${PUBLIC_BASE_URL}/static/artists/kanye-west.jpg?v=2`,
   },
 ];
 const ARTIST_IMAGE_BY_ID = new Map(
