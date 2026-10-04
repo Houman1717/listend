@@ -3635,25 +3635,36 @@ async function buildArtistDiscography(id, bust = false) {
     return [...map.values()];
   };
 
-  // Albums get additional base-title dedup (strips parenthetical suffixes across years)
-  const albumBaseMap = new Map();
-  for (const item of buckets.albums) {
-    const key = baseTitle(item.title);
-    const existing = albumBaseMap.get(key);
-    if (!existing) { albumBaseMap.set(key, item); continue; }
-    const itemHasSuffix     = /[\(\[]/.test(item.title);
-    const existingHasSuffix = /[\(\[]/.test(existing.title);
-    if (!itemHasSuffix && existingHasSuffix) { albumBaseMap.set(key, item); continue; }
-    if (itemHasSuffix && !existingHasSuffix) continue;
-    if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { albumBaseMap.set(key, item); continue; }
-    if (item.year < existing.year) { albumBaseMap.set(key, item); }
-  }
+  // Base-title dedup (strips parenthetical suffixes across years), run on every
+  // bucket rather than albums alone: Kanye's Collections tab carried both
+  // "Watch the Throne (Deluxe)" and "Watch the Throne (Deluxe Version)",
+  // identical 16-track 2011 editions that the title+year dedup can't see.
+  const dedupByBaseTitle = items => {
+    const byBase = new Map();
+    for (const item of items) {
+      const key = baseTitle(item.title);
+      const existing = byBase.get(key);
+      if (!existing) { byBase.set(key, item); continue; }
+      const itemHasSuffix     = /[\(\[]/.test(item.title);
+      const existingHasSuffix = /[\(\[]/.test(existing.title);
+      if (!itemHasSuffix && existingHasSuffix) { byBase.set(key, item); continue; }
+      if (itemHasSuffix && !existingHasSuffix) continue;
+      if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { byBase.set(key, item); continue; }
+      if ((item.trackCount ?? 0) < (existing.trackCount ?? 0)) continue;
+      if (item.year < existing.year) { byBase.set(key, item); continue; }
+      if (item.year > existing.year) continue;
+      // Same record twice over, so keep the tidier title — "(Deluxe)" over
+      // "(Deluxe Version)" — instead of whichever Apple happened to list first.
+      if (item.title.length < existing.title.length) byBase.set(key, item);
+    }
+    return [...byBase.values()];
+  };
 
   const grouped = {
-    albums:         dedupBucket([...albumBaseMap.values()]),
-    epsAndMixtapes: dedupBucket(buckets.epsAndMixtapes),
-    collections:    dedupBucket(buckets.collections),
-    live:           dedupBucket(buckets.live),
+    albums:         dedupBucket(dedupByBaseTitle(buckets.albums)),
+    epsAndMixtapes: dedupBucket(dedupByBaseTitle(buckets.epsAndMixtapes)),
+    collections:    dedupBucket(dedupByBaseTitle(buckets.collections)),
+    live:           dedupBucket(dedupByBaseTitle(buckets.live)),
   };
 
   console.log(`[artist-discography] success — albums:${grouped.albums.length} eps:${grouped.epsAndMixtapes.length} collections:${grouped.collections.length} live:${grouped.live.length}`);
