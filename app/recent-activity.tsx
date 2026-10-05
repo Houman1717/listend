@@ -22,7 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { type ColorsShape, VOLUME_EMPTY_DARK } from '@/constants/Colors';
+import Colors, { type ColorsShape, VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
@@ -512,7 +512,7 @@ function ReviewCardModal({
 }) {
   const router = useRouter();
   const border = isDark ? '#2a1e14' : '#e5e5e5';
-  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
+  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [localComments, setLocalComments] = useState<ReviewComment[]>([]);
 

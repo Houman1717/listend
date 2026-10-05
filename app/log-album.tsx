@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { VOLUME_EMPTY_DARK } from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useFlip } from '@/context/FlipContext';
 import { capture } from '@/lib/analytics';
@@ -51,7 +51,7 @@ function RatingBar({
   isDark: boolean;
 }) {
   const activeColor   = '#D4A017';
-  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
+  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
 
   const tap = Gesture.Tap()
     .runOnJS(true)
@@ -95,7 +95,7 @@ function RatingBar({
 function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
   const [barWidth, setBarWidth] = useState(0);
   const activeColor   = '#D4A017';
-  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
+  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
 
   return (
     <View style={styles.ratingContainer}>

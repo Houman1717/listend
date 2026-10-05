@@ -22,7 +22,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { VOLUME_EMPTY_DARK } from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePro } from '@/context/ProContext';
@@ -172,7 +172,7 @@ const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
 function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
   const [trackWidth, setTrackWidth] = useState(0);
   const activeColor   = '#D4A017';
-  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
+  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
 
   const tap = Gesture.Tap()
     .runOnJS(true)
@@ -221,7 +221,7 @@ function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: 
 // ─── Volume badge (speaker + bars + number) ──────────────────────────────────
 
 function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
-  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
+  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={10} color="#D4A017" />
@@ -242,7 +242,7 @@ function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
 
 function MiniRatingBar({ rating, isDark }: { rating: number; isDark: boolean }) {
   const activeColor = '#D4A017';
-  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : '#ddd';
+  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   return (
     <View style={s.miniBarRow}>
       <View style={s.miniBarTrack}>
@@ -292,7 +292,7 @@ function CommunityRatingSection({
   const avgStr = avg.toFixed(1);
   const fillLevel = avg;
   const activeColor = '#D4A017';
-  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
+  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
 
   return (
     <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>

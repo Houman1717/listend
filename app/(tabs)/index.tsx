@@ -19,7 +19,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { VOLUME_EMPTY_DARK } from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
@@ -159,7 +159,7 @@ function ArtFallback({ size, radius, label }: { size: number; radius: number; la
 // ─── Volume + bars badge ──────────────────────────────────────────────────────
 
 function VolumeBadge({ rating, showNumber, isDark }: { rating: number; showNumber?: boolean; isDark?: boolean }) {
-  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
+  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : inactive} />

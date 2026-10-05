@@ -20,7 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { reportContent } from '@/lib/reports';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { VOLUME_EMPTY_DARK } from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { EditListenDateModal } from '@/components/EditListenDateModal';
 
@@ -68,7 +68,7 @@ const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a
 // ─── Volume badge ─────────────────────────────────────────────────────────────
 
 function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
-  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
+  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />
@@ -461,7 +461,7 @@ export default function SessionsScreen() {
                 <Text style={[s.monthCardArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
                 {((album.lastRating ?? album.rating) > 0 || album.isRelistened) && (
                   <View style={{ marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    {(album.lastRating ?? album.rating) > 0 && <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />}
+                    {(album.lastRating ?? album.rating) > 0 && <VolumeBadge rating={album.lastRating ?? album.rating} isDark={colors.isDark} tint={colors.tint} />}
                     {!!(album.lastReview ?? album.review) && <FontAwesome name="quote-left" size={8} color={colors.tint} />}
                     {album.isRelistened && <FontAwesome name="repeat" size={8} color={colors.tint} />}
                   </View>
@@ -503,7 +503,7 @@ export default function SessionsScreen() {
                   <Text style={[s.albumArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  {(album.lastRating ?? album.rating) > 0 && <VolumeBadge rating={album.lastRating ?? album.rating} isDark={isDark} tint={colors.tint} />}
+                  {(album.lastRating ?? album.rating) > 0 && <VolumeBadge rating={album.lastRating ?? album.rating} isDark={colors.isDark} tint={colors.tint} />}
                   <View style={{ flexDirection: 'row', gap: 5 }}>
                     {!!(album.lastReview ?? album.review) && <FontAwesome name="quote-left" size={10} color={colors.tint} />}
                     {album.isRelistened && <FontAwesome name="repeat" size={10} color={colors.tint} />}
