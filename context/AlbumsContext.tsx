@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/supabaseQuery';
+import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { resolveCanonicalAlbum } from '@/lib/resolveCanonicalAlbum';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
@@ -635,7 +636,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     setPendingAlbum(null);
 
     if (user) {
-      supabase
+      const logWrite = supabase
         .from('user_albums')
         .upsert({
           user_id:     user.id,
@@ -650,7 +651,18 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         }, { onConflict: 'user_id,spotify_id' })
         .then(({ error }) => {
           if (error) console.error('[AlbumsContext] logAlbum upsert error:', error.message);
+          return !error;
         });
+
+      // Save the runtime now — otherwise duration_ms stays null until the
+      // album page is opened, and Listening Hours undercount. Waits for the
+      // upsert so the UPDATE has a row to land on.
+      Promise.all([logWrite, fetchAlbumDurations([newAlbum.id])])
+        .then(([saved, found]) => {
+          const ms = found[newAlbum.id];
+          if (saved && ms) updateDuration(newAlbum.id, ms);
+        })
+        .catch(() => {});
 
       supabase
         .from('want_to_listen')

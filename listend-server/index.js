@@ -4108,6 +4108,42 @@ app.get(['/catalog/recommendations', '/spotify/recommendations'], [
   }
 });
 
+// ── Album durations ───────────────────────────────────────────────────────────
+// Total runtime of one album, from the manual catalog or the (cached) Apple
+// Music tracklist. null = unknown (not on AM, lookup failed, or 0 length).
+async function resolveAlbumDurationMs(id) {
+  const manual = manualAlbumById(id);
+  if (manual) {
+    const manualMs = manual.tracks.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
+    return manualMs > 0 ? manualMs : null;
+  }
+
+  const CACHE_KEY = `catalog_album_tracks_${id}`;
+  let tracks = cacheGet(CACHE_KEY);
+  if (!tracks) {
+    const db = await getCached(CACHE_KEY, TTL_24H);
+    if (tracksComplete(db)) tracks = db;
+  }
+  if (!tracks) {
+    try {
+      const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/tracks`);
+      tracks = (data.data ?? []).map((t, i) => ({
+        number: t.attributes?.trackNumber ?? i + 1,
+        id: t.id,
+        title: t.attributes?.name ?? '',
+        durationMs: t.attributes?.durationInMillis ?? 0,
+        featuredArtists: [],
+      }));
+      await cacheAlbumTracks(CACHE_KEY, tracks);
+    } catch (err) {
+      console.warn(`[album-durations] failed for ${id}:`, err.message ?? err);
+      return null;
+    }
+  }
+  const totalMs = (capTracklist(id, tracks) ?? []).reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
+  return totalMs > 0 ? totalMs : null;
+}
+
 // ── GET /api/album-durations?ids=id1,id2,... ─────────────────────────────────
 // Batch endpoint: returns total duration in ms for each album ID.
 // Reuses the existing per-album tracks cache so repeated calls are cheap.
@@ -4121,42 +4157,81 @@ app.get('/api/album-durations', [
   if (ids.length === 0) return res.json({});
 
   const result = {};
-
   await Promise.all(ids.map(async (id) => {
-    const manual = manualAlbumById(id);
-    if (manual) {
-      const manualMs = manual.tracks.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
-      if (manualMs > 0) result[id] = manualMs;
-      return;
-    }
-
-    const CACHE_KEY = `catalog_album_tracks_${id}`;
-    let tracks = cacheGet(CACHE_KEY);
-    if (!tracks) {
-      const db = await getCached(CACHE_KEY, TTL_24H);
-      if (tracksComplete(db)) tracks = db;
-    }
-    if (!tracks) {
-      try {
-        const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/tracks`);
-        tracks = (data.data ?? []).map((t, i) => ({
-          number: t.attributes?.trackNumber ?? i + 1,
-          id: t.id,
-          title: t.attributes?.name ?? '',
-          durationMs: t.attributes?.durationInMillis ?? 0,
-          featuredArtists: [],
-        }));
-        await cacheAlbumTracks(CACHE_KEY, tracks);
-      } catch (err) {
-        console.warn(`[/api/album-durations] failed for ${id}:`, err.message ?? err);
-        return;
-      }
-    }
-    const totalMs = (capTracklist(id, tracks) ?? []).reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
-    if (totalMs > 0) result[id] = totalMs;
+    const ms = await resolveAlbumDurationMs(id);
+    if (ms) result[id] = ms;
   }));
-
   res.json(result);
+});
+
+// ── Duration backfill ─────────────────────────────────────────────────────────
+// user_albums.duration_ms used to be saved only when the owner opened the
+// album page or sorted by duration, so ~46% of rows were null and Listening
+// Hours read far too low (a 1163-album library showed 239h, really ~900h).
+// This fills every null row: one lookup per distinct album, then one UPDATE
+// covering every user who logged it. Runs once on boot and on demand; ids
+// that can't resolve (old Spotify ids, albums gone from AM) stay null and are
+// simply retried next run. Throttled like the populate routes — AM rate limit,
+// and the Supabase Micro instance doesn't like bursts.
+let durationBackfillRunning = false;
+
+async function backfillAlbumDurations() {
+  if (durationBackfillRunning) return { skipped: 'already running' };
+  durationBackfillRunning = true;
+  const started = Date.now();
+  let resolved = 0, rowsTried = 0, failed = 0;
+  try {
+    const ids = new Set();
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from('user_albums')
+        .select('spotify_id')
+        .is('duration_ms', null)
+        .order('spotify_id')
+        .range(from, from + 999);
+      if (error) throw new Error(error.message);
+      for (const r of data ?? []) {
+        // Numeric = Apple Music, lst- = manual catalog. Anything else is a
+        // legacy Spotify id AM can't answer for.
+        if (r.spotify_id && (/^\d+$/.test(r.spotify_id) || r.spotify_id.startsWith('lst-'))) ids.add(r.spotify_id);
+      }
+      if ((data ?? []).length < 1000) break;
+    }
+    const list = [...ids];
+    console.log(`[duration-backfill] ${list.length} albums with null duration_ms`);
+
+    const BATCH = 4, DELAY = 500;
+    for (let i = 0; i < list.length; i += BATCH) {
+      await Promise.all(list.slice(i, i + BATCH).map(async (id) => {
+        const ms = await resolveAlbumDurationMs(id);
+        if (!ms) { failed++; return; }
+        const { error } = await supabase
+          .from('user_albums')
+          .update({ duration_ms: ms })
+          .eq('spotify_id', id)
+          .is('duration_ms', null);
+        if (error) { failed++; console.warn(`[duration-backfill] update ${id}:`, error.message); return; }
+        resolved++;
+      }));
+      rowsTried = i + BATCH;
+      if (rowsTried % 400 === 0) console.log(`[duration-backfill] ${Math.min(rowsTried, list.length)}/${list.length} (resolved ${resolved})`);
+      if (i + BATCH < list.length) await new Promise(r => setTimeout(r, DELAY));
+    }
+    const summary = { albums: list.length, resolved, failed, seconds: Math.round((Date.now() - started) / 1000) };
+    console.log('[duration-backfill] done', summary);
+    return summary;
+  } catch (err) {
+    console.error('[duration-backfill] aborted:', err.message ?? err);
+    return { error: err.message ?? String(err), resolved, failed };
+  } finally {
+    durationBackfillRunning = false;
+  }
+}
+
+app.get('/api/admin/backfill-durations', requireAdmin, (req, res) => {
+  if (durationBackfillRunning) return res.json({ status: 'already running' });
+  backfillAlbumDurations();
+  res.json({ status: 'started' });
 });
 
 // ── PATCH /api/re-listens ─────────────────────────────────────────────────────
@@ -5601,6 +5676,11 @@ app.listen(PORT, () => {
   // Write artist image overrides into the rows that store their own copy.
   syncArtistImageOverrides().catch(err =>
     console.warn('[artist-images] sync failed:', err.message ?? err));
+
+  // Fill missing album durations (see backfillAlbumDurations). Delayed so it
+  // doesn't compete with boot-time seeding; idempotent, so every deploy just
+  // retries whatever couldn't resolve last time.
+  setTimeout(() => { backfillAlbumDurations(); }, 60_000);
 
   // Seed any genres in genreData.js that aren't yet in the DB.
   // Runs once on startup — safe to redeploy, upsert is idempotent.

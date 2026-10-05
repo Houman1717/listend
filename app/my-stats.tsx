@@ -33,6 +33,11 @@ const STATS_TOP_GENRES   = 6;
 const ARTIST_COMP_MIN_ALBUM_RATINGS = 5;
 const ARTIST_COMP_MIN_ALBUMS        = 2;
 const ARTIST_COMP_MIN_DIFF          = 0.5;
+// Albums the duration endpoint can answer for: Apple Music (numeric) or the
+// manual catalog (lst-). Legacy Spotify ids never resolve — don't wait on them.
+const hasLookupableId = (id: string) => /^\d+$/.test(id) || id.startsWith('lst-');
+const HOURS_WAIT_MS = 5000;
+
 type ComparePerson = { id: string; displayName: string; username: string; avatarUrl: string | null; isPro: boolean };
 type ArtistCompEntry = { artist: string; mine: number; community: number; delta: number; albums: LoggedAlbum[] };
 
@@ -863,24 +868,39 @@ export default function MyStatsScreen() {
   // read far too low (one 1163-album library had 878 blanks). Fill the gaps
   // once per library: our own answers are written back via updateDurations so
   // the lookup isn't repeated; another user's stay in memory (RLS).
+  // The server backfills these too, so normally only a handful are left;
+  // hours show "…" while they're fetched rather than a too-low number that
+  // jumps, capped at HOURS_WAIT_MS so a slow lookup can't hide the stat.
   const durationsHydratedFor = useRef<string | null>(null);
+  const [hoursPending, setHoursPending] = useState(false);
   useEffect(() => {
     if (!isLoaded) return;
     const key = viewedUserId ?? 'me';
     if (durationsHydratedFor.current === key) return;
     durationsHydratedFor.current = key;
-    const missing = loggedAlbumsRaw.filter(a => !a.durationMs).map(a => a.id);
+    const missing = loggedAlbumsRaw.filter(a => !a.durationMs && hasLookupableId(a.id)).map(a => a.id);
     if (missing.length === 0) return;
     let cancelled = false;
+    setHoursPending(true);
+    const giveUp = setTimeout(() => setHoursPending(false), HOURS_WAIT_MS);
     fetchAlbumDurations(missing, () => cancelled).then(found => {
-      if (cancelled || Object.keys(found).length === 0) return;
-      if (viewedUserId) {
-        setOtherAlbums(prev => prev.map(a => (found[a.id] && !a.durationMs ? { ...a, durationMs: found[a.id] } : a)));
-      } else {
-        updateDurations(found);
+      if (cancelled) return;
+      if (Object.keys(found).length > 0) {
+        if (viewedUserId) {
+          setOtherAlbums(prev => prev.map(a => (found[a.id] && !a.durationMs ? { ...a, durationMs: found[a.id] } : a)));
+        } else {
+          updateDurations(found);
+        }
       }
+      clearTimeout(giveUp);
+      setHoursPending(false);
     });
-    return () => { cancelled = true; if (durationsHydratedFor.current === key) durationsHydratedFor.current = null; };
+    return () => {
+      cancelled = true;
+      clearTimeout(giveUp);
+      setHoursPending(false);
+      if (durationsHydratedFor.current === key) durationsHydratedFor.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, viewedUserId]);
 
@@ -904,6 +924,7 @@ export default function MyStatsScreen() {
   const selectedFriendId  = useRef<string | null>(null);
   const [friendAlbums,  setFriendAlbums]  = useState<LoggedAlbum[]>([]);
   const [friendLoading, setFriendLoading] = useState(false);
+  const [friendHoursPending, setFriendHoursPending] = useState(false);
   const [sharedModal,        setSharedModal]        = useState<'albums' | 'artists' | null>(null);
   const [followingList,      setFollowingList]      = useState<ComparePerson[]>([]);
   const [friendTop5Albums,   setFriendTop5Albums]   = useState<{ id: string; title: string; artworkUrl?: string }[]>([]);
@@ -944,7 +965,7 @@ export default function MyStatsScreen() {
     : '—';
   const uniqueArtists  = new Set(loggedAlbums.map(a => a.artist)).size;
   const totalMs        = loggedAlbums.reduce((sum, a) => sum + (a.durationMs ?? 0), 0);
-  const totalHours     = totalMs > 0 ? Math.round(totalMs / 3_600_000) : '—';
+  const totalHours     = hoursPending ? '…' : totalMs > 0 ? Math.round(totalMs / 3_600_000) : '—';
 
   // ── Streak helpers ────────────────────────────────────────────────────────
   // Build a set of "YYYY-M-D" keys (0-indexed month) for every day with a log
@@ -1501,6 +1522,7 @@ export default function MyStatsScreen() {
     setFriendTop5Albums([]);
     setFriendTop5Artists([]);
     setFriendLikedArtists([]);
+    setFriendHoursPending(false);
     setCompareFriend(person);
     if (person.isPro) {
       setFriendLoading(true);
@@ -1603,11 +1625,19 @@ export default function MyStatsScreen() {
       // Same blank-duration gap as our own library — fill it so their
       // Listening Hours aren't undercounted. Not awaited: the comparison
       // renders now and the hours catch up when the lookup lands.
-      const missing = rows.filter(r => !r.duration_ms).map(r => r.spotify_id);
+      const missing = rows.filter(r => !r.duration_ms && hasLookupableId(r.spotify_id)).map(r => r.spotify_id);
       if (missing.length > 0) {
+        setFriendHoursPending(true);
+        const giveUp = setTimeout(() => {
+          if (selectedFriendId.current === friendId) setFriendHoursPending(false);
+        }, HOURS_WAIT_MS);
         fetchAlbumDurations(missing, () => selectedFriendId.current !== friendId).then(found => {
-          if (selectedFriendId.current !== friendId || Object.keys(found).length === 0) return;
-          setFriendAlbums(prev => prev.map(a => (found[a.id] && !a.durationMs ? { ...a, durationMs: found[a.id] } : a)));
+          if (selectedFriendId.current !== friendId) return;
+          clearTimeout(giveUp);
+          if (Object.keys(found).length > 0) {
+            setFriendAlbums(prev => prev.map(a => (found[a.id] && !a.durationMs ? { ...a, durationMs: found[a.id] } : a)));
+          }
+          setFriendHoursPending(false);
         });
       }
     }
@@ -1644,7 +1674,7 @@ export default function MyStatsScreen() {
   const friendAvgRating = friendRated.length > 0
     ? (friendRated.reduce((s, a) => s + effectiveRating(a), 0) / friendRated.length).toFixed(1) : '—';
   const friendHours     = friendAlbums.reduce((s, a) => s + (a.durationMs ?? 0), 0);
-  const friendHoursVal  = friendHours > 0 ? Math.round(friendHours / 3_600_000) : '—';
+  const friendHoursVal  = friendHoursPending ? '…' : friendHours > 0 ? Math.round(friendHours / 3_600_000) : '—';
   const friendArtistCount = new Set(friendAlbums.map(a => a.artist)).size;
 
   // Friend top genres
@@ -1769,7 +1799,7 @@ export default function MyStatsScreen() {
     const c = Colors[colorScheme ?? 'dark'];
     // Everything below the hero stays locked. Labels are real so the preview is
     // honest about what's inside; the values are masked.
-    const hasHours = typeof totalHours === 'number' && totalHours > 0;
+    const hasHours = hoursPending || (typeof totalHours === 'number' && totalHours > 0);
     const lockedTiles = [
       { label: hasHours ? 'Albums Logged' : 'Listening Hours', value: hasHours ? String(loggedAlbums.length) : '•••' },
       { label: 'Unique Artists', value: '••' },
