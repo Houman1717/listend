@@ -987,7 +987,7 @@ export default function UserProfileScreen() {
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             disabled={isPrivateWall}
-            onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'following' } })}>
+            onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'following', ...(navProTheme && { proTheme: navProTheme }) } })}>
             <Text style={[s.socialCount, { color: colors.text }]}>{displayCount(followingCount)}</Text>
             <Text style={[s.socialLabel, { color: colors.subtext }]}> Following</Text>
           </Pressable>
@@ -995,7 +995,7 @@ export default function UserProfileScreen() {
           <Pressable
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center' })}
             disabled={isPrivateWall}
-            onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'followers' } })}>
+            onPress={() => router.push({ pathname: '/followers-following', params: { userId: viewedUserId, type: 'followers', ...(navProTheme && { proTheme: navProTheme }) } })}>
             <Text style={[s.socialCount, { color: colors.text }]}>{displayCount(followersCount)}</Text>
             <Text style={[s.socialLabel, { color: colors.subtext }]}> Followers</Text>
           </Pressable>

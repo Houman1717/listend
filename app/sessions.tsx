@@ -354,7 +354,7 @@ export default function SessionsScreen() {
         headerShadowVisible: false,
         headerRight: viewingOther ? undefined : () => (
           <Pressable onPress={() => setDateEditMode(v => !v)} hitSlop={12} style={{ paddingHorizontal: 4 }}>
-            <Text style={{ color: '#D4A017', fontSize: 15, fontWeight: '600' }}>
+            <Text style={{ color: colors.tint, fontSize: 15, fontWeight: '600' }}>
               {dateEditMode ? 'Done' : 'Edit Dates'}
             </Text>
           </Pressable>
@@ -562,7 +562,7 @@ export default function SessionsScreen() {
       {editingDateAlbum && (
         <EditListenDateModal
           album={editingDateAlbum}
-          isDark={isDark}
+          isDark={colors.isDark}
           colors={colors}
           onClose={() => {
             setEditingDateAlbum(null);

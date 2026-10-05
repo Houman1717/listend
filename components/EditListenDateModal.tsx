@@ -29,7 +29,12 @@ export function EditListenDateModal({
   const { user } = useAuth();
   const { updateListenedDate } = useAlbums();
   const insets = useSafeAreaInsets();
-  const border = isDark ? '#2a1e14' : '#e5e5e5';
+  // Every colour comes from the caller's theme, so a pro theme (Sessions passes
+  // its own) carries into the sheet instead of the old fixed gold/brown.
+  const border  = colors.border;
+  const text    = colors.text;
+  const subtext = colors.subtext;
+  const tint    = colors.tint;
 
   const [loadingOptions, setLoadingOptions] = useState(album.isRelistened ?? false);
   const [options, setOptions] = useState<ListenOption[]>([]);
@@ -91,23 +96,23 @@ export function EditListenDateModal({
               <FontAwesome
                 name={chosen && options.length > 0 ? 'chevron-left' : 'close'}
                 size={16}
-                color={isDark ? '#A08060' : '#6B4C35'}
+                color={subtext}
               />
             </Pressable>
-            <Text style={[s.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Edit Listen Date</Text>
+            <Text style={[s.headerTitle, { color: text }]}>Edit Listen Date</Text>
             <View style={{ width: 20 }} />
           </View>
 
           <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
-            <Text style={[s.albumTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
+            <Text style={[s.albumTitle, { color: text }]} numberOfLines={1}>
               {album.title}
             </Text>
-            <Text style={[s.albumArtist, { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>
+            <Text style={[s.albumArtist, { color: subtext }]} numberOfLines={1}>
               {album.artist}
             </Text>
 
             {loadingOptions && (
-              <ActivityIndicator style={{ marginTop: 24 }} color="#D4A017" />
+              <ActivityIndicator style={{ marginTop: 24 }} color={tint} />
             )}
 
             {showOptionList && (
@@ -124,7 +129,7 @@ export function EditListenDateModal({
                       { borderColor: border, opacity: pressed ? 0.7 : 1 },
                     ]}>
                     <View>
-                      <Text style={[s.optionLabel, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>{opt.label}</Text>
+                      <Text style={[s.optionLabel, { color: text }]}>{opt.label}</Text>
                       <Text style={[s.optionDate, { color: colors.subtext }]}>{formatDate(opt.currentDate)}</Text>
                     </View>
                     <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
@@ -155,10 +160,10 @@ export function EditListenDateModal({
                       s.optionRow,
                       { borderColor: border, opacity: pressed ? 0.7 : 1, width: '100%' },
                     ]}>
-                    <Text style={[s.optionLabel, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>
+                    <Text style={[s.optionLabel, { color: text }]}>
                       {formatDate(date.toISOString())}
                     </Text>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#D4A017' }}>Change</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: tint }}>Change</Text>
                   </Pressable>
                 ) : (
                   <DateTimePicker
@@ -168,13 +173,13 @@ export function EditListenDateModal({
                     maximumDate={new Date()}
                     onChange={(_, d) => d && setDate(d)}
                     themeVariant={isDark ? 'dark' : 'light'}
-                    accentColor="#D4A017"
+                    accentColor={tint}
                     style={{ width: '100%' }}
                   />
                 )}
 
                 <Pressable
-                  style={[s.saveButton, { backgroundColor: '#D4A017', opacity: saving ? 0.6 : 1 }]}
+                  style={[s.saveButton, { backgroundColor: tint, opacity: saving ? 0.6 : 1 }]}
                   onPress={handleSave}
                   disabled={saving}>
                   {saving
