@@ -21,6 +21,7 @@ import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { reportContent } from '@/lib/reports';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { EditListenDateModal } from '@/components/EditListenDateModal';
 
@@ -72,17 +73,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
-        {Array.from({ length: 10 }, (_, i) => {
-          const h = Math.round(3 + i * 1);
-          return (
-            <View
-              key={i}
-              style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : inactive }}
-            />
-          );
-        })}
-      </View>
+      <VolumeBars rating={rating} activeColor={tint} inactiveColor={inactive} />
       <Text style={{ color: tint, fontSize: 10, fontWeight: '700' }}>{rating}</Text>
     </View>
   );

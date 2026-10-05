@@ -13,18 +13,14 @@ import { handleOrName } from '@/lib/userHandle';
 import { supabase } from '@/lib/supabase';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 
 function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
   const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
-        {Array.from({ length: 10 }, (_, i) => {
-          const h = Math.round(3 + i * 1);
-          return <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : inactive }} />;
-        })}
-      </View>
+      <VolumeBars rating={rating} activeColor={tint} inactiveColor={inactive} />
       <Text style={{ color: tint, fontSize: 10, fontWeight: '700' }}>{rating}</Text>
     </View>
   );

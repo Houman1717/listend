@@ -13,6 +13,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 import { PopularReview, fetchPopularReviewsThisWeek } from '@/lib/homeData';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
@@ -32,14 +33,7 @@ function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={10} color={rating > 0 ? '#D4A017' : inactive} />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
-        {Array.from({ length: 10 }, (_, i) => {
-          const h = Math.round(3 + i * 1);
-          return (
-            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }} />
-          );
-        })}
-      </View>
+      <VolumeBars rating={rating} activeColor={'#D4A017'} inactiveColor={inactive} />
       {rating > 0 && <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>}
     </View>
   );

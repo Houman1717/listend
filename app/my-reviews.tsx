@@ -20,6 +20,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape, VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -44,14 +45,7 @@ function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isD
   return (
     <View style={s.badge}>
       <FontAwesome name="volume-up" size={10} color={rating > 0 ? tint : inactive} />
-      <View style={s.badgeBars}>
-        {BAR_HEIGHTS.map((h, i) => (
-          <View
-            key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? tint : inactive }]}
-          />
-        ))}
-      </View>
+      <VolumeBars rating={rating} activeColor={tint} inactiveColor={inactive} heights={BAR_HEIGHTS} barWidth={2.5} gap={1.5} />
       {rating > 0 && <Text style={[s.badgeNum, { color: tint }]}>{rating}</Text>}
     </View>
   );
@@ -1186,8 +1180,6 @@ const s = StyleSheet.create({
 
   // Volume badge
   badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
-  badgeBar:  { width: 2.5, borderRadius: 1 },
   badgeNum:  { color: '#D4A017', fontSize: 10, fontWeight: '700', lineHeight: 15 },
 
   // Like

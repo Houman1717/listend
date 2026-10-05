@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape, VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
@@ -571,11 +572,7 @@ function ReviewCardModal({
                 {item.rating > 0 && (
                   <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, marginTop: 2 }}>
                     <FontAwesome name="volume-up" size={11} color={colors.tint} />
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
-                      {BAR_HEIGHTS.map((h, i) => (
-                        <View key={i} style={{ width: 2.5, borderRadius: 1, height: h, backgroundColor: i + 1 <= item.rating ? colors.tint : inactive }} />
-                      ))}
-                    </View>
+                    <VolumeBars rating={item.rating} activeColor={colors.tint} inactiveColor={inactive} heights={BAR_HEIGHTS} barWidth={2.5} gap={2} />
                     <Text style={{ color: colors.tint, fontSize: 11, fontWeight: '700', lineHeight: 16 }}>{item.rating}</Text>
                   </View>
                 )}
@@ -712,12 +709,7 @@ function ActivityRow({ item, onPress, colors }: { item: ActivityItem; onPress: (
       {item.rating > 0 && (
         <View style={s.bars}>
           <FontAwesome name="volume-up" size={10} color={colors.tint} />
-          {BAR_HEIGHTS.map((h, i) => (
-            <View
-              key={i}
-              style={[s.bar, { height: h, backgroundColor: i + 1 <= item.rating ? colors.tint : colors.border }]}
-            />
-          ))}
+          <VolumeBars rating={item.rating} activeColor={colors.tint} inactiveColor={colors.border} heights={BAR_HEIGHTS} barWidth={2.5} gap={2.5} />
           <Text style={[s.ratingNum, { color: colors.tint }]}>{item.rating}</Text>
         </View>
       )}
@@ -1372,7 +1364,6 @@ const s = StyleSheet.create({
   date:      { fontSize: 11 },
 
   bars:      { flexDirection: 'row', alignItems: 'flex-end', gap: 2.5, flexShrink: 0 },
-  bar:       { width: 2.5, borderRadius: 1 },
   ratingNum: { color: '#D4A017', fontSize: 10, fontWeight: '700', lineHeight: 15, marginLeft: 1 },
 
   sep: { height: StyleSheet.hairlineWidth, marginLeft: 83 },

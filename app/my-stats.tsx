@@ -7,6 +7,7 @@ import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { ProBadge } from '@/components/ProBadge';
@@ -112,12 +113,7 @@ function VolumeBadge({ rating, tint = ACCENT, isDark = true }: { rating: number;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
-        {Array.from({ length: 10 }, (_, i) => {
-          const h = Math.round(3 + i * 1);
-          return <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : inactive }} />;
-        })}
-      </View>
+      <VolumeBars rating={rating} activeColor={tint} inactiveColor={inactive} />
       <Text style={{ color: tint, fontSize: 10, fontWeight: '700' }}>{rating}</Text>
     </View>
   );

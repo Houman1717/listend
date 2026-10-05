@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 import { fetchAllRows } from '@/lib/supabaseQuery';
 import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { usePro } from '@/context/ProContext';
@@ -250,12 +251,7 @@ function VolumeBadge({ rating, tint = ACCENT, isDark = true }: { rating: number;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
-        {Array.from({ length: 10 }, (_, i) => {
-          const h = Math.round(3 + i * 1);
-          return <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : inactive }} />;
-        })}
-      </View>
+      <VolumeBars rating={rating} activeColor={tint} inactiveColor={inactive} />
       <Text style={{ color: tint, fontSize: 10, fontWeight: '700' }}>{rating}</Text>
     </View>
   );

@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 
 const PADDING = 16;
@@ -24,14 +25,7 @@ function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
   return (
     <View style={s.badge}>
       <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#D4A017' : inactive} />
-      <View style={s.badgeBars}>
-        {BAR_HEIGHTS.map((h, i) => (
-          <View
-            key={i}
-            style={[s.badgeBar, { height: h, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }]}
-          />
-        ))}
-      </View>
+      <VolumeBars rating={rating} activeColor={'#D4A017'} inactiveColor={inactive} heights={BAR_HEIGHTS} barWidth={2.5} gap={1.5} />
       {rating > 0 && <Text style={s.badgeNum}>{rating}</Text>}
     </View>
   );
@@ -109,8 +103,6 @@ const s = StyleSheet.create({
   ratingWrap: { marginTop: 6, alignItems: 'center' },
 
   badge:     { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  badgeBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
-  badgeBar:  { width: 2.5, borderRadius: 1 },
   badgeNum:  { color: '#D4A017', fontSize: 9, fontWeight: '700', lineHeight: 14 },
 
   emptyText: { textAlign: 'center', marginTop: 80, fontSize: 15 },

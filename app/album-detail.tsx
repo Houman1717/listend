@@ -23,6 +23,7 @@ import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePro } from '@/context/ProContext';
@@ -168,6 +169,7 @@ const RATING_LABELS: Record<number, string> = {
   9: 'Classic', 10: 'Timeless / No Skips',
 };
 const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
+const MINI_BAR_HEIGHTS = BAR_HEIGHTS.map(h => Math.round(h * 0.55));
 
 function RatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
   const [trackWidth, setTrackWidth] = useState(0);
@@ -225,14 +227,7 @@ function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={10} color="#D4A017" />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
-        {Array.from({ length: 10 }, (_, i) => {
-          const h = Math.round(3 + i * 1);
-          return (
-            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? '#D4A017' : inactive }} />
-          );
-        })}
-      </View>
+      <VolumeBars rating={rating} activeColor={'#D4A017'} inactiveColor={inactive} />
       <Text style={{ color: '#D4A017', fontSize: 10, fontWeight: '700' }}>{rating}</Text>
     </View>
   );
@@ -245,14 +240,7 @@ function MiniRatingBar({ rating, isDark }: { rating: number; isDark: boolean }) 
   const inactiveColor = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   return (
     <View style={s.miniBarRow}>
-      <View style={s.miniBarTrack}>
-        {BAR_HEIGHTS.map((h, i) => (
-          <View
-            key={i}
-            style={[s.miniBar, { height: Math.round(h * 0.55), backgroundColor: i + 1 <= rating ? activeColor : inactiveColor }]}
-          />
-        ))}
-      </View>
+      <VolumeBars rating={rating} activeColor={activeColor} inactiveColor={inactiveColor} heights={MINI_BAR_HEIGHTS} barWidth={4} gap={2} />
       <Text style={[s.miniBarNum, { color: rating > 0 ? activeColor : inactiveColor }]}>{rating > 0 ? rating : '–'}</Text>
     </View>
   );
@@ -2323,8 +2311,6 @@ const s = StyleSheet.create({
 
   // Mini rating bar (logged date row)
   miniBarRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-  miniBarTrack: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
-  miniBar: { width: 4, borderRadius: 1 },
   miniBarNum: { fontSize: 13, fontWeight: '700', lineHeight: 15 },
 
   // Community Rating (volume bar style)
