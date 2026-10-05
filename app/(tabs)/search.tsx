@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { ProBadge } from '@/components/ProBadge';
+import { fetchMembers, rankMembers, memberQuery } from '@/lib/memberSearch';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -93,29 +94,6 @@ const RECENT_KEY = '@listend:recentItems_v2';
 const MAX_RECENT = 10;
 
 // ─── Backend search ───────────────────────────────────────────────────────────
-
-// Best match first: exact > name starts with the text > a word in the name
-// starts with it > anywhere. Ties go to real accounts (a name set), then Pro,
-// then a profile photo, then the shorter name.
-function rankMembers(users: UserProfile[], q: string): UserProfile[] {
-  const tier = (u: UserProfile) => {
-    const names = [u.username, u.display_name].filter(Boolean).map(n => n!.toLowerCase());
-    if (names.some(n => n === q)) return 0;
-    if (names.some(n => n.startsWith(q))) return 1;
-    if (names.some(n => n.split(/[\s._-]+/).some(w => w.startsWith(q)))) return 2;
-    return 3;
-  };
-  const len = (u: UserProfile) => (u.display_name || u.username || '').length;
-  return users
-    .map(u => ({ u, t: tier(u) }))
-    .sort((a, b) =>
-      a.t - b.t
-      || Number(!(a.u.display_name || a.u.username)) - Number(!(b.u.display_name || b.u.username))
-      || Number(!!b.u.is_pro) - Number(!!a.u.is_pro)
-      || Number(!!b.u.avatar_url) - Number(!!a.u.avatar_url)
-      || len(a.u) - len(b.u))
-    .map(x => x.u);
-}
 
 async function searchBackend(tab: SearchTab, query: string): Promise<ResultItem[]> {
   if (tab === 'users') return [];
@@ -700,23 +678,7 @@ export default function SearchScreen() {
       }
       setLoading(true);
       try {
-        // Two queries: names that START with the text, then names that merely
-        // contain it. One substring query returned an arbitrary 30, so the
-        // exact match ("willi" → WilliWillsWissen) could land 9th or not at all.
-        const q = text.trim().replace(/^@/, '').toLowerCase();
-        const safe = q.replace(/[%_,()*\\]/g, '');
-        if (!safe) { setUserResults([]); return; }
-        const cols = 'id, username, display_name, avatar_url, is_pro';
-        const [prefixRes, containsRes] = await Promise.all([
-          supabase.from('profiles').select(cols)
-            .or(`username.ilike.${safe}%,display_name.ilike.${safe}%`).limit(30),
-          supabase.from('profiles').select(cols)
-            .or(`username.ilike.%${safe}%,display_name.ilike.%${safe}%`).limit(30),
-        ]);
-        if (prefixRes.error) throw prefixRes.error;
-        const byId = new Map<string, UserProfile>();
-        for (const u of [...(prefixRes.data ?? []), ...(containsRes.data ?? [])]) byId.set(u.id, u);
-        const data = rankMembers([...byId.values()], q);
+        const data = rankMembers(await fetchMembers(text), memberQuery(text));
 
         // Filter out self + blocked users (both directions)
         const [blockedByMe, blockedByThem] = await Promise.all([

@@ -14,6 +14,7 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/supabaseQuery';
 import { fetchAlbumDurations } from '@/lib/albumDurations';
+import { fetchMembers, rankMembers, memberQuery, type MemberRow } from '@/lib/memberSearch';
 import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 import { FLIP_POOL } from '@/constants/FlipPool';
@@ -1444,16 +1445,14 @@ export default function MyStatsScreen() {
   }, [mainTab]);
 
   // ── Compare: search-as-you-type ───────────────────────────────────────────
-  // People you follow match instantly (already loaded); everyone else comes
-  // from a debounced profiles query. reqId drops responses that arrive after
-  // a newer keystroke so the list never flickers back to stale results.
-  function matchScore(p: ComparePerson, q: string) {
-    const u = p.username.toLowerCase(), d = p.displayName.toLowerCase();
-    if (u === q || d === q) return 0;
-    if (u.startsWith(q) || d.startsWith(q)) return 1;
-    if (d.split(/\s+/).some(w => w.startsWith(q))) return 2;
-    return 3;
-  }
+  // Same search and ordering as the Search tab's members (lib/memberSearch),
+  // with people you follow winning ties. They also match instantly from the
+  // already-loaded list; everyone else arrives from a debounced query. reqId
+  // drops responses that land after a newer keystroke.
+  const asMemberRow = (p: ComparePerson): MemberRow & { person: ComparePerson } => ({
+    id: p.id, username: p.username || null, display_name: p.displayName || null,
+    avatar_url: p.avatarUrl, is_pro: p.isPro, person: p,
+  });
 
   function handleCompareQueryChange(text: string) {
     setCompareQuery(text);
@@ -1462,38 +1461,32 @@ export default function MyStatsScreen() {
     if (compareDebounce.current) clearTimeout(compareDebounce.current);
     const reqId = ++compareReqId.current;
 
-    const q = text.trim().replace(/^@/, '').toLowerCase();
+    const q = memberQuery(text);
     if (!q) { setCompareResults([]); setCompareSearching(false); return; }
 
-    const localMatches = followingList
+    const followingIds = new Set(followingList.map(p => p.id));
+    const localRows = followingList
       .filter(p => p.username.toLowerCase().includes(q) || p.displayName.toLowerCase().includes(q))
-      .sort((a, b) => matchScore(a, q) - matchScore(b, q));
-    setCompareResults(localMatches);
+      .map(asMemberRow);
+    setCompareResults(rankMembers(localRows, q, followingIds).map(r => r.person));
 
-    // Characters that would break the PostgREST .or() filter syntax.
-    const safe = q.replace(/[%_,()*\\]/g, '');
-    if (!safe) { setCompareSearching(false); return; }
     setCompareSearching(true);
     compareDebounce.current = setTimeout(async () => {
-      const pattern = `%${safe}%`;
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, display_name, username, avatar_url, is_pro')
-        .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
-        .limit(20);
+      let rows: MemberRow[] = [];
+      try { rows = await fetchMembers(text); } catch { /* keep the local matches */ }
       if (reqId !== compareReqId.current) return;
-      const seen = new Set(localMatches.map(p => p.id));
-      const remote = (data ?? [])
-        .filter((r: any) => !seen.has(r.id) && !compareExcludeIds.current.has(r.id))
-        .map((r: any): ComparePerson => ({
+      const byId = new Map(localRows.map(r => [r.id, r]));
+      for (const r of rows) {
+        if (byId.has(r.id) || compareExcludeIds.current.has(r.id)) continue;
+        byId.set(r.id, asMemberRow({
           id: r.id,
           displayName: nameOrHandle(r.display_name, r.username, r.id, ''),
           username: r.username || '',
           avatarUrl: r.avatar_url ?? null,
           isPro: r.is_pro ?? false,
-        }))
-        .sort((a, b) => matchScore(a, q) - matchScore(b, q));
-      const merged = [...localMatches, ...remote];
+        }));
+      }
+      const merged = rankMembers([...byId.values()], q, followingIds).map(r => r.person);
       setCompareResults(merged);
       setCompareSearching(false);
       if (merged.length === 0) setCompareError('No users match that name.');
