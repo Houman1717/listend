@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, Pressable, FlatList, Modal, useWindowDimensions,
 } from 'react-native';
@@ -7,7 +7,9 @@ import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import { fetchAllRows } from '@/lib/supabaseQuery';
+import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
@@ -183,7 +185,7 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, t
   title: string | null; albums: LoggedAlbum[];
   onClose: () => void; onAlbumPress: (a: LoggedAlbum) => void;
   onReviewPress?: (a: LoggedAlbum) => void;
-  themeColors?: { background: string; surface: string; text: string; subtext: string; tint: string; border: string };
+  themeColors?: { background: string; surface: string; text: string; subtext: string; tint: string; border: string; isDark?: boolean };
 }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -229,7 +231,7 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, t
                 <Text style={{ color: txt, fontSize: 12, fontWeight: '600', marginTop: 4 }} numberOfLines={1}>{item.title}</Text>
                 <Text style={{ color: sub, fontSize: 11, marginTop: 1 }} numberOfLines={1}>{item.artist}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 4 }}>
-                  {effectiveRating(item) > 0 && <VolumeBadge rating={effectiveRating(item)} tint={tint} />}
+                  {effectiveRating(item) > 0 && <VolumeBadge rating={effectiveRating(item)} tint={tint} isDark={themeColors?.isDark ?? true} />}
                   {onReviewPress && <FontAwesome name="quote-left" size={10} color={tint} />}
                 </View>
               </Pressable>
@@ -243,14 +245,15 @@ function AlbumListModal({ title, albums, onClose, onAlbumPress, onReviewPress, t
 
 // ─── Volume badge ─────────────────────────────────────────────────────────────
 
-function VolumeBadge({ rating, tint = ACCENT }: { rating: number; tint?: string }) {
+function VolumeBadge({ rating, tint = ACCENT, isDark = true }: { rating: number; tint?: string; isDark?: boolean }) {
+  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
-          return <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : '#2a1e14' }} />;
+          return <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : inactive }} />;
         })}
       </View>
       <Text style={{ color: tint, fontSize: 10, fontWeight: '700' }}>{rating}</Text>
@@ -259,6 +262,15 @@ function VolumeBadge({ rating, tint = ACCENT }: { rating: number; tint?: string 
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
+// Solid mix of two #rrggbb colours (t = share of `a`). Used for the
+// "everything else" fill in bars and pies so it follows the theme; on the
+// default dark theme it lands on the old #4a3020.
+function mixHex(a: string, b: string, t: number): string {
+  const p = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return '#' + x.map((v, i) => Math.round(v * t + y[i] * (1 - t)).toString(16).padStart(2, '0')).join('');
+}
 
 export default function MonthInReviewScreen() {
   const colorScheme = useColorScheme();
@@ -276,7 +288,7 @@ export default function MonthInReviewScreen() {
     : Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { loggedAlbums: ownAlbums } = useAlbums();
+  const { loggedAlbums: ownAlbums, isLoaded: ownLoaded, updateDurations } = useAlbums();
 
   // Fetch other user's albums if viewing someone else
   const [otherAlbums, setOtherAlbums] = useState<LoggedAlbum[]>([]);
@@ -287,25 +299,36 @@ export default function MonthInReviewScreen() {
     // re_listens comes along because a re-listen replaces the user's score while
     // user_albums.rating stays frozen at the first listen — without it every
     // average and breakdown below counts the stale original.
+    // Paged — a single select stops at 1000 rows and cut big libraries short.
     Promise.all([
-      supabase
-        .from('user_albums')
-        .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened')
-        .eq('user_id', viewedUserId)
-        .not('listened_at', 'is', null)
-        .order('listened_at', { ascending: false }),
-      supabase
-        .from('re_listens')
-        .select('spotify_id, rating, listened_at')
-        .eq('user_id', viewedUserId)
-        .order('listened_at', { ascending: true }),
+      fetchAllRows<any>(
+        (from, to) => supabase
+          .from('user_albums')
+          .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened, review')
+          .eq('user_id', viewedUserId)
+          .not('listened_at', 'is', null)
+          .order('listened_at', { ascending: false })
+          .order('spotify_id')
+          .range(from, to),
+        20,
+      ),
+      fetchAllRows<any>(
+        (from, to) => supabase
+          .from('re_listens')
+          .select('spotify_id, rating, listened_at')
+          .eq('user_id', viewedUserId)
+          .order('listened_at', { ascending: true })
+          .order('spotify_id')
+          .range(from, to),
+        20,
+      ),
     ])
-      .then(([{ data }, { data: reListens }]) => {
+      .then(([data, reListens]) => {
         const lastRatingById = new Map<string, number>();
         for (const r of (reListens ?? []) as any[]) {
           if ((r.rating ?? 0) > 0) lastRatingById.set(r.spotify_id, r.rating);
         }
-        setOtherAlbums((data ?? []).map(r => ({
+        setOtherAlbums((data ?? []).map((r: any) => ({
           id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '',
           year: r.year ?? 0, rating: r.rating ?? 0,
           lastRating: lastRatingById.get(r.spotify_id),
@@ -313,12 +336,52 @@ export default function MonthInReviewScreen() {
           artworkUrl: r.artwork_url ?? undefined, coverColor: '#2E2018',
           durationMs: r.duration_ms ?? undefined, genreTags: r.genre_tags ?? [],
           reListenCount: r.re_listen_count ?? 0, isRelistened: r.is_relistened ?? false,
+          review: r.review ?? undefined,
         })));
         setOtherLoaded(true);
       });
   }, [viewedUserId]);
 
   const loggedAlbums = viewedUserId ? otherAlbums : ownAlbums;
+
+  // Fill albums with no saved duration so Hours isn't undercounted — same as
+  // My Stats. Ours are written back; another user's stay in memory (RLS).
+  // Hours shows "…" meanwhile (max 5s) instead of a low number that jumps.
+  const libraryLoaded = viewedUserId ? otherLoaded : ownLoaded;
+  const durationsHydratedFor = useRef<string | null>(null);
+  const [hoursPending, setHoursPending] = useState(false);
+  useEffect(() => {
+    if (!libraryLoaded) return;
+    const key = viewedUserId ?? 'me';
+    if (durationsHydratedFor.current === key) return;
+    durationsHydratedFor.current = key;
+    const missing = loggedAlbums
+      .filter(a => !a.durationMs && (/^\d+$/.test(a.id) || a.id.startsWith('lst-')))
+      .map(a => a.id);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    setHoursPending(true);
+    const giveUp = setTimeout(() => setHoursPending(false), 5000);
+    fetchAlbumDurations(missing, () => cancelled).then(found => {
+      if (cancelled) return;
+      if (Object.keys(found).length > 0) {
+        if (viewedUserId) {
+          setOtherAlbums(prev => prev.map(a => (found[a.id] && !a.durationMs ? { ...a, durationMs: found[a.id] } : a)));
+        } else {
+          updateDurations(found);
+        }
+      }
+      clearTimeout(giveUp);
+      setHoursPending(false);
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(giveUp);
+      setHoursPending(false);
+      if (durationsHydratedFor.current === key) durationsHydratedFor.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryLoaded, viewedUserId]);
 
   const { width: screenWidth } = useWindowDimensions();
   const cardBg = colors.surface;
@@ -327,6 +390,7 @@ export default function MonthInReviewScreen() {
   const txt = colors.text;
   const sub = colors.subtext;
   const muted = colors.textMuted;
+  const mutedFill = mixHex(colors.textMuted, colors.surface, 0.45);
 
   // Build months with data
   const monthsWithData = (() => {
@@ -432,7 +496,7 @@ export default function MonthInReviewScreen() {
           avatarUrl={viewedUserId ? null : ownAvatarUrl}
           onClose={() => setReviewAlbum(null)}
           onAlbumPress={() => { setReviewAlbum(null); setTimeout(() => goToAlbum(reviewAlbum), 300); }}
-          isDark={colorScheme === 'dark'}
+          isDark={colors.isDark}
           colors={colors}
         />
       )}
@@ -497,7 +561,7 @@ export default function MonthInReviewScreen() {
                     stats={[
                       { label: 'Albums', value: monthAlbums.length, onPress: monthAlbums.length > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Albums`, albums: monthAlbums }) : undefined },
                       { label: 'Reviews', value: stats.reviewCount || '—', onPress: stats.reviewCount > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Reviews`, albums: monthAlbums.filter(a => a.review && a.review.trim().length > 0) }) : undefined },
-                      { label: 'Hours', value: stats.hours || '—' },
+                      { label: 'Hours', value: hoursPending ? '…' : (stats.hours || '—') },
                     ]}
                     textColor={txt} subtextColor={sub} borderColor={cardBorder}
                   />
@@ -524,7 +588,7 @@ export default function MonthInReviewScreen() {
                           {stats.dowCounts[i] > 0 && (
                             <Text style={{ color: isTop ? tint : sub, fontSize: 10, fontWeight: '700' }}>{stats.dowCounts[i]}</Text>
                           )}
-                          <View style={{ height: Math.max(h, 4), width: '100%', borderRadius: 3, backgroundColor: isTop ? tint : '#4a3020' }} />
+                          <View style={{ height: Math.max(h, 4), width: '100%', borderRadius: 3, backgroundColor: isTop ? tint : mutedFill }} />
                           <Text style={{ color: isTop ? tint : sub, fontSize: 10, fontWeight: isTop ? '700' : '500' }}>{lbl}</Text>
                         </View>
                       );
@@ -569,7 +633,7 @@ export default function MonthInReviewScreen() {
                                 : <View style={{ width: 90, height: 90, borderRadius: 8, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}>
                                     <FontAwesome name="music" size={28} color={SUBTEXT} />
                                   </View>}
-                              <VolumeBadge rating={effectiveRating(album)} tint={tint} />
+                              <VolumeBadge rating={effectiveRating(album)} tint={tint} isDark={colors.isDark} />
                               <Text style={{ color: txt, fontSize: 11, fontWeight: '600', marginTop: 4 }} numberOfLines={1}>{album.title}</Text>
                               <Text style={{ color: sub, fontSize: 10, marginTop: 1 }} numberOfLines={1}>{album.artist}</Text>
                               <Text style={{ color: muted, fontSize: 10, marginTop: 1 }}>{album.year}</Text>
