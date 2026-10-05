@@ -965,7 +965,8 @@ export default function FlipARecordScreen() {
     appleMusic:   detailId ? `https://music.apple.com/us/album/${detailId}` : null,
     spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${currentFlip.title} ${currentFlip.artist}`)}`,
     youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${currentFlip.title} ${currentFlip.artist}`)}`,
-    amazonMusic:  amazonMusicUrl,
+    // Server link, else a search — see album-detail's streamLinks.
+    amazonMusic:  amazonMusicUrl ?? `https://music.amazon.com/search/${encodeURIComponent(`${currentFlip.title} ${currentFlip.artist}`)}`,
   } : null;
 
   function handleStream() {
@@ -979,18 +980,20 @@ export default function FlipARecordScreen() {
       .finally(() => { setAmazonFetched(true); setAmazonFetching(false); });
   }
 
+  const flipAmazonUrl = flipStreamLinks?.amazonMusic ?? null;
+
   function handleAmazonPressFlip() {
-    if (amazonMusicUrl) { Linking.openURL(amazonMusicUrl); setShowStreamSheet(false); }
-    else if (amazonFetching) { setAmazonTapped(true); }
+    if (amazonFetching) { setAmazonTapped(true); return; }
+    if (flipAmazonUrl) { Linking.openURL(flipAmazonUrl); setShowStreamSheet(false); }
   }
 
   useEffect(() => {
-    if (amazonTapped && !amazonFetching && amazonMusicUrl) {
-      Linking.openURL(amazonMusicUrl);
+    if (amazonTapped && !amazonFetching && flipAmazonUrl) {
+      Linking.openURL(flipAmazonUrl);
       setShowStreamSheet(false);
       setAmazonTapped(false);
     }
-  }, [amazonTapped, amazonFetching, amazonMusicUrl]);
+  }, [amazonTapped, amazonFetching, flipAmazonUrl]);
 
   // Derive streak: consecutive logged flips — skip the pending one at the top
   const streak = (() => {
@@ -1021,7 +1024,7 @@ export default function FlipARecordScreen() {
               { key: 'spotify'      as const, label: 'Spotify',       icon: 'spotify'      as const, color: '#1DB954' },
               { key: 'youtubeMusic' as const, label: 'YouTube Music', icon: 'youtube-play' as const, color: '#FF0000' },
               { key: 'amazonMusic'  as const, label: 'Amazon Music',  icon: 'amazon'       as const, color: '#00A8E1' },
-            ]).filter(p => p.key !== 'amazonMusic' || !amazonFetched || amazonMusicUrl).map(platform => {
+            ]).map(platform => {
               const isAmazon = platform.key === 'amazonMusic';
               const loading  = isAmazon && (amazonFetching || amazonTapped);
               return (

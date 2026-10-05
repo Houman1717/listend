@@ -5773,6 +5773,15 @@ app.delete('/api/user/delete-account', requireAuth, async (req, res) => {
 // ── GET /api/albums/streaming-links ──────────────────────────────────────────
 // Returns Amazon Music direct link via Odesli. Cached 7 days.
 
+// Odesli (song.link) shut its public API in Oct 2026 — every call now 401s
+// with PUBLIC_API_ACCESS_DEPRECATED, and the app hid Amazon Music whenever
+// this route had no link. There's no other public way to resolve an exact
+// Amazon album, so link to an Amazon Music search for "title artist" — the
+// same approach the app already takes for Spotify and YouTube Music. Exact
+// links Odesli resolved earlier are still served from cache.
+const amazonMusicSearchUrl = (title, artist) =>
+  `https://music.amazon.com/search/${encodeURIComponent(`${title} ${artist}`.trim())}`;
+
 app.get('/api/albums/streaming-links', [
   query('appleId').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid appleId').isLength({ max: 50 }),
   validate,
@@ -5781,23 +5790,20 @@ app.get('/api/albums/streaming-links', [
   const CACHE_KEY = `streaming_links:${appleId}`;
 
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
+  if (mem?.amazonMusic) return res.json(mem);
 
   const db = await getCached(CACHE_KEY, TTL_7D);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+  if (db?.amazonMusic) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
 
-  if (manualAlbumById(appleId)) return res.json({ amazonMusic: null });
+  const manual = manualAlbumById(appleId);
+  if (manual) return res.json({ amazonMusic: amazonMusicSearchUrl(manual.title, manual.artist) });
 
   try {
-    const itunesUrl = `https://itunes.apple.com/${storefrontFor(appleId)}/album/id${appleId}`;
-    const odesliResp = await fetch(
-      `https://api.song.link/v1-alpha.1/links?url=${encodeURIComponent(itunesUrl)}`
-    );
-    if (!odesliResp.ok) throw new Error(`Odesli ${odesliResp.status}`);
-    const odesli = await odesliResp.json();
+    const data = await amFetch(`/catalog/${storefrontFor(appleId)}/albums/${appleId}`);
+    const attrs = data.data?.[0]?.attributes;
+    if (!attrs?.name) return res.json({ amazonMusic: null });
 
-    const payload = { amazonMusic: odesli.linksByPlatform?.amazonMusic?.url ?? null };
-
+    const payload = { amazonMusic: amazonMusicSearchUrl(attrs.name, attrs.artistName ?? '') };
     cacheSet(CACHE_KEY, payload, TTL_6H);
     await setCache(CACHE_KEY, payload);
     res.json(payload);

@@ -932,17 +932,20 @@ export default function AlbumDetailScreen() {
     appleMusic:   isManualAlbum ? null : `https://music.apple.com/us/album/${albumId}`,
     spotify:      `https://open.spotify.com/search/${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
     youtubeMusic: `https://music.youtube.com/search?q=${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
-    amazonMusic:  amazonMusicUrl,
+    // The server's link, else a search like Spotify's — Odesli, which used to
+    // resolve exact Amazon links, shut its public API, and a missing link
+    // used to hide Amazon Music from this sheet entirely.
+    amazonMusic:  amazonMusicUrl ?? `https://music.amazon.com/search/${encodeURIComponent(`${albumTitle} ${albumArtist}`)}`,
   };
 
   // Auto-open Amazon Music once it resolves if the user already tapped it
   useEffect(() => {
-    if (amazonTapped && !amazonFetching && amazonMusicUrl) {
-      Linking.openURL(amazonMusicUrl);
+    if (amazonTapped && !amazonFetching) {
+      Linking.openURL(streamLinks.amazonMusic);
       setShowStreamSheet(false);
       setAmazonTapped(false);
     }
-  }, [amazonTapped, amazonFetching, amazonMusicUrl]);
+  }, [amazonTapped, amazonFetching, streamLinks.amazonMusic]);
 
 
   // Community reviews + likes
@@ -1510,8 +1513,9 @@ export default function AlbumDetailScreen() {
   }
 
   function handleAmazonPress() {
-    if (amazonMusicUrl) { Linking.openURL(amazonMusicUrl); setShowStreamSheet(false); }
-    else if (amazonFetching) { setAmazonTapped(true); }
+    if (amazonFetching) { setAmazonTapped(true); return; }
+    Linking.openURL(streamLinks.amazonMusic);
+    setShowStreamSheet(false);
   }
 
   function handleArtistPress() {
@@ -2145,7 +2149,6 @@ export default function AlbumDetailScreen() {
               { key: 'amazonMusic'  as const, label: 'Amazon Music',  icon: 'amazon'       as const, color: '#00A8E1' },
             ])
               .filter(p => p.key !== 'appleMusic'  || !isManualAlbum)
-              .filter(p => p.key !== 'amazonMusic' || !amazonFetched || amazonMusicUrl)
               .map(platform => {
               const isAmazon  = platform.key === 'amazonMusic';
               const loading   = isAmazon && (amazonFetching || amazonTapped);
