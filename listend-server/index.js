@@ -257,6 +257,61 @@ pinStorefront('it', [
   '713582754', '713582761', '713582792', '713582801', '713582834', '713582846',
 ]);
 
+// CCCP Fedeli Alla Linea — Affinità - Divergenze fra il compagno togliatti e noi del conseguimento della maggiore età (Remastered) (1986)
+pinStorefront('it', [
+  '713209816',
+  '713209907', '713209909', '713209911', '713209913', '713209916', '713209917',
+  '713209919', '713209925', '713209927', '713209930',
+]);
+// CCCP Fedeli Alla Linea — Socialismo e Barbarie (Remastered) (1987)
+pinStorefront('it', [
+  '712924519',
+  '712924524', '712924526', '712924528', '712924530', '712924532', '712924535',
+  '712924538', '712924539', '712924577', '712924578', '712924579', '712924580',
+  '712924582',
+]);
+// CCCP Fedeli Alla Linea — Canzoni, Preghiere e Danze del II Millennio - Sezione Europa (Remastered) (1989)
+pinStorefront('it', [
+  '713235757',
+  '713235787', '713235789', '713235790', '713235793', '713235794', '713235817',
+  '713235969', '713236160', '713236349', '713236547', '713236675', '713236676',
+  '713236677',
+]);
+// CCCP Fedeli Alla Linea — Ecco I Miei Gioielli (Remastered) (1992)
+pinStorefront('it', [
+  '713251486',
+  '713251539', '713251541', '713251543', '713251545', '713251547', '713251549',
+  '713251551', '713251553', '713251584', '713251585', '713251586', '713251587',
+  '713251588', '713251589',
+]);
+// CCCP Fedeli Alla Linea — Live In Punkow (1996)
+pinStorefront('it', [
+  '713049015',
+  '713049241', '713049243', '713049246', '713049249', '713049252', '713049255',
+  '713049278', '713049281', '713049284', '713049287', '713049291', '713049294',
+  '713049297', '713049301', '713049382', '713049384', '713049386', '713049388',
+]);
+// CCCP Fedeli Alla Linea — Ortodossia ii / Compagni, cittadini, fratelli, partigiani (Remastered) (2004)
+pinStorefront('it', [
+  '711918155',
+  '711918231', '711918243', '711918304', '711918308', '711918310', '711918364',
+  '711918366', '711918369',
+]);
+// CCCP Fedeli Alla Linea — Enjoy CCCP (Remastered) (2008)
+pinStorefront('it', [
+  '713260107',
+  '713260191', '713260192', '713260194', '713260196', '713260198', '713260200',
+  '713260202', '713260204', '713260206', '713260210', '713260214', '713260219',
+  '713260224', '713260228', '713260233', '713260237', '713260241', '713260332',
+  '713260385', '713260388', '713260390', '713260392', '713260400', '713260403',
+]);
+// CCCP Fedeli Alla Linea — Essential (Remastered) (2012)
+pinStorefront('it', [
+  '713278044',
+  '713278098', '713278100', '713278102', '713278103', '713278105', '713278107',
+  '713278109', '713278110', '713278112', '713278114', '713278118', '713278122',
+]);
+
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
 // Absolute base for images this server hosts itself, under public/.
@@ -518,6 +573,38 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'prozac+::essential': {
     id: '713582680', title: 'Essential', artist: 'Prozac+', year: 2012,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d8/c1/48/d8c14825-8a27-cad0-d740-3fec774f15ac/05099962411554.jpg/500x500bb.jpg',
+  },
+  'cccpfedeliallalinea::affinitdivergenzefrailcompagnotogliattienoidelconseguimentodellamaggioreetremastered': {
+    id: '713209816', title: 'Affinità - Divergenze fra il compagno togliatti e noi del conseguimento della maggiore età (Remastered)', artist: 'CCCP Fedeli Alla Linea', year: 1986,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/08/bc/21/08bc21fb-c73b-653a-5cee-ecf83da33bb4/05099950039555.jpg/500x500bb.jpg',
+  },
+  'cccpfedeliallalinea::socialismoebarbarieremastered': {
+    id: '712924519', title: 'Socialismo e Barbarie (Remastered)', artist: 'CCCP Fedeli Alla Linea', year: 1987,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/22/0c/a8/220ca8ba-a390-f0ff-dca2-9ab10356f7cc/05099950039852.jpg/500x500bb.jpg',
+  },
+  'cccpfedeliallalinea::canzonipreghiereedanzedeliimillenniosezioneeuroparemastered': {
+    id: '713235757', title: 'Canzoni, Preghiere e Danze del II Millennio - Sezione Europa (Remastered)', artist: 'CCCP Fedeli Alla Linea', year: 1989,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/bd/32/17/bd321727-336c-ecfc-c12e-9e57770ff7f9/05099950040056.jpg/500x500bb.jpg',
+  },
+  'cccpfedeliallalinea::eccoimieigioielliremastered': {
+    id: '713251486', title: 'Ecco I Miei Gioielli (Remastered)', artist: 'CCCP Fedeli Alla Linea', year: 1992,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/c5/24/39/c52439d1-db17-9856-4ef5-e51453dd0a16/05099952228858.jpg/500x500bb.jpg',
+  },
+  'cccpfedeliallalinea::liveinpunkow': {
+    id: '713049015', title: 'Live In Punkow', artist: 'CCCP Fedeli Alla Linea', year: 1996,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/22/be/e2/22bee282-2916-a50e-9d8a-4491e59d757b/05099922709257.jpg/500x500bb.jpg',
+  },
+  'cccpfedeliallalinea::ortodossiaiicompagnicittadinifratellipartigianiremastered': {
+    id: '711918155', title: 'Ortodossia ii / Compagni, cittadini, fratelli, partigiani (Remastered)', artist: 'CCCP Fedeli Alla Linea', year: 2004,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/3c/d8/69/3cd869bf-28f3-a2e4-8b29-f96eed611020/05099950039357.jpg/500x500bb.jpg',
+  },
+  'cccpfedeliallalinea::enjoycccpremastered': {
+    id: '713260107', title: 'Enjoy CCCP (Remastered)', artist: 'CCCP Fedeli Alla Linea', year: 2008,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d5/97/1f/d5971f81-ab39-e5a1-dc3c-9b85266a6cad/05099952228551.jpg/500x500bb.jpg',
+  },
+  'cccpfedeliallalinea::essentialremastered': {
+    id: '713278044', title: 'Essential (Remastered)', artist: 'CCCP Fedeli Alla Linea', year: 2012,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d5/05/e9/d505e9d4-e6f5-70eb-4347-6ee0debf21df/05099962411158.jpg/500x500bb.jpg',
   },
   'invisible::eljardindelospresentes': {
     id: '401686454', title: 'El Jardin de los Presentes', artist: 'Invisible', year: 1976,
@@ -3594,6 +3681,56 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d8/c1/48/d8c14825-8a27-cad0-d740-3fec774f15ac/05099962411554.jpg/500x500bb.jpg',
       year: 2012, isSingle: false, isCompilation: true, trackCount: 12,
       url: 'https://music.apple.com/it/album/essential/713582680', type: 'album',
+    },
+  ],
+  '34030106': [ // CCCP Fedeli Alla Linea — not licensed for `us`
+    {
+      id: '713209816', title: 'Affinità - Divergenze fra il compagno togliatti e noi del conseguimento della maggiore età (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/08/bc/21/08bc21fb-c73b-653a-5cee-ecf83da33bb4/05099950039555.jpg/500x500bb.jpg',
+      year: 1986, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/it/album/affinit%C3%A0-divergenze-fra-il-compagno-togliatti-e-noi/713209816', type: 'album',
+    },
+    {
+      id: '712924519', title: 'Socialismo e Barbarie (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/22/0c/a8/220ca8ba-a390-f0ff-dca2-9ab10356f7cc/05099950039852.jpg/500x500bb.jpg',
+      year: 1987, isSingle: false, isCompilation: false, trackCount: 13,
+      url: 'https://music.apple.com/it/album/socialismo-e-barbarie-remastered/712924519', type: 'album',
+    },
+    {
+      id: '713235757', title: 'Canzoni, Preghiere e Danze del II Millennio - Sezione Europa (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/bd/32/17/bd321727-336c-ecfc-c12e-9e57770ff7f9/05099950040056.jpg/500x500bb.jpg',
+      year: 1989, isSingle: false, isCompilation: false, trackCount: 13,
+      url: 'https://music.apple.com/it/album/canzoni-preghiere-e-danze-del-ii-millennio-sezione/713235757', type: 'album',
+    },
+    {
+      id: '713251486', title: 'Ecco I Miei Gioielli (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/c5/24/39/c52439d1-db17-9856-4ef5-e51453dd0a16/05099952228858.jpg/500x500bb.jpg',
+      year: 1992, isSingle: false, isCompilation: true, trackCount: 14,
+      url: 'https://music.apple.com/it/album/ecco-i-miei-gioielli-remastered/713251486', type: 'album',
+    },
+    {
+      id: '713049015', title: 'Live In Punkow',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/22/be/e2/22bee282-2916-a50e-9d8a-4491e59d757b/05099922709257.jpg/500x500bb.jpg',
+      year: 1996, isSingle: false, isCompilation: false, trackCount: 18,
+      url: 'https://music.apple.com/it/album/live-in-punkow/713049015', type: 'album',
+    },
+    {
+      id: '711918155', title: 'Ortodossia ii / Compagni, cittadini, fratelli, partigiani (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/3c/d8/69/3cd869bf-28f3-a2e4-8b29-f96eed611020/05099950039357.jpg/500x500bb.jpg',
+      year: 2004, isSingle: false, isCompilation: false, trackCount: 8,
+      url: 'https://music.apple.com/it/album/ortodossia-ii-compagni-cittadini-fratelli-partigiani/711918155', type: 'album',
+    },
+    {
+      id: '713260107', title: 'Enjoy CCCP (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d5/97/1f/d5971f81-ab39-e5a1-dc3c-9b85266a6cad/05099952228551.jpg/500x500bb.jpg',
+      year: 2008, isSingle: false, isCompilation: true, trackCount: 24,
+      url: 'https://music.apple.com/it/album/enjoy-cccp-remastered/713260107', type: 'album',
+    },
+    {
+      id: '713278044', title: 'Essential (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d5/05/e9/d505e9d4-e6f5-70eb-4347-6ee0debf21df/05099962411158.jpg/500x500bb.jpg',
+      year: 2012, isSingle: false, isCompilation: true, trackCount: 12,
+      url: 'https://music.apple.com/it/album/essential-remastered/713278044', type: 'album',
     },
   ],
   '24836656': [ // Invisible — Apple has the album but doesn't list it under the artist
