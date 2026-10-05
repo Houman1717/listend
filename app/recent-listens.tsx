@@ -10,7 +10,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK } from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 
 const PADDING = 16;
@@ -20,7 +20,7 @@ const COLS    = 3;
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
 function VolumeBadge({ rating, isDark }: { rating: number; isDark?: boolean }) {
-  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
+  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
   return (
     <View style={s.badge}>
       <FontAwesome name="volume-up" size={9} color={rating > 0 ? '#D4A017' : inactive} />

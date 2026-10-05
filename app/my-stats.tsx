@@ -6,7 +6,7 @@ import { effectiveRating } from '@/lib/effectiveRating';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK } from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { ProBadge } from '@/components/ProBadge';
@@ -106,14 +106,15 @@ const ev = StyleSheet.create({
   ratingNew: { fontSize: 12, fontWeight: '700' },
 });
 
-function VolumeBadge({ rating, tint = ACCENT }: { rating: number; tint?: string }) {
+function VolumeBadge({ rating, tint = ACCENT, isDark = true }: { rating: number; tint?: string; isDark?: boolean }) {
+  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
         {Array.from({ length: 10 }, (_, i) => {
           const h = Math.round(3 + i * 1);
-          return <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : '#2a1e14' }} />;
+          return <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i + 1 <= rating ? tint : inactive }} />;
         })}
       </View>
       <Text style={{ color: tint, fontSize: 10, fontWeight: '700' }}>{rating}</Text>
@@ -126,6 +127,7 @@ function VolumeBadge({ rating, tint = ACCENT }: { rating: number; tint?: string 
 type ModalColors = {
   background: string; surface: string; text: string;
   subtext: string; tint: string; border: string;
+  isDark?: boolean;
 };
 
 function AlbumListModal({
@@ -201,7 +203,7 @@ function AlbumListModal({
                 <Text style={[rm.cardArtist, { color: sub }]} numberOfLines={1}>{item.artist}</Text>
                 {effectiveRating(item) > 0 && (
                   <View style={{ marginTop: 3 }}>
-                    <VolumeBadge rating={effectiveRating(item)} tint={tint} />
+                    <VolumeBadge rating={effectiveRating(item)} tint={tint} isDark={themeColors?.isDark ?? true} />
                   </View>
                 )}
               </Pressable>
@@ -2350,7 +2352,7 @@ export default function MyStatsScreen() {
               {compHigher.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
                   {compHigher.map(({ album, communityAvg }) => (
-                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} />
+                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} isDark={isDark} />
                   ))}
                 </ScrollView>
               ) : (
@@ -2370,7 +2372,7 @@ export default function MyStatsScreen() {
               {compLower.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[rl.carousel, { paddingTop: 4 }]}>
                   {compLower.map(({ album, communityAvg }) => (
-                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} />
+                    <ComparisonCard key={album.id} album={album} communityAvg={communityAvg} onPress={() => handleAlbumPress(album)} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} isDark={isDark} />
                   ))}
                 </ScrollView>
               ) : (
@@ -2834,13 +2836,14 @@ const s = StyleSheet.create({
 
 // ─── Community comparison card ────────────────────────────────────────────────
 
-function ComparisonCard({ album, communityAvg, onPress, tint = ACCENT, textColor = TEXT, subtextColor = SUBTEXT }: {
+function ComparisonCard({ album, communityAvg, onPress, tint = ACCENT, textColor = TEXT, subtextColor = SUBTEXT, isDark = true }: {
   album: LoggedAlbum;
   communityAvg: number;
   onPress: () => void;
   tint?: string;
   textColor?: string;
   subtextColor?: string;
+  isDark?: boolean;
 }) {
   const delta    = effectiveRating(album) - communityAvg;
   const isHigher = delta > 0;
@@ -2859,7 +2862,7 @@ function ComparisonCard({ album, communityAvg, onPress, tint = ACCENT, textColor
         <Text style={cc.deltaBadgeText}>{sign}{delta.toFixed(1)}</Text>
       </View>
       <Text style={[cc.title, { color: textColor }]} numberOfLines={2}>{album.title}</Text>
-      <VolumeBadge rating={effectiveRating(album)} tint={tint} />
+      <VolumeBadge rating={effectiveRating(album)} tint={tint} isDark={isDark} />
       <Text style={[cc.communityAvg, { color: subtextColor }]}>Community: {communityAvg.toFixed(1)}</Text>
     </Pressable>
   );

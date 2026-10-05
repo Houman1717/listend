@@ -19,7 +19,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { type ColorsShape } from '@/constants/Colors';
+import Colors, { type ColorsShape, VOLUME_EMPTY_DARK } from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -40,7 +40,7 @@ import { ProBadge } from '@/components/ProBadge';
 const BAR_HEIGHTS = [3, 4, 5, 6, 7, 9, 11, 13, 15, 17];
 
 function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
-  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
+  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
   return (
     <View style={s.badge}>
       <FontAwesome name="volume-up" size={10} color={rating > 0 ? tint : inactive} />

@@ -12,9 +12,10 @@ import { useAuth } from '@/context/AuthContext';
 import { handleOrName } from '@/lib/userHandle';
 import { supabase } from '@/lib/supabase';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
+import { VOLUME_EMPTY_DARK } from '@/constants/Colors';
 
 function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
-  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
+  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />

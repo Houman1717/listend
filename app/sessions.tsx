@@ -20,7 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { reportContent } from '@/lib/reports';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK } from '@/constants/Colors';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { EditListenDateModal } from '@/components/EditListenDateModal';
 
@@ -68,7 +68,7 @@ const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a
 // ─── Volume badge ─────────────────────────────────────────────────────────────
 
 function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
-  const inactive = isDark ? '#2a1e14' : '#e0e0e0';
+  const inactive = isDark ? VOLUME_EMPTY_DARK : '#e0e0e0';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
       <FontAwesome name="volume-up" size={9} color={tint} />

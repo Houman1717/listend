@@ -1,5 +1,10 @@
 // ─── Warm & Earthy Palette ────────────────────────────────────────────────────
 
+// Unlit volume-rating bars in dark mode. A faint white, not a brown, so the
+// empty bars stay readable on the page background, on card surfaces, and
+// under every dark pro theme.
+export const VOLUME_EMPTY_DARK = 'rgba(255,255,255,0.14)';
+
 export const PALETTE = {
   background:    '#0F0A07',  // deep espresso
   surface:       '#2E2018',  // walnut
