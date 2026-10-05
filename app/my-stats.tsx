@@ -823,13 +823,18 @@ export default function MyStatsScreen() {
   useEffect(() => {
     if (!viewedUserId) return;
     setOtherLoaded(false);
-    supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened')
-      .eq('user_id', viewedUserId)
-      .not('listened_at', 'is', null)
-      .order('listened_at', { ascending: false })
-      .then(({ data }) => {
+    fetchAllRows<any>(
+      (from, to) => supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, re_listen_count, is_relistened')
+        .eq('user_id', viewedUserId)
+        .not('listened_at', 'is', null)
+        .order('listened_at', { ascending: false })
+        .order('spotify_id')
+        .range(from, to),
+      20,
+    )
+      .then((data) => {
         const albums: LoggedAlbum[] = (data ?? []).map((row, i) => ({
           id:            row.spotify_id,
           title:         row.title        ?? '',
@@ -1049,11 +1054,17 @@ export default function MyStatsScreen() {
   useEffect(() => {
     if (!isLoaded) return;
     const run = async (uid: string) => {
-      const { data } = await supabase
-        .from('re_listens')
-        .select('spotify_id, rating, listened_at')
-        .eq('user_id', uid)
-        .order('listened_at', { ascending: true });
+      const data = await fetchAllRows<any>(
+        (from, to) => supabase
+          .from('re_listens')
+          .select('spotify_id, rating, listened_at')
+          .eq('user_id', uid)
+          .order('listened_at', { ascending: true })
+          .order('spotify_id')
+          .range(from, to),
+        20,
+      );
+      if (data === null) return;
       const map = new Map<string, { rating: number; listenedAt: string }[]>();
       for (const r of data ?? []) {
         if (!map.has(r.spotify_id)) map.set(r.spotify_id, []);
@@ -1503,21 +1514,38 @@ export default function MyStatsScreen() {
 
   async function loadFriendData(friendId: string) {
     const [albumsRes, profileRes, likedRes, myLikedRes, reListenRes] = await Promise.allSettled([
-      supabase.from('user_albums')
-        .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, review, is_relistened')
-        .eq('user_id', friendId).not('listened_at', 'is', null),
+      fetchAllRows<any>(
+        (from, to) => supabase.from('user_albums')
+          .select('spotify_id, title, artist, artwork_url, rating, year, listened_at, duration_ms, genre_tags, review, is_relistened')
+          .eq('user_id', friendId).not('listened_at', 'is', null)
+          .order('listened_at', { ascending: false }).order('spotify_id')
+          .range(from, to),
+        20,
+      ).then(data => ({ data })),
       supabase.from('profiles')
         .select('top_albums, top_artists')
         .eq('id', friendId).single(),
-      supabase.from('liked_artists')
-        .select('artist_id, name').eq('user_id', friendId),
+      fetchAllRows<any>(
+        (from, to) => supabase.from('liked_artists')
+          .select('artist_id, name').eq('user_id', friendId).order('artist_id').range(from, to),
+        10,
+      ).then(data => ({ data })),
       supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (!session?.user?.id) return { data: [] };
-        return supabase.from('liked_artists').select('artist_id, name').eq('user_id', session.user.id);
+        const data = await fetchAllRows<any>(
+          (from, to) => supabase.from('liked_artists')
+            .select('artist_id, name').eq('user_id', session.user.id).order('artist_id').range(from, to),
+          10,
+        );
+        return { data };
       }),
-      supabase.from('re_listens')
-        .select('spotify_id, rating, listened_at')
-        .eq('user_id', friendId).order('listened_at', { ascending: true }),
+      fetchAllRows<any>(
+        (from, to) => supabase.from('re_listens')
+          .select('spotify_id, rating, listened_at')
+          .eq('user_id', friendId).order('listened_at', { ascending: true }).order('spotify_id')
+          .range(from, to),
+        20,
+      ).then(data => ({ data })),
     ]);
     // A different friend was picked while this one was loading.
     if (selectedFriendId.current !== friendId) return;

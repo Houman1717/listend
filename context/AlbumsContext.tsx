@@ -10,6 +10,7 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabaseQuery';
 import { resolveCanonicalAlbum } from '@/lib/resolveCanonicalAlbum';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
@@ -253,20 +254,34 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
 
       // ── Step 3: Authoritative Supabase sync ──────────────────────────────────
 
-      // 3a. Logged albums (+ latest re-listen rating per album)
-      const [{ data: albumData, error: albumErr }, { data: reListenRatingData }] = await Promise.all([
-        supabase
-          .from('user_albums')
-          .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms, re_listen_count, is_relistened, genre_tags')
-          .eq('user_id', uid)
-          .not('listened_at', 'is', null)
-          .order('listened_at', { ascending: false }),
-        supabase
-          .from('re_listens')
-          .select('spotify_id, rating, review, listened_at')
-          .eq('user_id', uid)
-          .order('listened_at', { ascending: false }),
+      // 3a. Logged albums (+ latest re-listen rating per album). Paged — a
+      // single select stops at 1000 rows, which cut heavy libraries short.
+      // A failed page yields null, surfaced as albumErr so the cache is kept.
+      const [albumRows, reListenRatingData] = await Promise.all([
+        fetchAllRows<any>(
+          (from, to) => supabase
+            .from('user_albums')
+            .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms, re_listen_count, is_relistened, genre_tags')
+            .eq('user_id', uid)
+            .not('listened_at', 'is', null)
+            .order('listened_at', { ascending: false })
+            .order('spotify_id')
+            .range(from, to),
+          20,
+        ),
+        fetchAllRows<any>(
+          (from, to) => supabase
+            .from('re_listens')
+            .select('spotify_id, rating, review, listened_at')
+            .eq('user_id', uid)
+            .order('listened_at', { ascending: false })
+            .order('spotify_id')
+            .range(from, to),
+          20,
+        ),
       ]);
+      const albumData = albumRows;
+      const albumErr = albumRows === null ? { message: 'paged user_albums fetch failed' } : null;
 
       // Build maps: spotify_id → most recent re-listen rating / most recent re-listen review / latest date
       // Each map is filled independently so a missing review on the newest re-listen
