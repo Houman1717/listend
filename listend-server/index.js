@@ -1268,6 +1268,40 @@ function withTrackSearchOverrides(q, results) {
   return hits.length > 0 ? [...hits, ...results] : results;
 }
 
+// Artists whose name Apple's own search answers with somebody else. Searching
+// "The Sound" returns a Christian act and three bands with longer names, while
+// the post-punk band whose From the Lion's Mouth people are looking at is
+// nowhere in the results — so the album page opened a stranger. Keyed by the
+// exact searched name.
+const ARTIST_SEARCH_PINS = {
+  thesound: '201473744',   // The Sound (post-punk, Adrian Borland)
+};
+
+async function pinnedArtistFor(q) {
+  const id = ARTIST_SEARCH_PINS[searchKey(q)];
+  if (!id) return null;
+  const CACHE_KEY = `pinned_artist_${id}`;
+  let hit = cacheGet(CACHE_KEY) ?? await getCached(CACHE_KEY, TTL_7D);
+  if (!hit) {
+    try {
+      const a = (await amFetch(`/catalog/us/artists/${id}`)).data?.[0];
+      if (!a) return null;
+      hit = {
+        id,
+        name: a.attributes?.name ?? '',
+        genre: a.attributes?.genreNames?.[0] ?? '',
+        artworkUrl: amArtwork(a.attributes?.artwork),
+      };
+      cacheSet(CACHE_KEY, hit, TTL_7D);
+      await setCache(CACHE_KEY, hit);
+    } catch (err) {
+      console.warn('[/search] pinned artist lookup failed:', err.message ?? err);
+      return null;
+    }
+  }
+  return { ...hit, artworkUrl: artistImageFor(hit.id, hit.name, hit.artworkUrl) };
+}
+
 // Same idea for artists Listend carries itself (manualAlbums.js). Apple's
 // artist search returns *someone* for any name — for In The Panchine it's
 // Noyz Narcos, a guest on their record — and the artist page opens the first
@@ -1420,11 +1454,21 @@ app.get('/search', [
       results;
   };
 
+  // The artist page navigates by name and opens the first result, so a pinned
+  // artist has to lead — ahead of whatever Apple ranked first.
+  const respond = async rawResults => {
+    const results = withOverrides(rawResults);
+    if (type !== 'artist') return res.json(results);
+    const pin = await pinnedArtistFor(q);
+    if (!pin) return res.json(results);
+    return res.json([pin, ...results.filter(r => r.id !== pin.id)]);
+  };
+
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(withOverrides(mem));
+  if (mem) return respond(mem);
 
   const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_10M); return res.json(withOverrides(db)); }
+  if (db) { cacheSet(CACHE_KEY, db, TTL_10M); return respond(db); }
 
   try {
     const amType = type === 'album' ? 'albums' : type === 'track' ? 'songs' : 'artists';
@@ -1488,7 +1532,7 @@ app.get('/search', [
 
     cacheSet(CACHE_KEY, results, TTL_10M);
     await setCache(CACHE_KEY, results);
-    res.json(withOverrides(results));
+    await respond(results);
   } catch (err) {
     console.error('[/search]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
