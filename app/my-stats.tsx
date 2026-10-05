@@ -13,6 +13,7 @@ import { ProBadge } from '@/components/ProBadge';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/supabaseQuery';
+import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 import { FLIP_POOL } from '@/constants/FlipPool';
@@ -813,7 +814,7 @@ export default function MyStatsScreen() {
   const isDark = colors.isDark;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { loggedAlbums: ownAlbums, isLoaded: ownLoaded, topAlbums: myTop5Albums, topArtists: myTop5Artists } = useAlbums();
+  const { loggedAlbums: ownAlbums, isLoaded: ownLoaded, topAlbums: myTop5Albums, topArtists: myTop5Artists, updateDurations } = useAlbums();
   const { history: flipHistory } = useFlip();
 
   // Other-user album fetch
@@ -856,6 +857,32 @@ export default function MyStatsScreen() {
 
   const loggedAlbumsRaw = viewedUserId ? otherAlbums  : ownAlbums;
   const isLoaded        = viewedUserId ? otherLoaded  : ownLoaded;
+
+  // duration_ms is only saved when the owner opens an album's page or sorts a
+  // library by duration, so most logged albums have none and Listening Hours
+  // read far too low (one 1163-album library had 878 blanks). Fill the gaps
+  // once per library: our own answers are written back via updateDurations so
+  // the lookup isn't repeated; another user's stay in memory (RLS).
+  const durationsHydratedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLoaded) return;
+    const key = viewedUserId ?? 'me';
+    if (durationsHydratedFor.current === key) return;
+    durationsHydratedFor.current = key;
+    const missing = loggedAlbumsRaw.filter(a => !a.durationMs).map(a => a.id);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    fetchAlbumDurations(missing, () => cancelled).then(found => {
+      if (cancelled || Object.keys(found).length === 0) return;
+      if (viewedUserId) {
+        setOtherAlbums(prev => prev.map(a => (found[a.id] && !a.durationMs ? { ...a, durationMs: found[a.id] } : a)));
+      } else {
+        updateDurations(found);
+      }
+    });
+    return () => { cancelled = true; if (durationsHydratedFor.current === key) durationsHydratedFor.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, viewedUserId]);
 
   const [selectedRating, setSelectedRating]   = useState<number | null>(null);
   const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
@@ -1572,6 +1599,17 @@ export default function MyStatsScreen() {
         review: r.review ?? undefined,
       })));
       setFriendReviewCount(rows.filter(r => r.review).length);
+
+      // Same blank-duration gap as our own library — fill it so their
+      // Listening Hours aren't undercounted. Not awaited: the comparison
+      // renders now and the hours catch up when the lookup lands.
+      const missing = rows.filter(r => !r.duration_ms).map(r => r.spotify_id);
+      if (missing.length > 0) {
+        fetchAlbumDurations(missing, () => selectedFriendId.current !== friendId).then(found => {
+          if (selectedFriendId.current !== friendId || Object.keys(found).length === 0) return;
+          setFriendAlbums(prev => prev.map(a => (found[a.id] && !a.durationMs ? { ...a, durationMs: found[a.id] } : a)));
+        });
+      }
     }
     if (profileRes.status === 'fulfilled' && profileRes.value.data) {
       const p = profileRes.value.data;
