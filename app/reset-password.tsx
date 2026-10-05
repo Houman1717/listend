@@ -16,9 +16,9 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { PASSWORD_HINT, passwordProblem, weakPasswordMessage } from '@/lib/auth/passwordRules';
 
 const ACCENT = '#D4A017';
-const MIN_LENGTH = 8;
 
 export default function ResetPasswordScreen() {
   const colorScheme = useColorScheme();
@@ -33,8 +33,9 @@ export default function ResetPasswordScreen() {
   const [loading, setLoading]   = useState(false);
 
   async function handleSave() {
-    if (password.length < MIN_LENGTH) {
-      Alert.alert('Password too short', `Use at least ${MIN_LENGTH} characters.`);
+    const problem = passwordProblem(password);
+    if (problem) {
+      Alert.alert('Choose a stronger password', problem);
       return;
     }
     if (password !== confirm) {
@@ -45,7 +46,8 @@ export default function ResetPasswordScreen() {
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
-      Alert.alert('Couldn’t update password', error.message);
+      const weak = weakPasswordMessage(error, password);
+      Alert.alert(weak ? 'Choose a stronger password' : 'Couldn’t update password', weak ?? error.message);
       return;
     }
     // The recovery session is already a full session, so leaving recovery mode
@@ -96,7 +98,7 @@ export default function ResetPasswordScreen() {
         <Ionicons name="key-outline" size={56} color={ACCENT} />
         <Text style={[s.title, { color: colors.text }]}>Set a new password</Text>
         <Text style={[s.body, { color: colors.subtext }]}>
-          For {session.user.email}. At least {MIN_LENGTH} characters.
+          For {session.user.email}. {PASSWORD_HINT}
         </Text>
 
         <View style={s.form}>

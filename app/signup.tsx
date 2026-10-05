@@ -19,6 +19,7 @@ import Colors from '@/constants/Colors';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { LegalConsent } from '@/components/LegalConsent';
 import { capture } from '@/lib/analytics';
+import { PASSWORD_HINT, passwordProblem, weakPasswordMessage } from '@/lib/auth/passwordRules';
 
 const ACCENT = '#D4A017';
 
@@ -39,6 +40,11 @@ export default function SignUpScreen() {
       Alert.alert('Missing fields', 'Please fill in all fields.');
       return;
     }
+    const problem = passwordProblem(password);
+    if (problem) {
+      Alert.alert('Choose a stronger password', problem);
+      return;
+    }
     setLoading(true);
 
     const trimmedUsername = username.trim();
@@ -55,7 +61,8 @@ export default function SignUpScreen() {
 
     if (error) {
       setLoading(false);
-      Alert.alert('Sign up failed', error.message);
+      const weak = weakPasswordMessage(error, password);
+      Alert.alert(weak ? 'Choose a stronger password' : 'Sign up failed', weak ?? error.message);
       return;
     }
 
@@ -158,6 +165,7 @@ export default function SignUpScreen() {
                   />
                 </Pressable>
               </View>
+              <Text style={[s.pwHint, { color: colors.subtext }]}>{PASSWORD_HINT}</Text>
 
               <Pressable
                 style={({ pressed }) => [s.btn, { backgroundColor: ACCENT, opacity: pressed ? 0.85 : 1 }]}
@@ -217,6 +225,7 @@ const s = StyleSheet.create({
   },
   pwWrap: { width: '100%', justifyContent: 'center' },
   pwInput: { paddingRight: 48 },
+  pwHint:  { fontSize: 12, lineHeight: 17, marginTop: -4, paddingHorizontal: 4 },
   eyeBtn: {
     position: 'absolute',
     right: 6,
