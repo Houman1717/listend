@@ -1006,6 +1006,8 @@ export default function UserProfileScreen() {
           <Pressable
             style={({ pressed }) => [
               s.followBtn,
+              // Their pro theme's accent (gold for everyone else), like Following/Message.
+              { backgroundColor: profileAccent },
               isFollowing && { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: profileAccent },
               isRequested && { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.border },
               isMutual && s.followBtnMutual,
