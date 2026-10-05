@@ -23,7 +23,7 @@ import { useAlbums } from '@/context/AlbumsContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { nameOrHandle } from '@/lib/userHandle';
-import { countOrNull } from '@/lib/supabaseQuery';
+import { countOrNull, fetchAllRows } from '@/lib/supabaseQuery';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -198,10 +198,17 @@ export default function DMConversationScreen() {
   async function fetchOtherUserReviews() {
     if (!otherUserId) return;
 
-    const { data } = await supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, rating, review')
-      .eq('user_id', otherUserId);
+    // Paged — a single select stops at 1000 rows, so a large library lost
+    // the rating/review on cards for albums past the first page.
+    const data = await fetchAllRows<{ spotify_id: string | null; title: string | null; artist: string | null; rating: number | null; review: string | null }>(
+      (from, to) => supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, rating, review')
+        .eq('user_id', otherUserId)
+        .order('spotify_id')
+        .range(from, to),
+      20,
+    );
 
     if (!data) return;
 
