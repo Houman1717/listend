@@ -21,6 +21,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { ProBadge } from '@/components/ProBadge';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ type UserProfile = {
   username: string | null;
   display_name: string | null;
   avatar_url: string | null;
+  is_pro?: boolean | null;
 };
 
 type PlaylistSearchResult = {
@@ -91,6 +93,29 @@ const RECENT_KEY = '@listend:recentItems_v2';
 const MAX_RECENT = 10;
 
 // ─── Backend search ───────────────────────────────────────────────────────────
+
+// Best match first: exact > name starts with the text > a word in the name
+// starts with it > anywhere. Ties go to real accounts (a name set), then Pro,
+// then a profile photo, then the shorter name.
+function rankMembers(users: UserProfile[], q: string): UserProfile[] {
+  const tier = (u: UserProfile) => {
+    const names = [u.username, u.display_name].filter(Boolean).map(n => n!.toLowerCase());
+    if (names.some(n => n === q)) return 0;
+    if (names.some(n => n.startsWith(q))) return 1;
+    if (names.some(n => n.split(/[\s._-]+/).some(w => w.startsWith(q)))) return 2;
+    return 3;
+  };
+  const len = (u: UserProfile) => (u.display_name || u.username || '').length;
+  return users
+    .map(u => ({ u, t: tier(u) }))
+    .sort((a, b) =>
+      a.t - b.t
+      || Number(!(a.u.display_name || a.u.username)) - Number(!(b.u.display_name || b.u.username))
+      || Number(!!b.u.is_pro) - Number(!!a.u.is_pro)
+      || Number(!!b.u.avatar_url) - Number(!!a.u.avatar_url)
+      || len(a.u) - len(b.u))
+    .map(x => x.u);
+}
 
 async function searchBackend(tab: SearchTab, query: string): Promise<ResultItem[]> {
   if (tab === 'users') return [];
@@ -415,7 +440,9 @@ function RecentRow({
   colors,
   onPress,
   onRemove,
+  isPro = false,
 }: {
+  isPro?: boolean;
   item: RecentItem;
   isDark: boolean;
   colors: typeof Colors.light;
@@ -459,7 +486,8 @@ function RecentRow({
         {/* text */}
         <View style={s.recentText}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <Text style={[s.recentTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+            <Text style={[s.recentTitle, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{item.title}</Text>
+            {isPro && <ProBadge size="xs" />}
             {item.kind === 'playlist' && item.isFeatured && (
               <View style={{ backgroundColor: '#D4A017', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                 <Text style={{ color: '#0F0A07', fontSize: 9, fontWeight: '700' }}>by Listend</Text>
@@ -520,7 +548,10 @@ function UserRow({
         )}
         {/* Text */}
         <View style={s.resultText}>
-          <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Text style={[s.resultTitle, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{name}</Text>
+            {item.is_pro && <ProBadge size="xs" />}
+          </View>
           {handleText(item.username, item.id) ? (
             <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>{handleText(item.username, item.id)}</Text>
           ) : null}
@@ -557,6 +588,22 @@ export default function SearchScreen() {
       .then((v) => { if (v) setRecentItems(JSON.parse(v)); })
       .catch(() => {});
   }, []);
+
+  // Gold tick for recently searched members. Looked up fresh rather than
+  // saved with the recent entry — Pro can lapse, and a stored flag would
+  // keep showing the tick forever.
+  const [recentProIds, setRecentProIds] = useState<Set<string>>(new Set());
+  const recentUserIdsKey = recentItems.filter(r => r.kind === 'user').map(r => r.id).sort().join(',');
+  useEffect(() => {
+    if (!recentUserIdsKey) return;
+    let cancelled = false;
+    supabase.from('profiles').select('id').in('id', recentUserIdsKey.split(',')).eq('is_pro', true)
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        setRecentProIds(new Set((data ?? []).map((r: any) => r.id)));
+      });
+    return () => { cancelled = true; };
+  }, [recentUserIdsKey]);
 
   function saveRecentItem(item: ResultItem) {
     const entry = resultToRecentItem(item);
@@ -653,14 +700,23 @@ export default function SearchScreen() {
       }
       setLoading(true);
       try {
-        const pattern = `%${text.trim()}%`;
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id, username, display_name, avatar_url')
-          .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
-          .limit(30);
-
-        if (error) throw error;
+        // Two queries: names that START with the text, then names that merely
+        // contain it. One substring query returned an arbitrary 30, so the
+        // exact match ("willi" → WilliWillsWissen) could land 9th or not at all.
+        const q = text.trim().replace(/^@/, '').toLowerCase();
+        const safe = q.replace(/[%_,()*\\]/g, '');
+        if (!safe) { setUserResults([]); return; }
+        const cols = 'id, username, display_name, avatar_url, is_pro';
+        const [prefixRes, containsRes] = await Promise.all([
+          supabase.from('profiles').select(cols)
+            .or(`username.ilike.${safe}%,display_name.ilike.${safe}%`).limit(30),
+          supabase.from('profiles').select(cols)
+            .or(`username.ilike.%${safe}%,display_name.ilike.%${safe}%`).limit(30),
+        ]);
+        if (prefixRes.error) throw prefixRes.error;
+        const byId = new Map<string, UserProfile>();
+        for (const u of [...(prefixRes.data ?? []), ...(containsRes.data ?? [])]) byId.set(u.id, u);
+        const data = rankMembers([...byId.values()], q);
 
         // Filter out self + blocked users (both directions)
         const [blockedByMe, blockedByThem] = await Promise.all([
@@ -880,6 +936,7 @@ export default function SearchScreen() {
                 colors={colors}
                 onPress={() => handleRecentTap(item)}
                 onRemove={() => removeRecentItem(item.kind, item.id)}
+                isPro={item.kind === 'user' && recentProIds.has(item.id)}
               />
             ))}
           </ScrollView>

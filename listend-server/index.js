@@ -1205,6 +1205,112 @@ function withArtistSearchOverrides(q, results) {
   return hits.length > 0 ? [...hits, ...results] : results;
 }
 
+// ── Search ranking ────────────────────────────────────────────────────────────
+// Apple's first hit is usually right, but what follows was noise: "- Single"
+// uploads and karaoke covers ahead of real records, the same song six times,
+// four nameless "Drake"s. Results are re-scored on the way out from three
+// signals — how well the name matches the query, Apple's own order (which
+// carries its popularity), and how often Listend members have logged that
+// album / artist — then near-duplicates are collapsed.
+
+// Listend popularity: logs per album id and per artist, rebuilt every 6h.
+let listendPopularity = { albums: new Map(), artists: new Map() };
+
+async function loadListendPopularity() {
+  const albums = new Map(), artists = new Map();
+  try {
+    for (let from = 0, page = 0; page < 200; from += 1000, page++) {
+      const { data, error } = await supabase
+        .from('user_albums')
+        .select('spotify_id, artist')
+        .not('listened_at', 'is', null)
+        .order('user_id').order('spotify_id')
+        .range(from, from + 999);
+      if (error) throw new Error(error.message);
+      for (const r of data ?? []) {
+        if (r.spotify_id) albums.set(r.spotify_id, (albums.get(r.spotify_id) ?? 0) + 1);
+        const a = searchKey(r.artist);
+        if (a) artists.set(a, (artists.get(a) ?? 0) + 1);
+      }
+      if ((data ?? []).length < 1000) break;
+    }
+    listendPopularity = { albums, artists };
+    console.log(`[search-popularity] ${albums.size} albums, ${artists.size} artists`);
+  } catch (err) {
+    console.warn('[search-popularity] load failed:', err.message ?? err);
+  }
+}
+
+// Covers, karaoke and tribute uploads — real, but almost never what's wanted.
+const SEARCH_JUNK = /\b(karaoke|tribute|covers?|instrumental|8[- ]?bit|lullab(y|ies)|in the style of|originally performed|made famous|kidz bop|performs|piano version|metal version)\b/i;
+
+const cleanSearchTitle = t => stripContentTag(stripSameContentQualifier(t))
+  .replace(/\s*-\s*(single|ep)\s*$/i, '')
+  .replace(/\s*[([][^)\]]*[)\]]/g, '')
+  .trim();
+
+// 0–100: exact title > title starts with query > every query word somewhere
+// in title + artist (so "kanye graduation" and "kanye" both land) > weak.
+function searchTextScore(q, primary, secondary = '') {
+  const qk = searchKey(q);
+  if (!qk) return 0;
+  const pk = searchKey(cleanSearchTitle(primary));
+  if (pk === qk) return 100;
+  if (secondary && searchKey(secondary) === qk) return 70;
+  if (pk.startsWith(qk)) return 75;
+  const words = foldForMatch(q).split(/\s+/).map(searchKey).filter(Boolean);
+  const hay = searchKey(`${primary} ${secondary}`);
+  if (words.length > 0 && words.every(w => hay.includes(w))) return 60;
+  return 25;
+}
+
+const popBoost = (count, weight, cap) => Math.min(cap, weight * Math.log10(1 + (count ?? 0)));
+
+function rankSearchResults(type, q, results) {
+  const { albums, artists } = listendPopularity;
+  const scored = results.map((r, rank) => {
+    const appleBoost = Math.max(0, 30 - rank * 2);
+    let score;
+    if (type === 'album') {
+      score = searchTextScore(q, r.title, r.artist) + appleBoost
+        + popBoost(albums.get(r.id), 12, 35)
+        + popBoost(artists.get(searchKey(r.artist)), 8, 25);
+      if (/\s-\s*single\s*$/i.test(r.title)) score -= 30;
+      if (/^various artists$/i.test(r.artist ?? '')) score -= 10;
+      if (SEARCH_JUNK.test(`${r.title} ${r.artist}`)) score -= 40;
+    } else if (type === 'track') {
+      score = searchTextScore(q, r.title, r.artist) + appleBoost
+        + popBoost(artists.get(searchKey(r.artist)), 8, 20);
+      if (SEARCH_JUNK.test(`${r.title} ${r.artist}`)) score -= 40;
+    } else {
+      const hasImage = !!artistImageFor(r.id, r.name, r.artworkUrl);
+      score = searchTextScore(q, r.name) + appleBoost
+        + popBoost(artists.get(searchKey(r.name)), 12, 35);
+      if (!hasImage) score -= 25;
+      if (SEARCH_JUNK.test(r.name)) score -= 40;
+    }
+    return { r, rank, score };
+  });
+  scored.sort((a, b) => b.score - a.score || a.rank - b.rank);
+
+  // Collapse near-duplicates, keeping the best-scored one: the same song on
+  // several releases / remasters, or several artists sharing one name (four
+  // "Drake"s) — Apple's order puts the real one first, so the rest are noise.
+  const seen = new Set();
+  const out = [];
+  for (const { r } of scored) {
+    let key = null;
+    if (type === 'track') key = `${normalizeKey(r.artist)}::${normalizeKey(stripSameContentQualifier(r.title))}`;
+    if (type === 'artist') key = searchKey(r.name) || r.id;
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    out.push(r);
+  }
+  return out.slice(0, 15);
+}
+
 app.get('/search', [
   query('q').trim().customSanitizer(stripHtml).isLength({ max: 200 }).withMessage('q must be 200 characters or fewer'),
   query('type').trim(),
@@ -1216,13 +1322,16 @@ app.get('/search', [
     return res.status(400).json({ error: 'type must be album, track, or artist' });
   }
 
-  const CACHE_KEY = `search:${type}:${q.trim().toLowerCase()}`;
+  // v2: 25 candidates per query (was 10) so ranking has something to work with.
+  const CACHE_KEY = `search2:${type}:${q.trim().toLowerCase()}`;
 
-  const withOverrides = results =>
-    type === 'album'  ? withAlbumSearchOverrides(q, results)  :
-    type === 'artist' ? withArtistSearchOverrides(q, results) :
-    type === 'track'  ? withTrackSearchOverrides(q, results)  :
-    results;
+  const withOverrides = rawResults => {
+    const results = rankSearchResults(type, q, rawResults);
+    return type === 'album'  ? withAlbumSearchOverrides(q, results)  :
+      type === 'artist' ? withArtistSearchOverrides(q, results) :
+      type === 'track'  ? withTrackSearchOverrides(q, results)  :
+      results;
+  };
 
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(withOverrides(mem));
@@ -1232,7 +1341,7 @@ app.get('/search', [
 
   try {
     const amType = type === 'album' ? 'albums' : type === 'track' ? 'songs' : 'artists';
-    const url = `https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(q)}&types=${amType}&limit=10`;
+    const url = `https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(q)}&types=${amType}&limit=25`;
     const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${generateAppleToken()}` },
     });
@@ -4433,9 +4542,10 @@ app.get('/api/admin/purge-artist-rating-cache', requireAdmin, async (req, res) =
 app.get('/api/admin/purge-search-cache', requireAdmin, async (req, res) => {
   try {
     for (const key of memCache.keys()) {
-      if (key.startsWith('search:')) memCache.delete(key);
+      if (key.startsWith('search:') || key.startsWith('search2:')) memCache.delete(key);
     }
     await deleteCachePrefix('search:');
+    await deleteCachePrefix('search2:');
     console.log('[/api/admin/purge-search-cache] done.');
     res.json({ success: true });
   } catch (err) {
@@ -5681,6 +5791,10 @@ app.listen(PORT, () => {
   // doesn't compete with boot-time seeding; idempotent, so every deploy just
   // retries whatever couldn't resolve last time.
   setTimeout(() => { backfillAlbumDurations(); }, 60_000);
+
+  // Listend log counts feed search ranking; refreshed every 6h.
+  setTimeout(() => { loadListendPopularity(); }, 30_000);
+  setInterval(() => { loadListendPopularity(); }, 6 * 60 * 60 * 1000);
 
   // Seed any genres in genreData.js that aren't yet in the DB.
   // Runs once on startup — safe to redeploy, upsert is idempotent.
