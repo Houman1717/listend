@@ -1,7 +1,7 @@
-import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
-import { useState, useEffect, Fragment, useMemo } from 'react';
+import { useState, useEffect, Fragment, useMemo, useRef } from 'react';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -32,6 +32,7 @@ const STATS_TOP_GENRES   = 6;
 const ARTIST_COMP_MIN_ALBUM_RATINGS = 5;
 const ARTIST_COMP_MIN_ALBUMS        = 2;
 const ARTIST_COMP_MIN_DIFF          = 0.5;
+type ComparePerson = { id: string; displayName: string; username: string; avatarUrl: string | null; isPro: boolean };
 type ArtistCompEntry = { artist: string; mine: number; community: number; delta: number; albums: LoggedAlbum[] };
 
 const MAIN_GENRES = new Set([
@@ -863,14 +864,16 @@ export default function MyStatsScreen() {
   const [compareQuery,     setCompareQuery]     = useState('');
   const [compareSearching, setCompareSearching] = useState(false);
   const [compareError,     setCompareError]     = useState<string | null>(null);
-  const [compareFriend,    setCompareFriend]    = useState<{
-    id: string; displayName: string; username: string;
-    avatarUrl: string | null; isPro: boolean;
-  } | null>(null);
+  const [compareFriend,    setCompareFriend]    = useState<ComparePerson | null>(null);
+  const [compareResults,   setCompareResults]   = useState<ComparePerson[]>([]);
+  const compareReqId      = useRef(0);
+  const compareDebounce   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const compareExcludeIds = useRef<Set<string>>(new Set());
+  const selectedFriendId  = useRef<string | null>(null);
   const [friendAlbums,  setFriendAlbums]  = useState<LoggedAlbum[]>([]);
   const [friendLoading, setFriendLoading] = useState(false);
   const [sharedModal,        setSharedModal]        = useState<'albums' | 'artists' | null>(null);
-  const [followingList,      setFollowingList]      = useState<{ id: string; displayName: string; username: string; avatarUrl: string | null; isPro: boolean }[]>([]);
+  const [followingList,      setFollowingList]      = useState<ComparePerson[]>([]);
   const [friendTop5Albums,   setFriendTop5Albums]   = useState<{ id: string; title: string; artworkUrl?: string }[]>([]);
   const [friendTop5Artists,  setFriendTop5Artists]  = useState<{ id: string; name: string; artworkUrl?: string }[]>([]);
   const [friendLikedArtists, setFriendLikedArtists] = useState<{ artistId: string; name: string }[]>([]);
@@ -1347,6 +1350,17 @@ export default function MyStatsScreen() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id;
       if (!uid) return;
+      // Self + blocked users (both directions) never appear in compare suggestions.
+      Promise.all([
+        supabase.from('blocked_users').select('blocked_id').eq('blocker_id', uid),
+        supabase.from('blocked_users').select('blocker_id').eq('blocked_id', uid),
+      ]).then(([byMe, byThem]) => {
+        compareExcludeIds.current = new Set([
+          uid,
+          ...(byMe.data ?? []).map((r: any) => r.blocked_id),
+          ...(byThem.data ?? []).map((r: any) => r.blocker_id),
+        ]);
+      }).catch(() => { compareExcludeIds.current = new Set([uid]); });
       const { data } = await supabase
         .from('follows')
         .select('following_id, profiles!follows_following_id_fkey(id, display_name, username, avatar_url, is_pro)')
@@ -1368,36 +1382,123 @@ export default function MyStatsScreen() {
     });
   }, [mainTab]);
 
-  // ── Compare: search friend ────────────────────────────────────────────────
-  async function searchFriend() {
-    const q = compareQuery.trim().replace(/^@/, '');
-    if (!q) return;
+  // ── Compare: search-as-you-type ───────────────────────────────────────────
+  // People you follow match instantly (already loaded); everyone else comes
+  // from a debounced profiles query. reqId drops responses that arrive after
+  // a newer keystroke so the list never flickers back to stale results.
+  function matchScore(p: ComparePerson, q: string) {
+    const u = p.username.toLowerCase(), d = p.displayName.toLowerCase();
+    if (u === q || d === q) return 0;
+    if (u.startsWith(q) || d.startsWith(q)) return 1;
+    if (d.split(/\s+/).some(w => w.startsWith(q))) return 2;
+    return 3;
+  }
+
+  function handleCompareQueryChange(text: string) {
+    setCompareQuery(text);
+    setCompareError(null);
+    if (compareFriend) { setCompareFriend(null); selectedFriendId.current = null; }
+    if (compareDebounce.current) clearTimeout(compareDebounce.current);
+    const reqId = ++compareReqId.current;
+
+    const q = text.trim().replace(/^@/, '').toLowerCase();
+    if (!q) { setCompareResults([]); setCompareSearching(false); return; }
+
+    const localMatches = followingList
+      .filter(p => p.username.toLowerCase().includes(q) || p.displayName.toLowerCase().includes(q))
+      .sort((a, b) => matchScore(a, q) - matchScore(b, q));
+    setCompareResults(localMatches);
+
+    // Characters that would break the PostgREST .or() filter syntax.
+    const safe = q.replace(/[%_,()*\\]/g, '');
+    if (!safe) { setCompareSearching(false); return; }
     setCompareSearching(true);
+    compareDebounce.current = setTimeout(async () => {
+      const pattern = `%${safe}%`;
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, display_name, username, avatar_url, is_pro')
+        .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
+        .limit(20);
+      if (reqId !== compareReqId.current) return;
+      const seen = new Set(localMatches.map(p => p.id));
+      const remote = (data ?? [])
+        .filter((r: any) => !seen.has(r.id) && !compareExcludeIds.current.has(r.id))
+        .map((r: any): ComparePerson => ({
+          id: r.id,
+          displayName: nameOrHandle(r.display_name, r.username, r.id, ''),
+          username: r.username || '',
+          avatarUrl: r.avatar_url ?? null,
+          isPro: r.is_pro ?? false,
+        }))
+        .sort((a, b) => matchScore(a, q) - matchScore(b, q));
+      const merged = [...localMatches, ...remote];
+      setCompareResults(merged);
+      setCompareSearching(false);
+      if (merged.length === 0) setCompareError('No users match that name.');
+    }, 250);
+  }
+
+  function clearCompareSearch() {
+    if (compareDebounce.current) clearTimeout(compareDebounce.current);
+    compareReqId.current++;
+    selectedFriendId.current = null;
+    setCompareQuery('');
+    setCompareResults([]);
+    setCompareSearching(false);
     setCompareError(null);
     setCompareFriend(null);
-    setFriendAlbums([]);
-    const pattern = `%${q}%`;
-    const { data: rows } = await supabase
-      .from('profiles')
-      .select('id, display_name, username, avatar_url, is_pro')
-      .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
-      .limit(1);
-    const data = rows?.[0] ?? null;
-    if (!data) {
-      setCompareError('No user found with that username.');
-      setCompareSearching(false);
-      return;
-    }
-    setCompareFriend({
-      id: data.id, displayName: nameOrHandle(data.display_name, data.username, data.id, ''),
-      username: data.username || '', avatarUrl: data.avatar_url ?? null, isPro: data.is_pro ?? false,
-    });
-    if (data.is_pro) {
-      setFriendLoading(true);
-      await loadFriendData(data.id);
-      setFriendLoading(false);
-    }
+  }
+
+  async function selectCompareFriend(person: ComparePerson) {
+    Keyboard.dismiss();
+    if (compareDebounce.current) clearTimeout(compareDebounce.current);
+    compareReqId.current++;
+    selectedFriendId.current = person.id;
+    setCompareQuery(person.displayName);
+    setCompareResults([]);
     setCompareSearching(false);
+    setCompareError(null);
+    setFriendAlbums([]);
+    setFriendTop5Albums([]);
+    setFriendTop5Artists([]);
+    setFriendLikedArtists([]);
+    setCompareFriend(person);
+    if (person.isPro) {
+      setFriendLoading(true);
+      await loadFriendData(person.id);
+      if (selectedFriendId.current === person.id) setFriendLoading(false);
+    }
+  }
+
+  function renderComparePersonRow(person: ComparePerson, i: number) {
+    return (
+      <Pressable
+        key={person.id}
+        onPress={() => selectCompareFriend(person)}
+        style={({ pressed }) => ({
+          flexDirection: 'row', alignItems: 'center', gap: 12,
+          paddingHorizontal: 18, paddingVertical: 12, opacity: pressed ? 0.7 : 1,
+          borderTopWidth: i === 0 ? StyleSheet.hairlineWidth : 0,
+          borderTopColor: colors.border,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        })}>
+        {person.avatarUrl
+          ? <ExpoImage source={{ uri: person.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+          : <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}>
+              <FontAwesome name="user" size={18} color={SUBTEXT} />
+            </View>}
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>{person.displayName}</Text>
+            {person.isPro && <ProBadge size="xs" />}
+          </View>
+          {handleText(person.username, person.id) ? <Text style={{ color: colors.subtext, fontSize: 12 }}>{handleText(person.username, person.id)}</Text> : null}
+        </View>
+        <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
+      </Pressable>
+    );
   }
 
   async function loadFriendData(friendId: string) {
@@ -1418,6 +1519,8 @@ export default function MyStatsScreen() {
         .select('spotify_id, rating, listened_at')
         .eq('user_id', friendId).order('listened_at', { ascending: true }),
     ]);
+    // A different friend was picked while this one was loading.
+    if (selectedFriendId.current !== friendId) return;
 
     // Latest re-listen rating per album — same reason as loggedAlbums above:
     // their avg rating here must match what their own profile shows.
@@ -1841,72 +1944,44 @@ export default function MyStatsScreen() {
               </View>
             </Modal>
 
-            {/* Search bar */}
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            {/* Search bar — suggestions appear as you type */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 12 }}>
+              <FontAwesome name="search" size={14} color={colors.subtext} />
               <TextInput
-                style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 11, color: colors.text, fontSize: 15 }}
-                placeholder="Search by @username"
+                style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 11, color: colors.text, fontSize: 15 }}
+                placeholder="Search by name or @username"
                 placeholderTextColor={colors.subtext}
                 value={compareQuery}
-                onChangeText={setCompareQuery}
+                onChangeText={handleCompareQueryChange}
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="search"
-                onSubmitEditing={searchFriend}
+                onSubmitEditing={() => { if (compareResults[0]) selectCompareFriend(compareResults[0]); }}
               />
-              <Pressable
-                onPress={searchFriend}
-                style={({ pressed }) => ({ backgroundColor: colors.tint, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, opacity: pressed ? 0.7 : 1 })}>
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Search</Text>
-              </Pressable>
+              {compareSearching
+                ? <ActivityIndicator size="small" color={colors.subtext} />
+                : compareQuery.length > 0 && (
+                  <Pressable onPress={clearCompareSearch} hitSlop={10} style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+                    <FontAwesome name="times-circle" size={16} color={colors.subtext} />
+                  </Pressable>
+                )}
             </View>
 
-            {compareSearching && <ActivityIndicator color={colors.tint} style={{ marginTop: 20 }} />}
-            {compareError && <Text style={{ color: colors.subtext, fontSize: 14, textAlign: 'center', marginTop: 20 }}>{compareError}</Text>}
+            {/* Live suggestions */}
+            {!compareFriend && compareQuery.trim().length > 0 && compareResults.length > 0 && (
+              <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: 'hidden' }]}>
+                {compareResults.map((person, i) => renderComparePersonRow(person, i))}
+              </View>
+            )}
+            {!compareFriend && !compareSearching && compareError && compareQuery.trim().length > 0 && (
+              <Text style={{ color: colors.subtext, fontSize: 14, textAlign: 'center', marginTop: 20 }}>{compareError}</Text>
+            )}
 
-            {/* Following list — shown when no search has been made yet */}
-            {!compareFriend && !compareSearching && !compareError && followingList.length > 0 && (
+            {/* Following list — shown while the search box is empty */}
+            {!compareFriend && compareQuery.trim().length === 0 && followingList.length > 0 && (
               <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: 'hidden' }]}>
                 <Text style={[s.cardTitle, { color: colors.textMuted, paddingHorizontal: 18, paddingTop: 16, marginBottom: 0 }]}>PEOPLE YOU FOLLOW</Text>
-                {followingList.map((person, i) => (
-                  <Pressable
-                    key={person.id}
-                    onPress={async () => {
-                      setCompareError(null);
-                      setFriendAlbums([]);
-                      setFriendTop5Albums([]);
-                      setFriendTop5Artists([]);
-                      setFriendLikedArtists([]);
-                      setCompareFriend(person);
-                      if (person.isPro) {
-                        setFriendLoading(true);
-                        await loadFriendData(person.id);
-                        setFriendLoading(false);
-                      }
-                    }}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row', alignItems: 'center', gap: 12,
-                      paddingHorizontal: 18, paddingVertical: 12, opacity: pressed ? 0.7 : 1,
-                      borderTopWidth: i === 0 ? StyleSheet.hairlineWidth : 0,
-                      borderTopColor: colors.border,
-                      borderBottomWidth: StyleSheet.hairlineWidth,
-                      borderBottomColor: colors.border,
-                    })}>
-                    {person.avatarUrl
-                      ? <ExpoImage source={{ uri: person.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
-                      : <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}>
-                          <FontAwesome name="user" size={18} color={SUBTEXT} />
-                        </View>}
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{person.displayName}</Text>
-                        {person.isPro && <ProBadge size="xs" />}
-                      </View>
-                      {handleText(person.username, person.id) ? <Text style={{ color: colors.subtext, fontSize: 12 }}>{handleText(person.username, person.id)}</Text> : null}
-                    </View>
-                    <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
-                  </Pressable>
-                ))}
+                {followingList.map((person, i) => renderComparePersonRow(person, i))}
               </View>
             )}
 
