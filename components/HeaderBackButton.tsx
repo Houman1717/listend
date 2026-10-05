@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Platform, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -16,6 +17,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
  * button calling goBack() sidesteps it, and ships by OTA with no native
  * change. Older iOS keeps the real native button. Remove this once
  * react-native-screens is >= 4.17 (needs a new native build).
+ *
+ * It goes back on touch-DOWN, not touch-up. iOS 26+ hosts bar items in a
+ * Liquid Glass platter with its own press gesture, and when that gesture
+ * claims the touch it cancels React Native's — Pressable then sees pressIn
+ * but never onPress. Reported 2026-10-04 on iOS 27 (Privacy screen): the
+ * button "mostly doesn't work, or only after spamming it". The iOS 26.4
+ * simulator's synthetic taps never lose this race, so test on a device.
  */
 export const needsJsBackButton =
   Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26;
@@ -25,9 +33,20 @@ export const needsJsBackButton =
 const DARK_HEADER_TINT = '#f5e6c8';
 
 export function HeaderBackButton({ onPress, tintColor }: { onPress: () => void; tintColor?: string }) {
+  // pressIn and onPress both arrive on a normal tap — act on the first only.
+  const firedAt = useRef(0);
+  const goBack = () => {
+    const now = Date.now();
+    if (now - firedAt.current < 700) return;
+    firedAt.current = now;
+    onPress();
+  };
+
   return (
     <Pressable
-      onPress={onPress}
+      onPressIn={goBack}
+      // Still needed: VoiceOver's activate fires onPress without a pressIn.
+      onPress={goBack}
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel="Back"
