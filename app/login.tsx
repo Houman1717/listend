@@ -18,6 +18,8 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { LegalConsent } from '@/components/LegalConsent';
+import { isEmailNotConfirmed, resendConfirmationEmail } from '@/lib/auth/confirmationEmail';
+import { capture } from '@/lib/analytics';
 
 const ACCENT = '#D4A017';
 
@@ -39,6 +41,30 @@ export default function LoginScreen() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
+    if (error && isEmailNotConfirmed(error)) {
+      // Otherwise a user whose confirmation link never arrived has no way forward.
+      const address = email.trim();
+      Alert.alert(
+        'Confirm your email',
+        `Your account isn't confirmed yet. Tap the link we emailed to ${address}, or we can send a new one.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Resend email',
+            onPress: async () => {
+              const problem = await resendConfirmationEmail(address);
+              if (problem) {
+                Alert.alert("Couldn't resend the email", problem);
+                return;
+              }
+              capture('confirmation_email_resent', { from: 'login' });
+              Alert.alert('Email sent', `We've sent a new confirmation link to ${address}. Check your spam folder if it doesn't show up.`);
+            },
+          },
+        ],
+      );
+      return;
+    }
     if (error) {
       Alert.alert('Sign in failed', error.message);
     }

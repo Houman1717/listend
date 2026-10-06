@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -20,6 +20,11 @@ import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { LegalConsent } from '@/components/LegalConsent';
 import { capture } from '@/lib/analytics';
 import { PASSWORD_HINT, passwordProblem, weakPasswordMessage } from '@/lib/auth/passwordRules';
+import {
+  RESEND_COOLDOWN_SECONDS,
+  isConfirmationSendFailure,
+  resendConfirmationEmail,
+} from '@/lib/auth/confirmationEmail';
 
 const ACCENT = '#D4A017';
 
@@ -34,6 +39,29 @@ export default function SignUpScreen() {
   const [loading, setLoading]           = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  // True when signUp created the account but the confirmation email didn't send.
+  const [sendFailed, setSendFailed]     = useState(false);
+  const [resending, setResending]       = useState(false);
+  const [cooldown, setCooldown]         = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  async function handleResend() {
+    setResending(true);
+    const problem = await resendConfirmationEmail(email);
+    setResending(false);
+    if (problem) {
+      Alert.alert("Couldn't resend the email", problem);
+      return;
+    }
+    setSendFailed(false);
+    setCooldown(RESEND_COOLDOWN_SECONDS);
+    capture('confirmation_email_resent', { from: 'signup' });
+  }
 
   async function handleSignUp() {
     if (!email.trim() || !password || !username.trim()) {
@@ -61,6 +89,11 @@ export default function SignUpScreen() {
 
     if (error) {
       setLoading(false);
+      if (isConfirmationSendFailure(error)) {
+        setSendFailed(true);
+        setAwaitingConfirmation(true);
+        return;
+      }
       const weak = weakPasswordMessage(error, password);
       Alert.alert(weak ? 'Choose a stronger password' : 'Sign up failed', weak ?? error.message);
       return;
@@ -72,13 +105,14 @@ export default function SignUpScreen() {
 
     setLoading(false);
 
-    // Email confirmation is currently off, so signUp() already returns a live
-    // session — ensureProfile (AuthContext) creates the profiles row on the
-    // resulting SIGNED_IN event and AuthGate redirects into the app. Only
-    // show the "check your email" screen if a session wasn't issued (i.e.
-    // confirmation is required).
+    // With email confirmation off, signUp() returns a live session —
+    // ensureProfile (AuthContext) creates the profiles row on the resulting
+    // SIGNED_IN event and AuthGate redirects into the app. Confirmation is ON,
+    // so normally no session comes back and we show "check your email".
     if (!data.session) {
       setAwaitingConfirmation(true);
+      // Supabase just sent the first email — same wait before a resend.
+      setCooldown(RESEND_COOLDOWN_SECONDS);
     }
   }
 
@@ -93,12 +127,22 @@ export default function SignUpScreen() {
         {awaitingConfirmation ? (
           <View style={s.confirmBox}>
             <Ionicons name="mail-unread-outline" size={52} color={ACCENT} style={{ marginBottom: 16 }} />
-            <Text style={[s.confirmTitle, { color: colors.text }]}>Check your email</Text>
-            <Text style={[s.confirmText, { color: colors.subtext }]}>
-              We've sent a confirmation link to{' '}
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{email.trim()}</Text>.
-              {'\n'}Tap it to verify your account, then sign in.
+            <Text style={[s.confirmTitle, { color: colors.text }]}>
+              {sendFailed ? 'Almost there' : 'Check your email'}
             </Text>
+            {sendFailed ? (
+              <Text style={[s.confirmText, { color: colors.subtext }]}>
+                Your account was created, but we couldn't send the confirmation link to{' '}
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{email.trim()}</Text>.
+                {'\n'}Tap Resend email below to try again.
+              </Text>
+            ) : (
+              <Text style={[s.confirmText, { color: colors.subtext }]}>
+                We've sent a confirmation link to{' '}
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{email.trim()}</Text>.
+                {'\n'}Tap it to verify your account, then sign in.
+              </Text>
+            )}
             <Pressable
               style={({ pressed }) => [s.btn, { backgroundColor: ACCENT, opacity: pressed ? 0.85 : 1, width: '100%' }]}
               onPress={() => router.back()}>
@@ -107,6 +151,19 @@ export default function SignUpScreen() {
             <Text style={[s.confirmHint, { color: colors.subtext }]}>
               Didn't get it? Check your spam folder.
             </Text>
+            <Pressable
+              onPress={handleResend}
+              disabled={resending || cooldown > 0}
+              hitSlop={8}
+              style={s.resendBtn}>
+              {resending
+                ? <ActivityIndicator color={ACCENT} />
+                : (
+                  <Text style={[s.resendText, { color: cooldown > 0 ? colors.subtext : ACCENT }]}>
+                    {cooldown > 0 ? `Resend email in ${cooldown}s` : 'Resend email'}
+                  </Text>
+                )}
+            </Pressable>
           </View>
         ) : (
           <>
@@ -263,4 +320,6 @@ const s = StyleSheet.create({
   confirmTitle: { fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginBottom: 10 },
   confirmText:  { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
   confirmHint:  { fontSize: 13, textAlign: 'center', marginTop: 16 },
+  resendBtn:    { marginTop: 12, minHeight: 24, justifyContent: 'center' },
+  resendText:   { fontSize: 14, fontWeight: '600' },
 });
