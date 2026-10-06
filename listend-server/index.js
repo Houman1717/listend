@@ -329,6 +329,44 @@ pinStorefront('de', [
   '1445887610', '1445887615', '1445887617', '1445887621', '1445887624', '1445887626',
 ]);
 
+// Tokio Hotel — Durch den Monsun - EP (2005)
+pinStorefront('de', [
+  '1444397848',
+  '1444397860', '1444398111', '1444398120', '1444398123', '1444398127',
+]);
+// Tokio Hotel — Übers Ende der Welt - EP (2007)
+pinStorefront('de', [
+  '1444424549',
+  '1444424891', '1444424903', '1444424907',
+]);
+// Tokio Hotel — Spring nicht - EP (2007)
+pinStorefront('de', [
+  '1444330561',
+  '1444330565', '1444330566', '1444330568',
+]);
+// Tokio Hotel — Zimmer 483 (2007)
+pinStorefront('de', [
+  '1443261021',
+  '1443261033', '1443261038', '1443261162', '1443261166', '1443261168', '1443261170',
+  '1443261173', '1443261175', '1443261178', '1443261181', '1443261184', '1443261186',
+]);
+// Tokio Hotel — Room 483 (2007)
+pinStorefront('de', [
+  '1443332298',
+  '1443332472', '1443332488', '1443332497', '1443332630', '1443332638', '1443332643',
+  '1443332647', '1443332837', '1443332846', '1443332856', '1443333106', '1443333117',
+]);
+// Tokio Hotel — Automatic - EP (2009)
+pinStorefront('de', [
+  '1445128553',
+  '1445128559', '1445128566', '1445128567', '1445128569',
+]);
+// Tokio Hotel — Feel It All - EP (2015)
+pinStorefront('de', [
+  '1445299099',
+  '1445299182', '1445299193', '1445299195', '1445299197', '1445299200',
+]);
+
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
 // Absolute base for images this server hosts itself, under public/.
@@ -561,6 +599,34 @@ const CANONICAL_ALBUM_OVERRIDES = {
   },
   // Same shape as Invisible below: Apple has the record but doesn't return it
   // for its own title or artist, and leaves it off the artist page.
+  'tokiohotel::durchdenmonsunep': {
+    id: '1444397848', title: 'Durch den Monsun - EP', artist: 'Tokio Hotel', year: 2005,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/45/92/35/459235a8-8e29-f8e8-dc60-9591779ccfd9/00602498735091.rgb.jpg/500x500bb.jpg',
+  },
+  'tokiohotel::bersendederweltep': {
+    id: '1444424549', title: 'Übers Ende der Welt - EP', artist: 'Tokio Hotel', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/d0/28/d5/d028d5dd-d3c5-03c4-bb58-696e45e7ea6e/00602517230989.rgb.jpg/500x500bb.jpg',
+  },
+  'tokiohotel::springnichtep': {
+    id: '1444330561', title: 'Spring nicht - EP', artist: 'Tokio Hotel', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/12/2f/e7/122fe790-b350-16f7-4063-a1d6bdda7cd2/00602517323582.rgb.jpg/500x500bb.jpg',
+  },
+  'tokiohotel::zimmer483': {
+    id: '1443261021', title: 'Zimmer 483', artist: 'Tokio Hotel', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/55/1a/f6/551af64c-1856-103c-8b43-64b2234156f4/07UMGIM00940.rgb.jpg/500x500bb.jpg',
+  },
+  'tokiohotel::room483': {
+    id: '1443332298', title: 'Room 483', artist: 'Tokio Hotel', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/c7/73/3c/c7733cf9-8538-7ca2-fa97-2393cb948b7a/07UMGIM07448.rgb.jpg/500x500bb.jpg',
+  },
+  'tokiohotel::automaticep': {
+    id: '1445128553', title: 'Automatic - EP', artist: 'Tokio Hotel', year: 2009,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/4e/3b/64/4e3b64a8-d833-ff79-5607-5e479b07e11f/00602527217550.rgb.jpg/500x500bb.jpg',
+  },
+  'tokiohotel::feelitallep': {
+    id: '1445299099', title: 'Feel It All - EP', artist: 'Tokio Hotel', year: 2015,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/d2/35/93/d2359392-fdc3-a212-f290-cd0450f44467/00602547299529.rgb.jpg/500x500bb.jpg',
+  },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
@@ -3802,6 +3868,50 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d5/05/e9/d505e9d4-e6f5-70eb-4347-6ee0debf21df/05099962411158.jpg/500x500bb.jpg',
       year: 2012, isSingle: false, isCompilation: true, trackCount: 12,
       url: 'https://music.apple.com/it/album/essential-remastered/713278044', type: 'album',
+    },
+  ],
+  '78215262': [ // Tokio Hotel — not licensed for `us`
+    {
+      id: '1444397848', title: 'Durch den Monsun - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/45/92/35/459235a8-8e29-f8e8-dc60-9591779ccfd9/00602498735091.rgb.jpg/500x500bb.jpg',
+      year: 2005, isSingle: false, isCompilation: false, trackCount: 5,
+      url: 'https://music.apple.com/de/album/durch-den-monsun-ep/1444397848', type: 'album',
+    },
+    {
+      id: '1444424549', title: 'Übers Ende der Welt - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/d0/28/d5/d028d5dd-d3c5-03c4-bb58-696e45e7ea6e/00602517230989.rgb.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 3,
+      url: 'https://music.apple.com/de/album/%C3%BCbers-ende-der-welt-ep/1444424549', type: 'album',
+    },
+    {
+      id: '1444330561', title: 'Spring nicht - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/12/2f/e7/122fe790-b350-16f7-4063-a1d6bdda7cd2/00602517323582.rgb.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 3,
+      url: 'https://music.apple.com/de/album/spring-nicht-ep/1444330561', type: 'album',
+    },
+    {
+      id: '1443261021', title: 'Zimmer 483',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/55/1a/f6/551af64c-1856-103c-8b43-64b2234156f4/07UMGIM00940.rgb.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 12,
+      url: 'https://music.apple.com/de/album/zimmer-483/1443261021', type: 'album',
+    },
+    {
+      id: '1443332298', title: 'Room 483',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/c7/73/3c/c7733cf9-8538-7ca2-fa97-2393cb948b7a/07UMGIM07448.rgb.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 12,
+      url: 'https://music.apple.com/de/album/room-483/1443332298', type: 'album',
+    },
+    {
+      id: '1445128553', title: 'Automatic - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/4e/3b/64/4e3b64a8-d833-ff79-5607-5e479b07e11f/00602527217550.rgb.jpg/500x500bb.jpg',
+      year: 2009, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/de/album/automatic-ep/1445128553', type: 'album',
+    },
+    {
+      id: '1445299099', title: 'Feel It All - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/d2/35/93/d2359392-fdc3-a212-f290-cd0450f44467/00602547299529.rgb.jpg/500x500bb.jpg',
+      year: 2015, isSingle: false, isCompilation: false, trackCount: 5,
+      url: 'https://music.apple.com/de/album/feel-it-all-ep/1445299099', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
