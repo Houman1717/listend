@@ -542,6 +542,12 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1440767333', title: 'Turbe giovanili', artist: 'Fabri Fibra', year: 2002,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6f/66/ee/6f66ee1b-fd42-1397-d222-f284115c8b5a/00602527404899.rgb.jpg/500x500bb.jpg',
   },
+  // Same shape as Invisible below: Apple has the record but doesn't return it
+  // for its own title or artist, and leaves it off the artist page.
+  'centaur::instreams': {
+    id: '470365934', title: 'In Streams', artist: 'Centaur', year: 2002,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/44/14/e1/mzi.dqyzxcwn.jpg/500x500bb.jpg',
+  },
   // Apple has this record but never linked it to Invisible, so it reached
   // neither the discography nor search. Keyed under both spellings of the
   // title: normalizeKey strips the accent from "Jardín" rather than folding it,
@@ -3775,6 +3781,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/d5/05/e9/d505e9d4-e6f5-70eb-4347-6ee0debf21df/05099962411158.jpg/500x500bb.jpg',
       year: 2012, isSingle: false, isCompilation: true, trackCount: 12,
       url: 'https://music.apple.com/it/album/essential-remastered/713278044', type: 'album',
+    },
+  ],
+  '6474908': [ // Centaur — Apple has In Streams but doesn't list it under them
+    {
+      id: '470365934', title: 'In Streams',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/44/14/e1/mzi.dqyzxcwn.jpg/500x500bb.jpg',
+      year: 2002, isSingle: false, isCompilation: false, trackCount: 8,
+      url: 'https://music.apple.com/us/album/in-streams/470365934', type: 'album',
     },
   ],
   '24836656': [ // Invisible — Apple has the album but doesn't list it under the artist
