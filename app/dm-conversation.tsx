@@ -86,6 +86,7 @@ export default function DMConversationScreen() {
   const navigation = useNavigation();
   const router     = useRouter();
 
+  const [otherName,    setOtherName]    = useState<string | null>(null);
   const [messages,     setMessages]     = useState<Message[]>([]);
   const [loadingMsgs,  setLoadingMsgs]  = useState(true);
   // Height of the on-screen keyboard, Android only. Under edge-to-edge the app
@@ -121,18 +122,9 @@ export default function DMConversationScreen() {
       .eq('id', otherUserId)
       .single()
       .then(({ data }) => {
-        if (data) {
-          const name = nameOrHandle(data.display_name, data.username, (data as any).id, 'Message');
-          navigation.setOptions({
-            headerTitle: () => (
-              <Pressable onPress={() => router.push({ pathname: '/user-profile', params: { userId: otherUserId } })}>
-                <Text style={{ color: '#f5e6c8', fontSize: 17, fontWeight: '700' }}>{name}</Text>
-              </Pressable>
-            ),
-          });
-        }
+        if (data) setOtherName(nameOrHandle(data.display_name, data.username, (data as any).id, 'Message'));
       });
-  }, [otherUserId, navigation, router]);
+  }, [otherUserId]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -145,9 +137,24 @@ export default function DMConversationScreen() {
   // light mode that colour is a near-white grey. Any moment the content
   // doesn't reach the bottom of the window, that grey is what shows through —
   // so a themed container makes a stray gap invisible rather than glaring.
+  //
+  // The header follows the active theme too — _layout.tsx's default is the
+  // dark-mode brown, which sat on top of light mode and every pro theme.
   useEffect(() => {
-    navigation.setOptions({ contentStyle: { backgroundColor: colors.background } });
-  }, [navigation, colors.background]);
+    navigation.setOptions({
+      contentStyle: { backgroundColor: colors.background },
+      headerStyle: { backgroundColor: colors.background },
+      headerTintColor: colors.text,
+      headerShadowVisible: false,
+      ...(otherName && {
+        headerTitle: () => (
+          <Pressable onPress={() => router.push({ pathname: '/user-profile', params: { userId: otherUserId } })}>
+            <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{otherName}</Text>
+          </Pressable>
+        ),
+      }),
+    });
+  }, [navigation, router, otherUserId, otherName, colors.background, colors.text]);
 
   // ── Load messages + start polling ───────────────────────────────────────────
   useEffect(() => {
