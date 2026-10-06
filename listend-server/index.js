@@ -1073,7 +1073,13 @@ app.use(express.json({ limit: '10mb' }));
 
 // Images Listend hosts itself (public/artists/…), for the few artists whose
 // Apple artwork is unusable. Long cache: the files change only on deploy.
-app.use('/static', express.static(path.join(__dirname, 'public'), {
+// helmet() sends Cross-Origin-Resource-Policy: same-origin, which makes browsers
+// refuse these images on listend.uk profile pages (the app ignores CORP), so
+// these public images opt out.
+app.use('/static', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, 'public'), {
   maxAge: '7d',
   fallthrough: false,
 }));
