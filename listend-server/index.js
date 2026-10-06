@@ -312,6 +312,23 @@ pinStorefront('it', [
   '713278109', '713278110', '713278112', '713278114', '713278118', '713278122',
 ]);
 
+// Cro — trip (2021). The standard edition; `de` also has a 35-track deluxe,
+// left unpinned so the discography shows one entry for the record.
+pinStorefront('de', [
+  '1579322186',
+  '1579322434', '1579322565', '1579322568', '1579322573', '1579322576', '1579322579',
+  '1579322580', '1579322583', '1579322918', '1579322923', '1579322927', '1579322942',
+  '1579323249', '1579323257', '1579323521', '1579323524', '1579323530', '1579323535',
+  '1579323641', '1579323642', '1579323644', '1579323649', '1579323848', '1579323852',
+  '1579323857', '1579323858', '1579323865', '1579323873', '1579324178', '1579324186',
+  '1579324193', '1579324195',
+]);
+// Cro — Horst & Monika (Special Version) [feat. Cro] - EP (2012)
+pinStorefront('de', [
+  '1445887603',
+  '1445887610', '1445887615', '1445887617', '1445887621', '1445887624', '1445887626',
+]);
+
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
 // Absolute base for images this server hosts itself, under public/.
@@ -544,6 +561,10 @@ const CANONICAL_ALBUM_OVERRIDES = {
   },
   // Same shape as Invisible below: Apple has the record but doesn't return it
   // for its own title or artist, and leaves it off the artist page.
+  'cro::trip': {
+    id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
+  },
   'centaur::instreams': {
     id: '470365934', title: 'In Streams', artist: 'Centaur', year: 2002,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/44/14/e1/mzi.dqyzxcwn.jpg/500x500bb.jpg',
@@ -3783,6 +3804,20 @@ const ARTIST_ALBUM_OVERRIDES = {
       url: 'https://music.apple.com/it/album/essential-remastered/713278044', type: 'album',
     },
   ],
+  '469647548': [ // Cro — not licensed for `us`
+    {
+      id: '1579322186', title: 'trip',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
+      year: 2021, isSingle: false, isCompilation: false, trackCount: 32,
+      url: 'https://music.apple.com/de/album/trip/1579322186', type: 'album',
+    },
+    {
+      id: '1445887603', title: 'Horst & Monika (Special Version) [feat. Cro] - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/4c/7f/74/4c7f744a-fef4-6d7d-2a74-08156e981709/00602537159512.rgb.jpg/500x500bb.jpg',
+      year: 2012, isSingle: false, isCompilation: false, trackCount: 6,
+      url: 'https://music.apple.com/de/album/horst-monika-special-version-feat-cro-ep/1445887603', type: 'album',
+    },
+  ],
   '6474908': [ // Centaur — Apple has In Streams but doesn't list it under them
     {
       id: '470365934', title: 'In Streams',
@@ -4017,6 +4052,7 @@ async function buildArtistDiscography(id, bust = false) {
   // can't tell an EP from an album; see resolveShortRunTimes below.
   const categorize = (item, shortRunTimes) => {
     const t = item.title;
+    if (item.isLive) return 'live';   // a concert whose title doesn't say so
     if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
     if (inAllowlist(t)) return 'epsAndMixtapes';
     // A mixtape belongs with the EPs however long it runs — Exmilitary and

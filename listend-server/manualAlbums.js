@@ -14,8 +14,8 @@
 // Apple Music albums.
 //
 // `aliases` on an album or artist adds extra spellings that search should
-// match — the displayed title never changes. `isCompilation` and `isMixtape`
-// put a record in the Collections or EPs & Mixtapes tab of the artist page;
+// match — the displayed title never changes. `isCompilation`, `isMixtape` and `isLive`
+// put a record in the Collections, EPs & Mixtapes or Live tab of the artist page;
 // without either, running time decides.
 //
 // To add one: find the release on MusicBrainz, take its release-group id for
@@ -798,6 +798,42 @@ const MANUAL_ALBUMS = [
       { number: 35, id: 'lst-resting-state-t35', title: '35', durationMs: 129695 },
     ],
   },
+  {
+    id: 'lst-one-night-in-paris',
+    title: 'One Night in Paris',
+    artist: 'Depeche Mode',
+    artistId: '148377',
+    year: 2002,
+    isLive: true,                 // the Exciter tour concert film; Live tab, not Albums
+    // Never issued as an audio album — Apple Music has 101, Songs of Faith and
+    // Devotion Live and the rest, but not this. Two discs of the release,
+    // numbered straight through here.
+    artworkUrl: 'https://coverartarchive.org/release-group/15095ea0-35f8-3f0a-8422-95a9074aaf70/front-500',
+    musicbrainzReleaseId: 'c6bb16eb-ab02-4529-9893-bcb62fed6e96',
+    trackCount: 20,
+    tracks: [
+      { number: 1, id: 'lst-one-night-in-paris-t1', title: 'Intro: Easy Tiger / Dream On (instrumental)', durationMs: 215000 },
+      { number: 2, id: 'lst-one-night-in-paris-t2', title: 'The Dead of Night', durationMs: 306000 },
+      { number: 3, id: 'lst-one-night-in-paris-t3', title: 'The Sweetest Condition', durationMs: 238000 },
+      { number: 4, id: 'lst-one-night-in-paris-t4', title: 'Halo', durationMs: 290000 },
+      { number: 5, id: 'lst-one-night-in-paris-t5', title: 'Walking in My Shoes', durationMs: 379000 },
+      { number: 6, id: 'lst-one-night-in-paris-t6', title: 'Dream On', durationMs: 340000 },
+      { number: 7, id: 'lst-one-night-in-paris-t7', title: 'When the Body Speaks', durationMs: 420000 },
+      { number: 8, id: 'lst-one-night-in-paris-t8', title: 'Waiting for the Night', durationMs: 365000 },
+      { number: 9, id: 'lst-one-night-in-paris-t9', title: 'It Doesn’t Matter Two', durationMs: 227000 },
+      { number: 10, id: 'lst-one-night-in-paris-t10', title: 'Breathe', durationMs: 321000 },
+      { number: 11, id: 'lst-one-night-in-paris-t11', title: 'Freelove', durationMs: 429000 },
+      { number: 12, id: 'lst-one-night-in-paris-t12', title: 'Enjoy the Silence', durationMs: 440000 },
+      { number: 13, id: 'lst-one-night-in-paris-t13', title: 'I Feel You', durationMs: 419000 },
+      { number: 14, id: 'lst-one-night-in-paris-t14', title: 'In Your Room', durationMs: 327000 },
+      { number: 15, id: 'lst-one-night-in-paris-t15', title: 'It’s No Good', durationMs: 292000 },
+      { number: 16, id: 'lst-one-night-in-paris-t16', title: 'Personal Jesus', durationMs: 459000 },
+      { number: 17, id: 'lst-one-night-in-paris-t17', title: 'Home', durationMs: 376000 },
+      { number: 18, id: 'lst-one-night-in-paris-t18', title: 'Condemnation', durationMs: 263000 },
+      { number: 19, id: 'lst-one-night-in-paris-t19', title: 'Black Celebration', durationMs: 287000 },
+      { number: 20, id: 'lst-one-night-in-paris-t20', title: 'Never Let Me Down Again', durationMs: 679000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
@@ -849,6 +885,7 @@ const manualAlbumAsArtistItem = a => ({
   isSingle: false,
   isCompilation: a.isCompilation === true,
   isMixtape: a.isMixtape === true,
+  isLive: a.isLive === true,
   trackCount: a.trackCount,
   runMs: a.tracks.reduce((ms, t) => ms + (t.durationMs ?? 0), 0),
   url: '',
