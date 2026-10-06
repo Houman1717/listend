@@ -1211,8 +1211,18 @@ export default function ListendScreen() {
 
   // Inject DMs + bell + hamburger into the tab header, and sync header bg to the active pro theme
   const openSettings = useCallback(() => setSettingsVisible(true), []);
+  const openShareProfile = useCallback(() => {
+    router.push({
+      pathname: '/share-profile',
+      params: {
+        username: profileUsername,
+        displayName: nameOrHandle(profileDisplayName, profileUsername, user?.id, 'Listend user'),
+        avatarUrl: profileAvatarUrl ?? '',
+      },
+    });
+  }, [router, profileUsername, profileDisplayName, profileAvatarUrl, user?.id]);
   const headerIconColor = colors.text;
-  const headerBtnStyle = { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' } as const;
+  const headerBtnStyle = { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' } as const;
   const headerDotStyle = {
     position: 'absolute', top: 5, right: 5,
     width: 8, height: 8, borderRadius: 4,
@@ -1223,9 +1233,14 @@ export default function ListendScreen() {
       headerStyle: { backgroundColor: colors.background },
       headerTintColor: colors.text,
       headerRight: () => (
-        // Equal 36×36 boxes so the three glyphs (different natural widths)
+        // Equal 34×36 boxes, no gap — four icons must still clear the centred
+        // title on 375pt iPhones. Equal boxes so the glyphs (different natural widths)
         // sit on an even rhythm; dots anchor to the box, not the glyph.
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
+          {/* Share profile (QR card + share sheet) — each platform's own share glyph */}
+          <Pressable onPress={openShareProfile} hitSlop={6} style={headerBtnStyle}>
+            <Ionicons name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'} size={21} color={headerIconColor} />
+          </Pressable>
           {/* DMs icon with unread badge */}
           <Pressable onPress={() => router.push('/dms')} hitSlop={6} style={headerBtnStyle}>
             <FontAwesome name="paper-plane-o" size={18} color={headerIconColor} />
@@ -1243,7 +1258,7 @@ export default function ListendScreen() {
         </View>
       ),
     });
-  }, [navigation, openSettings, unreadCount, unreadDMCount, router, headerIconColor, colors.background, colors.text]);
+  }, [navigation, openSettings, openShareProfile, unreadCount, unreadDMCount, router, headerIconColor, colors.background, colors.text]);
 
   const reviewCount = loggedAlbums.filter((a) => !!(a.lastReview ?? a.review)).length;
 
