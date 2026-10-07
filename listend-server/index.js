@@ -4244,6 +4244,58 @@ const FEW_TRACKS = 6;
 // 15-20. Nothing in between is common enough to be worth agonising over.
 const EP_MAX_RUN_MS = 25 * 60 * 1000;
 
+// Apple sets isCompilation on some plain studio albums — Destruction's whole
+// Nuclear Blast run (Day of Reckoning, Spiritual Genocide, Under Attack) — which
+// then sit in Collections and drop out of the "X of Y albums" count and the
+// artist rating. The flag can't just be ignored: Apple sets it on real best-ofs
+// too (Anthrax's Attack of the Killer B's). MusicBrainz tells the two apart, so
+// the discography asks it about the few flagged releases whose title doesn't
+// already say what they are. Answers are cached for 30 days; on any failure the
+// release keeps Apple's flag, so an outage leaves the tabs as they were.
+const MB_TYPE_TTL = 30 * 24 * 60 * 60 * 1000;
+const MB_LOOKUPS_PER_BUILD = 8;
+const MB_HEADERS = { 'User-Agent': 'Listend/1.0 (contact@listend.app)' };
+
+// MusicBrainz allows one request a second per client and answers 503 past it.
+let mbQueue = Promise.resolve();
+const mbThrottled = fn => {
+  const run = mbQueue.then(fn);
+  mbQueue = run.catch(() => {}).then(() => new Promise(r => setTimeout(r, 1100)));
+  return run;
+};
+
+// true: a plain studio album. false: a compilation, live record, etc., or not
+// on MusicBrainz. null: couldn't ask, or `budget.left` (network lookups this
+// caller still allows) ran out before an uncached answer.
+async function mbIsPlainAlbum(artistName, title, budget) {
+  const cleanTitle = title.replace(VARIANT_SUFFIX_RE, '').trim() || title;
+  const key = `mb_plain_album_${searchKey(artistName)}_${searchKey(cleanTitle)}`;
+  const mem = cacheGet(key);
+  if (mem) return mem.plain;
+  const db = await getCached(key, MB_TYPE_TTL);
+  if (db) { cacheSet(key, db, TTL_6H); return db.plain; }
+  if (budget.left <= 0) return null;
+  budget.left--;
+
+  const lucene = s => s.replace(/["\\]/g, ' ');
+  const query = `artist:"${lucene(artistName)}" AND releasegroup:"${lucene(cleanTitle)}"`;
+  try {
+    const resp = await mbThrottled(() => fetch(
+      `https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(query)}&limit=5&fmt=json`,
+      { headers: MB_HEADERS, signal: AbortSignal.timeout(5000) },
+    ));
+    if (!resp.ok) return null;
+    const groups = (await resp.json())['release-groups'] ?? [];
+    const match = groups.find(g =>
+      searchKey(g.title) === searchKey(cleanTitle) &&
+      (g['artist-credit'] ?? []).some(c => searchKey(c.name) === searchKey(artistName)));
+    const entry = { plain: !!match && match['primary-type'] === 'Album' && (match['secondary-types'] ?? []).length === 0 };
+    cacheSet(key, entry, TTL_6H);
+    await setCache(key, entry).catch(() => {});
+    return entry.plain;
+  } catch { return null; }
+}
+
 // Total run time for a handful of albums, in one batched Apple Music call.
 // Returns a Map of id → milliseconds, omitting anything it can't resolve; every
 // caller treats a missing entry as "unknown" and falls back to track count, so a
@@ -4386,6 +4438,7 @@ async function buildArtistDiscography(id, bust = false) {
   let nextPath = manualArtistById(id) ? null : `/catalog/us/artists/${id}/albums?limit=25`;
   let page = 0;
   const PAGE_CAP = 5;
+  const artistNames = [];   // for the MusicBrainz check below
   while (nextPath && page < PAGE_CAP) {
     console.log(`[/catalog/artist/albums] fetching page ${page + 1}/${PAGE_CAP}: ${nextPath}`);
     try {
@@ -4397,6 +4450,7 @@ async function buildArtistDiscography(id, bust = false) {
         });
       }
       allItems = allItems.concat((data.data ?? []).map(toItem));
+      for (const item of data.data ?? []) if (item.attributes?.artistName) artistNames.push(item.attributes.artistName);
       nextPath = data.next ? data.next.replace('/v1', '') : null;
     } catch (pageErr) {
       console.warn(`[/catalog/artist/albums] page ${page + 1} failed, stopping pagination:`, pageErr.message);
@@ -4424,6 +4478,28 @@ async function buildArtistDiscography(id, bust = false) {
   const nonSingles = allItems.filter(item => !isSingleRelease(item));
   console.log(`[/catalog/artist/albums] ${allItems.length} total → ${nonSingles.length} after singles exclusion`);
 
+  // Releases Apple flags as compilations although their title doesn't say so —
+  // ask MusicBrainz whether each is really a studio album (see mbIsPlainAlbum).
+  // The artist's own name is the one most of their releases carry; a feature
+  // credit like "Anthrax & Public Enemy" never outnumbers it. Network lookups
+  // are capped per build so a cold page stays quick; the rest are answered on
+  // later builds as the cache fills.
+  const mbBudget = { left: MB_LOOKUPS_PER_BUILD };
+  const artistName = Object.entries(artistNames.reduce((n, a) => ({ ...n, [a]: (n[a] ?? 0) + 1 }), {}))
+    .sort((x, y) => y[1] - x[1])[0]?.[0];
+  if (artistName) {
+    for (const item of nonSingles) {
+      if (item.isCompilation !== true || !/^\d+$/.test(item.id)) continue;
+      const t = item.title;
+      if (COLLECTION_RE.test(t) || inCollectionTitles(t) || isFalseCompilation(t)) continue;
+      if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) continue;
+      if (await mbIsPlainAlbum(artistName, t, mbBudget) === true) {
+        console.log(`[artist-discography] "${t}": Apple says compilation, MusicBrainz says studio album`);
+        item.isCompilation = false;
+      }
+    }
+  }
+
   // Total run time for the handful of releases that are thin on tracks but might
   // still be albums. Only these are looked up, in one batched call, so a typical
   // artist costs nothing extra and the result is cached with the discography.
@@ -4439,6 +4515,25 @@ async function buildArtistDiscography(id, bust = false) {
   // Bucket items into 4 tab categories
   const buckets = { albums: [], epsAndMixtapes: [], collections: [], live: [] };
   for (const item of nonSingles) buckets[categorize(item, shortRunTimes)].push(item);
+
+  // An album `us` carries only as a deluxe edition — Pantera's Far Beyond
+  // Driven, Anthrax's Sound of White Noise — went to Collections on the word
+  // "deluxe" alone, leaving it out of Albums and the "X of Y albums" count. With
+  // no plain edition in Albums to stand for it, it takes the album's place.
+  // Only when the edition suffix is what matched: "Greatest Hits (Deluxe)"
+  // stays put.
+  const albumBases = new Set(buckets.albums.map(item => baseTitle(item.title)));
+  buckets.collections = buckets.collections.filter(item => {
+    const t = item.title;
+    const editionOnly =
+      item.isCompilation !== true && !inCollectionTitles(t) &&
+      !COLLECTION_RE.test(t.replace(VARIANT_SUFFIX_RE, ''));
+    if (!editionOnly || albumBases.has(baseTitle(t))) return true;
+    console.log(`[artist-discography] "${t}": only edition of the album, filing under Albums`);
+    buckets.albums.push(item);
+    albumBases.add(baseTitle(t));
+    return false;
+  });
 
   // Deduplicate each bucket: same title (case-insensitive) + same year → keep higher trackCount
   const dedupBucket = items => {
