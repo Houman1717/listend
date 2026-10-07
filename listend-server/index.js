@@ -379,6 +379,64 @@ pinStorefront('de', [
   '322794178', '322794261', '322794266', '322794272', '322794275', '322794276',
   '322794279', '322794280', '322794281', '322794284',
 ]);
+// Primal Scream — Demodelica (1991)
+pinStorefront('it', [
+  '1590338719',
+  '1590338723', '1590338725', '1590338726', '1590338730', '1590338731', '1590338733',
+  '1590339006', '1590339007', '1590339008', '1590339011', '1590339013', '1590339015',
+  '1590339016', '1590339017', '1590339018', '1590339020',
+]);
+// Primal Scream — Dixie Narco - EP (1992)
+pinStorefront('it', [
+  '1568698448',
+  '1568698450', '1568698455', '1568698456', '1568698457',
+]);
+// Primal Scream — Echo Dek (1997)
+pinStorefront('it', [
+  '207360599',
+  '207360600', '207360692', '207360786', '207360938', '207361247', '207361494',
+  '207361512', '207361554', '207361587',
+]);
+// Primal Scream — Live In Japan (2003)
+pinStorefront('it', [
+  '483578085',
+  '483578114', '483578116', '483578124', '483578128', '483578182', '483578258',
+  '483578291', '483578292', '483578293', '483578294', '483578295', '483578296',
+  '483578297', '483578299', '483578300', '483578301',
+]);
+// Primal Scream — Riot City Blues (2006)
+pinStorefront('it', [
+  '207012507',
+  '207012578', '207013106', '207013330', '207014109', '207014515', '207014886',
+  '207014939', '207015187', '207015309', '207015410',
+]);
+// Primal Scream — Give Out but Don't Give Up: The Original Memphis Recordings (2018)
+pinStorefront('it', [
+  '1435164739',
+  '1435165348', '1435165353', '1435165354', '1435165357', '1435165486', '1435165491',
+  '1435165494', '1435165497', '1435165501', '1435165502', '1435165503', '1435165507',
+  '1435165753', '1435165756', '1435165757', '1435165758', '1435165763', '1435165771',
+  '1435165779', '1435165968', '1435165974', '1435165975', '1435165976', '1435165977',
+  '1435165980',
+]);
+// Primal Scream — Maximum Rock 'n' Roll: The Singles (Remastered) (2019)
+pinStorefront('it', [
+  '1459271784',
+  '1459271885', '1459271886', '1459271889', '1459271890', '1459271895', '1459271898',
+  '1459271899', '1459271904', '1459272118', '1459272124', '1459272125', '1459272127',
+  '1459272133', '1459272136', '1459272298', '1459272301', '1459272308', '1459272312',
+  '1459272313', '1459272314', '1459272315', '1459272447', '1459272451', '1459272452',
+  '1459272455', '1459272460', '1459272461', '1459272464', '1459272469', '1459272470',
+  '1459272472',
+]);
+// Primal Scream — The Screamadelica 12" Singles (2021)
+pinStorefront('it', [
+  '1581970344',
+  '1581970757', '1581970764', '1581970767', '1581970771', '1581970772', '1581971259',
+  '1581971260', '1581971264', '1581971278', '1581971285', '1581971316', '1581971320',
+  '1581971321', '1581971323', '1581971325', '1581971328', '1581971330', '1581971341',
+  '1581971647', '1581971658', '1581971659', '1581971661',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -647,6 +705,38 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'coolio::fromthebottom2thetop': {
     id: '322794169', title: 'From the Bottom 2 the Top', artist: 'Coolio', year: 2009,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/60/e0/ba/mzi.dapzlwun.jpg/500x500bb.jpg',
+  },
+  'primalscream::demodelica': {
+    id: '1590338719', title: 'Demodelica', artist: 'Primal Scream', year: 1991,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/c8/2a/2b/c82a2be1-afcf-1fad-388e-febf6a8973c7/886449244751.jpg/500x500bb.jpg',
+  },
+  'primalscream::dixienarcoep': {
+    id: '1568698448', title: 'Dixie Narco - EP', artist: 'Primal Scream', year: 1992,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/fe/57/c7/fe57c77a-953b-76a8-56b0-d5523eeedd92/886449159321.jpg/500x500bb.jpg',
+  },
+  'primalscream::echodek': {
+    id: '207360599', title: 'Echo Dek', artist: 'Primal Scream', year: 1997,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/41/1a/99/mzi.hrpqyztj.jpg/500x500bb.jpg',
+  },
+  'primalscream::liveinjapan': {
+    id: '483578085', title: 'Live In Japan', artist: 'Primal Scream', year: 2003,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/96/e1/bf/mzi.yhoynqnv.jpg/500x500bb.jpg',
+  },
+  'primalscream::riotcityblues': {
+    id: '207012507', title: 'Riot City Blues', artist: 'Primal Scream', year: 2006,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3c/1b/71/3c1b711d-96ca-428c-854f-27cb3acd2674/828768316528.jpg/500x500bb.jpg',
+  },
+  'primalscream::giveoutbutdontgiveuptheoriginalmemphisrecordings': {
+    id: '1435164739', title: 'Give Out but Don\'t Give Up: The Original Memphis Recordings', artist: 'Primal Scream', year: 2018,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/e8/e4/ce/e8e4ceb2-abf3-eaca-a73f-92dbf6c6b736/886447293751.jpg/500x500bb.jpg',
+  },
+  'primalscream::maximumrocknrollthesinglesremastered': {
+    id: '1459271784', title: 'Maximum Rock \'n\' Roll: The Singles (Remastered)', artist: 'Primal Scream', year: 2019,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/0b/87/19/0b871931-2469-b94a-c29f-a74ba2e7d417/886446721750.jpg/500x500bb.jpg',
+  },
+  'primalscream::thescreamadelica12singles': {
+    id: '1581970344', title: 'The Screamadelica 12" Singles', artist: 'Primal Scream', year: 2021,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/49/44/ca/4944ca04-25f7-124b-9c90-34dc0851cd99/886449244768.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -3975,6 +4065,56 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/60/e0/ba/mzi.dapzlwun.jpg/500x500bb.jpg',
       year: 2009, isSingle: false, isCompilation: false, trackCount: 11,
       url: 'https://music.apple.com/de/album/from-the-bottom-2-the-top/322794169', type: 'album',
+    },
+  ],
+  '718829': [ // Primal Scream — not licensed for `us`
+    {
+      id: '1590338719', title: 'Demodelica',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/c8/2a/2b/c82a2be1-afcf-1fad-388e-febf6a8973c7/886449244751.jpg/500x500bb.jpg',
+      year: 1991, isSingle: false, isCompilation: false, trackCount: 16,
+      url: 'https://music.apple.com/it/album/demodelica/1590338719', type: 'album',
+    },
+    {
+      id: '1568698448', title: 'Dixie Narco - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/fe/57/c7/fe57c77a-953b-76a8-56b0-d5523eeedd92/886449159321.jpg/500x500bb.jpg',
+      year: 1992, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/it/album/dixie-narco-ep/1568698448', type: 'album',
+    },
+    {
+      id: '207360599', title: 'Echo Dek',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/41/1a/99/mzi.hrpqyztj.jpg/500x500bb.jpg',
+      year: 1997, isSingle: false, isCompilation: false, trackCount: 9,
+      url: 'https://music.apple.com/it/album/echo-dek/207360599', type: 'album',
+    },
+    {
+      id: '483578085', title: 'Live In Japan',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/96/e1/bf/mzi.yhoynqnv.jpg/500x500bb.jpg',
+      year: 2003, isSingle: false, isCompilation: false, trackCount: 16,
+      url: 'https://music.apple.com/it/album/live-in-japan/483578085', type: 'album',
+    },
+    {
+      id: '207012507', title: 'Riot City Blues',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3c/1b/71/3c1b711d-96ca-428c-854f-27cb3acd2674/828768316528.jpg/500x500bb.jpg',
+      year: 2006, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/it/album/riot-city-blues/207012507', type: 'album',
+    },
+    {
+      id: '1435164739', title: 'Give Out but Don\'t Give Up: The Original Memphis Recordings',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/e8/e4/ce/e8e4ceb2-abf3-eaca-a73f-92dbf6c6b736/886447293751.jpg/500x500bb.jpg',
+      year: 2018, isSingle: false, isCompilation: false, trackCount: 25,
+      url: 'https://music.apple.com/it/album/give-out-but-dont-give-up-the-original-memphis-recordings/1435164739', type: 'album',
+    },
+    {
+      id: '1459271784', title: 'Maximum Rock \'n\' Roll: The Singles (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/0b/87/19/0b871931-2469-b94a-c29f-a74ba2e7d417/886446721750.jpg/500x500bb.jpg',
+      year: 2019, isSingle: false, isCompilation: true, trackCount: 31,
+      url: 'https://music.apple.com/it/album/maximum-rock-n-roll-the-singles-remastered/1459271784', type: 'album',
+    },
+    {
+      id: '1581970344', title: 'The Screamadelica 12" Singles',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/49/44/ca/4944ca04-25f7-124b-9c90-34dc0851cd99/886449244768.jpg/500x500bb.jpg',
+      year: 2021, isSingle: false, isCompilation: true, trackCount: 22,
+      url: 'https://music.apple.com/it/album/the-screamadelica-12-singles/1581970344', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
