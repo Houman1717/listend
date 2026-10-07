@@ -4,10 +4,7 @@ import {
   Text,
   Pressable,
   ScrollView,
-  Modal,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -23,6 +20,7 @@ import { useAlbums, LoggedAlbum, Playlist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { handleOrName } from '@/lib/userHandle';
+import PlaylistFormModal from '@/components/PlaylistFormModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,86 +152,6 @@ function PlaylistCard({
       )}
       {!hideChevron && <FontAwesome name="chevron-right" size={13} color={isDark ? '#4a3020' : '#a07850'} />}
     </Pressable>
-  );
-}
-
-// ─── New Playlist bottom-sheet modal ─────────────────────────────────────────
-
-function NewPlaylistModal({
-  visible,
-  onClose,
-  onCreate,
-  isDark,
-  colors,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onCreate: (name: string, desc: string) => void;
-  isDark: boolean;
-  colors: any;
-}) {
-  const [name, setName] = useState('');
-  const [desc, setDesc] = useState('');
-
-  function handleCreate() {
-    if (!name.trim()) return;
-    onCreate(name.trim(), desc.trim());
-    setName('');
-    setDesc('');
-  }
-
-  function handleClose() {
-    setName('');
-    setDesc('');
-    onClose();
-  }
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={s.modalOverlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={[s.modalSheet, { backgroundColor: isDark ? '#141414' : '#fff' }]}>
-          <View style={s.modalHandle} />
-          <Text style={[s.modalTitle, { color: colors.text }]}>New Playlist</Text>
-
-          <Text style={[s.modalLabel, { color: colors.subtext }]}>Name</Text>
-          <TextInput
-            style={[s.modalInput, { color: colors.text, backgroundColor: isDark ? '#2e2018' : '#f2f2f2', borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
-            placeholder="e.g. Summer Road Trip"
-            placeholderTextColor={colors.subtext}
-            value={name}
-            onChangeText={setName}
-            maxLength={60}
-            autoFocus
-          />
-
-          <Text style={[s.modalLabel, { color: colors.subtext, marginTop: 16 }]}>
-            Description <Text style={{ fontWeight: '400' }}>(optional)</Text>
-          </Text>
-          <TextInput
-            style={[s.modalInput, s.modalInputMulti, { color: colors.text, backgroundColor: isDark ? '#2e2018' : '#f2f2f2', borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
-            placeholder="What's this list about?"
-            placeholderTextColor={colors.subtext}
-            value={desc}
-            onChangeText={setDesc}
-            multiline
-            textAlignVertical="top"
-            maxLength={200}
-          />
-
-          <Pressable
-            style={[s.createBtn, { backgroundColor: name.trim() ? colors.tint : (isDark ? '#2a1e14' : '#ddd') }]}
-            onPress={handleCreate}
-            disabled={!name.trim()}>
-            <Text style={[s.createBtnText, { color: name.trim() ? '#fff' : colors.subtext }]}>
-              Create Playlist
-            </Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
   );
 }
 
@@ -907,11 +825,12 @@ export default function MyPlaylistsScreen() {
 
       {/* New Playlist modal — own user only */}
       {!viewingOther && (
-        <NewPlaylistModal
+        <PlaylistFormModal
           visible={showNewPlaylist}
+          title="New Playlist"
+          submitLabel="Create Playlist"
           onClose={() => setShowNewPlaylist(false)}
-          onCreate={handleCreate}
-          isDark={isDark}
+          onSubmit={handleCreate}
           colors={colors}
         />
       )}
@@ -1000,48 +919,4 @@ const s = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 15, height: 36 },
 
-  // ── New Playlist modal ────────────────────────────────────────────────────────
-  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-  },
-  modalHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#4a3020',
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 20 },
-  modalLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  modalInput: {
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-  },
-  modalInputMulti: { minHeight: 72, textAlignVertical: 'top' },
-  createBtn: {
-    marginTop: 24,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  createBtnText: { fontSize: 16, fontWeight: '600' },
 });

@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { countOrNull } from '@/lib/supabaseQuery';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
+import PlaylistFormModal from '@/components/PlaylistFormModal';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -180,7 +181,7 @@ export default function PlaylistDetailScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const { id, userId: paramUserId } = useLocalSearchParams<{ id: string; userId?: string }>();
-  const { playlists, loggedAlbums, removeAlbumFromPlaylist, reorderPlaylistAlbums, deletePlaylist } = useAlbums();
+  const { playlists, loggedAlbums, removeAlbumFromPlaylist, reorderPlaylistAlbums, updatePlaylist, deletePlaylist } = useAlbums();
   const { user } = useAuth();
   const { isPro, proTheme: ownProTheme } = usePro();
 
@@ -209,6 +210,7 @@ export default function PlaylistDetailScreen() {
 
   // ── Reorder (edit) mode ───────────────────────────────────────────────────
   const [editing,    setEditing]    = useState(false);
+  const [showDetailsSheet, setShowDetailsSheet] = useState(false);
   const [scrollLock, setScrollLock] = useState(false);
   const draggingIdx = useSharedValue(-1);
   const hoverIdx    = useSharedValue(-1);
@@ -527,6 +529,13 @@ export default function PlaylistDetailScreen() {
                 </Pressable>
               )}
               <View style={{ flex: 1 }} />
+              <Pressable
+                onPress={() => setShowDetailsSheet(true)}
+                hitSlop={10}
+                accessibilityLabel="Edit name and description"
+                style={s.deleteBtn}>
+                <FontAwesome name="pencil" size={18} color={colors.subtext} />
+              </Pressable>
               <Pressable onPress={confirmDeletePlaylist} hitSlop={10} style={s.deleteBtn}>
                 <FontAwesome name="trash-o" size={18} color={colors.subtext} />
               </Pressable>
@@ -580,6 +589,21 @@ export default function PlaylistDetailScreen() {
           </View>
         )}
       </GHScrollView>
+      {!viewingOther && ownPlaylist && (
+        <PlaylistFormModal
+          visible={showDetailsSheet}
+          title="Edit Playlist"
+          submitLabel="Save"
+          initialName={ownPlaylist.name}
+          initialDescription={ownPlaylist.description ?? ''}
+          onClose={() => setShowDetailsSheet(false)}
+          onSubmit={(name, description) => {
+            updatePlaylist(ownPlaylist.id, name, description);
+            setShowDetailsSheet(false);
+          }}
+          colors={colors}
+        />
+      )}
     </>
   );
 }

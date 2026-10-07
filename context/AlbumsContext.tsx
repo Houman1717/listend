@@ -127,6 +127,7 @@ type AlbumsContextType = {
   removeFromWantToListen: (id: string) => void;
   playlists: Playlist[];
   createPlaylist: (name: string, description?: string) => string;
+  updatePlaylist: (id: string, name: string, description?: string) => void;
   deletePlaylist: (id: string) => void;
   addAlbumToPlaylist: (playlistId: string, albumId: string) => void;
   addAlbumsToPlaylist: (playlistId: string, albumIds: string[]) => void;
@@ -1158,6 +1159,25 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     return id;
   }
 
+  function updatePlaylist(id: string, name: string, description?: string) {
+    const next = { name: name.trim(), description: description?.trim() || undefined };
+    if (!next.name) return;
+    setPlaylists((prev) => prev.map((p) => (p.id === id ? { ...p, ...next } : p)));
+
+    if (user) {
+      supabase
+        .from('playlists')
+        .update({ name: next.name, description: next.description ?? null })
+        .eq('id', id)
+        .select('id')
+        .then(({ data, error }) => {
+          // RLS turns a disallowed UPDATE into zero rows, not an error.
+          if (error) console.error('[AlbumsContext] updatePlaylist error:', error.message);
+          else if (!data?.length) console.error('[AlbumsContext] updatePlaylist: no row updated for', id);
+        });
+    }
+  }
+
   function deletePlaylist(id: string) {
     setPlaylists((prev) => prev.filter((p) => p.id !== id));
 
@@ -1276,7 +1296,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       addTopSong, addTopSongAtSlot, removeTopSong, reorderTopSongs,
       addTopArtist, addTopArtistAtSlot, removeTopArtist, reorderTopArtists,
       wantToListen, addToWantToListen, removeFromWantToListen,
-      playlists, createPlaylist, deletePlaylist, addAlbumToPlaylist, addAlbumsToPlaylist, removeAlbumFromPlaylist, reorderPlaylistAlbums,
+      playlists, createPlaylist, updatePlaylist, deletePlaylist, addAlbumToPlaylist, addAlbumsToPlaylist, removeAlbumFromPlaylist, reorderPlaylistAlbums,
       isLoaded, isRemoteLoaded,
     }}>
       {children}
