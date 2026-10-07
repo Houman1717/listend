@@ -2045,6 +2045,22 @@ app.get('/discover/top-rated', async (req, res) => {
   }
 });
 
+// Year for a title+artist group = the one most rows agree on, not whichever row
+// came first. album-detail filters community ratings by year (plus 0/null), so
+// one stray row (a reissue's year, a bad import) becoming the group's year hides
+// everyone else's ratings — Lift Your Skinny Fists opened as "2026" from one
+// row and showed 1 rating instead of 32.
+function tallyYear(counts, year) {
+  if (year > 0) counts.set(year, (counts.get(year) ?? 0) + 1);
+}
+function mostCommonYear(counts) {
+  let best = 0, bestCount = 0;
+  for (const [year, count] of counts) {
+    if (count > bestCount) { best = year; bestCount = count; }
+  }
+  return best;
+}
+
 // ── GET /api/discover/community-popular ──────────────────────────────────────
 // All-time most-logged albums from real Listend user data.
 // Aggregates in JS (same pattern as fetchTopAlbumsThisWeek) over up to 5000 rows.
@@ -2088,11 +2104,12 @@ app.get('/api/discover/community-popular', async (req, res) => {
       const key = `${foldDiacritics(r.title)}::${foldDiacritics(r.artist)}`;
       let e = entries.get(key);
       if (!e) {
-        e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set() };
+        e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set(), yearCounts: new Map() };
         entries.set(key, e);
       } else if (!e.album.artworkUrl && r.artwork_url) {
         e.album.artworkUrl = r.artwork_url;
       }
+      tallyYear(e.yearCounts, r.year);
       return e;
     };
 
@@ -2108,7 +2125,7 @@ app.get('/api/discover/community-popular', async (req, res) => {
     const results = Array.from(entries.values())
       .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
       .slice(0, 201)
-      .map(e => e.album);
+      .map(e => ({ ...e.album, year: mostCommonYear(e.yearCounts) }));
 
     cacheSet(CACHE_KEY, results, TTL_30M);
     await setCache(CACHE_KEY, results);
@@ -2161,13 +2178,17 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
         const idCount = (e.idCounts.get(r.spotify_id) ?? 0) + 1;
         e.idCounts.set(r.spotify_id, idCount);
         if (idCount > e.topIdCount) { e.topIdCount = idCount; e.album.id = r.spotify_id; }
+        tallyYear(e.yearCounts, r.year);
       } else {
+        const yearCounts = new Map();
+        tallyYear(yearCounts, r.year);
         agg.set(key, {
-          album: { id: r.spotify_id, title: r.title, artist: r.artist, year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' },
+          album: { id: r.spotify_id, title: r.title, artist: r.artist, year: 0, artworkUrl: r.artwork_url ?? '' },
           totalRating: r.rating,
           count: 1,
           idCounts: new Map([[r.spotify_id, 1]]),
           topIdCount: 1,
+          yearCounts,
         });
       }
     }
@@ -2197,7 +2218,7 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
     const results = qualifying
       .sort((a, b) => weighted(b) - weighted(a))
       .slice(0, 201)
-      .map(e => e.album);
+      .map(e => ({ ...e.album, year: mostCommonYear(e.yearCounts) }));
 
     cacheSet(CACHE_KEY, results, TTL_30M);
     await setCache(CACHE_KEY, results);
@@ -2409,11 +2430,12 @@ async function computeTopAlbumsThisWeek(since) {
     const key = `${foldDiacritics(r.title)}::${foldDiacritics(r.artist)}`;
     let e = entries.get(key);
     if (!e) {
-      e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: r.year ?? 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set() };
+      e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set(), yearCounts: new Map() };
       entries.set(key, e);
     } else if (!e.album.artworkUrl && r.artwork_url) {
       e.album.artworkUrl = r.artwork_url;
     }
+    tallyYear(e.yearCounts, r.year);
     return e;
   };
 
@@ -2429,7 +2451,7 @@ async function computeTopAlbumsThisWeek(since) {
   return Array.from(entries.values())
     .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
     .slice(0, 51)
-    .map(e => e.album);
+    .map(e => ({ ...e.album, year: mostCommonYear(e.yearCounts) }));
 }
 
 async function computeTopSongsThisWeek(since) {
