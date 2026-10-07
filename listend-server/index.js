@@ -366,6 +366,19 @@ pinStorefront('de', [
   '1445299099',
   '1445299182', '1445299193', '1445299195', '1445299197', '1445299200',
 ]);
+// Coolio — The Return of the Gangsta (2007)
+pinStorefront('it', [
+  '213411635',
+  '213411637', '213411660', '213411721', '213411827', '213411905', '213411939',
+  '213411942', '213412022', '213412094', '213412136', '213412323', '213412339',
+  '213412443', '213412549', '213412557', '213412756', '213413046', '213413150',
+]);
+// Coolio — From the Bottom 2 the Top (2009)
+pinStorefront('de', [
+  '322794169',
+  '322794178', '322794261', '322794266', '322794272', '322794275', '322794276',
+  '322794279', '322794280', '322794281', '322794284',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -626,6 +639,14 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'tokiohotel::feelitallep': {
     id: '1445299099', title: 'Feel It All - EP', artist: 'Tokio Hotel', year: 2015,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/d2/35/93/d2359392-fdc3-a212-f290-cd0450f44467/00602547299529.rgb.jpg/500x500bb.jpg',
+  },
+  'coolio::thereturnofthegangsta': {
+    id: '213411635', title: 'The Return of the Gangsta', artist: 'Coolio', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/eb/94/fc/eb94fca8-fb1c-fd19-8e73-f37a939fe783/8022745031714.jpg/500x500bb.jpg',
+  },
+  'coolio::fromthebottom2thetop': {
+    id: '322794169', title: 'From the Bottom 2 the Top', artist: 'Coolio', year: 2009,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/60/e0/ba/mzi.dapzlwun.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -3940,6 +3961,20 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/d2/35/93/d2359392-fdc3-a212-f290-cd0450f44467/00602547299529.rgb.jpg/500x500bb.jpg',
       year: 2015, isSingle: false, isCompilation: false, trackCount: 5,
       url: 'https://music.apple.com/de/album/feel-it-all-ep/1445299099', type: 'album',
+    },
+  ],
+  '625207': [ // Coolio — not licensed for `us`
+    {
+      id: '213411635', title: 'The Return of the Gangsta',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/eb/94/fc/eb94fca8-fb1c-fd19-8e73-f37a939fe783/8022745031714.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 18,
+      url: 'https://music.apple.com/it/album/the-return-of-the-gangsta/213411635', type: 'album',
+    },
+    {
+      id: '322794169', title: 'From the Bottom 2 the Top',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/60/e0/ba/mzi.dapzlwun.jpg/500x500bb.jpg',
+      year: 2009, isSingle: false, isCompilation: false, trackCount: 11,
+      url: 'https://music.apple.com/de/album/from-the-bottom-2-the-top/322794169', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
