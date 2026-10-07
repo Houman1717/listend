@@ -893,6 +893,32 @@ const MANUAL_ALBUMS = [
       { number: 8, id: 'lst-juicewrld-9-9-9-t8', title: 'Until It’s Over (Closure)', durationMs: 216052 },
     ],
   },
+  {
+    id: 'lst-jester',
+    title: 'Jester',
+    artist: 'Jester',
+    artistId: 'lst-artist-jester',
+    year: 1978,
+    // A private-press LP (no label, cat. J-151) by a US prog/soul band, never
+    // reissued or put on streaming. Year, tracklist and cover from its one
+    // Discogs entry (release 5227929); not on MusicBrainz. Discogs has no
+    // times, so durations come from the chapter marks of a full-album YouTube
+    // upload, to the second; they sum to its 42:28 length.
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/jester.jpg`,
+    trackCount: 10,
+    tracks: [
+      { number: 1, id: 'lst-jester-t1', title: '(You Can) Find Another Way', durationMs: 248000 },
+      { number: 2, id: 'lst-jester-t2', title: 'Little Davey', durationMs: 188000 },
+      { number: 3, id: 'lst-jester-t3', title: 'Battle of Five Armies', durationMs: 281000 },
+      { number: 4, id: 'lst-jester-t4', title: 'He Put It in the Window', durationMs: 200000 },
+      { number: 5, id: 'lst-jester-t5', title: 'Why Rain?', durationMs: 309000 },
+      { number: 6, id: 'lst-jester-t6', title: 'The Choice Is Yours', durationMs: 338000 },
+      { number: 7, id: 'lst-jester-t7', title: 'Johnny the Rocker', durationMs: 230000 },
+      { number: 8, id: 'lst-jester-t8', title: 'Everybody', durationMs: 248000 },
+      { number: 9, id: 'lst-jester-t9', title: 'Seven & Seven', durationMs: 220000 },
+      { number: 10, id: 'lst-jester-t10', title: 'Lobo', durationMs: 286000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
@@ -911,6 +937,14 @@ const MANUAL_ARTISTS = [
     aliases: ['GY!BE', 'GYBE'],
     genre: 'Rock',
     artworkUrl: 'https://coverartarchive.org/release-group/3822abb6-ca53-3ae1-a4ec-7718cb321e9b/front-500',
+  },
+  {
+    // The 1978 band, absent from Apple Music. Several other Jesters are on it,
+    // and without this entry the album page opens whichever ranks first.
+    id: 'lst-artist-jester',
+    name: 'Jester',
+    genre: 'Rock',
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/jester.jpg`,
   },
   {
     id: 'lst-artist-in-the-panchine',
