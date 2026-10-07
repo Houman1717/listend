@@ -5,6 +5,7 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useRef,
   ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -128,7 +129,9 @@ type AlbumsContextType = {
   createPlaylist: (name: string, description?: string) => string;
   deletePlaylist: (id: string) => void;
   addAlbumToPlaylist: (playlistId: string, albumId: string) => void;
+  addAlbumsToPlaylist: (playlistId: string, albumIds: string[]) => void;
   removeAlbumFromPlaylist: (playlistId: string, albumId: string) => void;
+  reorderPlaylistAlbums: (playlistId: string, albumIds: string[]) => void;
   isLoaded: boolean;
   isRemoteLoaded: boolean;
 };
@@ -176,6 +179,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   const [topArtists,   setTopArtists]   = useState<(TopArtist | null)[]>(Array(5).fill(null));
   const [wantToListen, setWantToListen] = useState<WantToListenAlbum[]>([]);
   const [playlists,    setPlaylists]    = useState<Playlist[]>([]);
+  const reorderQueue = useRef<Promise<void>>(Promise.resolve());
   const [pendingAlbum,  setPendingAlbum]  = useState<PendingAlbum | null>(null);
   const [isLoaded,        setIsLoaded]        = useState(false);
   const [isRemoteLoaded,  setIsRemoteLoaded]  = useState(false);
@@ -1187,6 +1191,65 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  function addAlbumsToPlaylist(playlistId: string, albumIds: string[]) {
+    const playlist = playlists.find((p) => p.id === playlistId);
+    if (!playlist) return;
+    const toAdd = [...new Set(albumIds)].filter((id) => !playlist.albumIds.includes(id));
+    if (toAdd.length === 0) return;
+    const start = playlist.albumIds.length;
+
+    setPlaylists((prev) =>
+      prev.map((p) =>
+        p.id === playlistId
+          ? { ...p, albumIds: [...p.albumIds, ...toAdd.filter((id) => !p.albumIds.includes(id))] }
+          : p
+      )
+    );
+
+    if (user) {
+      supabase
+        .from('playlist_albums')
+        .upsert(
+          toAdd.map((spotify_id, i) => ({ playlist_id: playlistId, spotify_id, position: start + i })),
+          { onConflict: 'playlist_id,spotify_id' }
+        )
+        .then(({ error }) => { if (error) console.error('[AlbumsContext] addAlbumsToPlaylist error:', error.message); });
+    }
+  }
+
+  // Persists the whole order: every row is rewritten with its new index.
+  function reorderPlaylistAlbums(playlistId: string, albumIds: string[]) {
+    setPlaylists((prev) =>
+      prev.map((p) => (p.id === playlistId ? { ...p, albumIds } : p))
+    );
+
+    if (user && albumIds.length > 0) {
+      const rows = albumIds.map((spotify_id, position) => ({ playlist_id: playlistId, spotify_id, position }));
+      // Queued so quick successive drags can't interleave their writes.
+      reorderQueue.current = reorderQueue.current.then(async () => {
+        const { error } = await supabase
+          .from('playlist_albums')
+          .upsert(rows, { onConflict: 'playlist_id,spotify_id' });
+        if (!error) return;
+        // 42501 = RLS refused the UPDATE half of the upsert. Until
+        // supabase/add-playlist-albums-update-policy.sql is applied, rewrite the
+        // rows with the delete + insert the existing policies allow.
+        if (error.code !== '42501') {
+          console.error('[AlbumsContext] reorderPlaylistAlbums error:', error.message);
+          return;
+        }
+        const { error: delErr } = await supabase
+          .from('playlist_albums')
+          .delete()
+          .eq('playlist_id', playlistId)
+          .in('spotify_id', albumIds);
+        if (delErr) { console.error('[AlbumsContext] reorderPlaylistAlbums delete error:', delErr.message); return; }
+        const { error: insErr } = await supabase.from('playlist_albums').insert(rows);
+        if (insErr) console.error('[AlbumsContext] reorderPlaylistAlbums insert error:', insErr.message);
+      });
+    }
+  }
+
   function removeAlbumFromPlaylist(playlistId: string, albumId: string) {
     setPlaylists((prev) =>
       prev.map((p) =>
@@ -1213,7 +1276,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       addTopSong, addTopSongAtSlot, removeTopSong, reorderTopSongs,
       addTopArtist, addTopArtistAtSlot, removeTopArtist, reorderTopArtists,
       wantToListen, addToWantToListen, removeFromWantToListen,
-      playlists, createPlaylist, deletePlaylist, addAlbumToPlaylist, removeAlbumFromPlaylist,
+      playlists, createPlaylist, deletePlaylist, addAlbumToPlaylist, addAlbumsToPlaylist, removeAlbumFromPlaylist, reorderPlaylistAlbums,
       isLoaded, isRemoteLoaded,
     }}>
       {children}
