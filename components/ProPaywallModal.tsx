@@ -337,11 +337,11 @@ export function ProPaywallModal() {
                   <Text style={[s.legalSep, { color: c.textDimmer }]}>·</Text>
                 </>
               )}
-              <Pressable onPress={() => Linking.openURL('https://houman1717.github.io/listend-policys/privacy.html')}>
+              <Pressable onPress={() => Linking.openURL('https://listend.uk/privacy')}>
                 <Text style={[s.legalLink, { color: c.textDim }]}>Privacy</Text>
               </Pressable>
               <Text style={[s.legalSep, { color: c.textDimmer }]}>·</Text>
-              <Pressable onPress={() => Linking.openURL('https://houman1717.github.io/listend-policys/terms.html')}>
+              <Pressable onPress={() => Linking.openURL('https://listend.uk/terms')}>
                 <Text style={[s.legalLink, { color: c.textDim }]}>Terms</Text>
               </Pressable>
             </View>

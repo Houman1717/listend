@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Linking } from 'react-native';
 
-const TERMS_URL   = 'https://houman1717.github.io/listend-policys/terms.html';
-const PRIVACY_URL = 'https://houman1717.github.io/listend-policys/privacy.html';
+const TERMS_URL   = 'https://listend.uk/terms';
+const PRIVACY_URL = 'https://listend.uk/privacy';
 const ACCENT = '#D4A017';
 
 /**
