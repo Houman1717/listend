@@ -410,15 +410,6 @@ pinStorefront('it', [
   '207012578', '207013106', '207013330', '207014109', '207014515', '207014886',
   '207014939', '207015187', '207015309', '207015410',
 ]);
-// Primal Scream — Give Out but Don't Give Up: The Original Memphis Recordings (2018)
-pinStorefront('it', [
-  '1435164739',
-  '1435165348', '1435165353', '1435165354', '1435165357', '1435165486', '1435165491',
-  '1435165494', '1435165497', '1435165501', '1435165502', '1435165503', '1435165507',
-  '1435165753', '1435165756', '1435165757', '1435165758', '1435165763', '1435165771',
-  '1435165779', '1435165968', '1435165974', '1435165975', '1435165976', '1435165977',
-  '1435165980',
-]);
 // Primal Scream — Maximum Rock 'n' Roll: The Singles (Remastered) (2019)
 pinStorefront('it', [
   '1459271784',
@@ -725,10 +716,6 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'primalscream::riotcityblues': {
     id: '207012507', title: 'Riot City Blues', artist: 'Primal Scream', year: 2006,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3c/1b/71/3c1b711d-96ca-428c-854f-27cb3acd2674/828768316528.jpg/500x500bb.jpg',
-  },
-  'primalscream::giveoutbutdontgiveuptheoriginalmemphisrecordings': {
-    id: '1435164739', title: 'Give Out but Don\'t Give Up: The Original Memphis Recordings', artist: 'Primal Scream', year: 2018,
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/e8/e4/ce/e8e4ceb2-abf3-eaca-a73f-92dbf6c6b736/886447293751.jpg/500x500bb.jpg',
   },
   'primalscream::maximumrocknrollthesinglesremastered': {
     id: '1459271784', title: 'Maximum Rock \'n\' Roll: The Singles (Remastered)', artist: 'Primal Scream', year: 2019,
@@ -4097,12 +4084,6 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3c/1b/71/3c1b711d-96ca-428c-854f-27cb3acd2674/828768316528.jpg/500x500bb.jpg',
       year: 2006, isSingle: false, isCompilation: false, trackCount: 10,
       url: 'https://music.apple.com/it/album/riot-city-blues/207012507', type: 'album',
-    },
-    {
-      id: '1435164739', title: 'Give Out but Don\'t Give Up: The Original Memphis Recordings',
-      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/e8/e4/ce/e8e4ceb2-abf3-eaca-a73f-92dbf6c6b736/886447293751.jpg/500x500bb.jpg',
-      year: 2018, isSingle: false, isCompilation: false, trackCount: 25,
-      url: 'https://music.apple.com/it/album/give-out-but-dont-give-up-the-original-memphis-recordings/1435164739', type: 'album',
     },
     {
       id: '1459271784', title: 'Maximum Rock \'n\' Roll: The Singles (Remastered)',
