@@ -8,7 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -417,6 +417,7 @@ export default function ArtistDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <Stack.Screen options={{ headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
     <ScrollView
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={[sc.container, { paddingHorizontal: GRID_PAD }]}
@@ -604,8 +605,8 @@ const sc = StyleSheet.create({
   container: { paddingTop: 0, paddingBottom: 48 },
 
   // Header
-  header: { alignItems: 'center', paddingTop: 28, paddingBottom: 20 },
-  heartBtn: { position: 'absolute', top: 20, right: 0, zIndex: 10, padding: 4, alignItems: 'center', gap: 2 },
+  header: { alignItems: 'center', paddingTop: 4, paddingBottom: 20 },
+  heartBtn: { position: 'absolute', top: 0, right: 0, zIndex: 10, padding: 4, alignItems: 'center', gap: 2 },
   heartCount: { fontSize: 11, fontWeight: '700' },
 
   // Toast

@@ -117,7 +117,11 @@ function FeaturedPlaylistCard({ playlist, isDark, onPress }: { playlist: Feature
       onPress={onPress}
       style={({ pressed }) => [
         fp.card,
-        { backgroundColor: isDark ? '#1e1610' : '#F5EFE7', opacity: pressed ? 0.85 : 1 },
+        {
+          backgroundColor: isDark ? '#2E2018' : '#FFFFFF',
+          borderColor: isDark ? '#3A2818' : '#DDD5C8',
+          opacity: pressed ? 0.85 : 1,
+        },
       ]}>
       <FeaturedPlaylistMosaic urls={playlist.artworkUrls} size={88} />
       <View style={fp.info}>
@@ -670,6 +674,7 @@ const fp = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     gap: 14,
     width: 272,
   },
