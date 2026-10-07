@@ -4266,7 +4266,8 @@ const mbThrottled = fn => {
 
 // true: a plain studio album. false: a compilation, live record, etc., or not
 // on MusicBrainz. null: couldn't ask, or `budget.left` (network lookups this
-// caller still allows) ran out before an uncached answer.
+// caller still allows) ran out before an uncached answer — either way
+// `budget.incomplete` is set, so the caller knows to retry soon.
 async function mbIsPlainAlbum(artistName, title, budget) {
   const cleanTitle = title.replace(VARIANT_SUFFIX_RE, '').trim() || title;
   const key = `mb_plain_album_${searchKey(artistName)}_${searchKey(cleanTitle)}`;
@@ -4274,7 +4275,7 @@ async function mbIsPlainAlbum(artistName, title, budget) {
   if (mem) return mem.plain;
   const db = await getCached(key, MB_TYPE_TTL);
   if (db) { cacheSet(key, db, TTL_6H); return db.plain; }
-  if (budget.left <= 0) return null;
+  if (budget.left <= 0) { budget.incomplete = true; return null; }
   budget.left--;
 
   const lucene = s => s.replace(/["\\]/g, ' ');
@@ -4284,7 +4285,7 @@ async function mbIsPlainAlbum(artistName, title, budget) {
       `https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(query)}&limit=5&fmt=json`,
       { headers: MB_HEADERS, signal: AbortSignal.timeout(5000) },
     ));
-    if (!resp.ok) return null;
+    if (!resp.ok) { budget.incomplete = true; return null; }
     const groups = (await resp.json())['release-groups'] ?? [];
     const match = groups.find(g =>
       searchKey(g.title) === searchKey(cleanTitle) &&
@@ -4293,7 +4294,7 @@ async function mbIsPlainAlbum(artistName, title, budget) {
     cacheSet(key, entry, TTL_6H);
     await setCache(key, entry).catch(() => {});
     return entry.plain;
-  } catch { return null; }
+  } catch { budget.incomplete = true; return null; }
 }
 
 // Total run time for a handful of albums, in one batched Apple Music call.
@@ -4484,7 +4485,7 @@ async function buildArtistDiscography(id, bust = false) {
   // credit like "Anthrax & Public Enemy" never outnumbers it. Network lookups
   // are capped per build so a cold page stays quick; the rest are answered on
   // later builds as the cache fills.
-  const mbBudget = { left: MB_LOOKUPS_PER_BUILD };
+  const mbBudget = { left: MB_LOOKUPS_PER_BUILD, incomplete: false };
   const artistName = Object.entries(artistNames.reduce((n, a) => ({ ...n, [a]: (n[a] ?? 0) + 1 }), {}))
     .sort((x, y) => y[1] - x[1])[0]?.[0];
   if (artistName) {
@@ -4579,6 +4580,13 @@ async function buildArtistDiscography(id, bust = false) {
   };
 
   console.log(`[artist-discography] success — albums:${grouped.albums.length} eps:${grouped.epsAndMixtapes.length} collections:${grouped.collections.length} live:${grouped.live.length}`);
+  // A MusicBrainz answer missing (503s are common) would otherwise pin a
+  // studio album in Collections for the day; keep this build briefly instead.
+  if (mbBudget.incomplete) {
+    console.log('[artist-discography] MusicBrainz check incomplete — caching for 10 min only');
+    cacheSet(CACHE_KEY, grouped, TTL_10M);
+    return grouped;
+  }
   cacheSet(CACHE_KEY, grouped, TTL_6H);
   await setCache(CACHE_KEY, grouped);
   return grouped;
