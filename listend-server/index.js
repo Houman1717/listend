@@ -4322,8 +4322,18 @@ async function buildArtistDiscography(id, bust = false) {
   // original and they vanish from the profile entirely.
   const COLLECTION_TITLES = [
     'habibti (fomo)',   // Drake's expanded HABIBTI
+    // The scrapped 1993 sessions of the album, not an edition of it.
+    'give out but don\'t give up (the original memphis recordings)',   // Primal Scream
   ];
   const inCollectionTitles = title => COLLECTION_TITLES.includes(title.toLowerCase());
+
+  // Studio albums Apple flags isCompilation, which would file them under
+  // Collections — and leave the album's own expanded edition alone in Albums.
+  const NOT_COMPILATION_TITLES = [
+    'give out but don\'t give up',   // Primal Scream, 1994
+    'evil heat',                     // Primal Scream, 2002
+  ];
+  const isFalseCompilation = title => NOT_COMPILATION_TITLES.includes(title.toLowerCase());
 
   const LIVE_RE       = /\b(live|concert|tour|session|performance)\b|apple(?:\s+music)?\s+presents|chopnotslop|chopped\s+not\s+slopped/i;
   const COLLECTION_RE = /\b(greatest\s+hits?|highlights?|collection|deluxe)\b|best\s+of\b/i;
@@ -4352,7 +4362,7 @@ async function buildArtistDiscography(id, bust = false) {
     // A mixtape belongs with the EPs however long it runs — Exmilitary and
     // nostalgia, ULTRA are 49 and 42 minutes, so the clock calls them albums.
     if (item.isMixtape) return 'epsAndMixtapes';
-    if (item.isCompilation === true || COLLECTION_RE.test(t) || inCollectionTitles(t)) return 'collections';
+    if ((item.isCompilation === true && !isFalseCompilation(t)) || COLLECTION_RE.test(t) || inCollectionTitles(t)) return 'collections';
     if (EP_MIX_RE.test(t)) return 'epsAndMixtapes';
     if (item.url && item.url.toLowerCase().includes('/single/')) return 'epsAndMixtapes';
     // Albums Listend carries itself know their own run time (Apple has no entry

@@ -121,6 +121,12 @@ async function main() {
     byRecord.set(key, win);
   }
 
+  // The same title spelled differently — "Give Out but Don't Give Up: The
+  // Original Memphis Recordings" on it, "… (The Original Memphis Recordings)"
+  // on us. Stripping the suffix leaves the us one looking like the 1994 album,
+  // so the base-title check alone can't pair them; the whole title can.
+  const usByFullTitle = new Map(us.map(r => [normalizeKey(r.collectionName), r.collectionName]));
+
   const usEditionsByBase = new Map();
   for (const r of us) {
     const key = baseTitle(r.collectionName);
@@ -135,6 +141,8 @@ async function main() {
     if ((r.trackCount ?? 0) <= 1 || /-\s*single\b/i.test(r.collectionName)) {
       skipped.push([r, 'single — the discography filters these out']); continue;
     }
+    const sameTitleOnUs = usByFullTitle.get(normalizeKey(r.collectionName));
+    if (sameTitleOnUs && !includeVariants) { skipped.push([r, `us already carries it as "${sameTitleOnUs}"`]); continue; }
     const usEditions = usEditionsByBase.get(baseTitle(r.collectionName));
     if (usEditions) {
       // Only a reissue on us, and this one's title is clean → it IS the original.
