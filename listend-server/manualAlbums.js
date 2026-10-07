@@ -21,6 +21,10 @@
 // To add one: find the release on MusicBrainz, take its release-group id for
 // the cover and its release id for the tracklist, and append an entry below.
 
+// Covers Listend hosts itself, for records with no entry in the Cover Art
+// Archive. Served from listend-server/public by the /static route.
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? 'https://listend-production.up.railway.app').replace(/\/$/, '');
+
 const MANUAL_ALBUMS = [
   {
     id: 'lst-tin-machine-ii',
@@ -832,6 +836,36 @@ const MANUAL_ALBUMS = [
       { number: 18, id: 'lst-one-night-in-paris-t18', title: 'Condemnation', durationMs: 263000 },
       { number: 19, id: 'lst-one-night-in-paris-t19', title: 'Black Celebration', durationMs: 287000 },
       { number: 20, id: 'lst-one-night-in-paris-t20', title: 'Never Let Me Down Again', durationMs: 679000 },
+    ],
+  },
+  {
+    id: 'lst-chez-moi',
+    title: 'Chez Moi',
+    artist: 'Claudio Montana',
+    artistId: '1482389408',
+    year: 2022,
+    // Taken off streaming; Apple Music has his singles and one EP, not this.
+    // Reconstructed from two fan uploads, there being no catalogue entry
+    // anywhere — not MusicBrainz, Discogs or Deezer. A podcast upload of the
+    // album carries four tracks; the uploader's YouTube channel has three more
+    // tagged [Chez Moi], and where the two overlap their run times agree to the
+    // second. Order follows that channel's upload sequence, all seven posted
+    // within nine minutes on 2022-03-28.
+    //
+    // 2022 is therefore the latest the record can be, not a confirmed release
+    // year — the artist keeps almost nothing online. Worth correcting if the
+    // suggester ever answers, though note that reviews match on title+year, so
+    // changing it later strands any ratings logged against 2022.
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/chez-moi.jpg`,
+    trackCount: 7,
+    tracks: [
+      { number: 1, id: 'lst-chez-moi-t1', title: 'Queens', durationMs: 134000 },
+      { number: 2, id: 'lst-chez-moi-t2', title: 'Chloë Sevigny', durationMs: 162000 },
+      { number: 3, id: 'lst-chez-moi-t3', title: 'NEO 2', durationMs: 123000 },
+      { number: 4, id: 'lst-chez-moi-t4', title: 'Billetes de Metro', durationMs: 132000 },
+      { number: 5, id: 'lst-chez-moi-t5', title: 'Whoopie Pie', durationMs: 103000 },
+      { number: 6, id: 'lst-chez-moi-t6', title: 'I luv BCN', durationMs: 76000 },
+      { number: 7, id: 'lst-chez-moi-t7', title: 'Amigas', durationMs: 97000 },
     ],
   },
 ];
