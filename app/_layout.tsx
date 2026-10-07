@@ -373,6 +373,7 @@ function ThemedApp() {
           <Stack.Screen name="choose-username" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="user-profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="followers-following" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="share-profile" options={{ title: 'Share Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="artist-detail" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="dms" options={{ title: 'Messages', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="dm-conversation" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
