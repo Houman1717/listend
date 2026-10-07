@@ -868,6 +868,31 @@ const MANUAL_ALBUMS = [
       { number: 7, id: 'lst-chez-moi-t7', title: 'Amigas', durationMs: 97000 },
     ],
   },
+  {
+    id: 'lst-juicewrld-9-9-9',
+    title: 'JuiceWRLD 9 9 9',
+    artist: 'Juice WRLD',
+    isMixtape: true,              // an EP; files under EPs & Mixtapes
+    artistId: '1368733420',
+    year: 2017,
+    // SoundCloud-only EP (the one that broke "Lucid Dreams"), never put out on
+    // streaming as a whole. Tracklist and durations from the SoundCloud set,
+    // matching MusicBrainz and Wikipedia; an early 9-track version with
+    // "Sticks & Stones" has since been pulled back to these 8.
+    artworkUrl: 'https://coverartarchive.org/release-group/5892ca63-5f82-401a-ae14-5cf458003190/front-500',
+    musicbrainzReleaseId: '75bdef0d-7763-4cab-8ee5-0887ebdc48ca',
+    trackCount: 8,
+    tracks: [
+      { number: 1, id: 'lst-juicewrld-9-9-9-t1', title: 'Moonlight', durationMs: 178070 },
+      { number: 2, id: 'lst-juicewrld-9-9-9-t2', title: 'Lucid Dreams', durationMs: 239882 },
+      { number: 3, id: 'lst-juicewrld-9-9-9-t3', title: 'Eye Contact (Look Me in My Eyes)', durationMs: 199987 },
+      { number: 4, id: 'lst-juicewrld-9-9-9-t4', title: 'Rainbow', durationMs: 234887 },
+      { number: 5, id: 'lst-juicewrld-9-9-9-t5', title: 'Lost Her', durationMs: 191680 },
+      { number: 6, id: 'lst-juicewrld-9-9-9-t6', title: 'Two Cups (Everything’s Going My Way)', durationMs: 151504 },
+      { number: 7, id: 'lst-juicewrld-9-9-9-t7', title: 'Let Me Know (I Wonder Why Freestyle)', durationMs: 215138 },
+      { number: 8, id: 'lst-juicewrld-9-9-9-t8', title: 'Until It’s Over (Closure)', durationMs: 216052 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
