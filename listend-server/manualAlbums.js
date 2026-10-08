@@ -919,6 +919,69 @@ const MANUAL_ALBUMS = [
       { number: 10, id: 'lst-jester-t10', title: 'Lobo', durationMs: 286000 },
     ],
   },
+  {
+    id: 'lst-gialorgues',
+    title: 'Gialorgues',
+    artist: 'Shylock',
+    artistId: 'lst-artist-shylock',
+    year: 1976,
+    // French symphonic prog, self-released in 1976 and reissued by CBS in
+    // 1977; never on streaming. MusicBrainz and Discogs agree on the
+    // tracklist and timings to the second.
+    artworkUrl: 'https://coverartarchive.org/release-group/17f01921-089e-313d-8bb9-898d960b3163/front-500',
+    musicbrainzReleaseId: '93da7c77-efbb-41ac-a2d1-2b289a20920d',
+    trackCount: 3,
+    tracks: [
+      { number: 1, id: 'lst-gialorgues-t1', title: 'Le Quatrième', durationMs: 785000 },
+      { number: 2, id: 'lst-gialorgues-t2', title: 'Le Sixième', durationMs: 230000 },
+      { number: 3, id: 'lst-gialorgues-t3', title: 'Le Cinquième', durationMs: 1134000 },
+    ],
+  },
+  {
+    id: 'lst-spin',
+    title: 'Spin',
+    artist: 'Spin',
+    artistId: '1686918615',        // Apple has their second album, Whirlwind, under this artist
+    year: 1976,
+    // The Dutch jazz-rock band's debut on Ariola. Timings from the original
+    // Dutch pressing on MusicBrainz, which agree in order with a full-album
+    // YouTube upload's chapter marks; the US pressing's entry looks garbled.
+    artworkUrl: 'https://coverartarchive.org/release-group/d1085abc-363d-3297-bdca-91c17f15ef2e/front-500',
+    musicbrainzReleaseId: '318ea64d-e531-4054-99a8-53e2218f4c6e',
+    trackCount: 8,
+    tracks: [
+      { number: 1, id: 'lst-spin-t1', title: 'Grasshopper', durationMs: 265000 },
+      { number: 2, id: 'lst-spin-t2', title: 'Spinning', durationMs: 239000 },
+      { number: 3, id: 'lst-spin-t3', title: 'Excenter', durationMs: 311000 },
+      { number: 4, id: 'lst-spin-t4', title: 'Sea and Seasons', durationMs: 282000 },
+      { number: 5, id: 'lst-spin-t5', title: 'Little Bitch', durationMs: 342000 },
+      { number: 6, id: 'lst-spin-t6', title: 'Sunday Afternoon’s Dream', durationMs: 292000 },
+      { number: 7, id: 'lst-spin-t7', title: 'Flat Tyre', durationMs: 212000 },
+      { number: 8, id: 'lst-spin-t8', title: 'Beautiful Queenie', durationMs: 269000 },
+    ],
+  },
+  {
+    id: 'lst-lady-of-shalott',
+    title: 'Lady of Shalott',
+    artist: 'Atmosphera',
+    artistId: 'lst-artist-atmosphera',
+    year: 1977,
+    // Israeli prog. The two long pieces were recorded in 1977 (℗ Nana Disc)
+    // and shelved; the album first came out on CD in 2002 (MIO Records), with
+    // two 1975 home recordings and an alternate Cuckoo. 1977 follows
+    // MusicBrainz and the suggester. Tracklist and timings from MusicBrainz,
+    // the CD's audio disc only (its second disc is a video CD).
+    artworkUrl: 'https://coverartarchive.org/release-group/cb7f74f4-a5af-436c-b1f8-d53ba154ef79/front-500',
+    musicbrainzReleaseId: '2dd3b9dd-fc82-4b63-b5fd-a396b8bc91ce',
+    trackCount: 5,
+    tracks: [
+      { number: 1, id: 'lst-lady-of-shalott-t1', title: 'Lady of Shalott', durationMs: 983000 },
+      { number: 2, id: 'lst-lady-of-shalott-t2', title: 'Cuckoo (Love’s Labour’s Lost)', durationMs: 1006000 },
+      { number: 3, id: 'lst-lady-of-shalott-t3', title: 'Tomorrow', durationMs: 644000 },
+      { number: 4, id: 'lst-lady-of-shalott-t4', title: 'Love Is Waiting for a Lover', durationMs: 478000 },
+      { number: 5, id: 'lst-lady-of-shalott-t5', title: 'Cuckoo (Alternate Version)', durationMs: 983000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
@@ -945,6 +1008,20 @@ const MANUAL_ARTISTS = [
     name: 'Jester',
     genre: 'Rock',
     artworkUrl: `${PUBLIC_BASE_URL}/static/albums/jester.jpg`,
+  },
+  {
+    // The 1970s French prog band. Apple's several Shylocks are all other acts.
+    id: 'lst-artist-shylock',
+    name: 'Shylock',
+    genre: 'Rock',
+    artworkUrl: 'https://coverartarchive.org/release-group/17f01921-089e-313d-8bb9-898d960b3163/front-500',
+  },
+  {
+    // The 1970s Israeli prog band. Apple's Atmospheras are all other acts.
+    id: 'lst-artist-atmosphera',
+    name: 'Atmosphera',
+    genre: 'Rock',
+    artworkUrl: 'https://coverartarchive.org/release-group/cb7f74f4-a5af-436c-b1f8-d53ba154ef79/front-500',
   },
   {
     id: 'lst-artist-in-the-panchine',
