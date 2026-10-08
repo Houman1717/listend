@@ -30,16 +30,18 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
-  // Height of the full list, so filtering doesn't shrink the sheet and make it
-  // jump down the screen while you type.
+  // Height of the full list. While searching the sheet is held at it so
+  // filtering doesn't make it jump down the screen — as a shrinkable height,
+  // not a minHeight: a minHeight wouldn't give way to the keyboard and pushed
+  // the title and search bar off the top of the screen.
   const fullHeight = useRef(0);
-  const [minHeight, setMinHeight] = useState<number | undefined>(undefined);
+  const [heldHeight, setHeldHeight] = useState<number | undefined>(undefined);
 
   // Same toggle as the library screens' search (my-listend etc.).
   function toggleSearch() {
     const next = !searchOpen;
     setSearchOpen(next);
-    setMinHeight(next ? fullHeight.current : undefined);
+    setHeldHeight(next ? fullHeight.current : undefined);
     if (!next) setQuery('');
     else setTimeout(() => searchInputRef.current?.focus(), 50);
   }
@@ -58,7 +60,7 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
     setLoadFailed(false);
     setSendState({});
     setSearchOpen(false);
-    setMinHeight(undefined);
+    setHeldHeight(undefined);
     setQuery('');
     fetchDMFriends(user.id).then(result => {
       if (cancelled) return;
@@ -157,7 +159,7 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View
-          style={[s.sheet, { backgroundColor: sheetBg, minHeight }]}
+          style={[s.sheet, { backgroundColor: sheetBg, height: heldHeight }]}
           onLayout={e => { if (!searchOpen) fullHeight.current = e.nativeEvent.layout.height; }}>
           <View style={s.handle} />
           <View style={s.titleRow}>
@@ -205,8 +207,9 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
 }
 
 const s = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 40, maxHeight: '75%' },
+  // paddingTop keeps the sheet clear of the status bar when the keyboard is up.
+  overlay: { flex: 1, justifyContent: 'flex-end', paddingTop: 60 },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 40, maxHeight: '75%', flexShrink: 1 },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#4a3020', alignSelf: 'center', marginBottom: 16 },
   titleRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8, gap: 12 },
   titleText: { flex: 1 },
@@ -215,7 +218,7 @@ const s = StyleSheet.create({
   searchBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth },
   searchInput: { flex: 1, fontSize: 15, height: 36 },
-  list: { flexGrow: 0 },
+  list: { flexGrow: 0, flexShrink: 1 },
   empty: { fontSize: 14, lineHeight: 20, paddingHorizontal: 20, paddingVertical: 24, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 11, gap: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   avatar: { width: 40, height: 40, borderRadius: 20 },
