@@ -23,7 +23,8 @@ import { useAlbums } from '@/context/AlbumsContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { nameOrHandle } from '@/lib/userHandle';
-import { countOrNull, fetchAllRows } from '@/lib/supabaseQuery';
+import { fetchAllRows } from '@/lib/supabaseQuery';
+import { notifyMessageRecipient, sendAlbumMessage } from '@/lib/directMessages';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -228,27 +229,9 @@ export default function DMConversationScreen() {
     setOtherUserReviews(map);
   }
 
-  async function notifyRecipient() {
+  function notifyRecipient() {
     if (!user || !otherUserId) return;
-    const count = countOrNull(await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', otherUserId)
-      .eq('type', 'message')
-      .eq('actor_id', user.id)
-      .eq('read', false));
-    // null = the check itself failed. `?? 0` used to make that look like "no
-    // existing notification", so during an outage every message sent inserted
-    // another duplicate. Skip instead — a missed notification beats spam.
-    if (count === 0) {
-      supabase.from('notifications').insert({
-        user_id:  otherUserId,
-        type:     'message',
-        actor_id: user.id,
-      }).then(({ error }) => {
-        if (error) console.error('[DMConversation] notification insert error:', error.message);
-      });
-    }
+    notifyMessageRecipient(user.id, otherUserId);
   }
 
   // ── Send text message ────────────────────────────────────────────────────────
@@ -282,30 +265,8 @@ export default function DMConversationScreen() {
     setAlbumQuery('');
     setAlbumResults([]);
 
-    const loggedEntry = loggedAlbums.find(a => a.id === album.id)
-      ?? loggedAlbums.find(a =>
-          a.title.toLowerCase() === album.title.toLowerCase() &&
-          a.artist.toLowerCase() === album.artist.toLowerCase()
-        );
-    const albumDataWithRating = {
-      ...album,
-      ...(loggedEntry && (loggedEntry.lastRating ?? loggedEntry.rating) > 0 ? { sender_rating: loggedEntry.lastRating ?? loggedEntry.rating } : {}),
-      ...(loggedEntry && (loggedEntry.lastReview ?? loggedEntry.review) ? { sender_review: loggedEntry.lastReview ?? loggedEntry.review } : {}),
-    };
-
-    const { error } = await supabase.from('messages').insert({
-      sender_id:   user.id,
-      receiver_id: otherUserId,
-      content:     album.title,
-      type:        'album',
-      album_data:  albumDataWithRating,
-    });
-
-    if (error) {
-      console.error('[DMConversation] send album error:', error);
-    } else {
+    if (await sendAlbumMessage(user.id, otherUserId, album, loggedAlbums)) {
       fetchMessages();
-      notifyRecipient();
     }
   }
 

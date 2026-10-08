@@ -35,6 +35,7 @@ import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
 import { EditListenDateModal } from '@/components/EditListenDateModal';
+import { SendAlbumSheet } from '@/components/SendAlbumSheet';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -840,6 +841,7 @@ export default function AlbumDetailScreen() {
   const [review, setReview]       = useState(loggedAlbum?.isRelistened ? (loggedAlbum?.lastReview ?? '') : (loggedAlbum?.review ?? ''));
   const [editMode, setEditMode]         = useState(false);
   const [showPlaylists, setShowPlaylists] = useState(false);
+  const [showSendSheet, setShowSendSheet] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -1543,12 +1545,20 @@ export default function AlbumDetailScreen() {
           // show React Navigation's light-grey default behind the screen.
           contentStyle: { backgroundColor: colors.background },
           headerRight: () => (
-              <Pressable
-                onPress={() => setShowPlaylists(true)}
-                hitSlop={12}
-                style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
-                <FontAwesome name="list" size={18} color="#D4A017" />
-              </Pressable>
+              <View style={s.headerBtnRow}>
+                <Pressable
+                  onPress={() => setShowSendSheet(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
+                  <FontAwesome name="paper-plane-o" size={18} color="#D4A017" />
+                </Pressable>
+                <Pressable
+                  onPress={() => setShowPlaylists(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
+                  <FontAwesome name="list" size={18} color="#D4A017" />
+                </Pressable>
+              </View>
             ),
         }}
       />
@@ -2208,6 +2218,14 @@ export default function AlbumDetailScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <SendAlbumSheet
+        visible={showSendSheet}
+        album={{ id: albumId, title: albumTitle, artist: albumArtist, artworkUrl: albumArtwork, ...(albumYear ? { year: albumYear } : {}) }}
+        isDark={isDark}
+        colors={colors}
+        onClose={() => setShowSendSheet(false)}
+      />
+
       {showEditDateModal && loggedAlbum && (
         <EditListenDateModal
           album={loggedAlbum}
@@ -2432,6 +2450,7 @@ const s = StyleSheet.create({
   streamPlatformLabel: { flex: 1, fontSize: 16, fontWeight: '500' },
 
   // Header button
+  headerBtnRow: { flexDirection: 'row', alignItems: 'center' },
   headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
 
   // Playlist modal
