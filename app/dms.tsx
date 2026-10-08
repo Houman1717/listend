@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationsContext';
 import { supabase } from '@/lib/supabase';
 import { nameOrHandle } from '@/lib/userHandle';
+import { DM_NOTIFICATION_TYPES } from '@/lib/directMessages';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -56,9 +57,12 @@ export default function DMsScreen() {
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading,       setLoading]       = useState(true);
-  // Partners with an unread 'message' notification — the same rows that drive
-  // the DMs dot, cleared by markMessagesRead when the conversation is opened.
+  // Partners with an unread DM notification (message or message like) — the
+  // same rows that drive the DMs dot, cleared by markMessagesRead when the
+  // conversation is opened.
   const [unreadPartnerIds, setUnreadPartnerIds] = useState<Set<string>>(new Set());
+  // Partner → when they last liked one of your messages, while still unread.
+  const [unreadLikeAt, setUnreadLikeAt] = useState<Map<string, string>>(new Map());
 
   useFocusEffect(
     useCallback(() => {
@@ -77,9 +81,9 @@ export default function DMsScreen() {
   async function loadUnreadPartners(uid: string) {
     const { data, error } = await supabase
       .from('notifications')
-      .select('actor_id')
+      .select('actor_id, type, created_at')
       .eq('user_id', uid)
-      .eq('type', 'message')
+      .in('type', DM_NOTIFICATION_TYPES)
       .eq('read', false);
     // A failed read keeps the last known state rather than marking everything read.
     if (error) {
@@ -87,6 +91,13 @@ export default function DMsScreen() {
       return;
     }
     setUnreadPartnerIds(new Set((data ?? []).map((r: any) => r.actor_id as string)));
+    const likes = new Map<string, string>();
+    for (const r of (data ?? []) as { actor_id: string; type: string; created_at: string }[]) {
+      if (r.type !== 'like_message') continue;
+      const prev = likes.get(r.actor_id);
+      if (!prev || r.created_at > prev) likes.set(r.actor_id, r.created_at);
+    }
+    setUnreadLikeAt(likes);
   }
 
   async function loadConversations(silent = false) {
@@ -215,7 +226,11 @@ export default function DMsScreen() {
       )}
       renderItem={({ item }) => {
         const initial = item.partnerName.charAt(0).toUpperCase();
-        const unread  = unreadPartnerIds.has(item.partnerId) && item.lastMessage.sender_id !== user?.id;
+        // A like newer than the last message is the latest thing in the chat —
+        // it shows as the preview and counts as unread even if you sent last.
+        const likeAt  = unreadLikeAt.get(item.partnerId);
+        const likeIsLatest = !!likeAt && new Date(likeAt).getTime() > new Date(item.lastMessage.created_at).getTime();
+        const unread  = likeIsLatest || (unreadPartnerIds.has(item.partnerId) && item.lastMessage.sender_id !== user?.id);
         return (
           <Pressable
             style={({ pressed }) => [s.row, { opacity: pressed ? 0.7 : 1 }]}
@@ -223,6 +238,7 @@ export default function DMsScreen() {
               // Clear locally now; the conversation screen marks it read server-side.
               if (unread) {
                 setUnreadPartnerIds(prev => { const next = new Set(prev); next.delete(item.partnerId); return next; });
+                setUnreadLikeAt(prev => { const next = new Map(prev); next.delete(item.partnerId); return next; });
               }
               router.push({
                 pathname: '/dm-conversation',
@@ -251,12 +267,12 @@ export default function DMsScreen() {
               <Text
                 style={[s.preview, { color: unread ? colors.text : colors.subtext }, unread && { fontWeight: '600' }]}
                 numberOfLines={1}>
-                {previewText(item.lastMessage)}
+                {likeIsLatest ? '❤️ Liked your message' : previewText(item.lastMessage)}
               </Text>
             </View>
             <View style={s.meta}>
               <Text style={[s.time, { color: unread ? '#D4A017' : colors.subtext }, unread && { fontWeight: '600' }]}>
-                {formatTime(item.lastMessage.created_at)}
+                {formatTime(likeIsLatest ? likeAt! : item.lastMessage.created_at)}
               </Text>
               {unread && <View style={s.unreadDot} />}
             </View>

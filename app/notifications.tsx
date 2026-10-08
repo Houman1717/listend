@@ -20,6 +20,7 @@ import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { navigateToReviewNotification } from '@/lib/navigateToReviewNotification';
+import { DM_NOTIFICATION_TYPES_FILTER } from '@/lib/directMessages';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -172,7 +173,7 @@ export default function NotificationsScreen() {
       .from('notifications')
       .select('id, type, read, created_at, actor_id, target_id, comment_id')
       .eq('user_id', user.id)
-      .neq('type', 'message')
+      .not('type', 'in', DM_NOTIFICATION_TYPES_FILTER)
       .order('created_at', { ascending: false })
       .limit(50);
 

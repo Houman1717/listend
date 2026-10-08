@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
+import { DM_NOTIFICATION_TYPES, DM_NOTIFICATION_TYPES_FILTER } from '@/lib/directMessages';
 import { countOrNull } from '@/lib/supabaseQuery';
 import { registerPushToken } from '@/lib/registerPushToken';
 
@@ -21,7 +22,7 @@ type NotificationsContextType = {
   /** Unread DMs — shown on the DMs icon, never on the bell. */
   unreadDMCount: number;
   markAllRead: () => Promise<void>;
-  /** Mark all unread 'message' notifications from a specific actor as read. */
+  /** Mark all unread DM notifications (messages + message likes) from a specific actor as read. */
   markMessagesRead: (actorId: string) => Promise<void>;
   refresh: () => void;
 };
@@ -46,13 +47,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', uid)
-        .neq('type', 'message')
+        .not('type', 'in', DM_NOTIFICATION_TYPES_FILTER)
         .eq('read', false),
       supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', uid)
-        .eq('type', 'message')
+        .in('type', DM_NOTIFICATION_TYPES)
         .eq('read', false),
     ]);
     // A failed count must not clear the badge — keep the last known value
@@ -115,7 +116,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .from('notifications')
       .update({ read: true })
       .eq('user_id', user.id)
-      .neq('type', 'message')
+      .not('type', 'in', DM_NOTIFICATION_TYPES_FILTER)
       .eq('read', false);
     setUnreadCount(0);
   }
@@ -126,7 +127,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .from('notifications')
       .update({ read: true })
       .eq('user_id', user.id)
-      .eq('type', 'message')
+      .in('type', DM_NOTIFICATION_TYPES)
       .eq('actor_id', actorId)
       .eq('read', false);
     fetchUnreadCount(user.id);

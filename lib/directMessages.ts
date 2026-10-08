@@ -3,6 +3,15 @@ import { countOrNull, fetchAllRows } from '@/lib/supabaseQuery';
 import { nameOrHandle } from '@/lib/userHandle';
 import type { LoggedAlbum } from '@/context/AlbumsContext';
 
+/**
+ * Notification types that belong to DMs rather than the bell: they count
+ * toward the DMs badge, mark the conversation unread, and are cleared when
+ * the conversation is opened.
+ */
+export const DM_NOTIFICATION_TYPES = ['message', 'like_message'];
+/** PostgREST list form, for `.not('type', 'in', …)`. */
+export const DM_NOTIFICATION_TYPES_FILTER = `(${DM_NOTIFICATION_TYPES.join(',')})`;
+
 export type DMAlbum = {
   id: string;
   title: string;
