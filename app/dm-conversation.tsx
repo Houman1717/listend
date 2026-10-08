@@ -18,6 +18,8 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useNotifications } from '@/context/NotificationsContext';
@@ -59,6 +61,8 @@ type Message = {
     sender_review?: string;
   } | null;
   created_at: string;
+  // Ids of whoever liked it (double-tap). Missing until add-message-likes.sql has run.
+  liked_by?: string[] | null;
 };
 
 type AlbumResult = {
@@ -109,6 +113,10 @@ export default function DMConversationScreen() {
 
   // Other user's reviews for album messages (keyed by album id, with title+artist fallback key)
   const [otherUserReviews, setOtherUserReviews] = useState<Record<string, { rating?: number; review?: string }>>({});
+
+  // Likes the server hasn't confirmed yet, so a poll landing mid-request
+  // doesn't flash the heart back to its old state.
+  const pendingLikes  = useRef<Map<string, boolean>>(new Map());
 
   const listRef       = useRef<FlatList<Message>>(null);
   const pollTimer     = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -197,10 +205,40 @@ export default function DMConversationScreen() {
     if (error) {
       console.error('[DMConversation] fetch error:', error);
     } else {
-      setMessages(data ?? []);
+      setMessages(applyPendingLikes(data ?? []));
       fetchOtherUserReviews();
     }
     setLoadingMsgs(false);
+  }
+
+  function withMyLike(m: Message, like: boolean): Message {
+    if (!user) return m;
+    const others = (m.liked_by ?? []).filter(id => id !== user.id);
+    return { ...m, liked_by: like ? [...others, user.id] : others };
+  }
+
+  function applyPendingLikes(rows: Message[]): Message[] {
+    if (pendingLikes.current.size === 0) return rows;
+    return rows.map(m => pendingLikes.current.has(m.id) ? withMyLike(m, pendingLikes.current.get(m.id)!) : m);
+  }
+
+  // ── Like / unlike a message (double-tap) ─────────────────────────────────────
+  async function toggleLike(message: Message) {
+    if (!user) return;
+    const like = !(message.liked_by ?? []).includes(user.id);
+    pendingLikes.current.set(message.id, like);
+    setMessages(prev => prev.map(m => m.id === message.id ? withMyLike(m, like) : m));
+
+    const { data, error } = await supabase.rpc('toggle_message_like', { p_message_id: message.id, p_like: like });
+    // Only settle if this is still the latest toggle for the message.
+    if (pendingLikes.current.get(message.id) !== like) return;
+    pendingLikes.current.delete(message.id);
+    if (error) {
+      console.error('[DMConversation] like error:', error.message);
+      setMessages(prev => prev.map(m => m.id === message.id ? withMyLike(m, !like) : m));
+    } else {
+      setMessages(prev => prev.map(m => m.id === message.id ? { ...m, liked_by: (data as string[] | null) ?? [] } : m));
+    }
   }
 
   async function fetchOtherUserReviews() {
@@ -343,6 +381,9 @@ export default function DMConversationScreen() {
                   album={item.album_data}
                   isMe={isMe}
                   colors={colors}
+                  likedBy={item.liked_by ?? []}
+                  myId={user?.id}
+                  onToggleLike={() => toggleLike(item)}
                   senderRating={item.album_data.sender_rating}
                   senderReview={item.album_data.sender_review}
                   myLoggedEntry={(() => {
@@ -374,7 +415,15 @@ export default function DMConversationScreen() {
                   }
                 />
               ) : (
-                <TextBubble text={item.content ?? ''} isMe={isMe} time={item.created_at} colors={colors} />
+                <TextBubble
+                  text={item.content ?? ''}
+                  isMe={isMe}
+                  time={item.created_at}
+                  colors={colors}
+                  likedBy={item.liked_by ?? []}
+                  myId={user?.id}
+                  onToggleLike={() => toggleLike(item)}
+                />
               )}
               {/* In an inverted list, rendering AFTER the bubble puts it visually ABOVE */}
               {showDate && (
@@ -520,14 +569,52 @@ export default function DMConversationScreen() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function TextBubble({ text, isMe, time, colors }: { text: string; isMe: boolean; time: string; colors: ColorsType }) {
+type LikeProps = {
+  likedBy: string[];
+  myId: string | undefined;
+  onToggleLike: () => void;
+};
+
+function useDoubleTap(onDoubleTap: () => void, onSingleTap?: () => void) {
+  const double = Gesture.Tap().numberOfTaps(2).maxDelay(250).runOnJS(true).onEnd((_e, ok) => { if (ok) onDoubleTap(); });
+  if (!onSingleTap) return double;
+  const single = Gesture.Tap().runOnJS(true).onEnd((_e, ok) => { if (ok) onSingleTap(); });
+  return Gesture.Exclusive(double, single);
+}
+
+/** Small heart under a liked message; tapping it takes your own like back. */
+function LikeBadge({ likedBy, myId, onToggleLike, isMe, colors }: LikeProps & { isMe: boolean; colors: ColorsType }) {
+  if (likedBy.length === 0) return null;
+  const mine = !!myId && likedBy.includes(myId);
+  return (
+    <Animated.View entering={ZoomIn.springify().damping(12)} exiting={ZoomOut.duration(120)}
+      style={[b.likeBadgeWrap, isMe ? { alignSelf: 'flex-end', marginRight: 10 } : { alignSelf: 'flex-start', marginLeft: 10 }]}>
+      <Pressable
+        onPress={mine ? onToggleLike : undefined}
+        disabled={!mine}
+        hitSlop={8}
+        style={[b.likeBadge, { backgroundColor: colors.elevated, borderColor: colors.border }]}>
+        <FontAwesome name="heart" size={10} color={ACCENT} />
+        {likedBy.length > 1 && <Text style={[b.likeCount, { color: colors.subtext }]}>{likedBy.length}</Text>}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function TextBubble({ text, isMe, time, colors, likedBy, myId, onToggleLike }: { text: string; isMe: boolean; time: string; colors: ColorsType } & LikeProps) {
+  const tap = useDoubleTap(onToggleLike);
   return (
     <View style={[b.row, isMe ? b.rowMe : b.rowThem]}>
-      <View style={[b.bubble, isMe ? [b.bubbleMe, { backgroundColor: colors.tint }] : { ...b.bubbleThem, backgroundColor: colors.surface }]}>
-        <Text style={[b.text, isMe ? b.textMe : { color: colors.text }]}>{text}</Text>
-        <Text style={[b.time, isMe ? b.timeMe : { color: colors.subtext }]}>
-          {new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+      <View style={b.bubbleCol}>
+        <GestureDetector gesture={tap}>
+          <View style={[b.bubble, isMe ? [b.bubbleMe, { backgroundColor: colors.tint }] : { ...b.bubbleThem, backgroundColor: colors.surface }]}>
+            <Text style={[b.text, isMe ? b.textMe : { color: colors.text }]}>{text}</Text>
+            <Text style={[b.time, isMe ? b.timeMe : { color: colors.subtext }]}>
+              {new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+        </GestureDetector>
+        <LikeBadge likedBy={likedBy} myId={myId} onToggleLike={onToggleLike} isMe={isMe} colors={colors} />
       </View>
     </View>
   );
@@ -541,7 +628,10 @@ function AlbumCard({
   senderReview,
   myLoggedEntry,
   onPress,
-}: {
+  likedBy,
+  myId,
+  onToggleLike,
+}: LikeProps & {
   album: { id: string; title: string; artist: string; artworkUrl: string; year?: number };
   isMe: boolean;
   colors: ColorsType;
@@ -557,15 +647,18 @@ function AlbumCard({
   const senderLabel    = isMe ? 'You' : 'Them';
   const recipientLabel = isMe ? 'Them' : 'You';
 
+  // Single tap still opens the album; it waits out the double-tap window.
+  const tap = useDoubleTap(onToggleLike, onPress);
+
   return (
     <View style={[b.row, isMe ? b.rowMe : b.rowThem]}>
-      <Pressable
-        style={({ pressed }) => [b.albumCard, {
+      <View style={b.albumCol}>
+      <GestureDetector gesture={tap}>
+      <View
+        style={[b.albumCard, {
           backgroundColor: colors.elevated,
           borderColor: colors.border,
-          opacity: pressed ? 0.85 : 1,
-        }]}
-        onPress={onPress}>
+        }]}>
 
         {/* Top: artwork + album meta */}
         <View style={b.albumTop}>
@@ -625,7 +718,10 @@ function AlbumCard({
           </>
         )}
 
-      </Pressable>
+      </View>
+      </GestureDetector>
+      <LikeBadge likedBy={likedBy} myId={myId} onToggleLike={onToggleLike} isMe={isMe} colors={colors} />
+      </View>
     </View>
   );
 }
@@ -686,8 +782,13 @@ const b = StyleSheet.create({
   rowMe:  { justifyContent: 'flex-end' },
   rowThem:{ justifyContent: 'flex-start' },
 
+  bubbleCol: { maxWidth: '75%' },
+  albumCol:  { width: 280, maxWidth: '85%' },
+  likeBadgeWrap: { marginTop: -8, zIndex: 1 },
+  likeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
+  likeCount: { fontSize: 10, fontWeight: '600' },
+
   bubble: {
-    maxWidth: '75%',
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 9,
