@@ -2201,7 +2201,7 @@ export default function AlbumDetailScreen() {
                 return (
                   <Pressable
                     key={playlist.id}
-                    onPress={() => { inPlaylist ? removeAlbumFromPlaylist(playlist.id, myAlbumId) : addAlbumToPlaylist(playlist.id, myAlbumId); }}
+                    onPress={() => { inPlaylist ? removeAlbumFromPlaylist(playlist.id, myAlbumId) : addAlbumToPlaylist(playlist.id, myAlbumId, { title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork }); }}
                     style={({ pressed }) => [s.playlistRow, { borderBottomColor: isDark ? '#2a1e14' : '#f5e6c8', opacity: pressed ? 0.6 : 1 }]}>
                     <View style={s.playlistRowText}>
                       <Text style={[s.playlistRowName, { color: colors.text }]} numberOfLines={1}>{playlist.name}</Text>

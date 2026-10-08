@@ -16,8 +16,6 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { ColorsShape } from '@/constants/Colors';
 import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
-import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
 import { CatalogAlbum } from '@/context/CatalogService';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
@@ -152,7 +150,6 @@ export default function PlaylistAddAlbumsScreen() {
   const isDark = colors.isDark;
   const { playlistId } = useLocalSearchParams<{ playlistId: string }>();
   const { playlists, loggedAlbums, addAlbumToPlaylist, addAlbumsToPlaylist } = useAlbums();
-  const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -247,31 +244,8 @@ export default function PlaylistAddAlbumsScreen() {
 
   function handleAdd(album: CatalogAlbum) {
     if (!playlist) return;
-    addAlbumToPlaylist(playlist.id, album.id);
+    addAlbumToPlaylist(playlist.id, album.id, album);
     setAddedIds((prev) => new Set([...prev, album.id]));
-
-    // Store album metadata so it's retrievable in playlist-detail even if never logged.
-    // ignoreDuplicates: true ensures we never overwrite an existing logged entry.
-    if (user) {
-      supabase
-        .from('user_albums')
-        .upsert(
-          {
-            user_id:     user.id,
-            spotify_id:  album.id,
-            title:       album.title,
-            artist:      album.artist,
-            year:        album.year ?? 0,
-            artwork_url: album.artworkUrl ?? null,
-            rating:      0,
-            listened_at: null,
-          },
-          { onConflict: 'user_id,spotify_id', ignoreDuplicates: true }
-        )
-        .then(({ error }) => {
-          if (error) console.error('[PlaylistAddAlbums] catalog upsert error:', error.message);
-        });
-    }
   }
 
   const isEmpty = !query.trim();

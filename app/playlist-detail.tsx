@@ -15,7 +15,7 @@ import { Gesture, GestureDetector, ScrollView as GHScrollView } from 'react-nati
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, SharedValue } from 'react-native-reanimated';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
+import { useAlbums, LoggedAlbum, saveAlbumCatalogRow } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { countOrNull } from '@/lib/supabaseQuery';
@@ -181,7 +181,7 @@ export default function PlaylistDetailScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const { id, userId: paramUserId } = useLocalSearchParams<{ id: string; userId?: string }>();
-  const { playlists, loggedAlbums, removeAlbumFromPlaylist, reorderPlaylistAlbums, updatePlaylist, deletePlaylist } = useAlbums();
+  const { playlists, loggedAlbums, wantToListen, removeAlbumFromPlaylist, reorderPlaylistAlbums, updatePlaylist, deletePlaylist } = useAlbums();
   const { user } = useAuth();
   const { isPro, proTheme: ownProTheme } = usePro();
 
@@ -347,30 +347,63 @@ export default function PlaylistDetailScreen() {
     );
     if (missingIds.length === 0) return;
 
-    supabase
-      .from('user_albums')
-      .select('spotify_id, title, artist, artwork_url, year, rating')
-      .in('spotify_id', missingIds)
-      .eq('user_id', user.id)
-      .then(({ data }) => {
-        if (!data || data.length === 0) return;
-        setExtraAlbums((prev) => {
-          const next = new Map(prev);
-          data.forEach((row: any, i: number) => {
-            next.set(row.spotify_id, {
-              id:         row.spotify_id,
-              title:      row.title       ?? row.spotify_id,
-              artist:     row.artist      ?? '',
-              year:       row.year        ?? 0,
-              rating:     row.rating      ?? 0,
-              dateLogged: '',
-              artworkUrl: row.artwork_url ?? undefined,
-              coverColor: ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a'][i % 6],
-            });
-          });
-          return next;
+    type CatalogRow = { spotify_id: string; title: string | null; artist: string | null; artwork_url: string | null; year: number | null; rating: number | null };
+    (async () => {
+      const found = new Map<string, CatalogRow>();
+      const { data } = await supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, artwork_url, year, rating')
+        .in('spotify_id', missingIds)
+        .eq('user_id', user.id);
+      for (const row of (data ?? []) as CatalogRow[]) found.set(row.spotify_id, row);
+
+      // Albums added from the album page before it saved a catalog row have no
+      // user_albums row of ours — the playlist counted them but couldn't show
+      // them. Recover the details from Want to Listen or anyone else's log of
+      // the same album, and save our own row so it sticks.
+      const recovered: CatalogRow[] = [];
+      let stillMissing = missingIds.filter((aid) => !found.has(aid));
+      for (const aid of stillMissing) {
+        const w = wantToListen.find((a) => a.id === aid);
+        if (w) recovered.push({ spotify_id: aid, title: w.title, artist: w.artist, artwork_url: w.artworkUrl, year: w.year, rating: 0 });
+      }
+      stillMissing = stillMissing.filter((aid) => !recovered.some((r) => r.spotify_id === aid));
+      if (stillMissing.length > 0) {
+        const { data: others } = await supabase
+          .from('user_albums')
+          .select('spotify_id, title, artist, artwork_url, year')
+          .in('spotify_id', stillMissing)
+          .not('title', 'is', null)
+          .limit(stillMissing.length * 5);
+        for (const row of (others ?? []) as CatalogRow[]) {
+          if (!recovered.some((r) => r.spotify_id === row.spotify_id)) recovered.push({ ...row, rating: 0 });
+        }
+      }
+      for (const row of recovered) {
+        found.set(row.spotify_id, row);
+        saveAlbumCatalogRow(user.id, row.spotify_id, {
+          title: row.title ?? '', artist: row.artist ?? '', year: row.year ?? 0, artworkUrl: row.artwork_url,
         });
+      }
+
+      if (found.size === 0) return;
+      setExtraAlbums((prev) => {
+        const next = new Map(prev);
+        [...found.values()].forEach((row, i) => {
+          next.set(row.spotify_id, {
+            id:         row.spotify_id,
+            title:      row.title       ?? row.spotify_id,
+            artist:     row.artist      ?? '',
+            year:       row.year        ?? 0,
+            rating:     row.rating      ?? 0,
+            dateLogged: '',
+            artworkUrl: row.artwork_url ?? undefined,
+            coverColor: ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a'][i % 6],
+          });
+        });
+        return next;
       });
+    })();
   }, [ownPlaylist?.id, ownPlaylist?.albumIds?.join(','), loggedById, user?.id]);
 
   const ownAlbums = useMemo(

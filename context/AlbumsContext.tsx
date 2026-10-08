@@ -84,6 +84,41 @@ export type WantToListenAlbum = {
   durationMs?: number;
 };
 
+/** What a playlist needs to show an album the user never logged. */
+export type PlaylistAlbumMeta = {
+  title: string;
+  artist: string;
+  year?: number;
+  artworkUrl?: string | null;
+};
+
+/**
+ * playlist_albums only stores the id, so playlist-detail looks the album up in
+ * user_albums. For an album that was never logged there is no row, and the
+ * playlist would count it but not show it — so store a catalog row
+ * (rating 0, listened_at null: AlbumsContext only loads rows with a
+ * listened_at, so it never shows up as logged). ignoreDuplicates keeps a real
+ * logged entry untouched.
+ */
+export async function saveAlbumCatalogRow(userId: string, albumId: string, album: PlaylistAlbumMeta) {
+  const { error } = await supabase
+    .from('user_albums')
+    .upsert(
+      {
+        user_id:     userId,
+        spotify_id:  albumId,
+        title:       album.title,
+        artist:      album.artist,
+        year:        album.year ?? 0,
+        artwork_url: album.artworkUrl ?? null,
+        rating:      0,
+        listened_at: null,
+      },
+      { onConflict: 'user_id,spotify_id', ignoreDuplicates: true }
+    );
+  if (error) console.error('[AlbumsContext] catalog upsert error:', error.message);
+}
+
 export type Playlist = {
   id: string;
   name: string;
@@ -129,7 +164,7 @@ type AlbumsContextType = {
   createPlaylist: (name: string, description?: string) => string;
   updatePlaylist: (id: string, name: string, description?: string) => void;
   deletePlaylist: (id: string) => void;
-  addAlbumToPlaylist: (playlistId: string, albumId: string) => void;
+  addAlbumToPlaylist: (playlistId: string, albumId: string, album?: PlaylistAlbumMeta) => void;
   addAlbumsToPlaylist: (playlistId: string, albumIds: string[]) => void;
   removeAlbumFromPlaylist: (playlistId: string, albumId: string) => void;
   reorderPlaylistAlbums: (playlistId: string, albumIds: string[]) => void;
@@ -1190,19 +1225,23 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function addAlbumToPlaylist(playlistId: string, albumId: string) {
+  function addAlbumToPlaylist(playlistId: string, albumId: string, album?: PlaylistAlbumMeta) {
+    if (!albumId) return;
+    // Write the catalog row first so the album is resolvable by the time the
+    // playlist row exists.
+    const catalogWrite = user && album ? saveAlbumCatalogRow(user.id, albumId, album) : Promise.resolve();
     setPlaylists((prev) =>
       prev.map((p) => {
         if (p.id !== playlistId || p.albumIds.includes(albumId)) return p;
         const updated = { ...p, albumIds: [...p.albumIds, albumId] };
 
         if (user) {
-          supabase
+          catalogWrite.then(() => supabase
             .from('playlist_albums')
             .upsert(
               { playlist_id: playlistId, spotify_id: albumId, position: updated.albumIds.length - 1 },
               { onConflict: 'playlist_id,spotify_id' }
-            )
+            ))
             .then(({ error }) => { if (error) console.error('[AlbumsContext] addAlbumToPlaylist error:', error.message); });
         }
 
