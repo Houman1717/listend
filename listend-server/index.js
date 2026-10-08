@@ -4337,12 +4337,22 @@ async function resolveShortRunTimes(items) {
   const ids = items.map(i => i.id).filter(id => /^\d+$/.test(id));
   if (ids.length === 0) return new Map();
 
+  // Ask each album's own storefront: a pinned record isn't on `us`, so asking
+  // there drops it and it files by track count — Catapilla's 1971 LP, four
+  // tracks and 41 minutes, landed under EPs.
+  const byStorefront = new Map();
+  for (const id of ids) {
+    const sf = storefrontFor(id);
+    if (!byStorefront.has(sf)) byStorefront.set(sf, []);
+    byStorefront.get(sf).push(id);
+  }
+
   const runTimes = new Map();
   // Apple caps ids per request; these lists are tiny, but chunk anyway.
-  for (let i = 0; i < ids.length; i += 25) {
-    const chunk = ids.slice(i, i + 25);
+  for (const [sf, sfIds] of byStorefront) for (let i = 0; i < sfIds.length; i += 25) {
+    const chunk = sfIds.slice(i, i + 25);
     try {
-      const data = await amFetch(`/catalog/us/albums?ids=${chunk.join(',')}&include=tracks`);
+      const data = await amFetch(`/catalog/${sf}/albums?ids=${chunk.join(',')}&include=tracks`);
       for (const album of (data.data ?? [])) {
         const tracks = album.relationships?.tracks?.data ?? [];
         if (tracks.length === 0) continue;
