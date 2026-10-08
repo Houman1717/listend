@@ -438,6 +438,54 @@ pinStorefront('gb', [
   '1442531414',
   '1442531432', '1442531440', '1442531715', '1442531722',
 ]);
+// LL COOL J — Radio (1985)
+pinStorefront('it', [
+  '1443530975',
+  '1443531268', '1443531378', '1443531384', '1443531394', '1443531399', '1443531705',
+  '1443531714', '1443531726', '1443531856', '1443531868', '1443531876',
+]);
+// LL COOL J — Bigger and Deffer (1987)
+pinStorefront('it', [
+  '1440834457',
+  '1440834459', '1440834460', '1440835001', '1440835002', '1440835004', '1440835005',
+  '1440835006', '1440835011', '1440835013', '1440835014', '1440835015', '1440835016',
+]);
+// LL COOL J — Walking With a Panther (1989)
+pinStorefront('it', [
+  '1443938253',
+  '1443938382', '1443938388', '1443938391', '1443938395', '1443938399', '1443938401',
+  '1443938405', '1443938406', '1443938409', '1443938501', '1443938503', '1443938508',
+  '1443938511', '1443938514', '1443938516', '1443938518', '1443938522', '1443938524',
+]);
+// LL COOL J — Mama Said Knock You Out (1990)
+pinStorefront('it', [
+  '1443212742',
+  '1443212748', '1443212751', '1443212754', '1443212757', '1443212759', '1443212760',
+  '1443212762', '1443212765', '1443212767', '1443212769', '1443212861', '1443212864',
+  '1443212866', '1443212869',
+]);
+// LL COOL J — All World (1996)
+pinStorefront('it', [
+  '1440911214',
+  '1440911223', '1440911230', '1440911264', '1440911267', '1440911269', '1440911273',
+  '1440911275', '1440911277', '1440911279', '1440911283', '1440911285', '1440911288',
+  '1440911383', '1440911386', '1440911387', '1440911388',
+]);
+// LL COOL J — All World 2 (2009)
+pinStorefront('it', [
+  '1443266187',
+  '1443266191', '1443266194', '1443266197', '1443266261', '1443266263', '1443266266',
+  '1443266270', '1443266272', '1443266276', '1443266280', '1443266283', '1443266288',
+  '1443266383', '1443266387', '1443266391', '1443266395', '1443266398',
+]);
+// LL COOL J — Austin City Limits - Live (2018)
+pinStorefront('it', [
+  '1339115756',
+  '1339115937', '1339115939', '1339115940', '1339115941', '1339115942', '1339115943',
+  '1339115944', '1339115945', '1339115946', '1339115947', '1339115948', '1339115949',
+  '1339115950', '1339115951', '1339115952', '1339115953', '1339115954', '1339115955',
+  '1339115956',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -742,6 +790,34 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'catapilla::changes': {
     id: '1442531414', title: 'Changes', artist: 'Catapilla', year: 1972,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/29/db/59/29db5966-8b9c-7df2-2751-f2c0c1c8a147/00602517638563.rgb.jpg/500x500bb.jpg',
+  },
+  'llcoolj::radio': {
+    id: '1443530975', title: 'Radio', artist: 'LL COOL J', year: 1985,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/5f/92/83/5f92835e-4c6f-dad1-1941-4934674611f2/00602537402625.rgb.jpg/500x500bb.jpg',
+  },
+  'llcoolj::biggeranddeffer': {
+    id: '1440834457', title: 'Bigger and Deffer', artist: 'LL COOL J', year: 1987,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/ac/9a/4b/ac9a4b1c-2bf7-095e-4138-7cefb3837bbc/00602547742155.rgb.jpg/500x500bb.jpg',
+  },
+  'llcoolj::walkingwithapanther': {
+    id: '1443938253', title: 'Walking With a Panther', artist: 'LL COOL J', year: 1989,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/42/14/fa/4214fa69-0df2-fbbe-dab7-ebf1186dc92c/00731452735522.rgb.jpg/500x500bb.jpg',
+  },
+  'llcoolj::mamasaidknockyouout': {
+    id: '1443212742', title: 'Mama Said Knock You Out', artist: 'LL COOL J', year: 1990,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/74/82/a0/7482a0f8-52d7-d5d3-ea57-176ee6ec3f4c/00602547742278.rgb.jpg/500x500bb.jpg',
+  },
+  'llcoolj::allworld': {
+    id: '1440911214', title: 'All World', artist: 'LL COOL J', year: 1996,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/99/7e/2b/997e2bf0-8401-dc80-8e66-a1070fd104dd/06UMGIM05536.rgb.jpg/500x500bb.jpg',
+  },
+  'llcoolj::allworld2': {
+    id: '1443266187', title: 'All World 2', artist: 'LL COOL J', year: 2009,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/95/d0/e3/95d0e329-fc3e-d6fb-0837-928a84f54b37/00602527191225.rgb.jpg/500x500bb.jpg',
+  },
+  'llcoolj::austincitylimitslive': {
+    id: '1339115756', title: 'Austin City Limits - Live', artist: 'LL COOL J', year: 2018,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6c/ac/07/6cac0707-d573-73f8-f63f-f3c975fb446e/Cover.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -4128,6 +4204,50 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/29/db/59/29db5966-8b9c-7df2-2751-f2c0c1c8a147/00602517638563.rgb.jpg/500x500bb.jpg',
       year: 1972, isSingle: false, isCompilation: false, trackCount: 4,
       url: 'https://music.apple.com/gb/album/changes/1442531414', type: 'album',
+    },
+  ],
+  '50311': [ // LL COOL J — not licensed for `us`
+    {
+      id: '1443530975', title: 'Radio',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/5f/92/83/5f92835e-4c6f-dad1-1941-4934674611f2/00602537402625.rgb.jpg/500x500bb.jpg',
+      year: 1985, isSingle: false, isCompilation: false, trackCount: 11,
+      url: 'https://music.apple.com/it/album/radio/1443530975', type: 'album',
+    },
+    {
+      id: '1440834457', title: 'Bigger and Deffer',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/ac/9a/4b/ac9a4b1c-2bf7-095e-4138-7cefb3837bbc/00602547742155.rgb.jpg/500x500bb.jpg',
+      year: 1987, isSingle: false, isCompilation: false, trackCount: 12,
+      url: 'https://music.apple.com/it/album/bigger-and-deffer/1440834457', type: 'album',
+    },
+    {
+      id: '1443938253', title: 'Walking With a Panther',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/42/14/fa/4214fa69-0df2-fbbe-dab7-ebf1186dc92c/00731452735522.rgb.jpg/500x500bb.jpg',
+      year: 1989, isSingle: false, isCompilation: false, trackCount: 18,
+      url: 'https://music.apple.com/it/album/walking-with-a-panther/1443938253', type: 'album',
+    },
+    {
+      id: '1443212742', title: 'Mama Said Knock You Out',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/74/82/a0/7482a0f8-52d7-d5d3-ea57-176ee6ec3f4c/00602547742278.rgb.jpg/500x500bb.jpg',
+      year: 1990, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/it/album/mama-said-knock-you-out/1443212742', type: 'album',
+    },
+    {
+      id: '1440911214', title: 'All World',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/99/7e/2b/997e2bf0-8401-dc80-8e66-a1070fd104dd/06UMGIM05536.rgb.jpg/500x500bb.jpg',
+      year: 1996, isSingle: false, isCompilation: true, trackCount: 16,
+      url: 'https://music.apple.com/it/album/all-world/1440911214', type: 'album',
+    },
+    {
+      id: '1443266187', title: 'All World 2',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/95/d0/e3/95d0e329-fc3e-d6fb-0837-928a84f54b37/00602527191225.rgb.jpg/500x500bb.jpg',
+      year: 2009, isSingle: false, isCompilation: true, trackCount: 17,
+      url: 'https://music.apple.com/it/album/all-world-2/1443266187', type: 'album',
+    },
+    {
+      id: '1339115756', title: 'Austin City Limits - Live',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6c/ac/07/6cac0707-d573-73f8-f63f-f3c975fb446e/Cover.jpg/500x500bb.jpg',
+      year: 2018, isSingle: false, isCompilation: false, trackCount: 19,
+      url: 'https://music.apple.com/it/album/austin-city-limits-live/1339115756', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`

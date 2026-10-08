@@ -115,13 +115,23 @@ async function main() {
   // Two pressings of one record (Fabri Fibra's Bugiardo is listed twice on it,
   // 18 and 19 tracks) would pin as two entries and the discography would show
   // the fuller one anyway — so pick that one here and say so.
+  // The original over an edition (LL Cool J's 14-track Mama Said Knock You
+  // Out, not the 28-track Deluxe that more tracks alone would pick), then the
+  // explicit pressing over the cleaned one, then the fuller one.
+  const preferPressing = (a, b) => {
+    const suffixed = r => /[([]/.test(r.collectionName);
+    if (suffixed(a) !== suffixed(b)) return !suffixed(a);
+    const cleaned = r => r.collectionExplicitness === 'cleaned';
+    if (cleaned(a) !== cleaned(b)) return !cleaned(a);
+    return (a.trackCount ?? 0) >= (b.trackCount ?? 0);
+  };
   const byRecord = new Map();
   for (const r of missing.values()) {
     const key = `${baseTitle(r.collectionName)}::${year(r)}`;
     const rival = byRecord.get(key);
     if (!rival) { byRecord.set(key, r); continue; }
-    const [win, lose] = (r.trackCount ?? 0) >= (rival.trackCount ?? 0) ? [r, rival] : [rival, r];
-    console.log(`  · ${win.collectionName} (${year(win)}) is listed twice on ${win.storefront}: keeping the ${win.trackCount}-track pressing over the ${lose.trackCount}-track one`);
+    const [win, lose] = preferPressing(r, rival) ? [r, rival] : [rival, r];
+    console.log(`  · ${win.collectionName} (${year(win)}) is listed twice on ${win.storefront}: keeping the ${win.trackCount}-track pressing over the ${lose.trackCount}-track ${lose.collectionName === win.collectionName ? 'one' : `"${lose.collectionName}"`}`);
     byRecord.set(key, win);
   }
 
