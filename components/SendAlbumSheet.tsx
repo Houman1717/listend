@@ -176,6 +176,11 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
                 <Ionicons name="search-outline" size={13} color={searchOpen ? '#fff' : colors.tint} />
               </Pressable>
             )}
+            {/* Expanded for search the sheet covers the whole backdrop, so
+                tapping outside can't close it — this always can. */}
+            <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [s.closeBtn, { opacity: pressed ? 0.5 : 1 }]}>
+              <FontAwesome name="times" size={18} color={colors.subtext} />
+            </Pressable>
           </View>
           {searchOpen && (
             <View style={[s.searchBar, { borderBottomColor: divider }]}>
@@ -217,6 +222,7 @@ const s = StyleSheet.create({
   titleText: { flex: 1 },
   title: { fontSize: 17, fontWeight: '700' },
   subtitle: { fontSize: 13, marginTop: 2 },
+  closeBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   searchBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth },
   searchInput: { flex: 1, fontSize: 15, height: 36 },
