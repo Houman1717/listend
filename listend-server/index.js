@@ -2253,6 +2253,32 @@ function mostCommonYear(counts) {
   return best;
 }
 
+// Grouping key for the community lists: edition tags stripped (baseTitle), so
+// "good kid, m.A.A.d city", "(Deluxe)" and "(Deluxe Version)" are one album
+// instead of three entries splitting its ratings/logs.
+function communityAlbumKey(title, artist) {
+  return `${foldDiacritics(baseTitle(title))}::${foldDiacritics(artist)}`;
+}
+
+// Which catalog entry stands for a merged group: a plain title (no edition
+// suffix) wins, then whichever id the most rows use.
+function tallyRepresentative(reps, r) {
+  const e = reps.get(r.spotify_id);
+  if (e) { e.count++; if (!e.artworkUrl && r.artwork_url) e.artworkUrl = r.artwork_url; return; }
+  reps.set(r.spotify_id, { id: r.spotify_id, title: r.title, artist: r.artist, artworkUrl: r.artwork_url ?? '', count: 1 });
+}
+function pickRepresentative(reps) {
+  const plain = t => !/[\(\[]/.test(t ?? '');
+  let best = null;
+  for (const r of reps.values()) {
+    if (!best
+      || (plain(r.title) && !plain(best.title))
+      || (plain(r.title) === plain(best.title) && r.count > best.count)) best = r;
+  }
+  const artworkUrl = best.artworkUrl || ([...reps.values()].find(r => r.artworkUrl)?.artworkUrl ?? '');
+  return { id: best.id, title: best.title, artist: best.artist, artworkUrl };
+}
+
 // ── GET /api/discover/community-popular ──────────────────────────────────────
 // All-time most-logged albums from real Listend user data.
 // Aggregates in JS (same pattern as fetchTopAlbumsThisWeek) over up to 5000 rows.
@@ -2287,20 +2313,19 @@ app.get('/api/discover/community-popular', async (req, res) => {
     // otherwise a single user could spam re-listens to push an album to the
     // top on their own.
     //
-    // Grouped by normalized title+artist rather than spotify_id — the same
-    // release often gets logged under different catalog IDs (reissues,
-    // remasters), which used to split its popularity count into separate
-    // buckets (and could even show the same album twice in the list).
+    // Grouped by title (edition tags stripped) + artist rather than
+    // spotify_id — the same release often gets logged under different catalog
+    // IDs (reissues, remasters, deluxe editions), which used to split its
+    // popularity count into separate buckets and show the album twice.
     const entries = new Map();
     const getEntry = (r) => {
-      const key = `${foldDiacritics(r.title)}::${foldDiacritics(r.artist)}`;
+      const key = communityAlbumKey(r.title, r.artist);
       let e = entries.get(key);
       if (!e) {
-        e = { album: { id: r.spotify_id, title: r.title ?? '', artist: r.artist ?? '', year: 0, artworkUrl: r.artwork_url ?? '' }, baseUsers: new Set(), relistenUsers: new Set(), yearCounts: new Map() };
+        e = { reps: new Map(), baseUsers: new Set(), relistenUsers: new Set(), yearCounts: new Map() };
         entries.set(key, e);
-      } else if (!e.album.artworkUrl && r.artwork_url) {
-        e.album.artworkUrl = r.artwork_url;
       }
+      tallyRepresentative(e.reps, r);
       tallyYear(e.yearCounts, r.year);
       return e;
     };
@@ -2317,7 +2342,7 @@ app.get('/api/discover/community-popular', async (req, res) => {
     const results = Array.from(entries.values())
       .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
       .slice(0, 201)
-      .map(e => ({ ...e.album, year: mostCommonYear(e.yearCounts) }));
+      .map(e => ({ ...pickRepresentative(e.reps), year: mostCommonYear(e.yearCounts) }));
 
     cacheSet(CACHE_KEY, results, TTL_30M);
     await setCache(CACHE_KEY, results);
@@ -2348,41 +2373,38 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
   try {
     const data = await fetchAllRows((from, to) => supabase
       .from('user_albums')
-      .select('spotify_id, title, artist, year, artwork_url, rating')
+      .select('spotify_id, user_id, title, artist, year, artwork_url, rating')
       .not('rating', 'is', null)
       .gt('rating', 0)
       .range(from, to));
 
-    // Group by normalized title+artist rather than spotify_id — the same
-    // release often gets logged under different catalog IDs (reissues,
-    // remasters), which used to split its ratings into separate buckets and
-    // rank it off an average nobody actually sees (album-detail merges by
-    // title+artist too, per resolveCanonicalAlbum/community reviews query).
-    const agg = new Map();
+    // Group by title (edition tags stripped) + artist rather than spotify_id
+    // — the same release often gets logged under different catalog IDs
+    // (reissues, remasters, deluxe editions), which used to split its ratings
+    // into separate buckets and list the album two or three times.
+    //
+    // One vote per person per album: someone who rated both the plain and the
+    // deluxe edition counts once, at the average of their ratings.
+    const groups = new Map();
     for (const r of (data ?? [])) {
-      if (!r.spotify_id || !r.title || !r.artist) continue;
-      const key = `${foldDiacritics(r.title)}::${foldDiacritics(r.artist)}`;
-      const e = agg.get(key);
-      if (e) {
-        e.totalRating += r.rating;
-        e.count++;
-        if (!e.album.artworkUrl && r.artwork_url) e.album.artworkUrl = r.artwork_url;
-        const idCount = (e.idCounts.get(r.spotify_id) ?? 0) + 1;
-        e.idCounts.set(r.spotify_id, idCount);
-        if (idCount > e.topIdCount) { e.topIdCount = idCount; e.album.id = r.spotify_id; }
-        tallyYear(e.yearCounts, r.year);
-      } else {
-        const yearCounts = new Map();
-        tallyYear(yearCounts, r.year);
-        agg.set(key, {
-          album: { id: r.spotify_id, title: r.title, artist: r.artist, year: 0, artworkUrl: r.artwork_url ?? '' },
-          totalRating: r.rating,
-          count: 1,
-          idCounts: new Map([[r.spotify_id, 1]]),
-          topIdCount: 1,
-          yearCounts,
-        });
+      if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
+      const key = communityAlbumKey(r.title, r.artist);
+      let g = groups.get(key);
+      if (!g) {
+        g = { reps: new Map(), users: new Map(), yearCounts: new Map() };
+        groups.set(key, g);
       }
+      tallyRepresentative(g.reps, r);
+      tallyYear(g.yearCounts, r.year);
+      const u = g.users.get(r.user_id) ?? { sum: 0, n: 0 };
+      u.sum += r.rating; u.n++;
+      g.users.set(r.user_id, u);
+    }
+    const agg = new Map();
+    for (const [key, g] of groups) {
+      let totalRating = 0;
+      for (const u of g.users.values()) totalRating += u.sum / u.n;
+      agg.set(key, { album: pickRepresentative(g.reps), totalRating, count: g.users.size, yearCounts: g.yearCounts });
     }
 
     const qualifying = Array.from(agg.values()).filter(e => e.count >= MIN_RATINGS);
