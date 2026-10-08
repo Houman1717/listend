@@ -1547,7 +1547,7 @@ export default function AlbumDetailScreen() {
                 onPress={() => setShowPlaylists(true)}
                 hitSlop={12}
                 style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
-                <FontAwesome name="list-alt" size={19} color="#D4A017" />
+                <FontAwesome name="list" size={18} color="#D4A017" />
               </Pressable>
             ),
         }}
