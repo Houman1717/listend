@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, FlatList, Pressable, Modal, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, View, Text, FlatList, Pressable, Modal, ActivityIndicator, TextInput, LayoutAnimation } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -30,18 +30,14 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
-  // Height of the full list. While searching the sheet is held at it so
-  // filtering doesn't make it jump down the screen — as a shrinkable height,
-  // not a minHeight: a minHeight wouldn't give way to the keyboard and pushed
-  // the title and search bar off the top of the screen.
-  const fullHeight = useRef(0);
-  const [heldHeight, setHeldHeight] = useState<number | undefined>(undefined);
 
-  // Same toggle as the library screens' search (my-listend etc.).
+  // Same toggle as the library screens' search (my-listend etc.). Searching
+  // expands the sheet to (nearly) full height, pinned under the status bar —
+  // see the sheet style below for why it doesn't dodge the keyboard instead.
   function toggleSearch() {
     const next = !searchOpen;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSearchOpen(next);
-    setHeldHeight(next ? fullHeight.current : undefined);
     if (!next) setQuery('');
     else setTimeout(() => searchInputRef.current?.focus(), 50);
   }
@@ -60,7 +56,6 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
     setLoadFailed(false);
     setSendState({});
     setSearchOpen(false);
-    setHeldHeight(undefined);
     setQuery('');
     fetchDMFriends(user.id).then(result => {
       if (cancelled) return;
@@ -104,6 +99,8 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        // iOS: scroll the last rows out from under the keyboard.
+        automaticallyAdjustKeyboardInsets
         renderItem={({ item }) => {
           const state = sendState[item.id];
           const sent = state === 'sent';
@@ -156,11 +153,9 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.overlay}>
+      <View style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View
-          style={[s.sheet, { backgroundColor: sheetBg, height: heldHeight }]}
-          onLayout={e => { if (!searchOpen) fullHeight.current = e.nativeEvent.layout.height; }}>
+        <View style={[s.sheet, searchOpen ? s.sheetSearching : s.sheetResting, { backgroundColor: sheetBg }]}>
           <View style={s.handle} />
           <View style={s.titleRow}>
             <View style={s.titleText}>
@@ -201,15 +196,22 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
           )}
           {body}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
 const s = StyleSheet.create({
-  // paddingTop keeps the sheet clear of the status bar when the keyboard is up.
   overlay: { flex: 1, justifyContent: 'flex-end', paddingTop: 60 },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 40, maxHeight: '75%', flexShrink: 1 },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 40 },
+  sheetResting: { maxHeight: '75%' },
+  // While searching the sheet fills the screen below the status bar (the
+  // overlay's paddingTop) and the keyboard simply covers the bottom of the
+  // list. It used to sit in a KeyboardAvoidingView, but inside this Modal that
+  // over-shot by ~250pt on real devices (iOS and Android) and pushed the title
+  // and search bar off the top of the screen. Nothing here moves with the
+  // keyboard now, so it can't overshoot.
+  sheetSearching: { flex: 1 },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#4a3020', alignSelf: 'center', marginBottom: 16 },
   titleRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8, gap: 12 },
   titleText: { flex: 1 },
