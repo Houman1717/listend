@@ -235,7 +235,7 @@ function AuthGate() {
           pathname: '/month-in-review',
           params: { year: String(data.year), month: String(data.month) },
         } as any);
-      } else if (data.type === 'message') {
+      } else if (data.type === 'message' || data.type === 'like_message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });
       } else if (data.type === 'follow_request') {
         // Confirm/Delete live on the notifications screen.

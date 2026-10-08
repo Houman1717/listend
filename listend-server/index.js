@@ -6535,6 +6535,7 @@ const PUSH_TITLES = {
   like_playlist: 'Someone liked your playlist',
   like_comment:  'Someone liked your comment',
   like_reply:    'Someone liked your reply',
+  like_message:  'Someone liked your message',
   comment:       'New comment',
   comment_reply: 'New reply',
 };
@@ -6548,6 +6549,7 @@ const PUSH_BODIES = {
   like_playlist: name => `${name} liked your playlist`,
   like_comment:  name => `${name} liked your comment`,
   like_reply:    name => `${name} liked your reply`,
+  like_message:  name => `${name} liked your message`,
   comment:       name => `${name} commented on your review`,
   comment_reply: name => `${name} replied to your comment`,
 };

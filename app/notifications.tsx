@@ -25,7 +25,7 @@ import { navigateToReviewNotification } from '@/lib/navigateToReviewNotification
 
 type NotificationItem = {
   id: string;
-  type: 'follow' | 'follow_request' | 'follow_accepted' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'like_reply' | 'comment' | 'comment_reply';
+  type: 'follow' | 'follow_request' | 'follow_accepted' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'like_reply' | 'like_message' | 'comment' | 'comment_reply';
   read: boolean;
   createdAt: string;
   actorId: string;
@@ -47,6 +47,7 @@ const NOTIF_META: Record<NotificationItem['type'], { body: string; iconName: str
   like_playlist: { body: 'liked your playlist',      iconName: 'heart',     iconColor: '#D4A017' },
   like_comment:  { body: 'liked your comment',       iconName: 'heart',     iconColor: '#D4A017' },
   like_reply:    { body: 'liked your reply',         iconName: 'heart',     iconColor: '#D4A017' },
+  like_message:  { body: 'liked your message',       iconName: 'heart',     iconColor: '#D4A017' },
   comment:       { body: 'commented on your review', iconName: 'comment',  iconColor: '#D4A017' },
   comment_reply: { body: 'replied to your comment',  iconName: 'comment',  iconColor: '#D4A017' },
 };
@@ -258,7 +259,7 @@ export default function NotificationsScreen() {
             onRespond={accept => respondToRequest(item, accept)}
             onAvatarPress={() => router.push({ pathname: '/user-profile', params: { userId: item.actorId } })}
             onPress={() => {
-              if (item.type === 'message') {
+              if (item.type === 'message' || item.type === 'like_message') {
                 router.push({ pathname: '/dm-conversation', params: { userId: item.actorId } });
               } else if ((item.type === 'like_review' || item.type === 'like_comment' || item.type === 'like_reply' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
                 navigateToReviewNotification(router, item.targetId, item.type !== 'like_review', item.commentId ?? undefined);
