@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
@@ -309,6 +309,7 @@ export default function PopularReviewsScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <FlatList
         data={reviews}
         keyExtractor={item => item.id}
