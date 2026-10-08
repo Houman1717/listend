@@ -1178,46 +1178,57 @@ export default function UserProfileScreen() {
             </View>
           </View>
 
-          <View style={[s.rule, { backgroundColor: colors.border }]} />
+          {/* Empty Top 5 Songs is hidden on other people's profiles — blank slots read as broken */}
+          {(isOwnProfile || top5EditMode || profile.top_songs.some(Boolean)) && (
+            <>
+              <View style={[s.rule, { backgroundColor: colors.border }]} />
 
-          {/* ── Top 5 Songs ──────────────────────────────────────────────────── */}
-          <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 SONGS</Text>
-            </View>
-            <View style={s.favRow}>
-              {Array.from({ length: 5 }).map((_, i) => {
-                const sg = top5EditMode ? draftTopSongs[i] : profile.top_songs[i];
-                if (top5EditMode) {
-                  return (
-                    <FavSlotEdit
-                      key={i}
-                      item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
-                      onPress={() => setSlotPicker({ type: 'song', index: i })}
-                    />
-                  );
-                }
-                return (
-                  <FavSlotReadOnly
-                    key={i}
-                    item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
-                    onPress={sg ? () => setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
+              {/* ── Top 5 Songs ──────────────────────────────────────────────────── */}
+              <View style={s.section}>
+                <View style={s.sectionHeader}>
+                  <Text style={[s.sectionTitle, { color: colors.textMuted }]}>TOP 5 SONGS</Text>
+                </View>
+                {/* Songs read as a pressable list; the cover row only appears for editing */}
+                {!top5EditMode ? (
+                  <TopSongsCredits
+                    songs={profile.top_songs}
                     colors={colors}
+                    onSongPress={i => {
+                      const sg = profile.top_songs[i];
+                      if (sg) setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate });
+                    }}
+                    onAddPress={isOwnProfile ? () => {
+                    handleEnterEditMode();
+                    setSlotPicker({ type: 'song', index: 0 });
+                  } : undefined}
                   />
-                );
-              })}
-            </View>
-            {!top5EditMode && (
-              <TopSongsCredits
-                songs={profile.top_songs}
-                colors={colors}
-                onSongPress={i => {
-                  const sg = profile.top_songs[i];
-                  if (sg) setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate });
-                }}
-              />
-            )}
-          </View>
+                ) : (
+                  <View style={s.favRow}>
+                    {Array.from({ length: 5 }).map((_, i) => {
+                      const sg = top5EditMode ? draftTopSongs[i] : profile.top_songs[i];
+                      if (top5EditMode) {
+                        return (
+                          <FavSlotEdit
+                            key={i}
+                            item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
+                            onPress={() => setSlotPicker({ type: 'song', index: i })}
+                          />
+                        );
+                      }
+                      return (
+                        <FavSlotReadOnly
+                          key={i}
+                          item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
+                          onPress={sg ? () => setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
+                          colors={colors}
+                        />
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            </>
+          )}
 
           {/* ── Nav rows ────────────────────────────────────────────────────── */}
           <View style={[s.navGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>

@@ -1404,32 +1404,39 @@ export default function ListendScreen() {
         <View style={s.sectionHeader}>
           <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 SONGS</Text>
         </View>
-        <DraggableFavRow
-          items={topSongs.map(s => s ? { artworkUrl: s.artworkUrl, title: s.title } : null)}
-          editMode={top5EditMode}
-          onReorder={(from, to) => {
-            const next = [...topSongs];
-            const [moved] = next.splice(from, 1);
-            next.splice(to, 0, moved);
-            reorderTopSongs(next);
-          }}
-          onRemove={i => { const s = topSongs[i]; if (s) removeTopSong(s.id); }}
-          onSlotPress={i => {
-            const song = topSongs[i];
-            if (top5EditMode) {
-              if (!song) router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: String(i) } });
-            } else {
-              if (song) setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
-            }
-          }}
-        />
-        {!top5EditMode && (
+        {/* Songs read as a pressable list; the cover row only appears for editing */}
+        {!top5EditMode ? (
           <TopSongsCredits
             songs={topSongs}
             colors={colors}
             onSongPress={i => {
               const song = topSongs[i];
               if (song) setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+            }}
+            onAddPress={() => {
+              // Land back in edit mode so the other four slots are ready to fill
+              setTop5EditMode(true);
+              router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: '0' } });
+            }}
+          />
+        ) : (
+          <DraggableFavRow
+            items={topSongs.map(s => s ? { artworkUrl: s.artworkUrl, title: s.title } : null)}
+            editMode={top5EditMode}
+            onReorder={(from, to) => {
+              const next = [...topSongs];
+              const [moved] = next.splice(from, 1);
+              next.splice(to, 0, moved);
+              reorderTopSongs(next);
+            }}
+            onRemove={i => { const s = topSongs[i]; if (s) removeTopSong(s.id); }}
+            onSlotPress={i => {
+              const song = topSongs[i];
+              if (top5EditMode) {
+                if (!song) router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: String(i) } });
+              } else {
+                if (song) setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+              }
             }}
           />
         )}
