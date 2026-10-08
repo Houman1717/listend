@@ -1,7 +1,8 @@
-import { StyleSheet, View, Text, FlatList, Pressable, Modal, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, FlatList, Pressable, Modal, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { ProBadge } from '@/components/ProBadge';
@@ -15,7 +16,7 @@ type Props = {
   visible: boolean;
   album: DMAlbum;
   isDark: boolean;
-  colors: { text: string; subtext: string; border: string };
+  colors: { text: string; subtext: string; border: string; tint: string; surface: string };
   onClose: () => void;
 };
 
@@ -26,12 +27,39 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
   const [friends, setFriends] = useState<DMFriend[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [sendState, setSendState] = useState<Record<string, SendState>>({});
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
+  // Height of the full list, so filtering doesn't shrink the sheet and make it
+  // jump down the screen while you type.
+  const fullHeight = useRef(0);
+  const [minHeight, setMinHeight] = useState<number | undefined>(undefined);
+
+  // Same toggle as the library screens' search (my-listend etc.).
+  function toggleSearch() {
+    const next = !searchOpen;
+    setSearchOpen(next);
+    setMinHeight(next ? fullHeight.current : undefined);
+    if (!next) setQuery('');
+    else setTimeout(() => searchInputRef.current?.focus(), 50);
+  }
+
+  const shownFriends = useMemo(() => {
+    const q = query.trim().toLowerCase().replace(/^@/, '');
+    if (!friends || !q) return friends;
+    return friends.filter(f =>
+      f.name.toLowerCase().includes(q) || (f.username ?? '').toLowerCase().includes(q)
+    );
+  }, [friends, query]);
 
   useEffect(() => {
     if (!visible || !user?.id) return;
     let cancelled = false;
     setLoadFailed(false);
     setSendState({});
+    setSearchOpen(false);
+    setMinHeight(undefined);
+    setQuery('');
     fetchDMFriends(user.id).then(result => {
       if (cancelled) return;
       if (result) setFriends(result);
@@ -63,13 +91,17 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
         No friends to send to yet. Friends are people you follow who follow you back.
       </Text>
     );
+  } else if (shownFriends && shownFriends.length === 0) {
+    body = <Text style={[s.empty, { color: colors.subtext }]}>No friends match "{query.trim()}"</Text>;
   } else {
     body = (
       <FlatList
-        data={friends}
+        data={shownFriends}
         keyExtractor={f => f.id}
         style={s.list}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         renderItem={({ item }) => {
           const state = sendState[item.id];
           const sent = state === 'sent';
@@ -88,7 +120,7 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
                   {item.isPro && <ProBadge size="xs" />}
                 </View>
                 {item.username && (
-                  <Text style={[s.handle, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
+                  <Text style={[s.username, { color: colors.subtext }]} numberOfLines={1}>@{item.username}</Text>
                 )}
               </View>
               <Pressable
@@ -122,17 +154,52 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { backgroundColor: sheetBg }]}>
+        <View
+          style={[s.sheet, { backgroundColor: sheetBg, minHeight }]}
+          onLayout={e => { if (!searchOpen) fullHeight.current = e.nativeEvent.layout.height; }}>
           <View style={s.handle} />
-          <Text style={[s.title, { color: colors.text }]}>Send to a Friend</Text>
-          <Text style={[s.subtitle, { color: colors.subtext }]} numberOfLines={1}>
-            {album.title} · {album.artist}
-          </Text>
+          <View style={s.titleRow}>
+            <View style={s.titleText}>
+              <Text style={[s.title, { color: colors.text }]}>Send to a Friend</Text>
+              <Text style={[s.subtitle, { color: colors.subtext }]} numberOfLines={1}>
+                {album.title} · {album.artist}
+              </Text>
+            </View>
+            {friends && friends.length > 0 && (
+              <Pressable
+                onPress={toggleSearch}
+                hitSlop={6}
+                style={({ pressed }) => [s.searchBtn, {
+                  backgroundColor: searchOpen ? colors.tint : colors.surface,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                }]}>
+                <Ionicons name="search-outline" size={13} color={searchOpen ? '#fff' : colors.tint} />
+              </Pressable>
+            )}
+          </View>
+          {searchOpen && (
+            <View style={[s.searchBar, { borderBottomColor: divider }]}>
+              <FontAwesome name="search" size={14} color={colors.subtext} />
+              <TextInput
+                ref={searchInputRef}
+                style={[s.searchInput, { color: colors.text }]}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search friends…"
+                placeholderTextColor={colors.subtext}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+              />
+            </View>
+          )}
           {body}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -141,8 +208,13 @@ const s = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 40, maxHeight: '75%' },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#4a3020', alignSelf: 'center', marginBottom: 16 },
-  title: { fontSize: 17, fontWeight: '700', paddingHorizontal: 20 },
-  subtitle: { fontSize: 13, paddingHorizontal: 20, marginTop: 2, marginBottom: 8 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8, gap: 12 },
+  titleText: { flex: 1 },
+  title: { fontSize: 17, fontWeight: '700' },
+  subtitle: { fontSize: 13, marginTop: 2 },
+  searchBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchInput: { flex: 1, fontSize: 15, height: 36 },
   list: { flexGrow: 0 },
   empty: { fontSize: 14, lineHeight: 20, paddingHorizontal: 20, paddingVertical: 24, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 11, gap: 12, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -151,7 +223,7 @@ const s = StyleSheet.create({
   rowText: { flex: 1, gap: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   name: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
-  handle: { fontSize: 12 },
+  username: { fontSize: 12 },
   sendBtn: { minWidth: 72, height: 32, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   sendText: { fontSize: 13, fontWeight: '600' },
 });
