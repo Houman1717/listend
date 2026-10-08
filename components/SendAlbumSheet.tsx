@@ -1,4 +1,6 @@
-import { StyleSheet, View, Text, FlatList, Pressable, Modal, ActivityIndicator, TextInput, LayoutAnimation } from 'react-native';
+import { StyleSheet, View, Text, FlatList, Pressable, Modal, ActivityIndicator, TextInput, LayoutAnimation, Keyboard, useWindowDimensions } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -30,6 +32,28 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
+  const { height: screenHeight } = useWindowDimensions();
+
+  // Swipe down on the top of the sheet (handle, title, search bar) to close
+  // it. The friend list keeps its own vertical scroll.
+  const dragY = useSharedValue(0);
+  useEffect(() => { if (visible) dragY.value = 0; }, [visible]);
+  function dismiss() {
+    Keyboard.dismiss();
+    onClose();
+  }
+  const swipeDown = Gesture.Pan()
+    .activeOffsetY(8)
+    .failOffsetX([-20, 20])
+    .onUpdate(e => { dragY.value = Math.max(0, e.translationY); })
+    .onEnd(e => {
+      if (e.translationY > 120 || e.velocityY > 800) {
+        dragY.value = withTiming(screenHeight, { duration: 200 }, done => { if (done) runOnJS(dismiss)(); });
+      } else {
+        dragY.value = withSpring(0, { damping: 20, stiffness: 220 });
+      }
+    });
+  const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateY: dragY.value }] }));
 
   // Same toggle as the library screens' search (my-listend etc.). Searching
   // expands the sheet to (nearly) full height, pinned under the status bar —
@@ -153,55 +177,60 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
+      {/* A Modal is its own native root, so gestures inside it need their own root view. */}
+      <GestureHandlerRootView style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, searchOpen ? s.sheetSearching : s.sheetResting, { backgroundColor: sheetBg }]}>
-          <View style={s.handle} />
-          <View style={s.titleRow}>
-            <View style={s.titleText}>
-              <Text style={[s.title, { color: colors.text }]}>Send to a Friend</Text>
-              <Text style={[s.subtitle, { color: colors.subtext }]} numberOfLines={1}>
-                {album.title} · {album.artist}
-              </Text>
+        <Animated.View style={[s.sheet, searchOpen ? s.sheetSearching : s.sheetResting, { backgroundColor: sheetBg }, dragStyle]}>
+          <GestureDetector gesture={swipeDown}>
+            <View>
+              <View style={s.handle} />
+              <View style={s.titleRow}>
+                <View style={s.titleText}>
+                  <Text style={[s.title, { color: colors.text }]}>Send to a Friend</Text>
+                  <Text style={[s.subtitle, { color: colors.subtext }]} numberOfLines={1}>
+                    {album.title} · {album.artist}
+                  </Text>
+                </View>
+                {friends && friends.length > 0 && (
+                  <Pressable
+                    onPress={toggleSearch}
+                    hitSlop={6}
+                    style={({ pressed }) => [s.searchBtn, {
+                      backgroundColor: searchOpen ? colors.tint : colors.surface,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.7 : 1,
+                    }]}>
+                    <Ionicons name="search-outline" size={13} color={searchOpen ? '#fff' : colors.tint} />
+                  </Pressable>
+                )}
+                {/* Expanded for search the sheet covers the whole backdrop, so
+                    tapping outside can't close it — this always can. */}
+                <Pressable onPress={dismiss} hitSlop={12} style={({ pressed }) => [s.closeBtn, { opacity: pressed ? 0.5 : 1 }]}>
+                  <FontAwesome name="times" size={18} color={colors.subtext} />
+                </Pressable>
+              </View>
+              {searchOpen && (
+                <View style={[s.searchBar, { borderBottomColor: divider }]}>
+                  <FontAwesome name="search" size={14} color={colors.subtext} />
+                  <TextInput
+                    ref={searchInputRef}
+                    style={[s.searchInput, { color: colors.text }]}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search friends…"
+                    placeholderTextColor={colors.subtext}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    clearButtonMode="while-editing"
+                  />
+                </View>
+              )}
             </View>
-            {friends && friends.length > 0 && (
-              <Pressable
-                onPress={toggleSearch}
-                hitSlop={6}
-                style={({ pressed }) => [s.searchBtn, {
-                  backgroundColor: searchOpen ? colors.tint : colors.surface,
-                  borderColor: colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                }]}>
-                <Ionicons name="search-outline" size={13} color={searchOpen ? '#fff' : colors.tint} />
-              </Pressable>
-            )}
-            {/* Expanded for search the sheet covers the whole backdrop, so
-                tapping outside can't close it — this always can. */}
-            <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [s.closeBtn, { opacity: pressed ? 0.5 : 1 }]}>
-              <FontAwesome name="times" size={18} color={colors.subtext} />
-            </Pressable>
-          </View>
-          {searchOpen && (
-            <View style={[s.searchBar, { borderBottomColor: divider }]}>
-              <FontAwesome name="search" size={14} color={colors.subtext} />
-              <TextInput
-                ref={searchInputRef}
-                style={[s.searchInput, { color: colors.text }]}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search friends…"
-                placeholderTextColor={colors.subtext}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-              />
-            </View>
-          )}
+          </GestureDetector>
           {body}
-        </View>
-      </View>
+        </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
