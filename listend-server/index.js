@@ -428,6 +428,16 @@ pinStorefront('it', [
   '1581971321', '1581971323', '1581971325', '1581971328', '1581971330', '1581971341',
   '1581971647', '1581971658', '1581971659', '1581971661',
 ]);
+// Catapilla — Catapilla (1971)
+pinStorefront('gb', [
+  '1442531945',
+  '1442532086', '1442532093', '1442532097', '1442532477',
+]);
+// Catapilla — Changes (1972)
+pinStorefront('gb', [
+  '1442531414',
+  '1442531432', '1442531440', '1442531715', '1442531722',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -724,6 +734,14 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'primalscream::thescreamadelica12singles': {
     id: '1581970344', title: 'The Screamadelica 12" Singles', artist: 'Primal Scream', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/49/44/ca/4944ca04-25f7-124b-9c90-34dc0851cd99/886449244768.jpg/500x500bb.jpg',
+  },
+  'catapilla::catapilla': {
+    id: '1442531945', title: 'Catapilla', artist: 'Catapilla', year: 1971,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/fa/57/f0/fa57f014-4f4e-3fe8-5408-ea419cceb0e9/00602517638532.rgb.jpg/500x500bb.jpg',
+  },
+  'catapilla::changes': {
+    id: '1442531414', title: 'Changes', artist: 'Catapilla', year: 1972,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/29/db/59/29db5966-8b9c-7df2-2751-f2c0c1c8a147/00602517638563.rgb.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -4096,6 +4114,20 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/49/44/ca/4944ca04-25f7-124b-9c90-34dc0851cd99/886449244768.jpg/500x500bb.jpg',
       year: 2021, isSingle: false, isCompilation: true, trackCount: 22,
       url: 'https://music.apple.com/it/album/the-screamadelica-12-singles/1581970344', type: 'album',
+    },
+  ],
+  '288995812': [ // Catapilla — not licensed for `us`
+    {
+      id: '1442531945', title: 'Catapilla',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/fa/57/f0/fa57f014-4f4e-3fe8-5408-ea419cceb0e9/00602517638532.rgb.jpg/500x500bb.jpg',
+      year: 1971, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/gb/album/catapilla/1442531945', type: 'album',
+    },
+    {
+      id: '1442531414', title: 'Changes',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/29/db/59/29db5966-8b9c-7df2-2751-f2c0c1c8a147/00602517638563.rgb.jpg/500x500bb.jpg',
+      year: 1972, isSingle: false, isCompilation: false, trackCount: 4,
+      url: 'https://music.apple.com/gb/album/changes/1442531414', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`

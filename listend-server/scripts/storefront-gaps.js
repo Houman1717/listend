@@ -94,7 +94,11 @@ async function main() {
   if (us.length === 0) {
     console.error('Nothing on us for this artist — they may be absent from Apple Music entirely, which is a manualAlbums.js job, not a pin.');
   }
-  artistName = artistName ?? us[0]?.artistName ?? String(artistId);
+  // The artist's own record, not their first release: Catapilla's only `us`
+  // release is a feature on someone else's single, credited "Dr zehny &
+  // Catapilla", and that name would key every override printed below.
+  const artistRecord = (await itunes(`lookup?id=${artistId}&country=us`))?.results?.[0];
+  artistName = artistName ?? artistRecord?.artistName ?? us[0]?.artistName ?? String(artistId);
   const usIds        = new Set(us.map(r => r.collectionId));
   const usBaseTitles = new Set(us.map(r => baseTitle(r.collectionName)));
   console.log(`\n${artistName} (${artistId}) — ${us.length} releases on us\n`);
