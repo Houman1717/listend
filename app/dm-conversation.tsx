@@ -594,7 +594,7 @@ function LikeBadge({ likedBy, myId, onToggleLike, isMe, colors }: LikeProps & { 
         disabled={!mine}
         hitSlop={8}
         style={[b.likeBadge, { backgroundColor: colors.elevated, borderColor: colors.border }]}>
-        <FontAwesome name="heart" size={10} color={ACCENT} />
+        <FontAwesome name="heart" size={10} color={colors.tint} />
         {likedBy.length > 1 && <Text style={[b.likeCount, { color: colors.subtext }]}>{likedBy.length}</Text>}
       </Pressable>
     </Animated.View>
