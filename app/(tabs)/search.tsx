@@ -19,6 +19,7 @@ import { useAlbums, PendingAlbum, WantToListenAlbum } from '@/context/AlbumsCont
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { fetchPlaylistAlbums, fetchMosaicArtwork } from '@/lib/playlistArtwork';
 import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { ProBadge } from '@/components/ProBadge';
@@ -151,27 +152,18 @@ async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
     const playlistIds = (pls as any[]).map(p => p.id as string);
     const ownerIds    = [...new Set((pls as any[]).map(p => p.user_id as string))];
 
-    const [pasResult, profilesResult] = await Promise.all([
-      supabase
-        .from('playlist_albums')
-        .select('playlist_id, spotify_id, position')
-        .in('playlist_id', playlistIds)
-        .order('position', { ascending: true }),
+    const [pas, profilesResult] = await Promise.all([
+      fetchPlaylistAlbums(playlistIds),
       supabase.from('profiles').select('id, username, display_name').in('id', ownerIds),
     ]);
 
-    const pas: any[] = pasResult.data ?? [];
-    const allSpotifyIds = [...new Set(pas.map((a: any) => a.spotify_id as string))];
-    const artworkMap = new Map<string, string>();
-    if (allSpotifyIds.length > 0) {
-      const { data: uas } = await supabase
-        .from('user_albums')
-        .select('spotify_id, artwork_url')
-        .in('spotify_id', allSpotifyIds);
-      for (const a of (uas ?? []) as any[]) {
-        if (!artworkMap.has(a.spotify_id)) artworkMap.set(a.spotify_id, a.artwork_url ?? '');
-      }
-    }
+    const albumIdsByPlaylist = new Map<string, string[]>(
+      playlistIds.map(id => [id, pas.filter(a => a.playlist_id === id).map(a => a.spotify_id)])
+    );
+    const artworkMap = await fetchMosaicArtwork(
+      playlistIds.map(id => ({ albumIds: albumIdsByPlaylist.get(id) ?? [] })),
+      ownerIds,
+    );
 
     const usernameById = new Map<string, string>(
       (profilesResult.data ?? []).map((p: any) => [p.id as string, (p.username ?? '') as string])
@@ -181,8 +173,8 @@ async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
     );
 
     for (const p of pls as any[]) {
-      const albumIds    = pas.filter((a: any) => a.playlist_id === p.id).map((a: any) => a.spotify_id as string);
-      const artworkUrls = albumIds.map(id => artworkMap.get(id) ?? '').filter(Boolean).slice(0, 4);
+      const albumIds    = albumIdsByPlaylist.get(p.id) ?? [];
+      const artworkUrls = albumIds.slice(0, 4).map(id => artworkMap.get(id) ?? '').filter(Boolean);
       results.push({
         id:            p.id,
         name:          p.name,

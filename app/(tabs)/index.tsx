@@ -27,6 +27,7 @@ import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { fetchPlaylistCovers } from '@/lib/playlistArtwork';
 import { handleOrName } from '@/lib/userHandle';
 import { reviewOwnerId } from '@/lib/reviewTargets';
 import { navigateToProfile } from '@/lib/navigateToProfile';
@@ -850,25 +851,6 @@ function faDateLabel(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-async function fetchFriendPlaylistArtwork(playlistIds: string[]): Promise<Map<string, string[]>> {
-  if (playlistIds.length === 0) return new Map();
-  const { data: pas } = await supabase
-    .from('playlist_albums').select('playlist_id, spotify_id, position')
-    .in('playlist_id', playlistIds).order('position', { ascending: true });
-  const allIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id as string))];
-  const artMap = new Map<string, string>();
-  if (allIds.length > 0) {
-    const { data: uas } = await supabase.from('user_albums').select('spotify_id, artwork_url').in('spotify_id', allIds);
-    for (const a of (uas ?? []) as any[]) { if (a.artwork_url) artMap.set(a.spotify_id, a.artwork_url); }
-  }
-  const result = new Map<string, string[]>();
-  for (const id of playlistIds) {
-    const albums = (pas ?? []).filter((a: any) => a.playlist_id === id).slice(0, 4);
-    result.set(id, albums.map((a: any) => artMap.get(a.spotify_id) ?? '').filter(Boolean));
-  }
-  return result;
-}
-
 async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> {
   const [{ data: outRows }, { data: inRows }] = await Promise.all([
     supabase.from('follows').select('following_id').eq('follower_id', uid),
@@ -907,7 +889,7 @@ async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> 
 
   if (likedPlRows && likedPlRows.length > 0) {
     const plIds = (likedPlRows as any[]).map(r => r.target_id as string);
-    const [{ data: plData }, artworkMap] = await Promise.all([supabase.from('playlists').select('id, name, user_id').in('id', plIds), fetchFriendPlaylistArtwork(plIds)]);
+    const [{ data: plData }, artworkMap] = await Promise.all([supabase.from('playlists').select('id, name, user_id').in('id', plIds), fetchPlaylistCovers(plIds)]);
     const plNameMap  = new Map((plData ?? []).map((p: any) => [p.id as string, p.name as string]));
     const plOwnerMap = new Map((plData ?? []).map((p: any) => [p.id as string, p.user_id as string]));
     for (const r of likedPlRows as any[]) {
@@ -918,7 +900,7 @@ async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> 
 
   if (createdPlRows && createdPlRows.length > 0) {
     const plIds = (createdPlRows as any[]).map(r => r.id as string);
-    const artworkMap = await fetchFriendPlaylistArtwork(plIds);
+    const artworkMap = await fetchPlaylistCovers(plIds);
     for (const r of createdPlRows as any[]) {
       const friend = profileMap.get(r.user_id); if (!friend) continue;
       items.push({ kind: 'createdPlaylist', key: `cp-${r.user_id}-${r.id}`, friend, playlistId: r.id, name: r.name ?? 'Playlist', artworkUrls: artworkMap.get(r.id) ?? [], dateMs: new Date(r.created_at).getTime(), dateLabel: faDateLabel(r.created_at) });

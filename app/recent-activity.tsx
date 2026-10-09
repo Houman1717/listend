@@ -20,6 +20,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { fetchPlaylistCovers } from '@/lib/playlistArtwork';
 import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape, VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
@@ -233,36 +234,6 @@ async function fetchLikedArtistsForUser(uid: string): Promise<LikedArtistItem[]>
   }));
 }
 
-async function fetchPlaylistArtwork(playlistIds: string[]): Promise<Map<string, string[]>> {
-  if (playlistIds.length === 0) return new Map();
-
-  const { data: pas } = await supabase
-    .from('playlist_albums')
-    .select('playlist_id, spotify_id, position')
-    .in('playlist_id', playlistIds)
-    .order('position', { ascending: true });
-
-  const allSpotifyIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id as string))];
-  const artMap = new Map<string, string>();
-
-  if (allSpotifyIds.length > 0) {
-    const { data: uas } = await supabase
-      .from('user_albums')
-      .select('spotify_id, artwork_url')
-      .in('spotify_id', allSpotifyIds);
-    for (const a of (uas ?? []) as any[]) {
-      if (a.artwork_url) artMap.set(a.spotify_id, a.artwork_url);
-    }
-  }
-
-  const result = new Map<string, string[]>();
-  for (const id of playlistIds) {
-    const albums = (pas ?? []).filter((a: any) => a.playlist_id === id).slice(0, 4);
-    result.set(id, albums.map((a: any) => artMap.get(a.spotify_id) ?? '').filter(Boolean));
-  }
-  return result;
-}
-
 async function fetchLikedPlaylistsForUser(uid: string): Promise<LikedPlaylistItem[]> {
   // Only user-created playlists; featured playlists are handled via context for own
   // user or separately for other users below
@@ -284,7 +255,7 @@ async function fetchLikedPlaylistsForUser(uid: string): Promise<LikedPlaylistIte
 
   const { data: pls } = await supabase.from('playlists').select('id, name, user_id').in('id', userIds);
   for (const p of (pls ?? []) as any[]) { nameMap.set(p.id, p.name); ownerMap.set(p.id, p.user_id); }
-  const plArtwork = await fetchPlaylistArtwork(userIds);
+  const plArtwork = await fetchPlaylistCovers(userIds);
   plArtwork.forEach((urls, id) => artworkMap.set(id, urls));
 
   return (likedRows as any[]).map((r: any): LikedPlaylistItem => ({
@@ -347,7 +318,7 @@ async function fetchCreatedPlaylistsForUser(uid: string): Promise<CreatedPlaylis
   if (!data || data.length === 0) return [];
 
   const ids = data.map((r: any) => r.id as string);
-  const artworkMap = await fetchPlaylistArtwork(ids);
+  const artworkMap = await fetchPlaylistCovers(ids);
 
   return data.map((r: any): CreatedPlaylistItem => ({
     key:         `created-pl-${r.id}`,

@@ -19,6 +19,7 @@ import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum, Playlist } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { fetchPlaylistAlbums, fetchMosaicArtwork } from '@/lib/playlistArtwork';
 import { handleOrName } from '@/lib/userHandle';
 import PlaylistFormModal from '@/components/PlaylistFormModal';
 
@@ -190,7 +191,7 @@ async function buildLikedEntries(
     } catch {}
   }
 
-  const artMap = new Map<string, string | undefined>();
+  let artMap = new Map<string, string | undefined>();
 
   if (userRows.length > 0) {
     const playlistIds = userRows.map((r: any) => r.target_id as string);
@@ -204,22 +205,7 @@ async function buildLikedEntries(
       .in('id', playlistIds);
 
     if (pls && pls.length > 0) {
-      const { data: pas } = await supabase
-        .from('playlist_albums')
-        .select('playlist_id, spotify_id, position')
-        .in('playlist_id', playlistIds)
-        .order('position', { ascending: true });
-
-      const allSpotifyIds = [...new Set((pas ?? []).map((a: any) => a.spotify_id as string))];
-      if (allSpotifyIds.length > 0) {
-        const { data: uas } = await supabase
-          .from('user_albums')
-          .select('spotify_id, artwork_url')
-          .in('spotify_id', allSpotifyIds);
-        for (const a of (uas ?? []) as any[]) {
-          if (!artMap.has(a.spotify_id)) artMap.set(a.spotify_id, a.artwork_url ?? undefined);
-        }
-      }
+      const pas = await fetchPlaylistAlbums(playlistIds);
 
       const ownerIds = [...new Set(pls.map((p: any) => p.user_id as string))];
       const { data: profiles } = await supabase
@@ -235,9 +221,9 @@ async function buildLikedEntries(
           id:          p.id,
           name:        p.name,
           description: p.description ?? undefined,
-          albumIds:    (pas ?? [])
-            .filter((a: any) => a.playlist_id === p.id)
-            .map((a: any) => a.spotify_id as string),
+          albumIds:    pas
+            .filter(a => a.playlist_id === p.id)
+            .map(a => a.spotify_id),
           createdAt:   p.created_at,
         };
         entries.push({
@@ -250,6 +236,12 @@ async function buildLikedEntries(
       }
     }
   }
+
+  const userEntries = entries.filter((e): e is Extract<LikedEntry, { kind: 'user' }> => e.kind === 'user');
+  artMap = await fetchMosaicArtwork(
+    userEntries.map(e => e.playlist),
+    [...new Set(userEntries.map(e => e.ownerId))],
+  );
 
   entries.sort((a, b) => b.likedAt.localeCompare(a.likedAt));
   return { entries, artMap };
@@ -316,32 +308,19 @@ export default function MyPlaylistsScreen() {
       const playlistIds = pls.map((p: any) => p.id);
 
       // Album membership
-      const { data: pas } = await supabase
-        .from('playlist_albums')
-        .select('playlist_id, spotify_id, position')
-        .in('playlist_id', playlistIds)
-        .order('position', { ascending: true });
-
-      // Artwork
-      const { data: uas } = await supabase
-        .from('user_albums')
-        .select('spotify_id, artwork_url')
-        .eq('user_id', viewingOther);
-
-      const artMap = new Map<string, string | undefined>();
-      for (const a of (uas ?? []) as any[]) {
-        artMap.set(a.spotify_id, a.artwork_url ?? undefined);
-      }
+      const pas = await fetchPlaylistAlbums(playlistIds);
 
       const built: Playlist[] = pls.map((p: any) => ({
         id:          p.id,
         name:        p.name,
         description: p.description ?? undefined,
-        albumIds:    (pas ?? [])
-          .filter((a: any) => a.playlist_id === p.id)
-          .map((a: any) => a.spotify_id),
+        albumIds:    pas
+          .filter(a => a.playlist_id === p.id)
+          .map(a => a.spotify_id),
         createdAt:   p.created_at,
       }));
+
+      const artMap = await fetchMosaicArtwork(built, [viewingOther]);
 
       setOtherPlaylists(built);
       setOtherAlbumMap(artMap);
