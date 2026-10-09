@@ -12,7 +12,17 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useEffect, useMemo } from 'react';
 import { Gesture, GestureDetector, ScrollView as GHScrollView } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, SharedValue } from 'react-native-reanimated';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useFrameCallback,
+  withTiming,
+  runOnJS,
+  scrollTo,
+  SharedValue,
+} from 'react-native-reanimated';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAlbums, LoggedAlbum, saveAlbumCatalogRow } from '@/context/AlbumsContext';
@@ -27,6 +37,34 @@ const PADDING = 16;
 const GAP     = 12;
 const COLS    = 3;
 const ROW_H   = 64;
+
+// Auto-scroll while dragging: once the held row comes within EDGE px of the
+// top or bottom of the visible page, the page scrolls toward it, faster the deeper
+// into the edge it is, up to MAX_SCROLL_SPEED px per ms.
+const EDGE             = 90;
+const MAX_SCROLL_SPEED = 1.1;
+
+const AnimatedScrollView = Animated.createAnimatedComponent(GHScrollView);
+
+// Places the dragged row under the finger. The page may have auto-scrolled
+// since the drag began, so the row moves by that distance too, or it would
+// drift away from the finger as the list slides under it.
+function placeDraggedRow(
+  index: number,
+  count: number,
+  translationY: number,
+  scrolledBy: number,
+  dragY: SharedValue<number>,
+  hoverIdx: SharedValue<number>,
+) {
+  'worklet';
+  // Keep the row inside the list's bounds.
+  const minY = -index * ROW_H;
+  const maxY = (count - 1 - index) * ROW_H;
+  const y = Math.max(minY, Math.min(maxY, translationY + scrolledBy));
+  dragY.value = y;
+  hoverIdx.value = Math.max(0, Math.min(count - 1, Math.round(index + y / ROW_H)));
+}
 
 // ─── Album card — edit controls hidden when readOnly ─────────────────────────
 
@@ -85,6 +123,9 @@ function ReorderRow({
   draggingIdx,
   hoverIdx,
   dragY,
+  dragTranslation,
+  scrollY,
+  scrollAtDragStart,
   colors,
   onDragStart,
   onDrop,
@@ -96,6 +137,9 @@ function ReorderRow({
   draggingIdx: SharedValue<number>;
   hoverIdx: SharedValue<number>;
   dragY: SharedValue<number>;
+  dragTranslation: SharedValue<number>;
+  scrollY: SharedValue<number>;
+  scrollAtDragStart: SharedValue<number>;
   colors: any;
   onDragStart: () => void;
   onDrop: (from: number, to: number) => void;
@@ -125,16 +169,14 @@ function ReorderRow({
       draggingIdx.value = index;
       hoverIdx.value = index;
       dragY.value = 0;
+      dragTranslation.value = 0;
+      scrollAtDragStart.value = scrollY.value;
       runOnJS(onDragStart)();
     })
     .onUpdate((e) => {
       if (draggingIdx.value !== index) return;
-      // Keep the row inside the list's bounds.
-      const minY = -index * ROW_H;
-      const maxY = (count - 1 - index) * ROW_H;
-      const y = Math.max(minY, Math.min(maxY, e.translationY));
-      dragY.value = y;
-      hoverIdx.value = Math.max(0, Math.min(count - 1, Math.round(index + y / ROW_H)));
+      dragTranslation.value = e.translationY;
+      placeDraggedRow(index, count, e.translationY, scrollY.value - scrollAtDragStart.value, dragY, hoverIdx);
     })
     .onFinalize(() => {
       if (draggingIdx.value !== index) return;
@@ -215,6 +257,42 @@ export default function PlaylistDetailScreen() {
   const draggingIdx = useSharedValue(-1);
   const hoverIdx    = useSharedValue(-1);
   const dragY       = useSharedValue(0);
+  const dragTranslation   = useSharedValue(0);
+  const scrollAtDragStart = useSharedValue(0);
+  const albumCount        = useSharedValue(0);
+
+  // ── Auto-scroll while dragging ────────────────────────────────────────────
+  const scrollRef  = useAnimatedRef<any>();
+  const scrollY    = useSharedValue(0);
+  const viewportH  = useSharedValue(0);
+  const contentH   = useSharedValue(0);
+  const listTop    = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+  const autoScroll = useFrameCallback((frame) => {
+    const d = draggingIdx.value;
+    if (d < 0) return;
+    // Where the finger holds the row on screen. Unclamped, unlike dragY, so
+    // holding at the edge keeps scrolling past the list's ends to the very
+    // top or bottom of the page.
+    const rowTop = listTop.value + d * ROW_H + dragTranslation.value - scrollAtDragStart.value;
+    const rowBottom = rowTop + ROW_H;
+    let depth = 0;
+    if (rowTop < EDGE) depth = -(EDGE - rowTop) / EDGE;
+    else if (rowBottom > viewportH.value - EDGE) depth = (rowBottom - (viewportH.value - EDGE)) / EDGE;
+    if (depth === 0) return;
+    depth = Math.max(-1, Math.min(1, depth));
+    const dt = Math.min(frame.timeSincePreviousFrame ?? 16, 32);
+    const maxScroll = Math.max(0, contentH.value - viewportH.value);
+    const next = Math.max(0, Math.min(maxScroll, scrollY.value + depth * MAX_SCROLL_SPEED * dt));
+    if (next === scrollY.value) return;
+    // Set it here rather than waiting for the scroll event, so the row's
+    // position below uses the offset this frame actually scrolled to.
+    scrollY.value = next;
+    scrollTo(scrollRef, 0, next, false);
+    placeDraggedRow(d, albumCount.value, dragTranslation.value, next - scrollAtDragStart.value, dragY, hoverIdx);
+  }, false);
 
   // ── Like state ────────────────────────────────────────────────────────────
   const [liked,     setLiked]     = useState(false);
@@ -440,10 +518,13 @@ export default function PlaylistDetailScreen() {
 
   function handleDragStart() {
     setScrollLock(true);
+    albumCount.value = albums.length;
+    autoScroll.setActive(true);
   }
 
   function handleDrop(from: number, to: number) {
     setScrollLock(false);
+    autoScroll.setActive(false);
     if (from !== to && ownPlaylist) {
       const next = albums.map((a) => a.id);
       const [moved] = next.splice(from, 1);
@@ -507,10 +588,15 @@ export default function PlaylistDetailScreen() {
             : undefined,
         }}
       />
-      <GHScrollView
+      <AnimatedScrollView
+        ref={scrollRef}
         style={[s.container, { backgroundColor: colors.background }]}
         contentContainerStyle={s.content}
         scrollEnabled={!scrollLock}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        onLayout={(e) => { viewportH.value = e.nativeEvent.layout.height; }}
+        onContentSizeChange={(_w, h) => { contentH.value = h; }}
         showsVerticalScrollIndicator={false}>
 
         {/* Header */}
@@ -588,7 +674,9 @@ export default function PlaylistDetailScreen() {
             </Text>
           </View>
         ) : editing && !viewingOther ? (
-          <View style={{ height: albums.length * ROW_H }}>
+          <View
+            style={{ height: albums.length * ROW_H }}
+            onLayout={(e) => { listTop.value = e.nativeEvent.layout.y; }}>
             {albums.map((album, i) => (
               <ReorderRow
                 key={album.id}
@@ -598,6 +686,9 @@ export default function PlaylistDetailScreen() {
                 draggingIdx={draggingIdx}
                 hoverIdx={hoverIdx}
                 dragY={dragY}
+                dragTranslation={dragTranslation}
+                scrollY={scrollY}
+                scrollAtDragStart={scrollAtDragStart}
                 colors={colors}
                 onDragStart={handleDragStart}
                 onDrop={handleDrop}
@@ -621,7 +712,7 @@ export default function PlaylistDetailScreen() {
             ))}
           </View>
         )}
-      </GHScrollView>
+      </AnimatedScrollView>
       {!viewingOther && ownPlaylist && (
         <PlaylistFormModal
           visible={showDetailsSheet}
