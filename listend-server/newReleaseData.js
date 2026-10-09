@@ -3,6 +3,11 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Troye Sivan',            title: 'She’s the Best' },
+  { artist: 'Remi Wolf',              title: 'Mud' },
+  { artist: 'Greta Van Fleet',        title: 'Palace for the People' },
+  { artist: 'Pet Shop Boys',          title: 'A man from the future' },
+  { artist: 'Jamie T',                title: 'Ghosts (100 Days of Morning)' },
   { artist: 'Drake',                  title: 'HABIBTI (FOMO)' },
   { artist: 'Quavo',                  title: 'QRÖMELIFE' },
   { artist: 'Victoria Monét',         title: 'Frequency Of Love' },

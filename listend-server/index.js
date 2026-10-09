@@ -912,6 +912,20 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '6791645195', title: 'Frequency Of Love', artist: 'Victoria Monét', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/61/fa/63/61fa635a-fc24-b63a-00eb-a88371c28eab/196874323458.jpg/500x500bb.jpg',
   },
+  // Released 2026-10-09 and already in the catalog by id, but Apple's search
+  // index hadn't picked them up yet, so populate-new-releases couldn't find them.
+  'troyesivan::shesthebest': {
+    id: '6799851049', title: 'She’s the Best', artist: 'Troye Sivan', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/1b/e7/92/1be79297-2ced-d845-f3c2-31b30eb2bac2/26UM1IM00508.rgb.jpg/500x500bb.jpg',
+  },
+  'remiwolf::mud': {
+    id: '6800467151', title: 'Mud', artist: 'Remi Wolf', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/9e/c6/db/9ec6db05-040b-4e63-c099-42406602a4e7/26UMGIM96852.rgb.jpg/500x500bb.jpg',
+  },
+  'jamiet::ghosts100daysofmorning': {
+    id: '6802241223', title: 'Ghosts (100 Days of Morning)', artist: 'Jamie T', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/8d/85/b3/8d85b384-a176-55ac-0282-0a876e93ab3e/26UM1IM02156.rgb.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],
