@@ -1230,9 +1230,23 @@ export default function ListendScreen() {
     backgroundColor: '#D4A017',
   } as const;
   useEffect(() => {
+    // Whose profile this is, under the wordmark, so a screenshot of it carries
+    // the name. The handle is what people search for; accounts that never
+    // picked one (Apple / Google sign-up) show their display name instead.
+    const ownerLabel = handleText(profileUsername, user?.id) ?? (profileDisplayName.trim() || null);
     navigation.setOptions({
       headerStyle: { backgroundColor: colors.background },
       headerTintColor: colors.text,
+      headerTitle: () => (
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text }}>Listend</Text>
+          {ownerLabel ? (
+            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.subtext, marginTop: 1 }}>
+              {ownerLabel}
+            </Text>
+          ) : null}
+        </View>
+      ),
       headerRight: () => (
         // Equal 34×36 boxes, no gap — four icons must still clear the centred
         // title on 375pt iPhones. Equal boxes so the glyphs (different natural widths)
@@ -1259,7 +1273,7 @@ export default function ListendScreen() {
         </View>
       ),
     });
-  }, [navigation, openSettings, openShareProfile, unreadCount, unreadDMCount, router, headerIconColor, colors.background, colors.text]);
+  }, [navigation, openSettings, openShareProfile, unreadCount, unreadDMCount, router, headerIconColor, colors.background, colors.text, colors.subtext, profileUsername, profileDisplayName, user?.id]);
 
   const reviewCount = loggedAlbums.filter((a) => !!(a.lastReview ?? a.review)).length;
 
