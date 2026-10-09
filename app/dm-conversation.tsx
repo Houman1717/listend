@@ -19,7 +19,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
+import Animated, {
+  ZoomIn,
+  ZoomOut,
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withDelay,
+  interpolate,
+  Extrapolation,
+  runOnJS,
+} from 'react-native-reanimated';
 import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useNotifications } from '@/context/NotificationsContext';
@@ -63,7 +76,12 @@ type Message = {
   created_at: string;
   // Ids of whoever liked it (double-tap). Missing until add-message-likes.sql has run.
   liked_by?: string[] | null;
+  // The message this one answers (swipe to reply). Missing until add-message-replies.sql has run.
+  reply_to?: string | null;
 };
+
+// Swipe a message this far right to reply to it.
+const REPLY_SWIPE = 56;
 
 type AlbumResult = {
   id: string;
@@ -104,6 +122,10 @@ export default function DMConversationScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [inputText,    setInputText]    = useState('');
   const [sending,      setSending]      = useState(false);
+  // The message being replied to, shown above the input until sent or cancelled.
+  const [replyTo,      setReplyTo]      = useState<Message | null>(null);
+  // Briefly tints the original after tapping a reply's quote to jump to it.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   // Album search sheet
   const [albumSheetVisible,  setAlbumSheetVisible]  = useState(false);
@@ -119,6 +141,8 @@ export default function DMConversationScreen() {
   const pendingLikes  = useRef<Map<string, boolean>>(new Map());
 
   const listRef       = useRef<FlatList<Message>>(null);
+  const inputRef      = useRef<TextInput>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollTimer     = useRef<ReturnType<typeof setInterval> | null>(null);
   const albumDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -276,24 +300,55 @@ export default function DMConversationScreen() {
   async function sendText() {
     const text = inputText.trim();
     if (!text || !user || !otherUserId || sending) return;
+    const replyingTo = replyTo;
     setSending(true);
     setInputText('');
+    setReplyTo(null);
 
-    const { error } = await supabase.from('messages').insert({
+    const row = {
       sender_id:   user.id,
       receiver_id: otherUserId,
       content:     text,
       type:        'text',
-    });
+    };
+    let { error } = await supabase.from('messages').insert(
+      replyingTo ? { ...row, reply_to: replyingTo.id } : row
+    );
+    // PGRST204 = no reply_to column yet (add-message-replies.sql not run).
+    // Send it as a plain message rather than losing it.
+    if (error?.code === 'PGRST204' && replyingTo) {
+      ({ error } = await supabase.from('messages').insert(row));
+    }
 
     if (error) {
       console.error('[DMConversation] send error:', error);
       setInputText(text);
+      setReplyTo(replyingTo);
     } else {
       fetchMessages();
       notifyRecipient();
     }
     setSending(false);
+  }
+
+  // ── Reply (swipe a message right) ───────────────────────────────────────────
+  function startReply(message: Message) {
+    setReplyTo(message);
+    inputRef.current?.focus();
+  }
+
+  function senderLabel(m: Message) {
+    return m.sender_id === user?.id ? 'You' : (otherName ?? 'Them');
+  }
+
+  // Tapping a reply's quote scrolls back to the message it answers.
+  function jumpToMessage(id: string) {
+    const index = [...messages].reverse().findIndex(m => m.id === id);
+    if (index < 0) return;
+    listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+    setHighlightedId(id);
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightedId(null), 1400);
   }
 
   // ── Send album message ───────────────────────────────────────────────────────
@@ -364,9 +419,16 @@ export default function DMConversationScreen() {
         contentContainerStyle={s.listContent}
         showsVerticalScrollIndicator={false}
         inverted
+        // Rows vary in height, so a jump to a far-off quoted message can land
+        // outside the rendered window: get roughly there, then aim again.
+        onScrollToIndexFailed={info => {
+          listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+          setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), 250);
+        }}
         renderItem={({ item, index }) => {
           const reversedMsgs = [...messages].reverse();
           const isMe    = item.sender_id === user?.id;
+          const quoted  = item.reply_to ? messages.find(m => m.id === item.reply_to) : undefined;
           // index+1 in the reversed array = the chronologically older message
           const prevMsg = reversedMsgs[index + 1] as Message | undefined;
           const showDate =
@@ -376,6 +438,7 @@ export default function DMConversationScreen() {
 
           return (
             <>
+              <SwipeToReply onReply={() => startReply(item)} highlighted={highlightedId === item.id} colors={colors}>
               {item.type === 'album' && item.album_data ? (
                 <AlbumCard
                   album={item.album_data}
@@ -423,8 +486,18 @@ export default function DMConversationScreen() {
                   likedBy={item.liked_by ?? []}
                   myId={user?.id}
                   onToggleLike={() => toggleLike(item)}
+                  quote={quoted && (
+                    <ReplyQuote
+                      message={quoted}
+                      name={senderLabel(quoted)}
+                      onBubble={isMe}
+                      colors={colors}
+                      onPress={() => jumpToMessage(quoted.id)}
+                    />
+                  )}
                 />
               )}
+              </SwipeToReply>
               {/* In an inverted list, rendering AFTER the bubble puts it visually ABOVE */}
               {showDate && (
                 <Text style={[s.dateSeparator, { color: colors.subtext }]}>
@@ -437,6 +510,26 @@ export default function DMConversationScreen() {
           );
         }}
       />
+
+      {/* ── Replying-to bar ────────────────────────────────────────────────── */}
+      {replyTo && (
+        <Animated.View
+          entering={FadeIn.duration(150)}
+          style={[s.replyBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <View style={[s.replyBarAccent, { backgroundColor: colors.tint }]} />
+          <View style={s.replyBarText}>
+            <Text style={[s.replyBarLabel, { color: colors.tint }]} numberOfLines={1}>
+              Replying to {replyTo.sender_id === user?.id ? 'yourself' : (otherName ?? 'them')}
+            </Text>
+            <Text style={[s.replyBarSnippet, { color: colors.subtext }]} numberOfLines={1}>
+              {messageSnippet(replyTo)}
+            </Text>
+          </View>
+          <Pressable onPress={() => setReplyTo(null)} hitSlop={12} accessibilityLabel="Cancel reply">
+            <FontAwesome name="times" size={16} color={colors.subtext} />
+          </Pressable>
+        </Animated.View>
+      )}
 
       {/* ── Input bar ──────────────────────────────────────────────────────── */}
       <View style={[s.inputBar, {
@@ -460,6 +553,7 @@ export default function DMConversationScreen() {
         </Pressable>
 
         <TextInput
+          ref={inputRef}
           style={[s.textInput, {
             backgroundColor: colors.background,
             borderColor: colors.border,
@@ -569,16 +663,117 @@ export default function DMConversationScreen() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+/** One-line description of a message, for the reply bar and quotes. */
+function messageSnippet(m: Message) {
+  if (m.type === 'album' && m.album_data) return `${m.album_data.title} · ${m.album_data.artist}`;
+  return m.content ?? '';
+}
+
+/**
+ * Swipe a message right to reply to it. The row follows the finger (with some
+ * resistance) and a reply arrow fades in behind it; letting go past
+ * REPLY_SWIPE starts the reply, and the row springs back either way. Only a
+ * clearly sideways drag takes over, so scrolling the conversation and tapping
+ * or double-tapping the bubble behave as before.
+ */
+function SwipeToReply({ onReply, highlighted, colors, children }: {
+  onReply: () => void;
+  highlighted: boolean;
+  colors: ColorsType;
+  children: React.ReactNode;
+}) {
+  const offset = useSharedValue(0);
+  const flash  = useSharedValue(0);
+
+  useEffect(() => {
+    if (highlighted) {
+      flash.value = withSequence(withTiming(1, { duration: 150 }), withDelay(700, withTiming(0, { duration: 500 })));
+    }
+  }, [highlighted]);
+
+  const pan = Gesture.Pan()
+    .activeOffsetX(12)
+    .failOffsetY([-12, 12])
+    .onUpdate(e => {
+      offset.value = Math.max(0, Math.min(REPLY_SWIPE + 24, e.translationX * 0.6));
+    })
+    .onEnd(() => {
+      if (offset.value >= REPLY_SWIPE) runOnJS(onReply)();
+    })
+    .onFinalize(() => {
+      offset.value = withSpring(0, { damping: 18, stiffness: 220 });
+    });
+
+  const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
+  const iconStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(offset.value, [16, REPLY_SWIPE], [0, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(offset.value, [16, REPLY_SWIPE], [0.6, 1], Extrapolation.CLAMP) }],
+  }));
+
+  return (
+    <GestureDetector gesture={pan}>
+      <View>
+        {/* Always mounted and faded by opacity: toggling a background colour
+            on and off didn't reliably repaint the row. */}
+        <Animated.View pointerEvents="none" style={[b.flash, { backgroundColor: colors.tint + '33' }, flashStyle]} />
+        <Animated.View style={[b.replyIcon, iconStyle]}>
+          <FontAwesome name="reply" size={14} color={colors.subtext} />
+        </Animated.View>
+        <Animated.View style={rowStyle}>{children}</Animated.View>
+      </View>
+    </GestureDetector>
+  );
+}
+
+/** The quoted original at the top of a reply bubble; tap to jump to it. */
+function ReplyQuote({ message, name, onBubble, colors, onPress }: {
+  message: Message;
+  name: string;
+  onBubble: boolean;   // sits on your own (accent) bubble rather than theirs
+  colors: ColorsType;
+  onPress: () => void;
+}) {
+  const album = message.type === 'album' ? message.album_data : null;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[b.quote, onBubble
+        ? { backgroundColor: 'rgba(255,255,255,0.18)', borderLeftColor: 'rgba(255,255,255,0.85)' }
+        : { backgroundColor: colors.background, borderLeftColor: colors.tint }]}>
+      <Text style={[b.quoteName, { color: onBubble ? '#fff' : colors.tint }]} numberOfLines={1}>{name}</Text>
+      {album ? (
+        <View style={b.quoteAlbum}>
+          {album.artworkUrl ? (
+            <ExpoImage source={{ uri: album.artworkUrl }} style={b.quoteArt} contentFit="cover" cachePolicy="disk" />
+          ) : null}
+          <Text style={[b.quoteText, { color: onBubble ? 'rgba(255,255,255,0.85)' : colors.subtext, flexShrink: 1 }]} numberOfLines={2}>
+            {album.title} · {album.artist}
+          </Text>
+        </View>
+      ) : (
+        <Text style={[b.quoteText, { color: onBubble ? 'rgba(255,255,255,0.85)' : colors.subtext }]} numberOfLines={2}>
+          {message.content}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
 type LikeProps = {
   likedBy: string[];
   myId: string | undefined;
   onToggleLike: () => void;
 };
 
+// Taps give up once the finger travels this far, so a swipe-to-reply on an
+// album card doesn't also open the album when the finger lifts.
+const TAP_MAX_DIST = 10;
+
 function useDoubleTap(onDoubleTap: () => void, onSingleTap?: () => void) {
-  const double = Gesture.Tap().numberOfTaps(2).maxDelay(250).runOnJS(true).onEnd((_e, ok) => { if (ok) onDoubleTap(); });
+  const double = Gesture.Tap().numberOfTaps(2).maxDelay(250).maxDistance(TAP_MAX_DIST).runOnJS(true).onEnd((_e, ok) => { if (ok) onDoubleTap(); });
   if (!onSingleTap) return double;
-  const single = Gesture.Tap().runOnJS(true).onEnd((_e, ok) => { if (ok) onSingleTap(); });
+  const single = Gesture.Tap().maxDistance(TAP_MAX_DIST).runOnJS(true).onEnd((_e, ok) => { if (ok) onSingleTap(); });
   return Gesture.Exclusive(double, single);
 }
 
@@ -601,13 +796,14 @@ function LikeBadge({ likedBy, myId, onToggleLike, isMe, colors }: LikeProps & { 
   );
 }
 
-function TextBubble({ text, isMe, time, colors, likedBy, myId, onToggleLike }: { text: string; isMe: boolean; time: string; colors: ColorsType } & LikeProps) {
+function TextBubble({ text, isMe, time, colors, likedBy, myId, onToggleLike, quote }: { text: string; isMe: boolean; time: string; colors: ColorsType; quote?: React.ReactNode } & LikeProps) {
   const tap = useDoubleTap(onToggleLike);
   return (
     <View style={[b.row, isMe ? b.rowMe : b.rowThem]}>
       <View style={b.bubbleCol}>
         <GestureDetector gesture={tap}>
           <View style={[b.bubble, isMe ? [b.bubbleMe, { backgroundColor: colors.tint }] : { ...b.bubbleThem, backgroundColor: colors.surface }]}>
+            {quote}
             <Text style={[b.text, isMe ? b.textMe : { color: colors.text }]}>{text}</Text>
             <Text style={[b.time, isMe ? b.timeMe : { color: colors.subtext }]}>
               {new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -774,6 +970,20 @@ const s = StyleSheet.create({
     alignSelf: 'flex-end', marginBottom: 1,
   },
   sendBtnDisabled: { opacity: 0.4 },
+
+  // Replying-to bar
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  replyBarAccent:  { width: 3, alignSelf: 'stretch', borderRadius: 2 },
+  replyBarText:    { flex: 1, gap: 1 },
+  replyBarLabel:   { fontSize: 12, fontWeight: '700' },
+  replyBarSnippet: { fontSize: 13 },
 });
 
 // Chat bubble styles
@@ -783,6 +993,22 @@ const b = StyleSheet.create({
   rowThem:{ justifyContent: 'flex-start' },
 
   bubbleCol: { maxWidth: '75%' },
+  flash:     { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
+  replyIcon: { position: 'absolute', left: 4, top: 0, bottom: 0, justifyContent: 'center' },
+
+  // Quoted original inside a reply
+  quote: {
+    borderLeftWidth: 3,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 2,
+    marginBottom: 2,
+  },
+  quoteName:  { fontSize: 12, fontWeight: '700' },
+  quoteText:  { fontSize: 13, lineHeight: 17 },
+  quoteAlbum: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  quoteArt:   { width: 24, height: 24, borderRadius: 3 },
   albumCol:  { width: 280, maxWidth: '85%' },
   likeBadgeWrap: { marginTop: -8, zIndex: 1 },
   likeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
