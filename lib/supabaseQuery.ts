@@ -71,3 +71,32 @@ export async function fetchAllRows<T>(
   }
   return out;
 }
+
+/** How many ids go into one `.in()` filter — keeps the URL well under the limit. */
+export const IN_CHUNK_SIZE = 100;
+
+/**
+ * fetchAllRows for an `.in(column, ids)` filter over a list that can grow
+ * without bound. PostgREST puts the list in the URL, and past roughly 20 KB the
+ * gateway rejects the request with a 400 — Graduation's 645 reviews made its
+ * profiles/likes/comment lookups fail, so every reviewer showed up as a raw
+ * user id with 0 likes. Splits the ids into chunks (run in parallel) and pages
+ * each chunk. Any failed chunk returns null, never a partial list.
+ */
+export async function fetchAllRowsIn<T>(
+  ids: string[],
+  page: (chunk: string[], from: number, to: number) => PromiseLike<RowsResult<T>>,
+  maxPagesPerChunk: number,
+): Promise<T[] | null> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK_SIZE) chunks.push(ids.slice(i, i + IN_CHUNK_SIZE));
+  const results = await Promise.all(chunks.map(chunk =>
+    fetchAllRows<T>((from, to) => page(chunk, from, to), maxPagesPerChunk),
+  ));
+  const out: T[] = [];
+  for (const rows of results) {
+    if (!rows) return null;
+    for (const row of rows) out.push(row);
+  }
+  return out;
+}

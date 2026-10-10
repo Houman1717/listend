@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { handleOrName } from '@/lib/userHandle';
 import { reviewOwnerId } from '@/lib/reviewTargets';
+import { fetchAllRowsIn } from '@/lib/supabaseQuery';
 import { ReviewComment } from '@/components/ReviewComments';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -125,12 +126,14 @@ async function notifyForComment(reviewId: string, actorId: string, parentComment
 export async function countReviewComments(reviewIds: string[]): Promise<Map<string, number>> {
   if (!reviewIds.length) return new Map();
   try {
-    const { data } = await supabase
+    // Chunked — a popular album's ~600 review ids overflow one `.in()` URL.
+    const data = await fetchAllRowsIn<any>(reviewIds, (chunk, from, to) => supabase
       .from('review_comments')
       .select('review_id')
-      .in('review_id', reviewIds);
+      .in('review_id', chunk)
+      .range(from, to), 5);
     const counts = new Map<string, number>();
-    for (const r of (data ?? []) as any[]) {
+    for (const r of data ?? []) {
       counts.set(r.review_id, (counts.get(r.review_id) ?? 0) + 1);
     }
     return counts;

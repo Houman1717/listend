@@ -29,6 +29,7 @@ import { useAuth } from '@/context/AuthContext';
 import { usePro } from '@/context/ProContext';
 import { reportContent } from '@/lib/reports';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows, fetchAllRowsIn } from '@/lib/supabaseQuery';
 import { handleOrName } from '@/lib/userHandle';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
@@ -1103,18 +1104,20 @@ export default function AlbumDetailScreen() {
     async function loadCommunityReviews() {
       // Query by title + year so we find all reviews regardless of which AM
       // catalog ID each user happened to store (IDs diverge across accounts/time).
-      let q = supabase
-        .from('user_albums')
-        .select('user_id, rating, review, listened_at, spotify_id')
-        .ilike('title', albumTitle)
-        .not('listened_at', 'is', null)
-        .order('listened_at', { ascending: false });
-      // Accept exact year match OR entries where year wasn't stored (0/null) to
-      // handle old logged albums that predate reliable year population.
-      if (albumYear > 0) q = q.or(`year.eq.${albumYear},year.is.null,year.eq.0`);
-      if (user?.id)      q = q.neq('user_id', user.id);
-
-      const { data: titleRows } = await q;
+      // Paged — PostgREST stops at 1000 rows and Graduation is past 600.
+      const titleRows = await fetchAllRows<any>((from, to) => {
+        let q = supabase
+          .from('user_albums')
+          .select('user_id, rating, review, listened_at, spotify_id')
+          .ilike('title', albumTitle)
+          .not('listened_at', 'is', null);
+        // Accept exact year match OR entries where year wasn't stored (0/null) to
+        // handle old logged albums that predate reliable year population.
+        if (albumYear > 0) q = q.or(`year.eq.${albumYear},year.is.null,year.eq.0`);
+        if (user?.id)      q = q.neq('user_id', user.id);
+        return q.order('listened_at', { ascending: false }).range(from, to);
+      }, 10);
+      if (!titleRows) return; // failed — keep what's shown
 
       // Deduplicate by user_id keeping most recent, then cross-check artist
       // to avoid false positives from albums with the same title.
@@ -1129,13 +1132,19 @@ export default function AlbumDetailScreen() {
       const userIds   = rows.map(r => r.user_id as string);
       const targetIds = rows.map(r => `${r.user_id}_${r.spotify_id}`);
 
-      const [{ data: profiles }, commentCounts] = await Promise.all([
-        supabase.from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', userIds),
+      // Chunked — Graduation's 645 reviewer ids in one `.in()` overflowed the
+      // URL, the lookup failed, and every review fell back to a raw user id.
+      const [profiles, commentCounts] = await Promise.all([
+        fetchAllRowsIn<any>(userIds, (chunk, from, to) => supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url, is_pro')
+          .in('id', chunk)
+          .range(from, to), 1),
         countReviewComments(targetIds),
       ]);
 
       const profileMap = new Map<string, { username: string; displayName: string | null; avatarUrl: string | null; isPro: boolean }>();
-      for (const p of (profiles ?? []) as any[]) {
+      for (const p of profiles ?? []) {
         profileMap.set(p.id, { username: p.username ?? p.id, displayName: p.display_name ?? null, avatarUrl: p.avatar_url ?? null, isPro: !!(p.is_pro) });
       }
 
@@ -1182,14 +1191,18 @@ export default function AlbumDetailScreen() {
     const allTargetIds = ownTargetId ? [...targetIds, ownTargetId] : targetIds;
     if (allTargetIds.length === 0) return;
 
-    supabase
+    // Chunked — one `.in()` over every review on a popular album is a ~30 KB
+    // URL that the gateway rejects, which left every like count at 0.
+    fetchAllRowsIn<any>(allTargetIds, (chunk, from, to) => supabase
       .from('likes')
       .select('user_id, target_id')
       .eq('target_type', 'review')
-      .in('target_id', allTargetIds)
-      .then(({ data }) => {
+      .in('target_id', chunk)
+      .range(from, to), 5)
+      .then(data => {
+        if (!data) return; // failed — keep what's shown rather than zeroing it
         const newMap = new Map<string, LikeState>();
-        for (const like of (data ?? []) as any[]) {
+        for (const like of data) {
           const existing = newMap.get(like.target_id) ?? { liked: false, count: 0 };
           newMap.set(like.target_id, {
             count: existing.count + 1,
