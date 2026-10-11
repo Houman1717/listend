@@ -4599,6 +4599,7 @@ async function buildArtistDiscography(id, bust = false) {
     'live.love.a$ap',
     'long.live.a$ap',
     'live a little',   // Elvis — Live a Little, Love a Little
+    'live at the sand trap',   // Dos Gringos — studio album; written on deployment in Iraq
   ];
   const isLiveFalsePositive = title => LIVE_FALSE_POSITIVES.some(t => title.toLowerCase().includes(t));
 
