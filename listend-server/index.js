@@ -819,6 +819,21 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1339115756', title: 'Austin City Limits - Live', artist: 'LL COOL J', year: 2018,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6c/ac/07/6cac0707-d573-73f8-f63f-f3c975fb446e/Cover.jpg/500x500bb.jpg',
   },
+  // Apple never linked these to SpaceGhostPurrp, so its search doesn't return
+  // them either. The mixtape is only on Apple as the 2014 remaster; the plain
+  // title is keyed too so a log of "Nasa Gang" resolves to it.
+  'spaceghostpurrp::nasagangremastered': {
+    id: '925087164', title: 'Nasa Gang (Remastered)', artist: 'SpaceGhostPurrp', year: 2014,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music5/v4/c3/46/4c/c3464c1c-0b0d-c9e4-4d8b-c9d0362e9260/859713369702_cover.tif/500x500bb.jpg',
+  },
+  'spaceghostpurrp::nasagang': {
+    id: '925087164', title: 'Nasa Gang (Remastered)', artist: 'SpaceGhostPurrp', year: 2014,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music5/v4/c3/46/4c/c3464c1c-0b0d-c9e4-4d8b-c9d0362e9260/859713369702_cover.tif/500x500bb.jpg',
+  },
+  'spaceghostpurrp::intoxxxicated': {
+    id: '877748547', title: 'IntoXXXicated', artist: 'SpaceGhostPurrp', year: 2014,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/41/99/7d/41997d14-61fb-61db-a59e-0d26e05010f1/859712603159_cover.tif/500x500bb.jpg',
+  },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
@@ -4284,6 +4299,20 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6c/ac/07/6cac0707-d573-73f8-f63f-f3c975fb446e/Cover.jpg/500x500bb.jpg',
       year: 2018, isSingle: false, isCompilation: false, trackCount: 19,
       url: 'https://music.apple.com/it/album/austin-city-limits-live/1339115756', type: 'album',
+    },
+  ],
+  '529228640': [ // SpaceGhostPurrp — Apple has these on `us` but doesn't list them under him
+    {
+      id: '925087164', title: 'Nasa Gang (Remastered)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music5/v4/c3/46/4c/c3464c1c-0b0d-c9e4-4d8b-c9d0362e9260/859713369702_cover.tif/500x500bb.jpg',
+      year: 2014, isSingle: false, isCompilation: false, isMixtape: true, trackCount: 10,
+      url: 'https://music.apple.com/us/album/nasa-gang-remastered/925087164', type: 'album',
+    },
+    {
+      id: '877748547', title: 'IntoXXXicated',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/41/99/7d/41997d14-61fb-61db-a59e-0d26e05010f1/859712603159_cover.tif/500x500bb.jpg',
+      year: 2014, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/us/album/intoxxxicated/877748547', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
