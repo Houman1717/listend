@@ -148,6 +148,7 @@ export function SortBar({
   onPress,
   onSearchPress,
   searchActive,
+  filterActive,
   tint = '#D4A017',
   bg,
   surface: surfaceProp,
@@ -162,6 +163,7 @@ export function SortBar({
   onPress: () => void;
   onSearchPress?: () => void;
   searchActive?: boolean;
+  filterActive?: boolean;
   tint?: string;
   bg?: string;
   surface?: string;
@@ -176,7 +178,7 @@ export function SortBar({
   const labelColor = labelColorProp ?? (isDark ? '#f5e6c8' : '#1A0F0A');
   return (
     <View style={[sb.bar, { backgroundColor: barBg, borderBottomColor: border }]}>
-      <Text style={[sb.count, { color: subtext }]}>{count} {noun}</Text>
+      <Text style={[sb.count, { color: subtext }]} numberOfLines={1}>{count} {noun}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {onSearchPress && (
           <Pressable
@@ -189,7 +191,7 @@ export function SortBar({
         <Pressable
           onPress={onPress}
           style={({ pressed }) => [sb.btn, { backgroundColor: surface, borderColor: border, opacity: pressed ? 0.7 : 1 }]}>
-          <Ionicons name="funnel-outline" size={13} color={tint} />
+          <Ionicons name={filterActive ? 'funnel' : 'funnel-outline'} size={13} color={tint} />
           <Text style={[sb.btnText, { color: labelColor }]} numberOfLines={1}>
             {sortLabel(sortKey)}
           </Text>
@@ -210,6 +212,9 @@ export function SortSheet({
   isDark,
   tint = '#D4A017',
   excludeKeys = [],
+  genres,
+  activeGenre = null,
+  onSelectGenre,
 }: {
   visible: boolean;
   activeKey: SortKey;
@@ -218,6 +223,10 @@ export function SortSheet({
   isDark: boolean;
   tint?: string;
   excludeKeys?: SortKey[];
+  // Optional genre filter, from genreCounts() in lib/genres. null means All.
+  genres?: [string, number][];
+  activeGenre?: string | null;
+  onSelectGenre?: (genre: string | null) => void;
 }) {
   const bg      = isDark ? '#1c1410' : '#fff';
   const text    = isDark ? '#f5e6c8' : '#1A0F0A';
@@ -230,6 +239,34 @@ export function SortSheet({
     onClose();
   }
 
+  function handleSelectGenre(genre: string | null) {
+    onSelectGenre?.(genre);
+    onClose();
+  }
+
+  const showGenres = !!onSelectGenre && !!genres && genres.length > 0;
+
+  const genreChip = (label: string, count: number | null, genre: string | null) => {
+    const active = activeGenre === genre;
+    return (
+      <Pressable
+        key={label}
+        onPress={() => handleSelectGenre(genre)}
+        style={[
+          ss.optBtn,
+          ss.genreBtn,
+          active
+            ? { backgroundColor: tint, borderColor: tint }
+            : { backgroundColor: surface, borderColor: border },
+        ]}>
+        <Text style={[ss.optText, { color: active ? '#fff' : subtext }]}>{label}</Text>
+        {count !== null && (
+          <Text style={[ss.genreCount, { color: active ? 'rgba(255,255,255,0.85)' : subtext }]}>{count}</Text>
+        )}
+      </Pressable>
+    );
+  };
+
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
       <View style={StyleSheet.absoluteFill}>
@@ -238,9 +275,19 @@ export function SortSheet({
         {/* Handle */}
         <View style={[ss.handle, { backgroundColor: isDark ? '#3a2818' : '#ddd' }]} />
 
-        <Text style={[ss.title, { color: text }]}>Sort By</Text>
+        <Text style={[ss.title, { color: text }]}>{showGenres ? 'Sort & Filter' : 'Sort By'}</Text>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ss.content}>
+          {showGenres && (
+            <>
+              <Text style={[ss.sectionLabel, { color: text }]}>Genre</Text>
+              <View style={[ss.genreWrap, { borderBottomColor: border }]}>
+                {genreChip('All', null, null)}
+                {genres!.map(([genre, count]) => genreChip(genre, count, genre))}
+              </View>
+              <Text style={[ss.sectionLabel, { color: text, marginTop: 18 }]}>Sort By</Text>
+            </>
+          )}
           {SORT_GROUPS.filter(g => !excludeKeys.includes(g.a.key) && !excludeKeys.includes(g.b.key)).map((group) => (
             <View key={group.label} style={[ss.row, { borderBottomColor: border }]}>
               <Text style={[ss.groupLabel, { color: subtext }]}>{group.label}</Text>
@@ -296,7 +343,7 @@ export function SortSheet({
 
 const sb = StyleSheet.create({
   bar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  count:   { fontSize: 13 },
+  count:   { fontSize: 13, flexShrink: 1, marginRight: 8 },
   btn:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   btnText: { fontSize: 13, fontWeight: '500', maxWidth: 180 },
 });
@@ -314,6 +361,11 @@ const ss = StyleSheet.create({
   optBtn:     { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
   optBtnActive: { backgroundColor: '#D4A017', borderColor: '#D4A017' },
   optText:    { fontSize: 13, fontWeight: '500' },
+
+  sectionLabel: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  genreWrap:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 4, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  genreBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  genreCount:   { fontSize: 12 },
 
   shuffleBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, paddingVertical: 12, borderRadius: 16, borderWidth: 1 },
   shuffleBtnActive: { backgroundColor: '#D4A017', borderColor: '#D4A017' },

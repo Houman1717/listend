@@ -24,6 +24,8 @@ import { SortBar, SortSheet, applySort, SortKey, COMMUNITY_SORTS, DURATION_SORTS
 import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
 import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { fetchAllRows } from '@/lib/supabaseQuery';
+import { fetchAlbumGenres } from '@/lib/albumGenres';
+import { genreCounts, primaryGenre } from '@/lib/genres';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -105,6 +107,8 @@ export default function WantToListenScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [query, setQuery]         = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [genre, setGenre]         = useState<string | null>(null);
+  const [genreTags, setGenreTags] = useState<Record<string, string[]>>({});
   const searchInputRef = useRef<import('react-native').TextInput>(null);
 
   useEffect(() => {
@@ -179,6 +183,30 @@ export default function WantToListenScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortKey, sourceList.length, viewingOther]);
 
+  // Genres for the filter. want_to_listen rows store no genre_tags, so look
+  // them up — up front, since the filter shows in the sort sheet as soon as
+  // it opens. Keyed on list length like the lazy fetches above.
+  const genresForCount = useRef(-1);
+  useEffect(() => {
+    if (sourceList.length === 0 || genresForCount.current === sourceList.length) return;
+    genresForCount.current = sourceList.length;
+
+    let cancelled = false;
+    fetchAlbumGenres(sourceList.map(a => a.id), () => cancelled).then(found => {
+      if (!cancelled && Object.keys(found).length > 0) setGenreTags(prev => ({ ...prev, ...found }));
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceList.length]);
+
+  const genreOf = useCallback((a: WantToListenAlbum) => primaryGenre({ genreTags: genreTags[a.id] }), [genreTags]);
+  const genres = useMemo(
+    () => genreCounts(sourceList.map(a => ({ genreTags: genreTags[a.id] }))),
+    [sourceList, genreTags],
+  );
+  // Falls back to All if the last album of the picked genre is removed.
+  const activeGenre = genre && genres.some(([g]) => g === genre) ? genre : null;
+
   // Sorting is kept out of the search memo so typing doesn't re-sort — and
   // re-key — the whole list on every keystroke.
   const sortedList = useMemo(() => {
@@ -190,13 +218,18 @@ export default function WantToListenScreen() {
     return applySort(enriched, sortKey);
   }, [sourceList, sortKey, shuffled, communityStatsMap]);
 
+  const genreList = useMemo(
+    () => (activeGenre ? sortedList.filter(a => genreOf(a) === activeGenre) : sortedList),
+    [sortedList, activeGenre, genreOf],
+  );
+
   const displayList = useMemo(() => {
-    if (!query.trim()) return sortedList;
+    if (!query.trim()) return genreList;
     const q = query.toLowerCase();
-    return sortedList.filter(a =>
+    return genreList.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [sortedList, query]);
+  }, [genreList, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -252,8 +285,8 @@ export default function WantToListenScreen() {
       }} />
       <SortBar
         sortKey={sortKey}
-        count={sourceList.length}
-        noun="albums"
+        count={genreList.length}
+        noun={activeGenre ? `${activeGenre} albums` : 'albums'}
         isDark={isDark}
         onPress={() => setSheetOpen(true)}
         onSearchPress={() => {
@@ -263,6 +296,7 @@ export default function WantToListenScreen() {
           else setTimeout(() => searchInputRef.current?.focus(), 50);
         }}
         searchActive={searchOpen}
+        filterActive={!!activeGenre}
         tint={colors.tint}
         bg={colors.background}
         surface={colors.surface}
@@ -305,7 +339,9 @@ export default function WantToListenScreen() {
         ListEmptyComponent={
           <View style={s.empty}>
             <Text style={[s.emptyTitle, { color: colors.text }]}>
-              {query.trim() ? `No albums matching "${query}"` : 'Nothing here yet'}
+              {query.trim()
+                ? `No ${activeGenre ? `${activeGenre} ` : ''}albums matching "${query}"`
+                : 'Nothing here yet'}
             </Text>
             <Text style={[s.emptySubtext, { color: colors.subtext }]}>
               {query.trim() ? '' : viewingOther
@@ -324,6 +360,9 @@ export default function WantToListenScreen() {
         isDark={isDark}
         tint={colors.tint}
         excludeKeys={['my_rating_high', 'my_rating_low']}
+        genres={genres}
+        activeGenre={activeGenre}
+        onSelectGenre={setGenre}
       />
     </View>
   );

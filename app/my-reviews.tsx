@@ -27,6 +27,7 @@ import { supabase } from '@/lib/supabase';
 import { handleOrName } from '@/lib/userHandle';
 import { parseReviewTargetId } from '@/lib/reviewTargets';
 import { SortBar, SortSheet, applySort, SortKey, COMMUNITY_SORTS, DURATION_SORTS } from '@/components/SortSheet';
+import { genreCounts, primaryGenre } from '@/lib/genres';
 import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
 import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { fetchAllRows } from '@/lib/supabaseQuery';
@@ -409,6 +410,7 @@ export default function MyReviewsScreen() {
   const [sortKey, setSortKey]             = useState<SortKey>('date_new');
   const [shuffled, setShuffled]           = useState<LoggedAlbum[] | null>(null);
   const [sheetOpen, setSheetOpen]         = useState(false);
+  const [genre, setGenre]                 = useState<string | null>(null);
   const [selectedReview, setSelectedReview] = useState<LoggedAlbum | null>(null);
   const [profileUsername, setProfileUsername] = useState('you');
   const [profileHandle,   setProfileHandle]   = useState('@you');
@@ -456,7 +458,7 @@ export default function MyReviewsScreen() {
       const [data, reListenData] = await Promise.all([
         fetchAllRows<any>((from, to) => supabase
           .from('user_albums')
-          .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms, is_relistened')
+          .select('spotify_id, title, artist, artwork_url, year, rating, review, listened_at, duration_ms, is_relistened, genre_tags')
           .eq('user_id', viewingOther!)
           .order('listened_at', { ascending: false })
           .range(from, to), MAX_LIBRARY_PAGES),
@@ -494,6 +496,7 @@ export default function MyReviewsScreen() {
             artworkUrl:    a.artwork_url ?? undefined,
             coverColor:    COVER_COLORS[i % COVER_COLORS.length],
             durationMs:    a.duration_ms ?? undefined,
+            genreTags:     a.genre_tags ?? [],
             isRelistened:  a.is_relistened ?? false,
             lastRating:    a.is_relistened ? latestReListenRating.get(a.spotify_id) : undefined,
             lastReview:    a.is_relistened ? latestReListenReview.get(a.spotify_id) : undefined,
@@ -846,13 +849,22 @@ export default function MyReviewsScreen() {
     return applySort(enriched, sortKey);
   }, [sourceReviews, sortKey, shuffled, communityStatsMap]);
 
+  const genres = useMemo(() => genreCounts(sourceReviews), [sourceReviews]);
+  // Falls back to All if the last review of the picked genre is removed.
+  const activeGenre = genre && genres.some(([g]) => g === genre) ? genre : null;
+
+  const genreReviews = useMemo(
+    () => (activeGenre ? sortedReviews.filter(a => primaryGenre(a) === activeGenre) : sortedReviews),
+    [sortedReviews, activeGenre],
+  );
+
   const reviewed = useMemo(() => {
-    if (!query.trim()) return sortedReviews;
+    if (!query.trim()) return genreReviews;
     const q = query.toLowerCase();
-    return sortedReviews.filter(a =>
+    return genreReviews.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [sortedReviews, query]);
+  }, [genreReviews, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -948,8 +960,8 @@ export default function MyReviewsScreen() {
         <>
           <SortBar
             sortKey={sortKey}
-            count={sourceReviews.length}
-            noun="reviews"
+            count={genreReviews.length}
+            noun={activeGenre ? `${activeGenre} reviews` : 'reviews'}
             isDark={isDark}
             onPress={() => setSheetOpen(true)}
             onSearchPress={() => {
@@ -959,6 +971,7 @@ export default function MyReviewsScreen() {
               else setTimeout(() => searchInputRef.current?.focus(), 50);
             }}
             searchActive={searchOpen}
+            filterActive={!!activeGenre}
             tint={colors.tint}
             bg={colors.background}
             surface={colors.surface}
@@ -995,7 +1008,9 @@ export default function MyReviewsScreen() {
             ListEmptyComponent={() => (
               <View style={s.empty}>
                 <Text style={[s.emptyTitle, { color: colors.text }]}>
-                  {query.trim() ? `No reviews matching "${query}"` : 'No reviews yet'}
+                  {query.trim()
+                    ? `No ${activeGenre ? `${activeGenre} ` : ''}reviews matching "${query}"`
+                    : 'No reviews yet'}
                 </Text>
                 {!query.trim() && (
                   <Text style={[s.emptySubtext, { color: colors.subtext }]}>
@@ -1013,6 +1028,9 @@ export default function MyReviewsScreen() {
             onClose={() => setSheetOpen(false)}
             isDark={isDark}
             tint={colors.tint}
+            genres={genres}
+            activeGenre={activeGenre}
+            onSelectGenre={setGenre}
           />
         </>
       )}

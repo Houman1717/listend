@@ -21,6 +21,7 @@ import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/Alb
 import { FLIP_POOL } from '@/constants/FlipPool';
 import { useFlip } from '@/context/FlipContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MAIN_GENRES } from '@/lib/genres';
 
 // Album titles per `.in('title', …)` request for community averages — keeps URLs short.
 const COMMUNITY_TITLE_CHUNK = 80;
@@ -43,11 +44,6 @@ const HOURS_WAIT_MS = 5000;
 type ComparePerson = { id: string; displayName: string; username: string; avatarUrl: string | null; isPro: boolean };
 type ArtistCompEntry = { artist: string; mine: number; community: number; delta: number; albums: LoggedAlbum[] };
 
-const MAIN_GENRES = new Set([
-  'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
-  'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
-  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues',
-]);
 
 
 const CARD_BG  = '#2E2018';

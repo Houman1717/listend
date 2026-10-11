@@ -5209,6 +5209,48 @@ app.get('/api/album-durations', [
   res.json(result);
 });
 
+// ── GET /api/album-genres?ids=id1,id2,... ────────────────────────────────────
+// Batch genre lookup for lists that don't store genre_tags (Want to Listen).
+// Apple lists an album's primary genre first, so normalizing genreNames gives
+// the same first main genre /album-tags does for logged albums — without its
+// per-album MusicBrainz call, so a whole list costs one Apple request per 100.
+
+app.get('/api/album-genres', [
+  query('ids').optional().trim().isLength({ max: 2000 }).withMessage('ids too long'),
+  validate,
+], async (req, res) => {
+  const raw = String(req.query.ids ?? '');
+  // Numeric = Apple Music. Manual (lst-) and legacy Spotify ids have no catalog entry.
+  const ids = [...new Set(raw.split(',').map(s => s.trim()).filter(s => /^\d+$/.test(s)))];
+  const result = {};
+  const byStorefront = new Map();
+  for (const id of ids) {
+    const hit = cacheGet(`album_genres_${id}`);
+    if (hit) { if (hit.length > 0) result[id] = hit; continue; }
+    const sf = storefrontFor(id);
+    if (!byStorefront.has(sf)) byStorefront.set(sf, []);
+    byStorefront.get(sf).push(id);
+  }
+
+  await Promise.all(Array.from(byStorefront.entries()).map(async ([sf, sfIds]) => {
+    for (let i = 0; i < sfIds.length; i += 100) {
+      const chunk = sfIds.slice(i, i + 100);
+      try {
+        const data = await amFetch(`/catalog/${sf}/albums?ids=${chunk.join(',')}`);
+        for (const album of (data?.data ?? [])) {
+          const tags = normalizeGenreTags((album?.attributes?.genreNames ?? []).filter(g => g !== 'Music'));
+          cacheSet(`album_genres_${album.id}`, tags, TTL_6H);
+          if (tags.length > 0) result[album.id] = tags;
+        }
+      } catch (err) {
+        console.error('[album-genres]', sf, err.message ?? err);
+      }
+    }
+  }));
+
+  res.json(result);
+});
+
 // ── Duration backfill ─────────────────────────────────────────────────────────
 // user_albums.duration_ms used to be saved only when the owner opened the
 // album page or sorted by duration, so ~46% of rows were null and Listening

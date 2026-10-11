@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { ProLockedSection } from '@/components/ProLockedSection';
+import { MAIN_GENRES } from '@/lib/genres';
 
 const CARD_BG = '#2E2018';
 const BORDER  = '#2a1e14';
@@ -34,11 +35,6 @@ const MONTH_NAMES = [
 
 const DOW_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
-const MAIN_GENRES = new Set([
-  'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
-  'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
-  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues',
-]);
 
 // ─── Stats computation ────────────────────────────────────────────────────────
 
