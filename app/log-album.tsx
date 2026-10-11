@@ -5,21 +5,23 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   Alert,
+  Keyboard,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useFlip } from '@/context/FlipContext';
 import { capture } from '@/lib/analytics';
+import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 
 const RATING_LABELS: Record<number, string> = {
   1:  'Skip',
@@ -135,6 +137,26 @@ export default function LogAlbumScreen() {
   const [logDate, setLogDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const reviewFocused = useRef(false);
+  const androidKeyboardHeight = useAndroidKeyboardHeight();
+  const insets = useSafeAreaInsets();
+
+  // Once the keys are up, scroll the whole review box (and the Log button under
+  // it) into view — otherwise it opens behind the keyboard, or on iOS with
+  // only its first line showing. Android waits for the padding below to render.
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const sub = Keyboard.addListener('keyboardDidShow', () => {
+      if (reviewFocused.current) scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if (androidKeyboardHeight > 0 && reviewFocused.current) {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [androidKeyboardHeight]);
 
   // Clears reListenMode on every dismissal path (Cancel, swipe-down, hardware
   // back) — it was previously only reset after a successful submit, so
@@ -169,109 +191,115 @@ export default function LogAlbumScreen() {
   const isDark = colorScheme === 'dark';
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled">
+    <ScrollView
+      ref={scrollRef}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[
+        styles.container,
+        // The IME height is measured from the top of the nav bar, so add it back.
+        androidKeyboardHeight > 0 && { paddingBottom: 40 + androidKeyboardHeight + insets.bottom },
+      ]}
+      keyboardShouldPersistTaps="handled"
+      // iOS: inset the content by the keyboard. A KeyboardAvoidingView here
+      // left the review box under the keys until the user scrolled by hand.
+      automaticallyAdjustKeyboardInsets>
 
-        <ExpoImage source={{ uri: pendingAlbum.artworkUrl }} style={styles.artwork} 
-            contentFit="cover" cachePolicy="disk"
-          />
-
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
-          {pendingAlbum.title}
-        </Text>
-        <Text style={[styles.artist, { color: colors.subtext }]}>
-          {pendingAlbum.artist} · {pendingAlbum.year}
-        </Text>
-
-        <Pressable
-          style={[styles.dateRow, { borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
-          onPress={() => {
-            // Android's picker is a native dialog, not an inline view. Rendering
-            // <DateTimePicker> re-opens that dialog on every re-render, so any tap
-            // on this screen (or OK/Cancel itself) popped it straight back up and
-            // trapped the user. Open it imperatively instead — it closes itself.
-            if (Platform.OS === 'android') {
-              DateTimePickerAndroid.open({
-                value: logDate,
-                mode: 'date',
-                maximumDate: new Date(),
-                onChange: (event, d) => { if (event.type === 'set' && d) setLogDate(d); },
-              });
-              return;
-            }
-            setShowDatePicker(v => !v);
-          }}>
-          <Text style={[styles.dateRowText, { color: colors.subtext }]}>
-            Listend {logDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-          </Text>
-          <View style={styles.dateEditBtn}>
-            <FontAwesome name="pencil" size={11} color="#D4A017" />
-            <Text style={styles.dateEditBtnText}>Edit Date</Text>
-          </View>
-        </Pressable>
-        {Platform.OS === 'ios' && showDatePicker && (
-          <DateTimePicker
-            value={logDate}
-            mode="date"
-            display="inline"
-            maximumDate={new Date()}
-            onChange={(_, d) => { if (d) setLogDate(d); }}
-            themeVariant={isDark ? 'dark' : 'light'}
-            accentColor="#D4A017"
-            style={{ width: '100%', marginTop: 10 }}
-          />
-        )}
-
-        <Text style={[styles.sectionLabel, { color: colors.subtext }]}>
-          Your rating <Text style={{ fontWeight: '400' }}>(optional)</Text>
-        </Text>
-        <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
-
-        <Text style={[styles.sectionLabel, { color: colors.subtext, marginTop: 28 }]}>
-          Review <Text style={{ fontWeight: '400' }}>(optional)</Text>
-        </Text>
-        <TextInput
-          style={[
-            styles.reviewInput,
-            {
-              color: colors.text,
-              backgroundColor: isDark ? '#2e2018' : '#f2f2f2',
-              borderColor: isDark ? '#3a2818' : '#e0e0e0',
-            },
-          ]}
-          placeholder="What did you think?"
-          placeholderTextColor={colors.subtext}
-          value={review}
-          onChangeText={setReview}
-          multiline
-          textAlignVertical="top"
-          maxLength={1000}
+      <ExpoImage source={{ uri: pendingAlbum.artworkUrl }} style={styles.artwork} 
+          contentFit="cover" cachePolicy="disk"
         />
-        {review.length > 0 && (
-          <Text style={[styles.charCount, { color: colors.subtext }]}>
-            {review.length}/1000
-          </Text>
-        )}
 
-        <Pressable
-          style={[styles.logButton, { backgroundColor: '#D4A017', opacity: saving ? 0.6 : 1 }]}
-          disabled={saving}
-          onPress={handleLog}>
-          <Text style={[styles.logButtonText, { color: '#fff' }]}>
-            Log Album
-          </Text>
-        </Pressable>
+      <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
+        {pendingAlbum.title}
+      </Text>
+      <Text style={[styles.artist, { color: colors.subtext }]}>
+        {pendingAlbum.artist} · {pendingAlbum.year}
+      </Text>
 
-        <Pressable style={styles.cancelButton} onPress={() => router.dismiss()}>
-          <Text style={[styles.cancelText, { color: colors.subtext }]}>Cancel</Text>
-        </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <Pressable
+        style={[styles.dateRow, { borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
+        onPress={() => {
+          // Android's picker is a native dialog, not an inline view. Rendering
+          // <DateTimePicker> re-opens that dialog on every re-render, so any tap
+          // on this screen (or OK/Cancel itself) popped it straight back up and
+          // trapped the user. Open it imperatively instead — it closes itself.
+          if (Platform.OS === 'android') {
+            DateTimePickerAndroid.open({
+              value: logDate,
+              mode: 'date',
+              maximumDate: new Date(),
+              onChange: (event, d) => { if (event.type === 'set' && d) setLogDate(d); },
+            });
+            return;
+          }
+          setShowDatePicker(v => !v);
+        }}>
+        <Text style={[styles.dateRowText, { color: colors.subtext }]}>
+          Listend {logDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </Text>
+        <View style={styles.dateEditBtn}>
+          <FontAwesome name="pencil" size={11} color="#D4A017" />
+          <Text style={styles.dateEditBtnText}>Edit Date</Text>
+        </View>
+      </Pressable>
+      {Platform.OS === 'ios' && showDatePicker && (
+        <DateTimePicker
+          value={logDate}
+          mode="date"
+          display="inline"
+          maximumDate={new Date()}
+          onChange={(_, d) => { if (d) setLogDate(d); }}
+          themeVariant={isDark ? 'dark' : 'light'}
+          accentColor="#D4A017"
+          style={{ width: '100%', marginTop: 10 }}
+        />
+      )}
+
+      <Text style={[styles.sectionLabel, { color: colors.subtext }]}>
+        Your rating <Text style={{ fontWeight: '400' }}>(optional)</Text>
+      </Text>
+      <RatingPicker rating={rating} onChange={setRating} isDark={isDark} />
+
+      <Text style={[styles.sectionLabel, { color: colors.subtext, marginTop: 28 }]}>
+        Review <Text style={{ fontWeight: '400' }}>(optional)</Text>
+      </Text>
+      <TextInput
+        style={[
+          styles.reviewInput,
+          {
+            color: colors.text,
+            backgroundColor: isDark ? '#2e2018' : '#f2f2f2',
+            borderColor: isDark ? '#3a2818' : '#e0e0e0',
+          },
+        ]}
+        placeholder="What did you think?"
+        placeholderTextColor={colors.subtext}
+        value={review}
+        onChangeText={setReview}
+        onFocus={() => { reviewFocused.current = true; }}
+        onBlur={() => { reviewFocused.current = false; }}
+        multiline
+        textAlignVertical="top"
+        maxLength={1000}
+      />
+      {review.length > 0 && (
+        <Text style={[styles.charCount, { color: colors.subtext }]}>
+          {review.length}/1000
+        </Text>
+      )}
+
+      <Pressable
+        style={[styles.logButton, { backgroundColor: '#D4A017', opacity: saving ? 0.6 : 1 }]}
+        disabled={saving}
+        onPress={handleLog}>
+        <Text style={[styles.logButtonText, { color: '#fff' }]}>
+          Log Album
+        </Text>
+      </Pressable>
+
+      <Pressable style={styles.cancelButton} onPress={() => router.dismiss()}>
+        <Text style={[styles.cancelText, { color: colors.subtext }]}>Cancel</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 
