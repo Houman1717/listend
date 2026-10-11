@@ -193,7 +193,10 @@ export default function WantToListenScreen() {
 
     let cancelled = false;
     fetchAlbumGenres(sourceList.map(a => a.id), () => cancelled).then(found => {
-      if (!cancelled && Object.keys(found).length > 0) setGenreTags(prev => ({ ...prev, ...found }));
+      if (cancelled) return;
+      // Nothing back usually means the lookup failed — let the next visit retry.
+      if (Object.keys(found).length === 0) { genresForCount.current = -1; return; }
+      setGenreTags(prev => ({ ...prev, ...found }));
     });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
