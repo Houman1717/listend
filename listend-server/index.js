@@ -834,6 +834,12 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '877748547', title: 'IntoXXXicated', artist: 'SpaceGhostPurrp', year: 2014,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/41/99/7d/41997d14-61fb-61db-a59e-0d26e05010f1/859712603159_cover.tif/500x500bb.jpg',
   },
+  // Never linked to Donell Jones on Apple, so resolving it by title landed on
+  // Damjonboi's The Lost Files instead.
+  'donelljones::thelostfiles': {
+    id: '340509255', title: 'The Lost Files', artist: 'Donell Jones', year: 2009,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/45/59/55/mzi.ipzzmvpy.jpg/500x500bb.jpg',
+  },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
@@ -4313,6 +4319,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/41/99/7d/41997d14-61fb-61db-a59e-0d26e05010f1/859712603159_cover.tif/500x500bb.jpg',
       year: 2014, isSingle: false, isCompilation: false, trackCount: 14,
       url: 'https://music.apple.com/us/album/intoxxxicated/877748547', type: 'album',
+    },
+  ],
+  '291924': [ // Donell Jones — Apple has The Lost Files on `us` but doesn't list it under him
+    {
+      id: '340509255', title: 'The Lost Files',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/45/59/55/mzi.ipzzmvpy.jpg/500x500bb.jpg',
+      year: 2009, isSingle: false, isCompilation: false, trackCount: 11,
+      url: 'https://music.apple.com/us/album/the-lost-files/340509255', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
