@@ -7,6 +7,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 import { LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { handleOrName } from '@/lib/userHandle';
@@ -75,6 +76,7 @@ export function AlbumReviewModal({
   const pendingLikeToggle = useRef(false);
 
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useAndroidKeyboardHeight();
   const border = isDark ? '#2a1e14' : '#e5e5e5';
   const dateStr = album.dateLogged
     ? new Date(album.dateLogged).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -158,7 +160,7 @@ export function AlbumReviewModal({
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: colors.background }}>
+        style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight }}>
         <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
 
           {/* Header */}

@@ -23,6 +23,8 @@ import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Color
 import VolumeBars from '@/components/VolumeBars';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
@@ -380,11 +382,16 @@ function PopularReviewModal({
   const bg = isDark ? colors.background : colors.background;
   const border = isDark ? '#2a1e14' : '#e5e5e5';
 
+  // RN's SafeAreaView is a no-op on Android, so add the nav bar on top.
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useAndroidKeyboardHeight();
+  const keyboardPad = keyboardHeight > 0 ? keyboardHeight + insets.bottom : 0;
+
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: bg }}>
+        style={{ flex: 1, backgroundColor: bg, paddingBottom: keyboardPad }}>
         <SafeAreaView style={{ flex: 1 }}>
 
           {/* Header */}
@@ -702,11 +709,16 @@ function FriendReviewModal({
   const bg     = isDark ? colors.background : colors.background;
   const border = isDark ? '#2a1e14' : '#e5e5e5';
 
+  // RN's SafeAreaView is a no-op on Android, so add the nav bar on top.
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useAndroidKeyboardHeight();
+  const keyboardPad = keyboardHeight > 0 ? keyboardHeight + insets.bottom : 0;
+
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: bg }}>
+        style={{ flex: 1, backgroundColor: bg, paddingBottom: keyboardPad }}>
         <SafeAreaView style={{ flex: 1 }}>
 
           {/* Header */}
@@ -1112,6 +1124,8 @@ export default function HomeScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useAndroidKeyboardHeight();
 
   const { user } = useAuth();
   const { showPaywall } = usePro();
@@ -1631,7 +1645,9 @@ export default function HomeScreen() {
 
       {/* All friends list modal */}
       <Modal visible={showAllFriends} animationType="slide" onRequestClose={() => setShowAllFriends(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight > 0 ? keyboardHeight + insets.bottom : 0 }}>
           <SafeAreaView style={{ flex: 1 }}>
             <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
               <Text style={[s.allFriendsTitle, { color: colors.text }]}>Friends Recent Listend</Text>
@@ -1660,7 +1676,7 @@ export default function HomeScreen() {
               )}
             />
           </SafeAreaView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Friend review modal */}

@@ -26,6 +26,8 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape, VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
 import { ProBadge } from '@/components/ProBadge';
@@ -503,11 +505,16 @@ function ReviewCardModal({
     }]);
   }
 
+  // RN's SafeAreaView is a no-op on Android, so add the nav bar on top.
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useAndroidKeyboardHeight();
+  const keyboardPad = keyboardHeight > 0 ? keyboardHeight + insets.bottom : 0;
+
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: colors.background }}>
+        style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardPad }}>
         <SafeAreaView style={{ flex: 1 }}>
 
           {/* Header */}

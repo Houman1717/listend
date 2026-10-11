@@ -16,6 +16,8 @@ import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Color
 import VolumeBars from '@/components/VolumeBars';
 import { PopularReview, fetchPopularReviewsThisWeek } from '@/lib/homeData';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -175,6 +177,8 @@ export default function PopularReviewsScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useAndroidKeyboardHeight();
 
   const [reviews,      setReviews]      = useState<PopularReview[]>([]);
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
@@ -307,7 +311,7 @@ export default function PopularReviewsScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight > 0 ? keyboardHeight + insets.bottom : 0 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
       <FlatList

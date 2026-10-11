@@ -32,6 +32,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchAllRows, fetchAllRowsIn } from '@/lib/supabaseQuery';
 import { handleOrName } from '@/lib/userHandle';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
+import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { fetchReviewComments, insertReviewComment, countReviewComments } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
@@ -626,12 +627,14 @@ function AlbumSingleReviewModal({
     onLike();
   }
 
+  const keyboardHeight = useAndroidKeyboardHeight();
+
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <SafeAreaProvider>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: colors.background }}>
+        style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight }}>
         <SafeAreaView style={{ flex: 1 }}>
 
           {/* Header */}
