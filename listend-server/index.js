@@ -1797,7 +1797,8 @@ app.get('/search', [
   }
 
   // v2: 25 candidates per query (was 10) so ranking has something to work with.
-  const CACHE_KEY = `search2:${type}:${q.trim().toLowerCase()}`;
+  // v3: albums take a second page — see below.
+  const CACHE_KEY = `search3:${type}:${q.trim().toLowerCase()}`;
 
   const withOverrides = rawResults => {
     const results = rankSearchResults(type, q, rawResults);
@@ -1826,11 +1827,22 @@ app.get('/search', [
   try {
     const amType = type === 'album' ? 'albums' : type === 'track' ? 'songs' : 'artists';
     const url = `https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(q)}&types=${amType}&limit=25`;
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${generateAppleToken()}` },
-    });
+    const headers = { Authorization: `Bearer ${generateAppleToken()}` };
+    // A title shared by dozens of minor releases buries the album people mean:
+    // Apple puts The Corrs' White Light 26th for "white light", one past the
+    // first page, so ranking never saw it. Albums take a second page (Apple
+    // caps a page at 25); if it fails, the first page still stands.
+    const [resp, page2] = await Promise.all([
+      fetch(url, { headers }),
+      type === 'album'
+        ? fetch(`${url}&offset=25`, { headers }).then(r => (r.ok ? r.json() : null)).catch(() => null)
+        : null,
+    ]);
     if (!resp.ok) throw new Error(`Apple Music search → ${resp.status}`);
     const data = await resp.json();
+    if (page2?.results?.albums?.data && data.results?.albums?.data) {
+      data.results.albums.data = data.results.albums.data.concat(page2.results.albums.data);
+    }
 
     const artworkUrl = raw => (raw?.url ?? '').replace('{w}x{h}', '500x500');
 
@@ -5466,10 +5478,11 @@ app.get('/api/admin/purge-artist-rating-cache', requireAdmin, async (req, res) =
 app.get('/api/admin/purge-search-cache', requireAdmin, async (req, res) => {
   try {
     for (const key of memCache.keys()) {
-      if (key.startsWith('search:') || key.startsWith('search2:')) memCache.delete(key);
+      if (key.startsWith('search:') || key.startsWith('search2:') || key.startsWith('search3:')) memCache.delete(key);
     }
     await deleteCachePrefix('search:');
     await deleteCachePrefix('search2:');
+    await deleteCachePrefix('search3:');
     console.log('[/api/admin/purge-search-cache] done.');
     res.json({ success: true });
   } catch (err) {
