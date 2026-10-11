@@ -982,6 +982,25 @@ const MANUAL_ALBUMS = [
       { number: 5, id: 'lst-lady-of-shalott-t5', title: 'Cuckoo (Alternate Version)', durationMs: 983000 },
     ],
   },
+  {
+    id: 'lst-love-you-less',
+    title: 'LOVE YOU LESS',
+    artist: 'Joji',
+    artistId: '1258279972',
+    year: 2026,
+    // A four-song EP released ahead of Piss In The Wind; Spotify, Deezer and
+    // Tidal carry it, Apple only has the songs on the album. Tracklist and
+    // timings from MusicBrainz, matching Spotify to the millisecond.
+    artworkUrl: 'https://coverartarchive.org/release-group/5191a62c-bf0f-4fd0-8420-fa774ca1fa0e/front-500',
+    musicbrainzReleaseId: '4d8ac963-f81d-48db-ba39-02817ccc9092',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-love-you-less-t1', title: 'LOVE YOU LESS', durationMs: 201186 },
+      { number: 2, id: 'lst-love-you-less-t2', title: 'Past Won’t Leave My Bed', durationMs: 166106 },
+      { number: 3, id: 'lst-love-you-less-t3', title: 'If It Only Gets Better', durationMs: 68600 },
+      { number: 4, id: 'lst-love-you-less-t4', title: 'PIXELATED KISSES', durationMs: 110430 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────

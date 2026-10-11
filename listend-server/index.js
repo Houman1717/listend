@@ -4722,16 +4722,19 @@ async function buildArtistDiscography(id, bust = false) {
   // no plain edition in Albums to stand for it, it takes the album's place.
   // Only when the edition suffix is what matched: "Greatest Hits (Deluxe)"
   // stays put.
-  const albumBases = new Set(buckets.albums.map(item => baseTitle(item.title)));
+  // An EP's deluxe has its plain edition under EPs, not Albums — Joji's In
+  // Tongues (Deluxe) against "In Tongues - EP" — so count those too.
+  const editionBase = title => baseTitle(title).replace(/\s*-\s*(ep|single)$/, '');
+  const albumBases = new Set([...buckets.albums, ...buckets.epsAndMixtapes].map(item => editionBase(item.title)));
   buckets.collections = buckets.collections.filter(item => {
     const t = item.title;
     const editionOnly =
       item.isCompilation !== true && !inCollectionTitles(t) &&
       !COLLECTION_RE.test(t.replace(VARIANT_SUFFIX_RE, ''));
-    if (!editionOnly || albumBases.has(baseTitle(t))) return true;
+    if (!editionOnly || albumBases.has(editionBase(t))) return true;
     console.log(`[artist-discography] "${t}": only edition of the album, filing under Albums`);
     buckets.albums.push(item);
-    albumBases.add(baseTitle(t));
+    albumBases.add(editionBase(t));
     return false;
   });
 
