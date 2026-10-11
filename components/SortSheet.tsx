@@ -297,6 +297,8 @@ export function SortSheet({
   const border  = isDark ? '#2e2018' : '#ececec';
   const surface = isDark ? '#2e2018' : '#f5f5f5';
 
+  const listRef = useRef<ScrollView>(null);
+
   function handleSelect(key: SortKey) {
     onSelect(key);
     onClose();
@@ -312,7 +314,12 @@ export function SortSheet({
 
         <Text style={[ss.title, { color: text }]}>{filters.length > 0 ? 'Sort & Filter' : 'Sort By'}</Text>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ss.content}>
+        {/* The scroll bar flashes on open, so a list that runs past the bottom
+            on a smaller phone visibly scrolls. */}
+        <ScrollView
+          ref={listRef}
+          onLayout={() => listRef.current?.flashScrollIndicators()}
+          contentContainerStyle={ss.content}>
           {/* One row per filter, like the sort rows: label left, chips scrolling right. */}
           {filters.map((section) => (
             <FilterRow
@@ -352,8 +359,10 @@ export function SortSheet({
               </View>
             </View>
           ))}
+        </ScrollView>
 
-          {/* Shuffle */}
+        {/* Shuffle — pinned below the list so it's never cut off at the bottom. */}
+        <View style={[ss.footer, { borderTopColor: border }]}>
           <Pressable
             onPress={() => handleSelect('shuffle')}
             style={[
@@ -371,7 +380,7 @@ export function SortSheet({
               Shuffle
             </Text>
           </Pressable>
-        </ScrollView>
+        </View>
       </View>
       </View>
     </Modal>
@@ -389,12 +398,13 @@ const sb = StyleSheet.create({
 
 const ss = StyleSheet.create({
   overlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40, maxHeight: '80%' },
+  sheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34, maxHeight: '85%' },
   handle:   { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
   title:    { fontSize: 17, fontWeight: '700', textAlign: 'center', paddingVertical: 14 },
-  content:  { paddingHorizontal: 20, paddingBottom: 20 },
+  content:  { paddingHorizontal: 20, paddingBottom: 4 },
+  footer:   { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
 
-  row:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  row:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   groupLabel: { fontSize: 13, fontWeight: '600', flex: 1, marginRight: 12 },
   btnPair:    { flexDirection: 'row', gap: 8 },
   optBtn:     { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
@@ -408,7 +418,7 @@ const ss = StyleSheet.create({
   filterBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
   filterCount:  { fontSize: 12 },
 
-  shuffleBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, paddingVertical: 12, borderRadius: 16, borderWidth: 1 },
+  shuffleBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 16, borderWidth: 1 },
   shuffleBtnActive: { backgroundColor: '#D4A017', borderColor: '#D4A017' },
   shuffleText:      { fontSize: 15, fontWeight: '600' },
 });
