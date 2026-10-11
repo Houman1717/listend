@@ -486,6 +486,19 @@ pinStorefront('it', [
   '1339115950', '1339115951', '1339115952', '1339115953', '1339115954', '1339115955',
   '1339115956',
 ]);
+// Kayah — Kayah & Bregović (1999)
+pinStorefront('pl', [
+  '339040577',
+  '339040739', '339040741', '339040743', '339040758', '339040760', '339040762',
+  '339040766', '339040767', '339040845', '339040847',
+]);
+// Kayah — Stereo Typ (2004)
+pinStorefront('pl', [
+  '1046879822',
+  '1046880177', '1046880178', '1046880179', '1046880180', '1046880181', '1046880182',
+  '1046880183', '1046880184', '1046880305', '1046880306', '1046880308', '1046880309',
+  '1046880310',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -839,6 +852,20 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'donelljones::thelostfiles': {
     id: '340509255', title: 'The Lost Files', artist: 'Donell Jones', year: 2009,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/45/59/55/mzi.ipzzmvpy.jpg/500x500bb.jpg',
+  },
+  'kayah::kayahbregovi': {
+    id: '339040577', title: 'Kayah & Bregović', artist: 'Kayah', year: 1999,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/eb/b3/78/ebb37829-4ce8-9595-81cd-9d059a69495d/dj.oulafnin.jpg/500x500bb.jpg',
+  },
+  // The key drops "ć" rather than folding it, so the unaccented spelling
+  // keys differently and needs its own entry.
+  'kayah::kayahbregovic': {
+    id: '339040577', title: 'Kayah & Bregović', artist: 'Kayah', year: 1999,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/eb/b3/78/ebb37829-4ce8-9595-81cd-9d059a69495d/dj.oulafnin.jpg/500x500bb.jpg',
+  },
+  'kayah::stereotyp': {
+    id: '1046879822', title: 'Stereo Typ', artist: 'Kayah', year: 2004,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/7e/b9/95/7eb99564-896f-d6b0-f547-8ecb79090cfa/886445509236.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -4327,6 +4354,20 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/45/59/55/mzi.ipzzmvpy.jpg/500x500bb.jpg',
       year: 2009, isSingle: false, isCompilation: false, trackCount: 11,
       url: 'https://music.apple.com/us/album/the-lost-files/340509255', type: 'album',
+    },
+  ],
+  '2413279': [ // Kayah — not licensed for `us`
+    {
+      id: '339040577', title: 'Kayah & Bregović',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/eb/b3/78/ebb37829-4ce8-9595-81cd-9d059a69495d/dj.oulafnin.jpg/500x500bb.jpg',
+      year: 1999, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/pl/album/kayah-bregovi%C4%87/339040577', type: 'album',
+    },
+    {
+      id: '1046879822', title: 'Stereo Typ',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/7e/b9/95/7eb99564-896f-d6b0-f547-8ecb79090cfa/886445509236.jpg/500x500bb.jpg',
+      year: 2004, isSingle: false, isCompilation: false, trackCount: 13,
+      url: 'https://music.apple.com/pl/album/stereo-typ/1046879822', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`

@@ -1001,6 +1001,35 @@ const MANUAL_ALBUMS = [
       { number: 4, id: 'lst-love-you-less-t4', title: 'PIXELATED KISSES', durationMs: 110430 },
     ],
   },
+  {
+    id: 'lst-korova-milky-bar',
+    title: 'Korova Milky Bar',
+    artist: 'Myslovitz',
+    artistId: '156979662',
+    year: 2002,
+    // Their best-known album, absent from Apple everywhere though most of
+    // their catalogue is there; a 9-track digital release is marked withdrawn
+    // on MusicBrainz. The original 2002 Polish CD (Sony), not the 2003
+    // English-language version. MusicBrainz and Discogs agree on the
+    // tracklist and timings to the second; the last track runs on through a
+    // hidden one, hence its 16 minutes.
+    artworkUrl: 'https://coverartarchive.org/release-group/223b56fd-337f-3941-8348-21f98b5e8f10/front-500',
+    musicbrainzReleaseId: 'a537debd-0c0d-4c63-8c4f-04031dc48adc',
+    trackCount: 11,
+    tracks: [
+      { number: 1, id: 'lst-korova-milky-bar-t1', title: 'Sprzedawcy marzeń', durationMs: 235373 },
+      { number: 2, id: 'lst-korova-milky-bar-t2', title: 'Acidland', durationMs: 254226 },
+      { number: 3, id: 'lst-korova-milky-bar-t3', title: 'Bar mleczny Korova', durationMs: 184386 },
+      { number: 4, id: 'lst-korova-milky-bar-t4', title: 'Wieża melancholii', durationMs: 312093 },
+      { number: 5, id: 'lst-korova-milky-bar-t5', title: 'Za zamkniętymi oczami', durationMs: 208173 },
+      { number: 6, id: 'lst-korova-milky-bar-t6', title: 'Kilka błędów popełnionych przez dobrych rodziców', durationMs: 235720 },
+      { number: 7, id: 'lst-korova-milky-bar-t7', title: 'Siódmy koktajl', durationMs: 258440 },
+      { number: 8, id: 'lst-korova-milky-bar-t8', title: 'Nigdy nie znajdziesz sobie przyjaciół jeśli nie będziesz taki jak wszyscy', durationMs: 192560 },
+      { number: 9, id: 'lst-korova-milky-bar-t9', title: 'W 10 sekund przez całe życie', durationMs: 319013 },
+      { number: 10, id: 'lst-korova-milky-bar-t10', title: 'Chciałbym umrzeć z miłości', durationMs: 414506 },
+      { number: 11, id: 'lst-korova-milky-bar-t11', title: 'Szklany człowiek / Pocztówka z lotniska', durationMs: 984333 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
