@@ -22,6 +22,7 @@ import { FLIP_POOL } from '@/constants/FlipPool';
 import { useFlip } from '@/context/FlipContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MAIN_GENRES } from '@/lib/genres';
+import { StatsMilestones } from '@/components/StatsMilestones';
 
 // Album titles per `.in('title', …)` request for community averages — keeps URLs short.
 const COMMUNITY_TITLE_CHUNK = 80;
@@ -1799,6 +1800,7 @@ export default function MyStatsScreen() {
       { icon: 'users',      label: 'You vs the Community', sub: 'Where you rate higher and lower than everyone else' },
       { icon: 'line-chart', label: 'Growers & Faders',     sub: 'Albums your re-listens changed your mind about' },
       { icon: 'star',       label: 'Most Listend Artists', sub: 'Your most-played artists of all time' },
+      { icon: 'flag',       label: 'Milestones',           sub: 'Your 1st, 50th, 100th album and when you logged it' },
     ];
 
     return (
@@ -2296,6 +2298,25 @@ export default function MyStatsScreen() {
             <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 4 }}>Monthly Stats</Text>
             <Text style={{ color: colors.subtext, fontSize: 12 }}>Browse past months</Text>
           </Pressable>
+        </View>
+
+        {/* ── Milestones ────────────────────────────────────────────────── */}
+        <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <View style={s.cardTitleRow}>
+            <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>MILESTONES</Text>
+            {loggedAlbums.length > 0 && (
+              <Text style={[s.cardTitleValue, { color: colors.text }]}>{loggedAlbums.length} logged</Text>
+            )}
+          </View>
+          <StatsMilestones
+            albums={loggedAlbums}
+            onAlbumPress={handleAlbumPress}
+            tint={colors.tint}
+            textColor={colors.text}
+            subtextColor={colors.subtext}
+            borderColor={cardBorder}
+            trackColor={cardBorder}
+          />
         </View>
 
         {/* ── Year Chart ────────────────────────────────────────────────── */}
