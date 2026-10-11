@@ -27,7 +27,8 @@ import { supabase } from '@/lib/supabase';
 import { handleOrName } from '@/lib/userHandle';
 import { parseReviewTargetId } from '@/lib/reviewTargets';
 import { SortBar, SortSheet, applySort, SortKey, COMMUNITY_SORTS, DURATION_SORTS } from '@/components/SortSheet';
-import { genreCounts, primaryGenre } from '@/lib/genres';
+import { primaryGenre } from '@/lib/genres';
+import { useLibraryFilters } from '@/hooks/useLibraryFilters';
 import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
 import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { fetchAllRows } from '@/lib/supabaseQuery';
@@ -410,7 +411,6 @@ export default function MyReviewsScreen() {
   const [sortKey, setSortKey]             = useState<SortKey>('date_new');
   const [shuffled, setShuffled]           = useState<LoggedAlbum[] | null>(null);
   const [sheetOpen, setSheetOpen]         = useState(false);
-  const [genre, setGenre]                 = useState<string | null>(null);
   const [selectedReview, setSelectedReview] = useState<LoggedAlbum | null>(null);
   const [profileUsername, setProfileUsername] = useState('you');
   const [profileHandle,   setProfileHandle]   = useState('@you');
@@ -849,22 +849,16 @@ export default function MyReviewsScreen() {
     return applySort(enriched, sortKey);
   }, [sourceReviews, sortKey, shuffled, communityStatsMap]);
 
-  const genres = useMemo(() => genreCounts(sourceReviews), [sourceReviews]);
-  // Falls back to All if the last review of the picked genre is removed.
-  const activeGenre = genre && genres.some(([g]) => g === genre) ? genre : null;
-
-  const genreReviews = useMemo(
-    () => (activeGenre ? sortedReviews.filter(a => primaryGenre(a) === activeGenre) : sortedReviews),
-    [sortedReviews, activeGenre],
-  );
+  const { filters, filtered: filteredReviews, label: filterLabel, filterActive } =
+    useLibraryFilters(sourceReviews, sortedReviews, primaryGenre);
 
   const reviewed = useMemo(() => {
-    if (!query.trim()) return genreReviews;
+    if (!query.trim()) return filteredReviews;
     const q = query.toLowerCase();
-    return genreReviews.filter(a =>
+    return filteredReviews.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [genreReviews, query]);
+  }, [filteredReviews, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -960,8 +954,8 @@ export default function MyReviewsScreen() {
         <>
           <SortBar
             sortKey={sortKey}
-            count={genreReviews.length}
-            noun={activeGenre ? `${activeGenre} reviews` : 'reviews'}
+            count={filteredReviews.length}
+            noun={filterLabel ? `${filterLabel} reviews` : 'reviews'}
             isDark={isDark}
             onPress={() => setSheetOpen(true)}
             onSearchPress={() => {
@@ -971,7 +965,7 @@ export default function MyReviewsScreen() {
               else setTimeout(() => searchInputRef.current?.focus(), 50);
             }}
             searchActive={searchOpen}
-            filterActive={!!activeGenre}
+            filterActive={filterActive}
             tint={colors.tint}
             bg={colors.background}
             surface={colors.surface}
@@ -1009,7 +1003,7 @@ export default function MyReviewsScreen() {
               <View style={s.empty}>
                 <Text style={[s.emptyTitle, { color: colors.text }]}>
                   {query.trim()
-                    ? `No ${activeGenre ? `${activeGenre} ` : ''}reviews matching "${query}"`
+                    ? `No ${filterLabel ? `${filterLabel} ` : ''}reviews matching "${query}"`
                     : 'No reviews yet'}
                 </Text>
                 {!query.trim() && (
@@ -1028,9 +1022,7 @@ export default function MyReviewsScreen() {
             onClose={() => setSheetOpen(false)}
             isDark={isDark}
             tint={colors.tint}
-            genres={genres}
-            activeGenre={activeGenre}
-            onSelectGenre={setGenre}
+            filters={filters}
           />
         </>
       )}

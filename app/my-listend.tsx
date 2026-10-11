@@ -29,7 +29,8 @@ import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { reportContent } from '@/lib/reports';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
-import { genreCounts, primaryGenre } from '@/lib/genres';
+import { primaryGenre } from '@/lib/genres';
+import { useLibraryFilters } from '@/hooks/useLibraryFilters';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -146,7 +147,6 @@ export default function MyListendScreen() {
   const [sheetOpen, setSheetOpen]   = useState(false);
   const [query, setQuery]           = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [genre, setGenre]           = useState<string | null>(null);
   const searchInputRef = useRef<import('react-native').TextInput>(null);
 
   // Review modal state
@@ -289,22 +289,16 @@ export default function MyListendScreen() {
     return applySort(enriched, sortKey);
   }, [sourceAlbums, sortKey, shuffled, communityStatsMap]);
 
-  const genres = useMemo(() => genreCounts(sourceAlbums), [sourceAlbums]);
-  // Falls back to All if the last album of the picked genre is removed.
-  const activeGenre = genre && genres.some(([g]) => g === genre) ? genre : null;
-
-  const genreAlbums = useMemo(
-    () => (activeGenre ? sortedAlbums.filter(a => primaryGenre(a) === activeGenre) : sortedAlbums),
-    [sortedAlbums, activeGenre],
-  );
+  const { filters, filtered: filteredAlbums, label: filterLabel, filterActive } =
+    useLibraryFilters(sourceAlbums, sortedAlbums, primaryGenre);
 
   const displayAlbums = useMemo(() => {
-    if (!query.trim()) return genreAlbums;
+    if (!query.trim()) return filteredAlbums;
     const q = query.toLowerCase();
-    return genreAlbums.filter(a =>
+    return filteredAlbums.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [genreAlbums, query]);
+  }, [filteredAlbums, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -341,8 +335,8 @@ export default function MyListendScreen() {
       }} />
       <SortBar
         sortKey={sortKey}
-        count={genreAlbums.length}
-        noun={activeGenre ? `${activeGenre} albums` : 'albums'}
+        count={filteredAlbums.length}
+        noun={filterLabel ? `${filterLabel} albums` : 'albums'}
         isDark={isDark}
         onPress={() => setSheetOpen(true)}
         onSearchPress={() => {
@@ -352,7 +346,7 @@ export default function MyListendScreen() {
           else setTimeout(() => searchInputRef.current?.focus(), 50);
         }}
         searchActive={searchOpen}
-        filterActive={!!activeGenre}
+        filterActive={filterActive}
         tint={colors.tint}
         bg={colors.background}
         surface={colors.surface}
@@ -398,7 +392,7 @@ export default function MyListendScreen() {
         ListEmptyComponent={
           <Text style={[s.emptyText, { color: colors.subtext }]}>
             {query.trim()
-              ? `No ${activeGenre ? `${activeGenre} ` : ''}albums matching "${query}"`
+              ? `No ${filterLabel ? `${filterLabel} ` : ''}albums matching "${query}"`
               : 'No albums logged yet — head to Search!'}
           </Text>
         }
@@ -411,9 +405,7 @@ export default function MyListendScreen() {
         onClose={() => setSheetOpen(false)}
         isDark={isDark}
         tint={colors.tint}
-        genres={genres}
-        activeGenre={activeGenre}
-        onSelectGenre={setGenre}
+        filters={filters}
       />
 
       {selectedAlbum && (

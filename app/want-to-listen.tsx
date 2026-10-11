@@ -25,7 +25,8 @@ import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/co
 import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { fetchAllRows } from '@/lib/supabaseQuery';
 import { fetchAlbumGenres } from '@/lib/albumGenres';
-import { genreCounts, primaryGenre } from '@/lib/genres';
+import { primaryGenre } from '@/lib/genres';
+import { useLibraryFilters } from '@/hooks/useLibraryFilters';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -107,7 +108,6 @@ export default function WantToListenScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [query, setQuery]         = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [genre, setGenre]         = useState<string | null>(null);
   const [genreTags, setGenreTags] = useState<Record<string, string[]>>({});
   const searchInputRef = useRef<import('react-native').TextInput>(null);
 
@@ -203,12 +203,6 @@ export default function WantToListenScreen() {
   }, [sourceList.length]);
 
   const genreOf = useCallback((a: WantToListenAlbum) => primaryGenre({ genreTags: genreTags[a.id] }), [genreTags]);
-  const genres = useMemo(
-    () => genreCounts(sourceList.map(a => ({ genreTags: genreTags[a.id] }))),
-    [sourceList, genreTags],
-  );
-  // Falls back to All if the last album of the picked genre is removed.
-  const activeGenre = genre && genres.some(([g]) => g === genre) ? genre : null;
 
   // Sorting is kept out of the search memo so typing doesn't re-sort — and
   // re-key — the whole list on every keystroke.
@@ -221,18 +215,16 @@ export default function WantToListenScreen() {
     return applySort(enriched, sortKey);
   }, [sourceList, sortKey, shuffled, communityStatsMap]);
 
-  const genreList = useMemo(
-    () => (activeGenre ? sortedList.filter(a => genreOf(a) === activeGenre) : sortedList),
-    [sortedList, activeGenre, genreOf],
-  );
+  const { filters, filtered: filteredList, label: filterLabel, filterActive } =
+    useLibraryFilters(sourceList, sortedList, genreOf);
 
   const displayList = useMemo(() => {
-    if (!query.trim()) return genreList;
+    if (!query.trim()) return filteredList;
     const q = query.toLowerCase();
-    return genreList.filter(a =>
+    return filteredList.filter(a =>
       a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
     );
-  }, [genreList, query]);
+  }, [filteredList, query]);
 
   function handleSelectSort(key: SortKey) {
     if (key === 'shuffle') {
@@ -288,8 +280,8 @@ export default function WantToListenScreen() {
       }} />
       <SortBar
         sortKey={sortKey}
-        count={genreList.length}
-        noun={activeGenre ? `${activeGenre} albums` : 'albums'}
+        count={filteredList.length}
+        noun={filterLabel ? `${filterLabel} albums` : 'albums'}
         isDark={isDark}
         onPress={() => setSheetOpen(true)}
         onSearchPress={() => {
@@ -299,7 +291,7 @@ export default function WantToListenScreen() {
           else setTimeout(() => searchInputRef.current?.focus(), 50);
         }}
         searchActive={searchOpen}
-        filterActive={!!activeGenre}
+        filterActive={filterActive}
         tint={colors.tint}
         bg={colors.background}
         surface={colors.surface}
@@ -343,7 +335,7 @@ export default function WantToListenScreen() {
           <View style={s.empty}>
             <Text style={[s.emptyTitle, { color: colors.text }]}>
               {query.trim()
-                ? `No ${activeGenre ? `${activeGenre} ` : ''}albums matching "${query}"`
+                ? `No ${filterLabel ? `${filterLabel} ` : ''}albums matching "${query}"`
                 : 'Nothing here yet'}
             </Text>
             <Text style={[s.emptySubtext, { color: colors.subtext }]}>
@@ -363,9 +355,7 @@ export default function WantToListenScreen() {
         isDark={isDark}
         tint={colors.tint}
         excludeKeys={['my_rating_high', 'my_rating_low']}
-        genres={genres}
-        activeGenre={activeGenre}
-        onSelectGenre={setGenre}
+        filters={filters}
       />
     </View>
   );

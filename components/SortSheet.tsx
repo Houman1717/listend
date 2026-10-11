@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Modal,
   View,
@@ -204,6 +204,74 @@ export function SortBar({
 
 // ─── Sort sheet (bottom modal) ────────────────────────────────────────────────
 
+// A row of filter chips above the sorts — see useLibraryFilters. `options` are
+// [label, count] pairs; a null `active` means All.
+export type FilterSection = {
+  title: string;
+  options: [string, number][];
+  active: string | null;
+  onSelect: (option: string | null) => void;
+};
+
+// One filter as a sideways-scrolling row of chips. Taps leave the sheet open,
+// so a genre and a decade can be picked together.
+function FilterRow({ section, tint, surface, border, subtext }: {
+  section: FilterSection;
+  tint: string;
+  surface: string;
+  border: string;
+  subtext: string;
+}) {
+  // The sheet's Modal unmounts its content while closed, so this runs fresh on
+  // every open: bring the chip that was picked last time into view, once —
+  // never again while the user taps around in the open sheet.
+  const scrollRef = useRef<ScrollView>(null);
+  const openedOn  = useRef(section.active).current;
+  const scrolled  = useRef(false);
+
+  const chip = (label: string, count: number | null, option: string | null) => {
+    const active = section.active === option;
+    return (
+      <Pressable
+        key={label}
+        onPress={() => section.onSelect(active ? null : option)}
+        onLayout={option !== null && option === openedOn ? (e) => {
+          if (scrolled.current) return;
+          scrolled.current = true;
+          // A little of the previous chip stays visible, so the row still reads as scrollable.
+          scrollRef.current?.scrollTo({ x: Math.max(0, e.nativeEvent.layout.x - 48), animated: false });
+        } : undefined}
+        style={[
+          ss.optBtn,
+          ss.filterBtn,
+          active
+            ? { backgroundColor: tint, borderColor: tint }
+            : { backgroundColor: surface, borderColor: border },
+        ]}>
+        <Text style={[ss.optText, { color: active ? '#fff' : subtext }]}>{label}</Text>
+        {count !== null && (
+          <Text style={[ss.filterCount, { color: active ? 'rgba(255,255,255,0.85)' : subtext }]}>{count}</Text>
+        )}
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={[ss.row, { borderBottomColor: border }]}>
+      <Text style={[ss.groupLabel, ss.filterLabel, { color: subtext }]}>{section.title}</Text>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={ss.filterScroll}
+        contentContainerStyle={ss.filterChips}>
+        {chip('All', null, null)}
+        {section.options.map(([option, count]) => chip(option, count, option))}
+      </ScrollView>
+    </View>
+  );
+}
+
 export function SortSheet({
   visible,
   activeKey,
@@ -212,9 +280,7 @@ export function SortSheet({
   isDark,
   tint = '#D4A017',
   excludeKeys = [],
-  genres,
-  activeGenre = null,
-  onSelectGenre,
+  filters = [],
 }: {
   visible: boolean;
   activeKey: SortKey;
@@ -223,10 +289,7 @@ export function SortSheet({
   isDark: boolean;
   tint?: string;
   excludeKeys?: SortKey[];
-  // Optional genre filter, from genreCounts() in lib/genres. null means All.
-  genres?: [string, number][];
-  activeGenre?: string | null;
-  onSelectGenre?: (genre: string | null) => void;
+  filters?: FilterSection[];
 }) {
   const bg      = isDark ? '#1c1410' : '#fff';
   const text    = isDark ? '#f5e6c8' : '#1A0F0A';
@@ -239,34 +302,6 @@ export function SortSheet({
     onClose();
   }
 
-  function handleSelectGenre(genre: string | null) {
-    onSelectGenre?.(genre);
-    onClose();
-  }
-
-  const showGenres = !!onSelectGenre && !!genres && genres.length > 0;
-
-  const genreChip = (label: string, count: number | null, genre: string | null) => {
-    const active = activeGenre === genre;
-    return (
-      <Pressable
-        key={label}
-        onPress={() => handleSelectGenre(genre)}
-        style={[
-          ss.optBtn,
-          ss.genreBtn,
-          active
-            ? { backgroundColor: tint, borderColor: tint }
-            : { backgroundColor: surface, borderColor: border },
-        ]}>
-        <Text style={[ss.optText, { color: active ? '#fff' : subtext }]}>{label}</Text>
-        {count !== null && (
-          <Text style={[ss.genreCount, { color: active ? 'rgba(255,255,255,0.85)' : subtext }]}>{count}</Text>
-        )}
-      </Pressable>
-    );
-  };
-
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
       <View style={StyleSheet.absoluteFill}>
@@ -275,18 +310,22 @@ export function SortSheet({
         {/* Handle */}
         <View style={[ss.handle, { backgroundColor: isDark ? '#3a2818' : '#ddd' }]} />
 
-        <Text style={[ss.title, { color: text }]}>{showGenres ? 'Sort & Filter' : 'Sort By'}</Text>
+        <Text style={[ss.title, { color: text }]}>{filters.length > 0 ? 'Sort & Filter' : 'Sort By'}</Text>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ss.content}>
-          {showGenres && (
-            <>
-              <Text style={[ss.sectionLabel, { color: text }]}>Genre</Text>
-              <View style={[ss.genreWrap, { borderBottomColor: border }]}>
-                {genreChip('All', null, null)}
-                {genres!.map(([genre, count]) => genreChip(genre, count, genre))}
-              </View>
-              <Text style={[ss.sectionLabel, { color: text, marginTop: 18 }]}>Sort By</Text>
-            </>
+          {/* One row per filter, like the sort rows: label left, chips scrolling right. */}
+          {filters.map((section) => (
+            <FilterRow
+              key={section.title}
+              section={section}
+              tint={tint}
+              surface={surface}
+              border={border}
+              subtext={subtext}
+            />
+          ))}
+          {filters.length > 0 && (
+            <Text style={[ss.sectionLabel, { color: text }]}>Sort By</Text>
           )}
           {SORT_GROUPS.filter(g => !excludeKeys.includes(g.a.key) && !excludeKeys.includes(g.b.key)).map((group) => (
             <View key={group.label} style={[ss.row, { borderBottomColor: border }]}>
@@ -362,10 +401,12 @@ const ss = StyleSheet.create({
   optBtnActive: { backgroundColor: '#D4A017', borderColor: '#D4A017' },
   optText:    { fontSize: 13, fontWeight: '500' },
 
-  sectionLabel: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
-  genreWrap:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 4, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  genreBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  genreCount:   { fontSize: 12 },
+  sectionLabel: { fontSize: 15, fontWeight: '700', marginTop: 18, marginBottom: 2 },
+  filterLabel:  { flex: 0, width: 64, marginRight: 8 },
+  filterScroll: { flex: 1, marginRight: -20 },
+  filterChips:  { gap: 8, paddingRight: 20 },
+  filterBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  filterCount:  { fontSize: 12 },
 
   shuffleBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, paddingVertical: 12, borderRadius: 16, borderWidth: 1 },
   shuffleBtnActive: { backgroundColor: '#D4A017', borderColor: '#D4A017' },
