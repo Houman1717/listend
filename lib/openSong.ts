@@ -12,7 +12,7 @@ export type OpenSongParams = {
   durationMs?:  number;
 };
 
-export function openSongPage(router: { push: (href: any) => void }, song: OpenSongParams) {
+export function openSongPage(router: { push: (href: any) => void }, song: OpenSongParams, opts?: { edit?: boolean }) {
   if (!song.id) return;
   router.push({
     pathname: '/song-detail',
@@ -25,6 +25,7 @@ export function openSongPage(router: { push: (href: any) => void }, song: OpenSo
       albumTitle:  song.albumTitle ?? '',
       releaseDate: song.releaseDate ?? '',
       durationMs:  song.durationMs ? String(song.durationMs) : '',
+      ...(opts?.edit ? { edit: '1' } : {}),
     },
   });
 }

@@ -32,6 +32,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { useSongReviews } from '@/context/SongReviewsContext';
+import { SongReviewCard } from '@/components/SongReviewCard';
+import type { SongReview } from '@/lib/songReviews';
 import { openSongPage } from '@/lib/openSong';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { LoggedAlbum } from '@/context/AlbumsContext';
@@ -1276,7 +1278,15 @@ export default function ListendScreen() {
   }, [navigation, openSettings, openShareProfile, unreadCount, unreadDMCount, router, headerIconColor, colors.background, colors.text, colors.subtext, profileUsername, profileDisplayName, user?.id]);
 
   const reviewCount = loggedAlbums.filter((a) => !!(a.lastReview ?? a.review)).length;
-  const { songReviews, songsLoaded } = useSongReviews();
+  const { songReviews, songsLoaded, getSongReview } = useSongReviews();
+  const [cardSong, setCardSong] = useState<SongReview | null>(null);
+  // A Top 5 song you've rated opens your review card (like an album in My
+  // Listend); one you haven't goes straight to its Song page.
+  function openTopSong(song: { id: string; title: string; artist: string; artworkUrl: string; releaseDate?: string }) {
+    const mine = getSongReview(song.id);
+    if (mine) { setCardSong(mine); return; }
+    openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+  }
 
   // ── Profile stats ────────────────────────────────────────────────────────────
   // "Do we actually know this user's library?" — true once we have rows from
@@ -1419,7 +1429,7 @@ export default function ListendScreen() {
             colors={colors}
             onSongPress={i => {
               const song = topSongs[i];
-              if (song) openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+              if (song) openTopSong(song);
             }}
             onAddPress={() => {
               // Land back in edit mode so the other four slots are ready to fill
@@ -1443,7 +1453,7 @@ export default function ListendScreen() {
               if (top5EditMode) {
                 if (!song) router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: String(i) } });
               } else {
-                if (song) openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+                if (song) openTopSong(song);
               }
             }}
           />
@@ -1497,6 +1507,13 @@ export default function ListendScreen() {
         isOwner
       />
     )}
+    <SongReviewCard
+      userId={user?.id}
+      review={cardSong}
+      onClose={() => setCardSong(null)}
+      isDark={isDark}
+      colors={colors}
+    />
     </>
   );
 }

@@ -33,7 +33,7 @@ import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
 import { ProBadge } from '@/components/ProBadge';
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
-import { openSongPage } from '@/lib/openSong';
+import { SongReviewCard } from '@/components/SongReviewCard';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { SongReview } from '@/lib/songReviews';
@@ -1180,6 +1180,7 @@ export default function RecentActivityScreen() {
   }, [featuredLikedPlaylists, featuredLikeDates, viewingOther]);
 
   const { songReviews } = useSongReviews();
+  const [cardSong, setCardSong] = useState<SongReview | null>(null);
   const ownSongItems = useMemo((): SongItem[] => {
     const groups = new Map<string, SongReview[]>();
     for (const song of songReviews) {
@@ -1357,11 +1358,7 @@ export default function RecentActivityScreen() {
               item={item.data}
               colors={colors}
               onPress={() => {
-                if (songs.length === 1) {
-                  const x = songs[0];
-                  openSongPage(router, { id: x.songId, title: x.title, artist: x.artist, artworkUrl: x.artworkUrl, albumId: x.albumId, albumTitle: x.albumTitle, durationMs: x.durationMs });
-                  return;
-                }
+                if (songs.length === 1) { setCardSong(songs[0]); return; }
                 const first = songs[0];
                 router.push({ pathname: '/album-detail', params: { id: first.albumId!, title: first.albumTitle ?? '', artist: first.artist, artworkUrl: first.artworkUrl ?? '' } });
               }}
@@ -1428,6 +1425,13 @@ export default function RecentActivityScreen() {
           onUsernamePress={viewingOther ? (username) => { setSelectedReview(null); navigateToProfile(username, router); } : undefined}
         />
       )}
+      <SongReviewCard
+        userId={user?.id}
+        review={cardSong}
+        onClose={() => setCardSong(null)}
+        isDark={isDark}
+        colors={colors}
+      />
     </>
   );
 }

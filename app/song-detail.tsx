@@ -53,6 +53,8 @@ export default function SongDetailScreen() {
   const params = useLocalSearchParams<{
     id: string; title?: string; artist?: string; artworkUrl?: string;
     albumId?: string; albumTitle?: string; releaseDate?: string; durationMs?: string;
+    /** '1' opens your rating editor straight away (Edit on a review card). */
+    edit?: string;
   }>();
   const { user } = useAuth();
   const { getSongReview } = useSongReviews();
@@ -61,7 +63,7 @@ export default function SongDetailScreen() {
   const [stats, setStats] = useState<SongRatingStats | undefined>(undefined);
   const [reviews, setReviews] = useState<CommunitySongReview[] | null>(null);
   const [reviewsFailed, setReviewsFailed] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(params.edit === '1');
   const [addingToPlaylist, setAddingToPlaylist] = useState(false);
   const [sending, setSending] = useState(false);
   const [openEntry, setOpenEntry] = useState<SongReviewEntry | null>(null);

@@ -32,11 +32,13 @@ export type SongReviewEntry = SongReviewAuthor & {
  * One person's review of one song — the song equivalent of AlbumReviewModal.
  * Lives in a Modal, so navigation goes through callbacks.
  */
-export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onEdit, isDark, colors: colorsProp }: {
+export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onSongPress, onEdit, isDark, colors: colorsProp }: {
   song:         SongMeta;
   entry:        SongReviewEntry | null;
   onClose:      () => void;
   onUserPress?: (userId: string) => void;
+  /** Tapping the song row — e.g. to open its Song page (average + everyone's reviews). */
+  onSongPress?: () => void;
   /** Shown on your own review. */
   onEdit?:      () => void;
   isDark:       boolean;
@@ -85,7 +87,10 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onEdi
 
         <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
           {/* Song */}
-          <View style={s.songRow}>
+          <Pressable
+            style={({ pressed }) => [s.songRow, { opacity: pressed && onSongPress ? 0.7 : 1 }]}
+            disabled={!onSongPress}
+            onPress={onSongPress}>
             {song.artworkUrl ? (
               <ExpoImage source={{ uri: song.artworkUrl }} style={s.art} contentFit="cover" cachePolicy="disk" />
             ) : (
@@ -98,7 +103,8 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onEdi
               <Text style={[s.songSub, { color: muted }]} numberOfLines={1}>{song.artist}</Text>
               {!!song.albumTitle && <Text style={[s.songSub, { color: muted }]} numberOfLines={1}>{song.albumTitle}</Text>}
             </View>
-          </View>
+            {onSongPress && <FontAwesome name="chevron-right" size={13} color={muted} />}
+          </Pressable>
 
           {/* Author */}
           <Pressable

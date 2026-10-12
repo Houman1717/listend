@@ -41,7 +41,7 @@ import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { SongReviewsTab } from '@/components/SongReviewsTab';
-import { openSongPage } from '@/lib/openSong';
+import { SongReviewCard } from '@/components/SongReviewCard';
 import type { SongReview } from '@/lib/songReviews';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
@@ -414,6 +414,7 @@ export default function MyReviewsScreen() {
 
   const viewingOther = paramUserId || null;
   const [activeTab, setActiveTab]         = useState<'reviews' | 'songs' | 'liked'>('reviews');
+  const [cardSong, setCardSong]           = useState<SongReview | null>(null);
   const [query, setQuery]                 = useState('');
   const [searchOpen, setSearchOpen]       = useState(false);
   const searchInputRef = useRef<import('react-native').TextInput>(null);
@@ -1047,9 +1048,16 @@ export default function MyReviewsScreen() {
           viewingUserId={viewingOther}
           colors={colors}
           isDark={isDark}
-          onOpen={x => openSongPage(router, { id: x.songId, title: x.title, artist: x.artist, artworkUrl: x.artworkUrl, albumId: x.albumId, albumTitle: x.albumTitle, durationMs: x.durationMs })}
+          onOpen={setCardSong}
         />
       )}
+      <SongReviewCard
+        userId={viewingOther ?? user?.id}
+        review={cardSong}
+        onClose={() => setCardSong(null)}
+        isDark={isDark}
+        colors={colors}
+      />
 
       {/* ── Liked Reviews tab ────────────────────────────────────────────── */}
       {activeTab === 'liked' && searchOpenLiked && (

@@ -18,8 +18,9 @@ import { CompactRating } from '@/components/CompactRating';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useSongReviews } from '@/context/SongReviewsContext';
+import { SongReviewCard } from '@/components/SongReviewCard';
 import { SortBar, SortSheet, applySort, SortKey, COMMUNITY_SORTS } from '@/components/SortSheet';
-import { openSongPage } from '@/lib/openSong';
+import { useAuth } from '@/context/AuthContext';
 import { SONG_MIN_RATINGS, fetchSongCommunityRatings, fetchUserSongReviews, type SongReview, type SongRatingStats } from '@/lib/songReviews';
 
 // My Songs — every song the user has logged (rated, reviewed or just marked
@@ -102,6 +103,8 @@ export default function MySongsScreen() {
   const [query, setQuery]           = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [stats, setStats]           = useState<Map<string, SongRatingStats>>(new Map());
+  const [cardSong, setCardSong]     = useState<SongReview | null>(null);
+  const { user } = useAuth();
   const searchInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -161,10 +164,8 @@ export default function MySongsScreen() {
     setSortKey(key);
   }
 
-  const handlePress = useCallback((song: SongReview) => openSongPage(router, {
-    id: song.songId, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl,
-    albumId: song.albumId, albumTitle: song.albumTitle, durationMs: song.durationMs,
-  }), [router]);
+  // Like My Listend: a song opens its review card; the card links to the Song page.
+  const handlePress = useCallback((song: SongReview) => setCardSong(song), []);
   const renderItem = useCallback(({ item }: { item: SongReview }) => (
     <SongRow song={item} colors={colors} isDark={isDark} onPress={handlePress} />
   ), [colors, isDark, handlePress]);
@@ -245,6 +246,13 @@ export default function MySongsScreen() {
         excludeKeys={EXCLUDED_SORTS}
       />
 
+      <SongReviewCard
+        userId={viewingOther ?? user?.id}
+        review={cardSong}
+        onClose={() => setCardSong(null)}
+        isDark={isDark}
+        colors={colors}
+      />
     </View>
   );
 }

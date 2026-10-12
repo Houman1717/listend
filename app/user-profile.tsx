@@ -20,6 +20,8 @@ import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { SongReviewCard } from '@/components/SongReviewCard';
+import { SONG_REVIEW_COLUMNS, rowToSongReview, type SongReview } from '@/lib/songReviews';
 import { countOrNull, displayCount, fetchAllRows } from '@/lib/supabaseQuery';
 import { openSongPage } from '@/lib/openSong';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -447,6 +449,22 @@ export default function UserProfileScreen() {
   const router         = useRouter();
 
   const isOwnProfile = !!user?.id && user.id === viewedUserId;
+
+  // A Top 5 song this person has rated opens their review card (like their
+  // albums do); one they haven't goes straight to its Song page.
+  const [cardSong, setCardSong] = useState<SongReview | null>(null);
+  async function openTopSong(song: { id: string; title: string; artist: string; artworkUrl: string; releaseDate?: string }) {
+    if (viewedUserId) {
+      const { data } = await supabase
+        .from('song_reviews')
+        .select(SONG_REVIEW_COLUMNS)
+        .eq('user_id', viewedUserId)
+        .eq('song_id', song.id)
+        .maybeSingle();
+      if (data) { setCardSong(rowToSongReview(data)); return; }
+    }
+    openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+  }
 
   const [profile,        setProfile]        = useState<Profile | null>(null);
   const [loading,        setLoading]        = useState(true);
@@ -1187,7 +1205,7 @@ export default function UserProfileScreen() {
                     colors={colors}
                     onSongPress={i => {
                       const sg = profile.top_songs[i];
-                      if (sg) openSongPage(router, { id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate });
+                      if (sg) openTopSong(sg);
                     }}
                     onAddPress={isOwnProfile ? () => {
                     handleEnterEditMode();
@@ -1211,7 +1229,7 @@ export default function UserProfileScreen() {
                         <FavSlotReadOnly
                           key={i}
                           item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
-                          onPress={sg ? () => openSongPage(router, { id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
+                          onPress={sg ? () => openTopSong(sg) : undefined}
                           colors={colors}
                         />
                       );
@@ -1292,6 +1310,13 @@ export default function UserProfileScreen() {
       }}
       displayName={nameOrHandle(profile?.display_name, profile?.username, viewedUserId, 'This user')}
       themeKey={(profile?.pro_theme as any) ?? null}
+    />
+    <SongReviewCard
+      userId={viewedUserId}
+      review={cardSong}
+      onClose={() => setCardSong(null)}
+      isDark={colors.isDark}
+      colors={colors}
     />
     </>
   );
