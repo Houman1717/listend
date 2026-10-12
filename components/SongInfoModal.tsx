@@ -13,6 +13,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
+import { AverageVolume } from '@/components/AverageVolume';
 import { SongReviewModal } from '@/components/SongReviewModal';
 import { AddToSongPlaylistSheet } from '@/components/AddToSongPlaylistSheet';
 import { useSongReviews } from '@/context/SongReviewsContext';
@@ -244,9 +245,14 @@ export function SongInfoModal({
               ) : mine ? (
                 <Text style={[s.rateStatLabel, { color: subtext }]}>Listened</Text>
               ) : null}
-              <Text style={[s.rateStatLabel, { color: subtext }]}>
-                {community ? `Listend avg ${community.avg.toFixed(1)}` : 'No ratings yet'}
-              </Text>
+              {community ? (
+                <View style={s.rateStat}>
+                  <Text style={[s.rateStatLabel, { color: subtext }]}>Listend avg</Text>
+                  <AverageVolume avg={community.avg} isDark={isDark} />
+                </View>
+              ) : (
+                <Text style={[s.rateStatLabel, { color: subtext }]}>No ratings yet</Text>
+              )}
             </View>
             {writtenReviews && writtenReviews.length > 0 && (
               <View style={s.reviewsBlock}>

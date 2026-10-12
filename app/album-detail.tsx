@@ -25,6 +25,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
+import { AverageVolume } from '@/components/AverageVolume';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePro } from '@/context/ProContext';
@@ -2018,11 +2019,12 @@ export default function AlbumDetailScreen() {
                     </View>
                     {(track.featuredArtists.length > 0 || community || reviewCount > 0) && (
                       <View style={s.trackMetaRow}>
-                        <Text style={[s.trackFeat, { color: colors.subtext, flexShrink: 1 }]} numberOfLines={1}>
-                          {track.featuredArtists.length > 0 ? `feat. ${track.featuredArtists.join(', ')}` : ''}
-                          {track.featuredArtists.length > 0 && community ? '  ·  ' : ''}
-                          {community ? `avg ${community.avg.toFixed(1)}` : ''}
-                        </Text>
+                        {track.featuredArtists.length > 0 && (
+                          <Text style={[s.trackFeat, { color: colors.subtext, flexShrink: 1 }]} numberOfLines={1}>
+                            feat. {track.featuredArtists.join(', ')}
+                          </Text>
+                        )}
+                        {community && <AverageVolume avg={community.avg} isDark={isDark} />}
                         {reviewCount > 0 && <FontAwesome name="quote-left" size={10} color="#D4A017" />}
                       </View>
                     )}

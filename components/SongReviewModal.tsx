@@ -20,6 +20,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
+import { AverageVolume } from '@/components/AverageVolume';
 import { VolumeRatingPicker } from '@/components/VolumeRatingPicker';
 import { avatarColor } from '@/components/ReviewComments';
 import { useAuth } from '@/context/AuthContext';
@@ -191,13 +192,17 @@ export function SongReviewModal({
 
               {/* Community average */}
               <View style={[s.avgRow, { borderColor: border }]}>
-                <FontAwesome name="volume-up" size={12} color={community ? ACCENT : inactive} />
-                <Text style={[s.avgText, { color: colors.text }]}>
-                  {community ? community.avg.toFixed(1) : '–'}
-                </Text>
-                <Text style={[s.avgSub, { color: muted }]}>
-                  {community ? 'Listend average' : 'No ratings yet — be the first'}
-                </Text>
+                {community ? (
+                  <>
+                    <AverageVolume avg={community.avg} isDark={isDark} size="md" numberColor={colors.text} />
+                    <Text style={[s.avgSub, { color: muted }]}>Listend average</Text>
+                  </>
+                ) : (
+                  <>
+                    <FontAwesome name="volume-up" size={12} color={inactive} />
+                    <Text style={[s.avgSub, { color: muted }]}>No ratings yet — be the first</Text>
+                  </>
+                )}
               </View>
 
               {/* Your rating */}
@@ -290,7 +295,7 @@ const s = StyleSheet.create({
   songTitle: { fontSize: 18, fontWeight: '700' },
   songArtist: { fontSize: 14 },
   songAlbum: { fontSize: 12 },
-  avgRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 18, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
+  avgRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
   avgText: { fontSize: 15, fontWeight: '700' },
   avgSub: { fontSize: 12, flexShrink: 1 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 20 },
