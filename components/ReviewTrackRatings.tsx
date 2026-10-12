@@ -8,13 +8,42 @@ import { useAuth } from '@/context/AuthContext';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchUserAlbumSongReviews, songsMatchingAlbum, type SongReview } from '@/lib/songReviews';
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const ACCENT = '#D4A017';
 const PREVIEW_COUNT = 5;
 
+type TrackPos = { index: number; number: number };
+
+// Tracklists per album id, shared across review modals for the session.
+const tracklistCache = new Map<string, Promise<Map<string, TrackPos> | null>>();
+
+function fetchTrackPositions(albumId: string): Promise<Map<string, TrackPos> | null> {
+  let p = tracklistCache.get(albumId);
+  if (!p) {
+    p = fetch(`${API_URL}/catalog/album/${albumId}/tracks`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then((data: { id: string; number: number }[]) =>
+        new Map(data.map((t, index) => [t.id, { index, number: t.number }])))
+      .catch(() => { tracklistCache.delete(albumId); return null; });
+    tracklistCache.set(albumId, p);
+  }
+  return p;
+}
+
+/** The album id most of these songs were logged under (falls back to the review's). */
+function songsAlbumId(songs: SongReview[], fallback?: string): string | undefined {
+  const counts = new Map<string, number>();
+  for (const s of songs) if (s.albumId) counts.set(s.albumId, (counts.get(s.albumId) ?? 0) + 1);
+  let best = fallback; let bestN = 0;
+  for (const [id, n] of counts) if (n > bestN) { best = id; bestN = n; }
+  return best;
+}
+
 /**
  * "Track ratings" block shown inside a full album review: the reviewer's
- * ratings for songs on that album, favourite first. Renders nothing when they
- * haven't rated any — so review cards without song ratings look as before.
+ * ratings for songs on that album in tracklist order, with their favourite
+ * called out on top. Renders nothing when they haven't rated any — so review
+ * cards without song ratings look as before.
  */
 export function ReviewTrackRatings({ userId, album, isDark, colors }: {
   userId: string | null | undefined;
@@ -27,6 +56,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
   const isOwn = !!userId && userId === user?.id;
   const [fetched, setFetched] = useState<SongReview[] | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [positions, setPositions] = useState<Map<string, TrackPos> | null>(null);
 
   // Your own reviews come from context so edits show up straight away.
   useEffect(() => {
@@ -37,13 +67,31 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
     return () => { cancelled = true; };
   }, [userId, isOwn, album.id, album.title, album.artist]);
 
-  const songs = useMemo(() => {
-    const list = isOwn ? (songsLoaded ? songsMatchingAlbum(songReviews, album) : []) : (fetched ?? []);
-    return [...list].sort((a, b) =>
-      Number(b.isFavorite) - Number(a.isFavorite) || b.rating - a.rating || a.title.localeCompare(b.title));
-  }, [isOwn, songsLoaded, songReviews, fetched, album.id, album.title, album.artist]);
+  const matched = useMemo(
+    () => isOwn ? (songsLoaded ? songsMatchingAlbum(songReviews, album) : []) : (fetched ?? []),
+    [isOwn, songsLoaded, songReviews, fetched, album.id, album.title, album.artist],
+  );
+
+  // Tracklist order comes from the album the songs were logged under.
+  const tracklistId = songsAlbumId(matched, album.id);
+  useEffect(() => {
+    setPositions(null);
+    if (!tracklistId || matched.length === 0) return;
+    let cancelled = false;
+    fetchTrackPositions(tracklistId).then(m => { if (!cancelled) setPositions(m); });
+    return () => { cancelled = true; };
+  }, [tracklistId, matched.length > 0]);
+
+  // Album order; anything not on that tracklist (another edition) goes last.
+  const songs = useMemo(() => [...matched].sort((a, b) => {
+    const pa = positions?.get(a.songId)?.index ?? Infinity;
+    const pb = positions?.get(b.songId)?.index ?? Infinity;
+    return pa - pb || a.title.localeCompare(b.title);
+  }), [matched, positions]);
 
   if (songs.length === 0) return null;
+
+  const favorite = songs.find(s => s.isFavorite);
 
   const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   const border   = isDark ? '#2a1e14' : '#ececec';
@@ -52,13 +100,21 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
   return (
     <View style={[s.wrap, { borderTopColor: border }]}>
       <Text style={[s.label, { color: colors.subtext }]}>TRACK RATINGS</Text>
+      {favorite && (
+        <View style={s.favLine}>
+          <Ionicons name="trophy" size={13} color={ACCENT} />
+          <Text style={[s.favLabel, { color: colors.subtext }]}>Favourite track</Text>
+          <Text style={[s.favTitle, { color: colors.text }]} numberOfLines={1}>{favorite.title}</Text>
+        </View>
+      )}
       {shown.map(song => (
         <View key={song.songId} style={[s.row, { borderBottomColor: border }]}>
           <View style={s.head}>
-            {song.isFavorite && <Ionicons name="trophy" size={12} color={ACCENT} />}
+            <Text style={[s.num, { color: colors.subtext }]}>{positions?.get(song.songId)?.number ?? '·'}</Text>
             <Text style={[s.title, { color: colors.text, fontWeight: song.isFavorite ? '700' : '500' }]} numberOfLines={1}>
               {song.title}
             </Text>
+            {song.isFavorite && <Ionicons name="trophy" size={12} color={ACCENT} />}
             {song.rating > 0 ? (
               <View style={s.rating}>
                 <FontAwesome name="volume-up" size={10} color={ACCENT} />
@@ -93,12 +149,16 @@ const s = StyleSheet.create({
   wrap: { marginTop: 18, marginBottom: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 },
   row: { paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, gap: 4 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  favLine: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
+  favLabel: { fontSize: 12 },
+  favTitle: { flex: 1, fontSize: 14, fontWeight: '700' },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  num: { width: 18, fontSize: 12, textAlign: 'right' },
   title: { flex: 1, fontSize: 14 },
   rating: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   ratingNum: { color: ACCENT, fontSize: 11, fontWeight: '700', minWidth: 14, textAlign: 'right' },
   listened: { fontSize: 11 },
-  review: { fontSize: 13, lineHeight: 18, fontStyle: 'italic' },
+  review: { fontSize: 13, lineHeight: 18, fontStyle: 'italic', marginLeft: 26 },
   more: { alignSelf: 'flex-start', paddingTop: 10 },
   moreText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
 });
