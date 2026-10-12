@@ -60,6 +60,9 @@ export function rowToSongReview(r: any): SongReview {
 
 export type SongRatingStats = { sum: number; count: number };
 
+/** Like albums, a song's Listend average stays hidden until this many people rate it. */
+export const SONG_MIN_RATINGS = 5;
+
 /**
  * Community rating sum/count per song, excluding the caller (combine with the
  * user's own rating via `withOwnRating`). Returns null if the request failed —
@@ -82,13 +85,17 @@ export async function fetchSongCommunityRatings(songIds: string[]): Promise<Map<
   return out;
 }
 
-/** Average rating (1 decimal) including the user's own, or null if nobody has rated. */
-export function withOwnRating(stats: SongRatingStats | undefined, ownRating: number | undefined): { avg: number; count: number } | null {
+/**
+ * Average rating (1 decimal) including the user's own, plus how many ratings
+ * it's from. `revealed` is false until SONG_MIN_RATINGS people have rated —
+ * show the average only when it's true. Null if nobody has rated.
+ */
+export function withOwnRating(stats: SongRatingStats | undefined, ownRating: number | undefined): { avg: number; count: number; revealed: boolean } | null {
   let sum   = stats?.sum ?? 0;
   let count = stats?.count ?? 0;
   if (ownRating && ownRating > 0) { sum += ownRating; count += 1; }
   if (count === 0) return null;
-  return { avg: Math.round((sum / count) * 10) / 10, count };
+  return { avg: Math.round((sum / count) * 10) / 10, count, revealed: count >= SONG_MIN_RATINGS };
 }
 
 /**

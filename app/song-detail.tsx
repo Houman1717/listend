@@ -233,11 +233,15 @@ export default function SongDetailScreen() {
         {/* ── Ratings ──────────────────────────────────────────────────── */}
         <View style={[s.section, { backgroundColor: sectionBg, borderColor: border }]}>
           <Text style={[s.sectionLabel, { color: colors.subtext }]}>Ratings</Text>
-          {community ? (
+          {community?.revealed ? (
             <View style={s.ratingsRow}>
               <Text style={[s.ratingsAvg, { color: colors.text }]}>{community.avg.toFixed(1)}</Text>
               <AverageVolume avg={community.avg} isDark={isDark} size="lg" showNumber={false} />
             </View>
+          ) : community ? (
+            <Text style={[s.emptyText, { color: muted, lineHeight: 19 }]}>
+              Ratings are revealed once more listeners have rated this song.
+            </Text>
           ) : (
             <Text style={[s.emptyText, { color: muted }]}>No ratings yet — be the first.</Text>
           )}

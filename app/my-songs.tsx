@@ -20,7 +20,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { SortBar, SortSheet, applySort, SortKey, COMMUNITY_SORTS } from '@/components/SortSheet';
 import { openSongPage } from '@/lib/openSong';
-import { fetchSongCommunityRatings, fetchUserSongReviews, type SongReview, type SongRatingStats } from '@/lib/songReviews';
+import { SONG_MIN_RATINGS, fetchSongCommunityRatings, fetchUserSongReviews, type SongReview, type SongRatingStats } from '@/lib/songReviews';
 
 // My Songs — every song the user has logged (rated, reviewed or just marked
 // listened), like My Listend but a list, since songs are secondary to albums.
@@ -139,7 +139,8 @@ export default function MySongsScreen() {
         ...x,
         year: 0,
         dateLogged: x.listenedAt,
-        communityAvgRating:   st && st.count > 0 ? st.sum / st.count : undefined,
+        // Hidden averages (under SONG_MIN_RATINGS) sort as "no rating", like albums.
+        communityAvgRating:   st && st.count >= SONG_MIN_RATINGS ? st.sum / st.count : undefined,
         communityRatingCount: st?.count ?? 0,
       };
     });

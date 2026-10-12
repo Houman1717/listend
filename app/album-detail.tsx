@@ -2025,7 +2025,8 @@ export default function AlbumDetailScreen() {
           ) : tracks && tracks.length > 0 ? (
             tracks.map(track => {
               const mine      = getSongReview(track.id);
-              const community = withOwnRating(trackStats.get(track.id), mine?.rating);
+              const average   = withOwnRating(trackStats.get(track.id), mine?.rating);
+              const community = average?.revealed ? average : null;
               // Other people's written reviews only — your own doesn't earn the ❝.
               const hasReviews = (trackReviewCounts.get(track.id) ?? 0) > 0;
               const showMine  = trackView === 'mine';
