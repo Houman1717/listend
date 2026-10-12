@@ -36,7 +36,7 @@ import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { SongReviewCard } from '@/components/SongReviewCard';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import type { SongReview } from '@/lib/songReviews';
+import { fetchUserSongReviews, type SongReview } from '@/lib/songReviews';
 
 // ─── Static metadata ──────────────────────────────────────────────────────────
 
@@ -144,13 +144,16 @@ type FeedItem =
   | { kind: 'flippedRecord';   data: FlipItem }
   | { kind: 'song';            data: SongItem };
 
-// A song you logged. Only ever in your own feed — songs never appear in other
-// people's activity (or friends' feeds), by design.
+// A song logged by the person whose activity this is. Your own feed shows
+// every song you log; someone else's shows only songs they wrote a review of,
+// so bare ratings don't flood it. Never shown on Home.
 // Songs from one album logged on the same day collapse into one row, so rating
 // a whole tracklist doesn't flood the feed.
 type SongItem = {
   key:       string;
   songs:     SongReview[];   // newest first; one entry = a single song row
+  /** Someone else's feed — every song here has a written review. */
+  reviewedOnly?: boolean;
   dateMs:    number;
   dateLabel: string;
 };
@@ -918,7 +921,9 @@ function AlbumSongsRow({ item, onPress, colors }: { item: SongItem; onPress: () 
           <View style={[s.typePill, { borderColor: colors.tint }]}>
             <FontAwesome name="music" size={9} color={colors.tint} />
             <Text style={[s.typeLabel, { color: colors.tint }]}>
-              {rated > 0 ? `Rated ${rated} track${rated === 1 ? '' : 's'}` : `Listened to ${item.songs.length} tracks`}
+              {item.reviewedOnly
+                ? `Reviewed ${item.songs.length} tracks`
+                : rated > 0 ? `Rated ${rated} track${rated === 1 ? '' : 's'}` : `Listened to ${item.songs.length} tracks`}
             </Text>
           </View>
           {fav && <Ionicons name="trophy" size={11} color={colors.tint} />}
@@ -1181,9 +1186,21 @@ export default function RecentActivityScreen() {
 
   const { songReviews } = useSongReviews();
   const [cardSong, setCardSong] = useState<SongReview | null>(null);
-  const ownSongItems = useMemo((): SongItem[] => {
+
+  // Someone else's reviewed songs (bare ratings stay private to their profile's Songs list).
+  const [otherSongs, setOtherSongs] = useState<SongReview[]>([]);
+  useEffect(() => {
+    if (!viewingOther) return;
+    let cancelled = false;
+    fetchUserSongReviews(viewingOther).then(list => {
+      if (!cancelled && list) setOtherSongs(list.filter(x => !!x.review));
+    });
+    return () => { cancelled = true; };
+  }, [viewingOther]);
+
+  function groupSongs(list: SongReview[], reviewedOnly: boolean): SongItem[] {
     const groups = new Map<string, SongReview[]>();
-    for (const song of songReviews) {
+    for (const song of list) {
       const day = song.listenedAt.slice(0, 10);
       const k = song.albumId ? `${song.albumId}|${day}` : `single|${song.songId}`;
       const g = groups.get(k);
@@ -1192,10 +1209,13 @@ export default function RecentActivityScreen() {
     return [...groups.entries()].map(([k, songs]) => ({
       key:       `song-${k}`,
       songs,
+      reviewedOnly,
       dateMs:    new Date(songs[0].listenedAt).getTime(),
       dateLabel: formatDateLabel(songs[0].listenedAt),
     }));
-  }, [songReviews]);
+  }
+  const ownSongItems   = useMemo(() => groupSongs(songReviews, false), [songReviews]);
+  const otherSongItems = useMemo(() => groupSongs(otherSongs, true), [otherSongs]);
 
   const feed = useMemo((): FeedItem[] => {
     const activityItems      = viewingOther ? otherActivity         : [...ownActivityItems, ...ownReListens];
@@ -1208,7 +1228,7 @@ export default function RecentActivityScreen() {
     const createdPlaylistItems = viewingOther ? otherCreatedPlaylists : ownCreatedPlaylists;
 
     const flipItems = viewingOther ? otherFlips : ownFlips;
-    const songItems = viewingOther ? [] : ownSongItems;
+    const songItems = viewingOther ? otherSongItems : ownSongItems;
 
     const combined: FeedItem[] = [
       ...activityItems.map(d       => ({ kind: 'activity'        as const, data: d })),
@@ -1239,7 +1259,7 @@ export default function RecentActivityScreen() {
     ownLikedPlaylists, otherLikedPlaylists, ownFeaturedLikedPlaylists, featuredLikeDates,
     ownCreatedPlaylists, otherCreatedPlaylists,
     ownFlips, otherFlips,
-    ownSongItems,
+    ownSongItems, otherSongItems,
     viewingOther,
   ]);
 
@@ -1426,7 +1446,7 @@ export default function RecentActivityScreen() {
         />
       )}
       <SongReviewCard
-        userId={user?.id}
+        userId={viewingOther ?? user?.id}
         review={cardSong}
         onClose={() => setCardSong(null)}
         isDark={isDark}
