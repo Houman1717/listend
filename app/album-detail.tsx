@@ -44,7 +44,7 @@ import { TrackRatingsEditor, useTrackRatingsDraft } from '@/components/TrackRati
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { parseReviewTargetId } from '@/lib/reviewTargets';
 import { useSongReviews } from '@/context/SongReviewsContext';
-import { fetchSongCommunityRatings, withOwnRating, type SongMeta, type SongRatingStats } from '@/lib/songReviews';
+import { fetchSongCommunityRatings, fetchSongReviewCounts, withOwnRating, type SongMeta, type SongRatingStats } from '@/lib/songReviews';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -863,6 +863,7 @@ export default function AlbumDetailScreen() {
   const { getSongReview } = useSongReviews();
   const [openSong, setOpenSong] = useState<SongMeta | null>(null);
   const [trackStats, setTrackStats] = useState<Map<string, SongRatingStats>>(new Map());
+  const [trackReviewCounts, setTrackReviewCounts] = useState<Map<string, number>>(new Map());
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -1059,6 +1060,9 @@ export default function AlbumDetailScreen() {
         setTracks(data);
         fetchSongCommunityRatings(data.map(t => t.id)).then(m => {
           if (!cancelled && m) setTrackStats(m);
+        });
+        fetchSongReviewCounts(data.map(t => t.id)).then(m => {
+          if (!cancelled && m) setTrackReviewCounts(m);
         });
         // Cache total duration so the Duration sort filter works.
         // Called unconditionally — updateDuration is a no-op if this album
@@ -1989,6 +1993,8 @@ export default function AlbumDetailScreen() {
             tracks.map(track => {
               const mine      = getSongReview(track.id);
               const community = withOwnRating(trackStats.get(track.id), mine?.rating);
+              // Includes your own review; re-fetched when the song sheet closes.
+              const reviewCount = trackReviewCounts.get(track.id) ?? 0;
               return (
                 <Pressable
                   key={track.id}
@@ -2010,12 +2016,20 @@ export default function AlbumDetailScreen() {
                       </Text>
                       {mine?.isFavorite && <Ionicons name="trophy" size={12} color="#D4A017" />}
                     </View>
-                    {(track.featuredArtists.length > 0 || community) && (
-                      <Text style={[s.trackFeat, { color: colors.subtext }]} numberOfLines={1}>
-                        {track.featuredArtists.length > 0 ? `feat. ${track.featuredArtists.join(', ')}` : ''}
-                        {track.featuredArtists.length > 0 && community ? '  ·  ' : ''}
-                        {community ? `avg ${community.avg.toFixed(1)} (${community.count})` : ''}
-                      </Text>
+                    {(track.featuredArtists.length > 0 || community || reviewCount > 0) && (
+                      <View style={s.trackMetaRow}>
+                        <Text style={[s.trackFeat, { color: colors.subtext, flexShrink: 1 }]} numberOfLines={1}>
+                          {track.featuredArtists.length > 0 ? `feat. ${track.featuredArtists.join(', ')}` : ''}
+                          {track.featuredArtists.length > 0 && community ? '  ·  ' : ''}
+                          {community ? `avg ${community.avg.toFixed(1)} (${community.count})` : ''}
+                        </Text>
+                        {reviewCount > 0 && (
+                          <View style={s.trackReviewCount}>
+                            <FontAwesome name="comment-o" size={11} color="#D4A017" />
+                            <Text style={s.trackReviewCountText}>{reviewCount}</Text>
+                          </View>
+                        )}
+                      </View>
                     )}
                   </View>
                   {mine && mine.rating > 0 && (
@@ -2304,7 +2318,11 @@ export default function AlbumDetailScreen() {
         song={openSong}
         isDark={isDark}
         colors={colors}
-        onClose={() => setOpenSong(null)}
+        onClose={() => {
+          setOpenSong(null);
+          // Pick up a review you just wrote or removed.
+          if (tracks?.length) fetchSongReviewCounts(tracks.map(t => t.id)).then(m => { if (m) setTrackReviewCounts(m); });
+        }}
         onUserPress={(userId) => { setOpenSong(null); router.push({ pathname: '/user-profile', params: { userId } } as any); }}
       />
 
@@ -2496,6 +2514,9 @@ const s = StyleSheet.create({
   trackTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   trackTitle: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
   trackMyRating: { marginLeft: 10 },
+  trackMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trackReviewCount: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  trackReviewCountText: { color: '#D4A017', fontSize: 12, fontWeight: '600' },
   trackHint: { fontSize: 12, marginBottom: 6 },
   trackFeat: { fontSize: 12 },
   trackDuration: { fontSize: 13, marginLeft: 12 },

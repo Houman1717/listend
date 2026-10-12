@@ -16,7 +16,12 @@ import VolumeBars from '@/components/VolumeBars';
 import { SongReviewModal } from '@/components/SongReviewModal';
 import { AddToSongPlaylistSheet } from '@/components/AddToSongPlaylistSheet';
 import { useSongReviews } from '@/context/SongReviewsContext';
-import { fetchSongCommunityRatings, withOwnRating, type SongRatingStats } from '@/lib/songReviews';
+import { fetchSongCommunityRatings, fetchCommunitySongReviews, withOwnRating, type SongRatingStats, type CommunitySongReview } from '@/lib/songReviews';
+import { useAuth } from '@/context/AuthContext';
+import { handleOrName } from '@/lib/userHandle';
+import { avatarColor } from '@/components/ReviewComments';
+
+const PREVIEW_REVIEWS = 2;
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -81,6 +86,8 @@ export function SongInfoModal({
   const [addingToPlaylist,  setAddingToPlaylist]  = useState(false);
   const [ratingStats,       setRatingStats]       = useState<SongRatingStats | undefined>(undefined);
   const { getSongReview } = useSongReviews();
+  const { user } = useAuth();
+  const [writtenReviews,    setWrittenReviews]    = useState<CommunitySongReview[] | null>(null);
 
   useEffect(() => {
     setReviewing(false);
@@ -93,6 +100,18 @@ export function SongInfoModal({
     });
     return () => { cancelled = true; };
   }, [song?.id]);
+
+  // Other people's written reviews, previewed here so they're one tap away.
+  // Re-fetched after the rate/review screen closes (`reviewing` flips back).
+  useEffect(() => {
+    setWrittenReviews(null);
+    if (!song?.id || reviewing) return;
+    let cancelled = false;
+    fetchCommunitySongReviews(song.id, user?.id).then(list => {
+      if (!cancelled && list) setWrittenReviews(list.filter(r => !!r.review));
+    });
+    return () => { cancelled = true; };
+  }, [song?.id, user?.id, reviewing]);
 
   useEffect(() => {
     setFetchedDate('');
@@ -229,6 +248,44 @@ export function SongInfoModal({
                 {community ? `Listend avg ${community.avg.toFixed(1)} (${community.count})` : 'No ratings yet'}
               </Text>
             </View>
+            {writtenReviews && writtenReviews.length > 0 && (
+              <View style={s.reviewsBlock}>
+                {writtenReviews.slice(0, PREVIEW_REVIEWS).map(r => (
+                  <View key={r.userId} style={s.reviewItem}>
+                    <Pressable
+                      style={s.reviewHead}
+                      disabled={!onUserPress}
+                      onPress={() => { onClose(); onUserPress?.(r.userId); }}>
+                      {r.avatarUrl ? (
+                        <ExpoImage source={{ uri: r.avatarUrl }} style={s.reviewAvatar} contentFit="cover" cachePolicy="disk" />
+                      ) : (
+                        <View style={[s.reviewAvatar, { backgroundColor: avatarColor(r.username || r.userId), alignItems: 'center', justifyContent: 'center' }]}>
+                          <Text style={s.reviewAvatarText}>{(r.username || r.displayName || '?').charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                      <Text style={[s.reviewName, { color: colorsProp ? colorsProp.text : isDark ? '#f5e6c8' : '#1c1410' }]} numberOfLines={1}>
+                        {handleOrName(r.username, r.displayName, r.userId)}
+                      </Text>
+                      {r.rating > 0 && (
+                        <View style={s.rateStat}>
+                          <FontAwesome name="volume-up" size={9} color="#D4A017" />
+                          <VolumeBars rating={r.rating} activeColor="#D4A017" inactiveColor={inactive} />
+                          <Text style={s.rateStatNum}>{r.rating}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                    <Text style={[s.reviewText, { color: subtext }]} numberOfLines={3}>"{r.review}"</Text>
+                  </View>
+                ))}
+                <Pressable onPress={() => setReviewing(true)} hitSlop={6}>
+                  <Text style={s.seeAll}>
+                    {writtenReviews.length > PREVIEW_REVIEWS
+                      ? `See all ${writtenReviews.length} reviews ›`
+                      : 'See reviews ›'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
             <View style={s.rateBtnRow}>
               <Pressable
                 onPress={() => setReviewing(true)}
@@ -395,6 +452,43 @@ const s = StyleSheet.create({
     color:      '#D4A017',
     fontSize:   11,
     fontWeight: '700',
+  },
+  reviewsBlock: {
+    gap: 10,
+  },
+  reviewItem: {
+    gap: 4,
+  },
+  reviewHead: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap: 7,
+  },
+  reviewAvatar: {
+    width:        22,
+    height:       22,
+    borderRadius: 11,
+  },
+  reviewAvatarText: {
+    color:      '#fff',
+    fontSize:   10,
+    fontWeight: '700',
+  },
+  reviewName: {
+    fontSize:   13,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  reviewText: {
+    fontSize:   13,
+    lineHeight: 18,
+    fontStyle:  'italic',
+    marginLeft: 29,
+  },
+  seeAll: {
+    color:      '#D4A017',
+    fontSize:   13,
+    fontWeight: '600',
   },
   rateBtnRow: {
     flexDirection: 'row',

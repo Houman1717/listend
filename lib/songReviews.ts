@@ -184,3 +184,27 @@ export function songsMatchingAlbum(list: SongReview[], album: { id?: string; tit
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, m => `\\${m}`);
 }
+
+/**
+ * Number of written reviews per song (everyone the caller can see, including
+ * themselves). Null on failure.
+ */
+export async function fetchSongReviewCounts(songIds: string[]): Promise<Map<string, number> | null> {
+  const ids = [...new Set(songIds.filter(Boolean))];
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
+  const rows = await fetchAllRowsIn<any>(
+    ids,
+    (chunk, from, to) => supabase
+      .from('song_reviews')
+      .select('song_id')
+      .in('song_id', chunk)
+      .not('review', 'is', null)
+      .neq('review', '')
+      .range(from, to),
+    5,
+  );
+  if (!rows) return null;
+  for (const r of rows) out.set(r.song_id, (out.get(r.song_id) ?? 0) + 1);
+  return out;
+}
