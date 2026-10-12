@@ -2040,8 +2040,8 @@ export default function AlbumDetailScreen() {
               const mine      = getSongReview({ id: track.id, title: track.title, artist: albumArtist });
               const average   = withOwnRating(trackStats.get(track.id), mine?.rating);
               const community = average?.revealed ? average : null;
-              // Other people's written reviews only — your own doesn't earn the ❝.
-              const hasReviews = (trackReviewCounts.get(track.id) ?? 0) > 0;
+              // People (not you, not blocked) who wrote a review of this track.
+              const reviewCount = trackReviewCounts.get(track.id) ?? 0;
               const showMine  = trackView === 'mine';
               return (
                 <Pressable
@@ -2063,7 +2063,6 @@ export default function AlbumDetailScreen() {
                         {track.title}
                       </Text>
                       {showMine && mine?.isFavorite && <Ionicons name="trophy" size={12} color="#D4A017" />}
-                      {!showMine && hasReviews && <FontAwesome name="quote-left" size={10} color="#D4A017" />}
                     </View>
                     {track.featuredArtists.length > 0 && (
                       <Text style={[s.trackFeat, { color: colors.subtext }]} numberOfLines={1}>
@@ -2071,6 +2070,17 @@ export default function AlbumDetailScreen() {
                       </Text>
                     )}
                   </View>
+                  {!showMine && (
+                    // Fixed width (empty when 0) so the averages stay in one column.
+                    <View style={s.trackReviewCount}>
+                      {reviewCount > 0 && (
+                        <>
+                          <FontAwesome name="comment-o" size={11} color={colors.subtext} />
+                          <Text style={[s.trackReviewCountText, { color: colors.subtext }]}>{reviewCount}</Text>
+                        </>
+                      )}
+                    </View>
+                  )}
                   {showMine ? (
                     mine && mine.rating > 0 && (
                       <View style={s.trackMyRating}>
@@ -2551,6 +2561,8 @@ const s = StyleSheet.create({
   trackTitle: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
   // Fixed width so ratings line up in a column down the tracklist.
   trackMyRating: { marginLeft: 10, width: 54, alignItems: 'flex-end' },
+  trackReviewCount: { marginLeft: 8, width: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  trackReviewCountText: { fontSize: 12, fontWeight: '600' },
   trackToggle: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, padding: 2 },
   trackToggleBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   trackToggleText: { fontSize: 12, fontWeight: '700' },
