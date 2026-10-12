@@ -179,7 +179,7 @@ export default function DMsScreen() {
   }
 
   function previewText(msg: Message): string {
-    if (msg.type === 'album' && msg.album_data) {
+    if ((msg.type === 'album' || msg.type === 'song') && msg.album_data) {
       return `🎵 ${msg.album_data.title}`;
     }
     return msg.content ?? '';

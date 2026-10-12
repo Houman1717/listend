@@ -20,6 +20,7 @@ import { avatarColor } from '@/components/ReviewComments';
 import { SongReviewModal } from '@/components/SongReviewModal';
 import { SongReviewDetailModal, type SongReviewEntry } from '@/components/SongReviewDetailModal';
 import { AddToSongPlaylistSheet } from '@/components/AddToSongPlaylistSheet';
+import { SendAlbumSheet } from '@/components/SendAlbumSheet';
 import { useAuth } from '@/context/AuthContext';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { handleOrName } from '@/lib/userHandle';
@@ -62,6 +63,7 @@ export default function SongDetailScreen() {
   const [reviewsFailed, setReviewsFailed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addingToPlaylist, setAddingToPlaylist] = useState(false);
+  const [sending, setSending] = useState(false);
   const [openEntry, setOpenEntry] = useState<SongReviewEntry | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [me, setMe] = useState<{ username?: string; displayName?: string; avatarUrl?: string | null } | null>(null);
@@ -134,6 +136,17 @@ export default function SongDetailScreen() {
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,
+        // Same pair as album-detail: DM it to a friend, add it to a playlist.
+        headerRight: () => (
+          <View style={s.headerBtnRow}>
+            <Pressable onPress={() => setSending(true)} hitSlop={8} style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
+              <FontAwesome name="paper-plane-o" size={18} color={ACCENT} />
+            </Pressable>
+            <Pressable onPress={() => setAddingToPlaylist(true)} hitSlop={8} style={({ pressed }) => [s.headerBtn, { opacity: pressed ? 0.5 : 1 }]}>
+              <FontAwesome name="list" size={18} color={ACCENT} />
+            </Pressable>
+          </View>
+        ),
       }} />
       <ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
         {/* ── Song ─────────────────────────────────────────────────────── */}
@@ -152,14 +165,24 @@ export default function SongDetailScreen() {
         </Pressable>
         {song.albumId && song.albumTitle ? (
           <Pressable
-            style={({ pressed }) => [s.albumLink, { borderColor: border, opacity: pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [s.albumCard, { backgroundColor: sectionBg, borderColor: border, opacity: pressed ? 0.7 : 1 }]}
             onPress={() => router.push({
               pathname: '/album-detail',
               params: { id: song.albumId!, title: song.albumTitle!, artist: song.artist, year, artworkUrl: song.artworkUrl ?? '' },
             } as any)}>
-            <FontAwesome name="circle-o" size={12} color={muted} />
-            <Text style={[s.albumLinkText, { color: colors.subtext }]} numberOfLines={1}>{song.albumTitle}</Text>
-            <FontAwesome name="chevron-right" size={10} color={muted} />
+            {song.artworkUrl ? (
+              <ExpoImage source={{ uri: song.artworkUrl }} style={s.albumCardArt} contentFit="cover" cachePolicy="disk" />
+            ) : (
+              <View style={[s.albumCardArt, { backgroundColor: border }]} />
+            )}
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={[s.albumCardLabel, { color: muted }]}>FROM THE ALBUM</Text>
+              <Text style={[s.albumCardTitle, { color: colors.text }]} numberOfLines={1}>{song.albumTitle}</Text>
+              <Text style={[s.albumCardSub, { color: colors.subtext }]} numberOfLines={1}>
+                {song.artist}{year ? ` · ${year}` : ''}
+              </Text>
+            </View>
+            <FontAwesome name="chevron-right" size={13} color={muted} />
           </Pressable>
         ) : null}
 
@@ -198,12 +221,6 @@ export default function SongDetailScreen() {
             <Text style={s.rateBtnText}>Rate & Review</Text>
           </Pressable>
         )}
-        <Pressable
-          onPress={() => setAddingToPlaylist(true)}
-          style={({ pressed }) => [s.playlistBtn, { borderColor: ACCENT, opacity: pressed ? 0.7 : 1 }]}>
-          <FontAwesome name="list" size={13} color={ACCENT} />
-          <Text style={s.playlistBtnText}>Add to Playlist</Text>
-        </Pressable>
         {mine?.review ? (
           <Pressable
             onPress={() => ownEntry && setOpenEntry(ownEntry)}
@@ -273,6 +290,13 @@ export default function SongDetailScreen() {
         colors={colors}
         onClose={() => { setEditing(false); setRefreshTick(t => t + 1); }}
       />
+      <SendAlbumSheet
+        visible={sending}
+        song={song}
+        isDark={isDark}
+        colors={{ text: colors.text, subtext: colors.subtext, border: colors.border, tint: colors.tint, surface: colors.surface }}
+        onClose={() => setSending(false)}
+      />
       <AddToSongPlaylistSheet
         song={song}
         visible={addingToPlaylist}
@@ -298,8 +322,13 @@ const s = StyleSheet.create({
   artwork: { width: 200, height: 200, borderRadius: 10 },
   title: { marginTop: 18, fontSize: 22, fontWeight: '800', textAlign: 'center', letterSpacing: -0.3 },
   artist: { marginTop: 4, fontSize: 15, fontWeight: '600', color: ACCENT, textAlign: 'center' },
-  albumLink: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, maxWidth: '90%' },
-  albumLinkText: { fontSize: 13, fontWeight: '500', flexShrink: 1 },
+  headerBtnRow: { flexDirection: 'row', alignItems: 'center' },
+  headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  albumCard: { marginTop: 18, width: '100%', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  albumCardArt: { width: 52, height: 52, borderRadius: 6 },
+  albumCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  albumCardTitle: { fontSize: 16, fontWeight: '700' },
+  albumCardSub: { fontSize: 12 },
 
   youRow: { marginTop: 22, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   youLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -311,8 +340,6 @@ const s = StyleSheet.create({
   editBtnText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
   rateBtn: { marginTop: 22, width: '100%', height: 50, borderRadius: 12, backgroundColor: ACCENT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   rateBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  playlistBtn: { marginTop: 10, width: '100%', height: 44, borderRadius: 12, borderWidth: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  playlistBtnText: { color: ACCENT, fontSize: 15, fontWeight: '600' },
   yourReview: { marginTop: 14, width: '100%', borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, gap: 6 },
   yourReviewLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
   yourReviewText: { fontSize: 14, lineHeight: 20, fontStyle: 'italic' },

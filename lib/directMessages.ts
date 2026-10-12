@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { countOrNull, fetchAllRows } from '@/lib/supabaseQuery';
 import { nameOrHandle } from '@/lib/userHandle';
 import type { LoggedAlbum } from '@/context/AlbumsContext';
+import type { SongMeta, SongReview } from '@/lib/songReviews';
 
 /**
  * Notification types that belong to DMs rather than the bell: they count
@@ -82,6 +83,42 @@ export async function sendAlbumMessage(
 
   if (error) {
     console.error('[DM] send album error:', error);
+    return false;
+  }
+  notifyMessageRecipient(senderId, receiverId);
+  return true;
+}
+
+/**
+ * Sends a song card (type 'song', data in album_data like album cards),
+ * carrying the sender's own rating/review of it if they've logged it.
+ * `content` is the readable fallback older app builds show as plain text.
+ */
+export async function sendSongMessage(
+  senderId: string,
+  receiverId: string,
+  song: SongMeta,
+  mine?: SongReview,
+): Promise<boolean> {
+  const songData = {
+    id:         song.id,
+    title:      song.title,
+    artist:     song.artist,
+    artworkUrl: song.artworkUrl ?? '',
+    ...(song.albumId    ? { albumId: song.albumId } : {}),
+    ...(song.albumTitle ? { albumTitle: song.albumTitle } : {}),
+    ...(mine && mine.rating > 0 ? { sender_rating: mine.rating } : {}),
+    ...(mine?.review ? { sender_review: mine.review } : {}),
+  };
+  const { error } = await supabase.from('messages').insert({
+    sender_id:   senderId,
+    receiver_id: receiverId,
+    content:     `🎵 ${song.title} – ${song.artist}`,
+    type:        'song',
+    album_data:  songData,
+  });
+  if (error) {
+    console.error('[DM] send song error:', error);
     return false;
   }
   notifyMessageRecipient(senderId, receiverId);

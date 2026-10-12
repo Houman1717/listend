@@ -40,6 +40,8 @@ import { supabase } from '@/lib/supabase';
 import { nameOrHandle } from '@/lib/userHandle';
 import { fetchAllRows } from '@/lib/supabaseQuery';
 import { notifyMessageRecipient, sendAlbumMessage } from '@/lib/directMessages';
+import { useSongReviews } from '@/context/SongReviewsContext';
+import { openSongPage } from '@/lib/openSong';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
@@ -56,7 +58,7 @@ const POLL_INTERVAL_MS = 5000;
 
 type ColorsType = ColorsShape;
 
-type MessageType = 'text' | 'album';
+type MessageType = 'text' | 'album' | 'song';
 
 type Message = {
   id: string;
@@ -70,6 +72,9 @@ type Message = {
     artist: string;
     artworkUrl: string;
     year?: number;
+    /** Song cards only: the album the song is on. */
+    albumId?: string;
+    albumTitle?: string;
     sender_rating?: number;
     sender_review?: string;
   } | null;
@@ -105,6 +110,7 @@ export default function DMConversationScreen() {
   const { userId: otherUserId } = useLocalSearchParams<{ userId: string }>();
   const { user }   = useAuth();
   const { loggedAlbums } = useAlbums();
+  const { getSongReview } = useSongReviews();
   const { markMessagesRead } = useNotifications();
   const navigation = useNavigation();
   const router     = useRouter();
@@ -439,7 +445,29 @@ export default function DMConversationScreen() {
           return (
             <>
               <SwipeToReply onReply={() => startReply(item)} highlighted={highlightedId === item.id} colors={colors}>
-              {item.type === 'album' && item.album_data ? (
+              {item.type === 'song' && item.album_data ? (
+                <AlbumCard
+                  album={item.album_data}
+                  kindLabel="SONG"
+                  subtitle={item.album_data.albumTitle}
+                  isMe={isMe}
+                  colors={colors}
+                  likedBy={item.liked_by ?? []}
+                  myId={user?.id}
+                  onToggleLike={() => toggleLike(item)}
+                  senderRating={item.album_data.sender_rating}
+                  senderReview={item.album_data.sender_review}
+                  // Only your own rating is known locally for songs.
+                  myLoggedEntry={!isMe ? getSongReview(item.album_data.id) : undefined}
+                  onPress={() => {
+                    const sd = item.album_data!;
+                    openSongPage(router, {
+                      id: sd.id, title: sd.title, artist: sd.artist, artworkUrl: sd.artworkUrl,
+                      albumId: sd.albumId, albumTitle: sd.albumTitle,
+                    });
+                  }}
+                />
+              ) : item.type === 'album' && item.album_data ? (
                 <AlbumCard
                   album={item.album_data}
                   isMe={isMe}
@@ -665,7 +693,7 @@ export default function DMConversationScreen() {
 
 /** One-line description of a message, for the reply bar and quotes. */
 function messageSnippet(m: Message) {
-  if (m.type === 'album' && m.album_data) return `${m.album_data.title} · ${m.album_data.artist}`;
+  if ((m.type === 'album' || m.type === 'song') && m.album_data) return `${m.album_data.title} · ${m.album_data.artist}`;
   return m.content ?? '';
 }
 
@@ -734,7 +762,7 @@ function ReplyQuote({ message, name, onBubble, colors, onPress }: {
   colors: ColorsType;
   onPress: () => void;
 }) {
-  const album = message.type === 'album' ? message.album_data : null;
+  const album = message.type === 'album' || message.type === 'song' ? message.album_data : null;
   return (
     <Pressable
       onPress={onPress}
@@ -827,8 +855,14 @@ function AlbumCard({
   likedBy,
   myId,
   onToggleLike,
+  kindLabel,
+  subtitle,
 }: LikeProps & {
   album: { id: string; title: string; artist: string; artworkUrl: string; year?: number };
+  /** Small label above the title, e.g. "SONG" for song cards. */
+  kindLabel?: string;
+  /** Replaces the year line (song cards show their album). */
+  subtitle?: string;
   isMe: boolean;
   colors: ColorsType;
   senderRating?: number;
@@ -866,9 +900,12 @@ function AlbumCard({
             </View>
           )}
           <View style={b.albumMeta}>
+            {kindLabel ? <Text style={[b.kindLabel, { color: colors.tint }]}>{kindLabel}</Text> : null}
             <Text style={[b.albumTitle, { color: colors.text }]} numberOfLines={2}>{album.title}</Text>
             <Text style={[b.albumArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
-            {album.year ? <Text style={[b.albumYear, { color: colors.subtext }]}>{album.year}</Text> : null}
+            {subtitle
+              ? <Text style={[b.albumYear, { color: colors.subtext }]} numberOfLines={1}>{subtitle}</Text>
+              : album.year ? <Text style={[b.albumYear, { color: colors.subtext }]}>{album.year}</Text> : null}
           </View>
           <FontAwesome name="chevron-right" size={11} color={colors.subtext} style={{ alignSelf: 'center', marginLeft: 4 }} />
         </View>
@@ -1053,6 +1090,7 @@ const b = StyleSheet.create({
   albumTitle:  { fontSize: 13, fontWeight: '700', lineHeight: 17 },
   albumArtist: { fontSize: 12 },
   albumYear:   { fontSize: 11 },
+  kindLabel:   { fontSize: 9, fontWeight: '800', letterSpacing: 0.8, marginBottom: 1 },
 
   reviewDivider: { height: StyleSheet.hairlineWidth },
 

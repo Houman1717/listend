@@ -8,7 +8,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { ProBadge } from '@/components/ProBadge';
-import { DMAlbum, DMFriend, fetchDMFriends, sendAlbumMessage } from '@/lib/directMessages';
+import { DMAlbum, DMFriend, fetchDMFriends, sendAlbumMessage, sendSongMessage } from '@/lib/directMessages';
+import { useSongReviews } from '@/context/SongReviewsContext';
+import type { SongMeta } from '@/lib/songReviews';
 
 const ACCENT = '#D4A017';
 
@@ -16,16 +18,21 @@ type SendState = 'sending' | 'sent' | 'failed';
 
 type Props = {
   visible: boolean;
-  album: DMAlbum;
+  /** Send an album card… */
+  album?: DMAlbum;
+  /** …or a song card (takes precedence). */
+  song?: SongMeta;
   isDark: boolean;
   colors: { text: string; subtext: string; border: string; tint: string; surface: string };
   onClose: () => void;
 };
 
-/** Bottom sheet listing your friends (mutual follows with DMs on); tap Send to DM them the album. */
-export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Props) {
+/** Bottom sheet listing your friends (mutual follows with DMs on); tap Send to DM them the album or song. */
+export function SendAlbumSheet({ visible, album, song, isDark, colors, onClose }: Props) {
   const { user } = useAuth();
   const { loggedAlbums } = useAlbums();
+  const { getSongReview } = useSongReviews();
+  const item = song ?? album!;
   const [friends, setFriends] = useState<DMFriend[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [sendState, setSendState] = useState<Record<string, SendState>>({});
@@ -94,7 +101,9 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
     const state = sendState[friend.id];
     if (state === 'sending' || state === 'sent') return;
     setSendState(prev => ({ ...prev, [friend.id]: 'sending' }));
-    const ok = await sendAlbumMessage(user.id, friend.id, album, loggedAlbums);
+    const ok = song
+      ? await sendSongMessage(user.id, friend.id, song, getSongReview(song.id))
+      : await sendAlbumMessage(user.id, friend.id, album!, loggedAlbums);
     setSendState(prev => ({ ...prev, [friend.id]: ok ? 'sent' : 'failed' }));
   }
 
@@ -188,7 +197,7 @@ export function SendAlbumSheet({ visible, album, isDark, colors, onClose }: Prop
                 <View style={s.titleText}>
                   <Text style={[s.title, { color: colors.text }]}>Send to a Friend</Text>
                   <Text style={[s.subtitle, { color: colors.subtext }]} numberOfLines={1}>
-                    {album.title} · {album.artist}
+                    {item.title} · {item.artist}
                   </Text>
                 </View>
                 {friends && friends.length > 0 && (
