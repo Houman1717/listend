@@ -106,29 +106,42 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
 
   if (songs.length === 0) return null;
 
+  // The favourite lives only in its card (with its review); the list is
+  // everything else, so a favourite-only review is just the card.
   const favorite = songs.find(s => s.isFavorite);
+  const others   = favorite ? songs.filter(s => s !== favorite) : songs;
+  const favNum   = favorite ? positions?.get(favorite.songId)?.number : undefined;
 
   const border   = colors.border ?? (isDark ? '#2a1e14' : '#ececec');
   // Pro theme accent (every theme accent is #RRGGBB, so alpha can be appended).
   const accent   = colors.tint ?? ACCENT;
-  const shown    = expanded ? songs : songs.slice(0, PREVIEW_COUNT);
+  const shown    = expanded ? others : others.slice(0, PREVIEW_COUNT);
 
   return (
     <View style={[s.wrap, { borderTopColor: border }]}>
-      <Text style={[s.label, { color: colors.subtext }]}>TRACK RATINGS</Text>
       {favorite && (
         <Pressable
           onPress={() => setOpenSong(favorite)}
           style={({ pressed }) => [s.favCard, { backgroundColor: `${accent}14`, borderColor: `${accent}33`, opacity: pressed ? 0.7 : 1 }]}>
-          <View style={[s.favIcon, { backgroundColor: `${accent}26` }]}>
-            <Ionicons name="trophy" size={14} color={accent} />
+          <View style={s.favHead}>
+            <View style={[s.favIcon, { backgroundColor: `${accent}26` }]}>
+              <Ionicons name="trophy" size={14} color={accent} />
+            </View>
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text style={[s.favLabel, { color: accent }]}>
+                FAVOURITE TRACK{favNum ? <Text style={{ color: colors.subtext }}>{`  ·  TRACK ${favNum}`}</Text> : null}
+              </Text>
+              <Text style={[s.favTitle, { color: colors.text }]} numberOfLines={1}>{favorite.title}</Text>
+            </View>
+            {favorite.rating > 0 && <CompactRating value={favorite.rating} color={accent} size={13} />}
           </View>
-          <View style={{ flex: 1, gap: 1 }}>
-            <Text style={[s.favLabel, { color: accent }]}>FAVOURITE TRACK</Text>
-            <Text style={[s.favTitle, { color: colors.text }]} numberOfLines={1}>{favorite.title}</Text>
-          </View>
-          {favorite.rating > 0 && <CompactRating value={favorite.rating} color={accent} size={13} />}
+          {!!favorite.review && (
+            <Text style={[s.favReview, { color: colors.subtext }]} numberOfLines={3}>"{favorite.review}"</Text>
+          )}
         </Pressable>
+      )}
+      {others.length > 0 && (
+        <Text style={[s.label, { color: colors.subtext, marginTop: favorite ? 14 : 0 }]}>TRACK RATINGS</Text>
       )}
       {shown.map(song => (
         <Pressable
@@ -140,7 +153,6 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
             <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>
               {song.title}
             </Text>
-            {song.isFavorite && <Ionicons name="trophy" size={12} color={accent} />}
             {song.rating > 0 ? (
               <CompactRating value={song.rating} color={accent} />
             ) : (
@@ -152,7 +164,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
           )}
         </Pressable>
       ))}
-      {songs.length > PREVIEW_COUNT && (
+      {others.length > PREVIEW_COUNT && (
         <Pressable
           hitSlop={8}
           onPress={() => {
@@ -160,7 +172,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
             setExpanded(v => !v);
           }}
           style={({ pressed }) => [s.more, { opacity: pressed ? 0.6 : 1 }]}>
-          <Text style={[s.moreText, { color: accent }]}>{expanded ? 'Show less' : `Show all ${songs.length} tracks`}</Text>
+          <Text style={[s.moreText, { color: accent }]}>{expanded ? 'Show less' : `Show all ${others.length} tracks`}</Text>
         </Pressable>
       )}
       {openSong && userId && (
@@ -190,7 +202,9 @@ const s = StyleSheet.create({
   wrap: { marginTop: 18, marginBottom: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 },
   row: { paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, gap: 4 },
-  favCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, marginTop: 6, marginBottom: 4 },
+  favCard: { padding: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, gap: 6 },
+  favHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  favReview: { fontSize: 13, lineHeight: 18, fontStyle: 'italic', marginLeft: 40 },
   favIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   favLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
   favTitle: { fontSize: 14, fontWeight: '600' },
