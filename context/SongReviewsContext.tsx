@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/supabaseQuery';
@@ -30,8 +30,17 @@ const SongReviewsContext = createContext<SongReviewsContextType | null>(null);
 
 export function SongReviewsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [songReviews, setSongReviews] = useState<SongReview[]>([]);
+  const [songReviews, setSongReviewsState] = useState<SongReview[]>([]);
   const [songsLoaded, setSongsLoaded] = useState(false);
+  // Mirror of the latest list, updated synchronously, so several writes fired
+  // back to back (e.g. rating a whole tracklist + a favourite on log) each see
+  // the others' optimistic rows instead of a stale render's.
+  const listRef = useRef<SongReview[]>([]);
+  function setSongReviews(next: SongReview[] | ((prev: SongReview[]) => SongReview[])) {
+    listRef.current = typeof next === 'function' ? next(listRef.current) : next;
+    setSongReviewsState(listRef.current);
+  }
+  const findSong = (songId: string) => listRef.current.find(s => s.songId === songId);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -67,7 +76,7 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
 
   async function saveSongReview({ song, rating, review }: SaveInput): Promise<boolean> {
     if (!user) return false;
-    const existing = byId.get(song.id);
+    const existing = findSong(song.id);
     const trimmed  = review?.trim() || undefined;
     const listenedAt = existing?.listenedAt ?? new Date().toISOString();
 
@@ -121,7 +130,7 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
 
   async function removeSongReview(songId: string): Promise<boolean> {
     if (!user) return false;
-    const existing = byId.get(songId);
+    const existing = findSong(songId);
     if (!existing) return true;
     setSongReviews(prev => prev.filter(s => s.songId !== songId));
     const { error } = await supabase
@@ -140,13 +149,13 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
   async function setFavoriteSong(song: SongMeta, on: boolean): Promise<boolean> {
     if (!user || !song.albumId) return false;
     const albumId = song.albumId;
-    if (!byId.has(song.id)) {
+    if (!findSong(song.id)) {
       if (!on) return true;
       const ok = await saveSongReview({ song, rating: 0 });
       if (!ok) return false;
     }
 
-    const before = songReviews;
+    const before = listRef.current;
     setSongReviews(prev => prev.map(s => {
       if (s.songId === song.id) return { ...s, isFavorite: on };
       if (on && s.albumId === albumId && s.isFavorite) return { ...s, isFavorite: false };

@@ -73,3 +73,52 @@ const s = StyleSheet.create({
   numBox: { width: 30, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 },
   num: { fontSize: 20, fontWeight: '700' },
 });
+
+// ─── Compact variant ─────────────────────────────────────────────────────────
+// One-line dial for lists (e.g. rating every track while logging an album).
+// The drag only claims horizontal movement so the list can still scroll.
+
+const COMPACT_HEIGHTS = [4, 5, 7, 8, 10, 11, 13, 14, 16, 18];
+
+export function CompactVolumePicker({ rating, onChange, isDark, width = 120 }: {
+  rating: number;
+  onChange: (r: number) => void;
+  isDark: boolean;
+  width?: number;
+}) {
+  const inactiveColor = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
+  const valueAt = (x: number) => Math.max(1, Math.min(10, Math.ceil((x / width) * 10)));
+
+  const tap = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd(e => {
+      const val = valueAt(e.x);
+      onChange(val === rating ? 0 : val);
+    });
+
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .activeOffsetX([-6, 6])
+    .failOffsetY([-10, 10])
+    .onUpdate(e => onChange(valueAt(e.x)));
+
+  return (
+    <View style={c.row}>
+      <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
+        <View style={[c.track, { width }]} hitSlop={{ top: 10, bottom: 10 }}>
+          {COMPACT_HEIGHTS.map((h, i) => (
+            <View key={i} style={[c.bar, { height: h, backgroundColor: i + 1 <= rating ? ACCENT : inactiveColor }]} />
+          ))}
+        </View>
+      </GestureDetector>
+      <Text style={[c.num, { color: rating > 0 ? ACCENT : inactiveColor }]}>{rating > 0 ? rating : '–'}</Text>
+    </View>
+  );
+}
+
+const c = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  track: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 22, paddingBottom: 2 },
+  bar: { flex: 1, borderRadius: 1.5 },
+  num: { width: 18, fontSize: 13, fontWeight: '700', textAlign: 'right' },
+});
