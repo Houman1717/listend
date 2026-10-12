@@ -74,8 +74,13 @@ export function rowToSongReview(r: any): SongReview {
 
 export type SongRatingStats = { sum: number; count: number };
 
-/** Like albums, a song's Listend average stays hidden until this many people rate it. */
-export const SONG_MIN_RATINGS = 5;
+/**
+ * Like albums, a song's Listend average stays hidden until this many people
+ * rate it. Lower than albums (10): song ratings spread across far more items,
+ * so per-song counts grow much slower. 3 is the least that's more than one
+ * or two people's opinion (often your own, which is counted).
+ */
+export const SONG_MIN_RATINGS = 3;
 
 /**
  * Community rating sum/count per song, excluding the caller (combine with the
