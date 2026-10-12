@@ -50,7 +50,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
   userId: string | null | undefined;
   album:  { id?: string; title: string; artist: string };
   isDark: boolean;
-  colors: { text: string; subtext: string; background?: string; tint?: string };
+  colors: { text: string; subtext: string; background?: string; tint?: string; border?: string };
 }) {
   const { user } = useAuth();
   const { songReviews, songsLoaded } = useSongReviews();
@@ -108,7 +108,8 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
 
   const favorite = songs.find(s => s.isFavorite);
 
-  const border   = isDark ? '#2a1e14' : '#ececec';
+  const border   = colors.border ?? (isDark ? '#2a1e14' : '#ececec');
+  // Pro theme accent (every theme accent is #RRGGBB, so alpha can be appended).
   const accent   = colors.tint ?? ACCENT;
   const shown    = expanded ? songs : songs.slice(0, PREVIEW_COUNT);
 
@@ -116,11 +117,18 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
     <View style={[s.wrap, { borderTopColor: border }]}>
       <Text style={[s.label, { color: colors.subtext }]}>TRACK RATINGS</Text>
       {favorite && (
-        <View style={s.favLine}>
-          <Ionicons name="trophy" size={13} color={accent} />
-          <Text style={[s.favLabel, { color: colors.subtext }]}>Favourite track</Text>
-          <Text style={[s.favTitle, { color: colors.text }]} numberOfLines={1}>{favorite.title}</Text>
-        </View>
+        <Pressable
+          onPress={() => setOpenSong(favorite)}
+          style={({ pressed }) => [s.favCard, { backgroundColor: `${accent}14`, borderColor: `${accent}33`, opacity: pressed ? 0.7 : 1 }]}>
+          <View style={[s.favIcon, { backgroundColor: `${accent}26` }]}>
+            <Ionicons name="trophy" size={14} color={accent} />
+          </View>
+          <View style={{ flex: 1, gap: 1 }}>
+            <Text style={[s.favLabel, { color: accent }]}>FAVOURITE TRACK</Text>
+            <Text style={[s.favTitle, { color: colors.text }]} numberOfLines={1}>{favorite.title}</Text>
+          </View>
+          {favorite.rating > 0 && <CompactRating value={favorite.rating} color={accent} size={13} />}
+        </Pressable>
       )}
       {shown.map(song => (
         <Pressable
@@ -129,12 +137,12 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
           style={({ pressed }) => [s.row, { borderBottomColor: border, opacity: pressed ? 0.6 : 1 }]}>
           <View style={s.head}>
             <Text style={[s.num, { color: colors.subtext }]}>{positions?.get(song.songId)?.number ?? '·'}</Text>
-            <Text style={[s.title, { color: colors.text, fontWeight: song.isFavorite ? '700' : '500' }]} numberOfLines={1}>
+            <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>
               {song.title}
             </Text>
             {song.isFavorite && <Ionicons name="trophy" size={12} color={accent} />}
             {song.rating > 0 ? (
-              <CompactRating value={song.rating} />
+              <CompactRating value={song.rating} color={accent} />
             ) : (
               <Text style={[s.listened, { color: colors.subtext }]}>Listened</Text>
             )}
@@ -182,12 +190,13 @@ const s = StyleSheet.create({
   wrap: { marginTop: 18, marginBottom: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 },
   row: { paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, gap: 4 },
-  favLine: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
-  favLabel: { fontSize: 12 },
-  favTitle: { flex: 1, fontSize: 14, fontWeight: '700' },
+  favCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, marginTop: 6, marginBottom: 4 },
+  favIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  favLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  favTitle: { fontSize: 14, fontWeight: '600' },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   num: { width: 18, fontSize: 12, textAlign: 'right' },
-  title: { flex: 1, fontSize: 14 },
+  title: { flex: 1, fontSize: 14, fontWeight: '500' },
   listened: { fontSize: 11 },
   review: { fontSize: 13, lineHeight: 18, fontStyle: 'italic', marginLeft: 26 },
   more: { alignSelf: 'flex-start', paddingTop: 10 },
