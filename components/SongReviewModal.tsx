@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
+  Switch,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,6 +52,7 @@ export function SongReviewModal({
   const [rating,     setRating]     = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [saving,     setSaving]     = useState(false);
+  const [favBusy,    setFavBusy]    = useState(false);
 
   // Reset the form whenever a different song opens.
   useEffect(() => {
@@ -97,9 +99,13 @@ export function SongReviewModal({
     ]);
   }
 
+  // Saves straight away — no rating needed (logs the song as listened if it
+  // wasn't already). The rating/review draft is left as it is.
   async function handleFavorite() {
-    if (!song) return;
+    if (!song || favBusy) return;
+    setFavBusy(true);
     const ok = await setFavoriteSong(song, !isFavorite);
+    setFavBusy(false);
     if (!ok) Alert.alert("Couldn't update favourite", 'Check your connection and try again.');
   }
 
@@ -117,13 +123,7 @@ export function SongReviewModal({
                 <FontAwesome name="chevron-down" size={16} color={muted} />
               </Pressable>
               <Text style={[s.headerTitle, { color: colors.text }]}>{existing ? 'Your Review' : 'Rate & Review'}</Text>
-              {canFavorite ? (
-                <Pressable onPress={handleFavorite} hitSlop={12} accessibilityLabel={isFavorite ? 'Unmark favourite track' : 'Mark as favourite track'}>
-                  <Ionicons name={isFavorite ? 'trophy' : 'trophy-outline'} size={19} color={isFavorite ? accent : muted} />
-                </Pressable>
-              ) : (
-                <View style={{ width: 18 }} />
-              )}
+              <View style={{ width: 16 }} />
             </View>
 
             <ScrollView
@@ -149,6 +149,33 @@ export function SongReviewModal({
                   )}
                 </View>
               </View>
+
+              {/* Favourite — its own labelled row so it's clearly separate from rating */}
+              {canFavorite && (
+                <Pressable
+                  onPress={handleFavorite}
+                  disabled={favBusy}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: isFavorite }}
+                  style={[s.favRow, {
+                    backgroundColor: isFavorite ? `${accent}14` : fieldBg,
+                    borderColor:     isFavorite ? `${accent}55` : border,
+                  }]}>
+                  <Ionicons name={isFavorite ? 'trophy' : 'trophy-outline'} size={18} color={isFavorite ? accent : muted} />
+                  <View style={{ flex: 1, gap: 1 }}>
+                    <Text style={[s.favTitle, { color: colors.text }]}>Favourite track</Text>
+                    {!!song.albumTitle && (
+                      <Text style={[s.favSub, { color: muted }]} numberOfLines={1}>on {song.albumTitle}</Text>
+                    )}
+                  </View>
+                  <Switch
+                    value={isFavorite}
+                    onValueChange={handleFavorite}
+                    disabled={favBusy}
+                    trackColor={{ true: accent, false: undefined }}
+                  />
+                </Pressable>
+              )}
 
               {/* Your rating */}
               <Text style={[s.label, { color: muted }]}>YOUR RATING</Text>
@@ -194,6 +221,9 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 16, fontWeight: '700' },
   body: { padding: 20, paddingBottom: 48 },
+  favRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  favTitle: { fontSize: 15, fontWeight: '600' },
+  favSub: { fontSize: 12 },
   songRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   art: { width: 72, height: 72, borderRadius: 6 },
   songTitle: { fontSize: 18, fontWeight: '700' },

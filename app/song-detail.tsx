@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -57,7 +58,7 @@ export default function SongDetailScreen() {
     edit?: string;
   }>();
   const { user } = useAuth();
-  const { getSongReview } = useSongReviews();
+  const { getSongReview, setFavoriteSong } = useSongReviews();
 
   const [fetched, setFetched] = useState<{ albumId?: string; albumTitle?: string; artist?: string; releaseDate?: string } | null>(null);
   const [stats, setStats] = useState<SongRatingStats | undefined>(undefined);
@@ -68,6 +69,7 @@ export default function SongDetailScreen() {
   const [sending, setSending] = useState(false);
   const [openEntry, setOpenEntry] = useState<SongReviewEntry | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [favBusy, setFavBusy] = useState(false);
   const [me, setMe] = useState<{ username?: string; displayName?: string; avatarUrl?: string | null } | null>(null);
 
   useEffect(() => {
@@ -218,12 +220,32 @@ export default function SongDetailScreen() {
             </View>
           </View>
         ) : (
-          <Pressable
-            onPress={() => setEditing(true)}
-            style={({ pressed }) => [s.rateBtn, { opacity: pressed ? 0.85 : 1 }]}>
-            <FontAwesome name="headphones" size={16} color="#fff" />
-            <Text style={s.rateBtnText}>Rate & Review</Text>
-          </Pressable>
+          <View style={s.rateRow}>
+            <Pressable
+              onPress={() => setEditing(true)}
+              style={({ pressed }) => [s.rateBtn, { opacity: pressed ? 0.85 : 1 }]}>
+              <FontAwesome name="headphones" size={16} color="#fff" />
+              <Text style={s.rateBtnText}>Rate & Review</Text>
+            </Pressable>
+            {/* One tap, no rating: logs it as listened + the album's favourite. */}
+            {!!song.albumId && (
+              <Pressable
+                disabled={favBusy}
+                onPress={async () => {
+                  setFavBusy(true);
+                  const ok = await setFavoriteSong(song, true);
+                  setFavBusy(false);
+                  if (!ok) Alert.alert("Couldn't mark as favourite", 'Check your connection and try again.');
+                }}
+                accessibilityLabel={`Mark as favourite track${song.albumTitle ? ` on ${song.albumTitle}` : ''}`}
+                style={({ pressed }) => [s.favBtn, { opacity: favBusy ? 0.5 : pressed ? 0.7 : 1 }]}>
+                {favBusy
+                  ? <ActivityIndicator size="small" color={ACCENT} />
+                  : <Ionicons name="trophy-outline" size={16} color={ACCENT} />}
+                <Text style={s.favBtnText}>Favourite</Text>
+              </Pressable>
+            )}
+          </View>
         )}
         {mine?.review ? (
           <Pressable
@@ -346,7 +368,10 @@ const s = StyleSheet.create({
   youNum: { color: ACCENT, fontSize: 15, fontWeight: '800', marginRight: 6 },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: ACCENT, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
   editBtnText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
-  rateBtn: { marginTop: 22, width: '100%', height: 50, borderRadius: 12, backgroundColor: ACCENT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  rateRow: { flexDirection: 'row', gap: 10, marginTop: 22 },
+  rateBtn: { flex: 1, height: 50, borderRadius: 12, backgroundColor: ACCENT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  favBtn: { height: 50, borderRadius: 12, borderWidth: 1.5, borderColor: ACCENT, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  favBtnText: { color: ACCENT, fontSize: 16, fontWeight: '700' },
   rateBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   yourReview: { marginTop: 14, width: '100%', borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, gap: 6 },
   yourReviewLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
