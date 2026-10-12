@@ -53,7 +53,11 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onSon
   const muted    = colors.subtext;
   const border   = colors.border;
   const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
-  const handle   = handleOrName(entry.username, entry.displayName, entry.userId);
+  // Same as the album review card: always the @handle (display name for
+  // accounts that never picked one), yours included. '…' while the profile loads.
+  const handle   = entry.username || entry.displayName
+    ? handleOrName(entry.username, entry.displayName, entry.userId)
+    : '…';
   const date     = new Date(entry.listenedAt);
   const dateStr  = isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -115,11 +119,11 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onSon
               <ExpoImage source={{ uri: entry.avatarUrl }} style={s.avatar} contentFit="cover" cachePolicy="disk" />
             ) : (
               <View style={[s.avatar, { backgroundColor: avatarColor(entry.username || entry.userId), alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={s.avatarLetter}>{handle.replace(/^@/, '').charAt(0).toUpperCase() || '?'}</Text>
+                <Text style={s.avatarLetter}>{handle === '…' ? '?' : handle.replace(/^@/, '').charAt(0).toUpperCase() || '?'}</Text>
               </View>
             )}
             <View style={{ gap: 1 }}>
-              <Text style={[s.handle, { color: accent }]}>{isOwn ? 'Your review' : handle}</Text>
+              <Text style={[s.handle, { color: accent }]}>{handle}</Text>
               {dateStr ? <Text style={[s.date, { color: muted }]}>Listend {dateStr}</Text> : null}
             </View>
           </Pressable>
