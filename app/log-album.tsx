@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import { useAlbums } from '@/context/AlbumsContext';
@@ -403,7 +404,7 @@ export default function LogAlbumScreen() {
           ) : (
             <>
               <Text style={[styles.tracksHint, { color: colors.subtext }]}>
-                Tap or drag the bars to rate. Tap a track name to review it. ☆ marks your favourite.
+                Tap or drag the bars to rate. Tap a track name to review it. The trophy marks your favourite.
               </Text>
               {tracks!.map(t => {
                 const fav        = favoriteId === t.id;
@@ -436,7 +437,7 @@ export default function LogAlbumScreen() {
                         onPress={() => setFavoriteId(fav ? null : t.id)}
                         hitSlop={8}
                         accessibilityLabel={fav ? 'Unmark favourite track' : 'Mark as favourite track'}>
-                        <FontAwesome name={fav ? 'star' : 'star-o'} size={15} color={fav ? '#D4A017' : colors.subtext} />
+                        <Ionicons name={fav ? 'trophy' : 'trophy-outline'} size={16} color={fav ? '#D4A017' : colors.subtext} />
                       </Pressable>
                     </View>
                     {reviewOpen && (

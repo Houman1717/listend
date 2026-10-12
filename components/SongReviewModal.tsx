@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
 import { VolumeRatingPicker } from '@/components/VolumeRatingPicker';
@@ -157,7 +158,7 @@ export function SongReviewModal({
               <Text style={[s.headerTitle, { color: colors.text }]}>Song</Text>
               {canFavorite ? (
                 <Pressable onPress={handleFavorite} hitSlop={12} accessibilityLabel={isFavorite ? 'Unmark favourite track' : 'Mark as favourite track'}>
-                  <FontAwesome name={isFavorite ? 'star' : 'star-o'} size={18} color={isFavorite ? ACCENT : muted} />
+                  <Ionicons name={isFavorite ? 'trophy' : 'trophy-outline'} size={19} color={isFavorite ? ACCENT : muted} />
                 </Pressable>
               ) : (
                 <View style={{ width: 18 }} />
@@ -265,7 +266,7 @@ export function SongReviewModal({
                             <Text style={s.otherRatingNum}>{r.rating}</Text>
                           </View>
                         )}
-                        {r.isFavorite && <FontAwesome name="star" size={11} color={ACCENT} />}
+                        {r.isFavorite && <Ionicons name="trophy" size={12} color={ACCENT} />}
                       </Pressable>
                       {!!r.review && (
                         <Text style={[s.otherReview, { color: colors.text }]}>{r.review}</Text>

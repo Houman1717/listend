@@ -21,6 +21,7 @@ import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useState, useRef, useEffect } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
@@ -1987,7 +1988,7 @@ export default function AlbumDetailScreen() {
                       <Text style={[s.trackTitle, { color: colors.text }]} numberOfLines={1}>
                         {track.title}
                       </Text>
-                      {mine?.isFavorite && <FontAwesome name="star" size={11} color="#D4A017" />}
+                      {mine?.isFavorite && <Ionicons name="trophy" size={12} color="#D4A017" />}
                     </View>
                     {(track.featuredArtists.length > 0 || community) && (
                       <Text style={[s.trackFeat, { color: colors.subtext }]} numberOfLines={1}>

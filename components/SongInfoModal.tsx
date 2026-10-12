@@ -9,6 +9,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
@@ -216,7 +217,7 @@ export function SongInfoModal({
                   <FontAwesome name="volume-up" size={10} color="#D4A017" />
                   <VolumeBars rating={mine.rating} activeColor="#D4A017" inactiveColor={inactive} />
                   <Text style={s.rateStatNum}>{mine.rating}</Text>
-                  {mine.isFavorite && <FontAwesome name="star" size={11} color="#D4A017" />}
+                  {mine.isFavorite && <Ionicons name="trophy" size={12} color="#D4A017" />}
                 </View>
               ) : mine ? (
                 <Text style={[s.rateStatLabel, { color: subtext }]}>Listened</Text>
