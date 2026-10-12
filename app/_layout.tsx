@@ -18,6 +18,7 @@ import { navigateToReviewNotification } from '@/lib/navigateToReviewNotification
 import { useColorScheme } from '@/components/useColorScheme';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AlbumsProvider } from '@/context/AlbumsContext';
+import { SongReviewsProvider } from '@/context/SongReviewsContext';
 import { FlipProvider } from '@/context/FlipContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { NotificationsProvider } from '@/context/NotificationsContext';
@@ -315,6 +316,7 @@ function ThemedApp() {
     <ProProvider>
     <NotificationsProvider>
     <AlbumsProvider>
+    <SongReviewsProvider>
     <LikedArtistsProvider>
     <LikedFeaturedPlaylistsProvider>
     <FlipProvider>
@@ -393,6 +395,7 @@ function ThemedApp() {
     </FlipProvider>
     </LikedFeaturedPlaylistsProvider>
     </LikedArtistsProvider>
+    </SongReviewsProvider>
     </AlbumsProvider>
     </NotificationsProvider>
     </ProProvider>

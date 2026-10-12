@@ -38,6 +38,9 @@ import { fetchReviewComments, insertReviewComment, countReviewComments } from '@
 import { ProBadge } from '@/components/ProBadge';
 import { EditListenDateModal } from '@/components/EditListenDateModal';
 import { SendAlbumSheet } from '@/components/SendAlbumSheet';
+import { SongReviewModal } from '@/components/SongReviewModal';
+import { useSongReviews } from '@/context/SongReviewsContext';
+import { fetchSongCommunityRatings, withOwnRating, type SongMeta, type SongRatingStats } from '@/lib/songReviews';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -846,6 +849,9 @@ export default function AlbumDetailScreen() {
   const [editMode, setEditMode]         = useState(false);
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showSendSheet, setShowSendSheet] = useState(false);
+  const { getSongReview } = useSongReviews();
+  const [openSong, setOpenSong] = useState<SongMeta | null>(null);
+  const [trackStats, setTrackStats] = useState<Map<string, SongRatingStats>>(new Map());
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -1035,6 +1041,9 @@ export default function AlbumDetailScreen() {
       .then((data: Track[]) => {
         if (cancelled) return;
         setTracks(data);
+        fetchSongCommunityRatings(data.map(t => t.id)).then(m => {
+          if (!cancelled && m) setTrackStats(m);
+        });
         // Cache total duration so the Duration sort filter works.
         // Called unconditionally — updateDuration is a no-op if this album
         // isn't in loggedAlbums, and skips Supabase if the user isn't signed in.
@@ -1950,27 +1959,55 @@ export default function AlbumDetailScreen() {
               </Text>
             )}
           </View>
+          {tracks && tracks.length > 0 && !tracks.some(t => getSongReview(t.id)) && (
+            <Text style={[s.trackHint, { color: mutedText }]}>Tap a track to rate or review it</Text>
+          )}
           {tracksLoading ? (
             <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
           ) : tracks && tracks.length > 0 ? (
-            tracks.map(track => (
-              <View key={track.id} style={[s.trackRow, { borderBottomColor: borderColor }]}>
-                <Text style={[s.trackNumber, { color: mutedText }]}>{track.number}</Text>
-                <View style={s.trackInfo}>
-                  <Text style={[s.trackTitle, { color: colors.text }]} numberOfLines={1}>
-                    {track.title}
-                  </Text>
-                  {track.featuredArtists.length > 0 && (
-                    <Text style={[s.trackFeat, { color: colors.subtext }]} numberOfLines={1}>
-                      feat. {track.featuredArtists.join(', ')}
-                    </Text>
+            tracks.map(track => {
+              const mine      = getSongReview(track.id);
+              const community = withOwnRating(trackStats.get(track.id), mine?.rating);
+              return (
+                <Pressable
+                  key={track.id}
+                  onPress={() => setOpenSong({
+                    id:         track.id,
+                    title:      track.title,
+                    artist:     albumArtist,
+                    albumId,
+                    albumTitle,
+                    artworkUrl: albumArtwork || undefined,
+                    durationMs: track.durationMs,
+                  })}
+                  style={({ pressed }) => [s.trackRow, { borderBottomColor: borderColor, opacity: pressed ? 0.6 : 1 }]}>
+                  <Text style={[s.trackNumber, { color: mutedText }]}>{track.number}</Text>
+                  <View style={s.trackInfo}>
+                    <View style={s.trackTitleRow}>
+                      <Text style={[s.trackTitle, { color: colors.text }]} numberOfLines={1}>
+                        {track.title}
+                      </Text>
+                      {mine?.isFavorite && <FontAwesome name="star" size={11} color="#D4A017" />}
+                    </View>
+                    {(track.featuredArtists.length > 0 || community) && (
+                      <Text style={[s.trackFeat, { color: colors.subtext }]} numberOfLines={1}>
+                        {track.featuredArtists.length > 0 ? `feat. ${track.featuredArtists.join(', ')}` : ''}
+                        {track.featuredArtists.length > 0 && community ? '  ·  ' : ''}
+                        {community ? `avg ${community.avg.toFixed(1)} (${community.count})` : ''}
+                      </Text>
+                    )}
+                  </View>
+                  {mine && mine.rating > 0 && (
+                    <View style={s.trackMyRating}>
+                      <VolumeBadge rating={mine.rating} isDark={isDark} />
+                    </View>
                   )}
-                </View>
-                <Text style={[s.trackDuration, { color: colors.subtext }]}>
-                  {formatDuration(track.durationMs)}
-                </Text>
-              </View>
-            ))
+                  <Text style={[s.trackDuration, { color: colors.subtext }]}>
+                    {formatDuration(track.durationMs)}
+                  </Text>
+                </Pressable>
+              );
+            })
           ) : (
             <Text style={[s.emptyText, { color: mutedText }]}>No tracks available</Text>
           )}
@@ -2242,6 +2279,14 @@ export default function AlbumDetailScreen() {
         onClose={() => setShowSendSheet(false)}
       />
 
+      <SongReviewModal
+        song={openSong}
+        isDark={isDark}
+        colors={colors}
+        onClose={() => setOpenSong(null)}
+        onUserPress={(userId) => { setOpenSong(null); router.push({ pathname: '/user-profile', params: { userId } } as any); }}
+      />
+
       {showEditDateModal && loggedAlbum && (
         <EditListenDateModal
           album={loggedAlbum}
@@ -2427,7 +2472,10 @@ const s = StyleSheet.create({
   trackRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   trackNumber: { width: 24, fontSize: 13, textAlign: 'right', marginRight: 12 },
   trackInfo: { flex: 1, gap: 2 },
-  trackTitle: { fontSize: 14, fontWeight: '500' },
+  trackTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trackTitle: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
+  trackMyRating: { marginLeft: 10 },
+  trackHint: { fontSize: 12, marginBottom: 6 },
   trackFeat: { fontSize: 12 },
   trackDuration: { fontSize: 13, marginLeft: 12 },
   emptyText: { fontSize: 13, textAlign: 'center', paddingVertical: 16 },
