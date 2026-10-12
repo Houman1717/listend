@@ -245,7 +245,7 @@ export function SongInfoModal({
                 <Text style={[s.rateStatLabel, { color: subtext }]}>Listened</Text>
               ) : null}
               <Text style={[s.rateStatLabel, { color: subtext }]}>
-                {community ? `Listend avg ${community.avg.toFixed(1)} (${community.count})` : 'No ratings yet'}
+                {community ? `Listend avg ${community.avg.toFixed(1)}` : 'No ratings yet'}
               </Text>
             </View>
             {writtenReviews && writtenReviews.length > 0 && (
@@ -279,9 +279,7 @@ export function SongInfoModal({
                 ))}
                 <Pressable onPress={() => setReviewing(true)} hitSlop={6}>
                   <Text style={s.seeAll}>
-                    {writtenReviews.length > PREVIEW_REVIEWS
-                      ? `See all ${writtenReviews.length} reviews ›`
-                      : 'See reviews ›'}
+                    {writtenReviews.length > PREVIEW_REVIEWS ? 'See all reviews ›' : 'See reviews ›'}
                   </Text>
                 </Pressable>
               </View>

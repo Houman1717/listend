@@ -2021,14 +2021,9 @@ export default function AlbumDetailScreen() {
                         <Text style={[s.trackFeat, { color: colors.subtext, flexShrink: 1 }]} numberOfLines={1}>
                           {track.featuredArtists.length > 0 ? `feat. ${track.featuredArtists.join(', ')}` : ''}
                           {track.featuredArtists.length > 0 && community ? '  ·  ' : ''}
-                          {community ? `avg ${community.avg.toFixed(1)} (${community.count})` : ''}
+                          {community ? `avg ${community.avg.toFixed(1)}` : ''}
                         </Text>
-                        {reviewCount > 0 && (
-                          <View style={s.trackReviewCount}>
-                            <FontAwesome name="comment-o" size={11} color="#D4A017" />
-                            <Text style={s.trackReviewCountText}>{reviewCount}</Text>
-                          </View>
-                        )}
+                        {reviewCount > 0 && <FontAwesome name="quote-left" size={10} color="#D4A017" />}
                       </View>
                     )}
                   </View>
@@ -2515,8 +2510,6 @@ const s = StyleSheet.create({
   trackTitle: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
   trackMyRating: { marginLeft: 10 },
   trackMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  trackReviewCount: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  trackReviewCountText: { color: '#D4A017', fontSize: 12, fontWeight: '600' },
   trackHint: { fontSize: 12, marginBottom: 6 },
   trackFeat: { fontSize: 12 },
   trackDuration: { fontSize: 13, marginLeft: 12 },

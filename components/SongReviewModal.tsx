@@ -196,9 +196,7 @@ export function SongReviewModal({
                   {community ? community.avg.toFixed(1) : '–'}
                 </Text>
                 <Text style={[s.avgSub, { color: muted }]}>
-                  {community
-                    ? `Listend average · ${community.count} rating${community.count === 1 ? '' : 's'}`
-                    : 'No ratings yet — be the first'}
+                  {community ? 'Listend average' : 'No ratings yet — be the first'}
                 </Text>
               </View>
 
