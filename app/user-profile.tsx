@@ -509,6 +509,7 @@ export default function UserProfileScreen() {
   const [relistenLatest, setRelistenLatest] = useState<Map<string, { rating?: number; review?: string }>>(new Map());
   const [reviewCount,   setReviewCount]   = useState(0);
   const [wantCount,     setWantCount]     = useState<number | null>(null);
+  const [songCount,     setSongCount]     = useState<number | null>(null);
   const [loadError,     setLoadError]     = useState(false);
   const [reloadKey,     setReloadKey]     = useState(0);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
@@ -656,11 +657,15 @@ export default function UserProfileScreen() {
           }
         }
 
-        const want = countOrNull(await supabase
-          .from('want_to_listen')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', viewedUserId));
+        const [wantRes, songsRes] = await Promise.all([
+          supabase.from('want_to_listen').select('*', { count: 'exact', head: true }).eq('user_id', viewedUserId),
+          // Same rows their Songs page lists (rated, reviewed or just listened).
+          supabase.from('song_reviews').select('*', { count: 'exact', head: true }).eq('user_id', viewedUserId),
+        ]);
+        const want  = countOrNull(wantRes);
+        const songs = countOrNull(songsRes);
         if (want != null) setWantCount(want);
+        if (songs != null) setSongCount(songs);
 
       } catch (e) {
         console.error('[UserProfile] unexpected load error:', e);
@@ -1252,7 +1257,7 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="quote-left" label="Reviews"         sub={`${reviewCount} reviews`}       onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="play-circle-o" label="Songs"        sub="Rated songs"                    onPress={() => router.push({ pathname: '/my-songs',         params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
+            <NavRow icon="play-circle-o" label="Songs"        sub={`${displayCount(songCount)} songs`} onPress={() => router.push({ pathname: '/my-songs',         params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`}  onPress={() => router.push({ pathname: '/recent-activity',  params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
