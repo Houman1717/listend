@@ -12,8 +12,6 @@ import { handleOrName } from '@/lib/userHandle';
 import { reportContent } from '@/lib/reports';
 import type { SongMeta } from '@/lib/songReviews';
 
-const ACCENT = '#D4A017';
-
 export type SongReviewAuthor = {
   userId:       string;
   username?:    string | null;
@@ -50,8 +48,10 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onSon
   if (!entry) return null;
 
   const isOwn    = entry.userId === user?.id;
-  const muted    = isDark ? '#A08060' : '#6B4C35';
-  const border   = isDark ? '#2a1e14' : '#e5e5e5';
+  // All from the theme so pro themes recolour the card, not just its background.
+  const accent   = colors.tint;
+  const muted    = colors.subtext;
+  const border   = colors.border;
   const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   const handle   = handleOrName(entry.username, entry.displayName, entry.userId);
   const date     = new Date(entry.listenedAt);
@@ -67,7 +67,7 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onSon
           <Text style={[s.headerTitle, { color: colors.text }]}>Review</Text>
           {isOwn && onEdit ? (
             <Pressable onPress={onEdit} hitSlop={12}>
-              <Text style={s.editText}>Edit</Text>
+              <Text style={[s.editText, { color: accent }]}>Edit</Text>
             </Pressable>
           ) : !isOwn ? (
             <Pressable
@@ -119,7 +119,7 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onSon
               </View>
             )}
             <View style={{ gap: 1 }}>
-              <Text style={[s.handle, { color: ACCENT }]}>{isOwn ? 'Your review' : handle}</Text>
+              <Text style={[s.handle, { color: accent }]}>{isOwn ? 'Your review' : handle}</Text>
               {dateStr ? <Text style={[s.date, { color: muted }]}>Listend {dateStr}</Text> : null}
             </View>
           </Pressable>
@@ -127,15 +127,15 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onSon
           {/* Rating */}
           {entry.rating > 0 && (
             <View style={s.ratingRow}>
-              <FontAwesome name="volume-up" size={14} color={ACCENT} />
-              <VolumeBars rating={entry.rating} activeColor={ACCENT} inactiveColor={inactive} heights={[4, 5, 7, 8, 10, 11, 13, 14, 16, 18]} barWidth={3} gap={1.5} />
-              <Text style={s.ratingNum}>{entry.rating}</Text>
+              <FontAwesome name="volume-up" size={14} color={accent} />
+              <VolumeBars rating={entry.rating} activeColor={accent} inactiveColor={inactive} heights={[4, 5, 7, 8, 10, 11, 13, 14, 16, 18]} barWidth={3} gap={1.5} />
+              <Text style={[s.ratingNum, { color: accent }]}>{entry.rating}</Text>
               <Text style={[s.ratingLabel, { color: muted }]}>{RATING_LABELS[entry.rating]}</Text>
             </View>
           )}
           {entry.isFavorite && (
             <View style={s.favRow}>
-              <Ionicons name="trophy" size={13} color={ACCENT} />
+              <Ionicons name="trophy" size={13} color={accent} />
               <Text style={[s.favText, { color: muted }]}>
                 Favourite track{song.albumTitle ? ` on ${song.albumTitle}` : ''}
               </Text>
@@ -157,7 +157,7 @@ export function SongReviewDetailModal({ song, entry, onClose, onUserPress, onSon
 const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 16, fontWeight: '700' },
-  editText: { color: ACCENT, fontSize: 15, fontWeight: '600' },
+  editText: { fontSize: 15, fontWeight: '600' },
   body: { padding: 20, paddingBottom: 48 },
   songRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
   art: { width: 72, height: 72, borderRadius: 8 },
@@ -169,7 +169,7 @@ const s = StyleSheet.create({
   handle: { fontSize: 15, fontWeight: '700' },
   date: { fontSize: 12 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  ratingNum: { color: ACCENT, fontSize: 15, fontWeight: '800' },
+  ratingNum: { fontSize: 15, fontWeight: '800' },
   ratingLabel: { fontSize: 13, marginLeft: 4 },
   favRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   favText: { fontSize: 13 },

@@ -16,7 +16,7 @@ export const RATING_LABELS: Record<number, string> = {
 const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
 const ACCENT = '#D4A017';
 
-export function VolumeRatingPicker({ rating, onChange, isDark }: { rating: number; onChange: (r: number) => void; isDark: boolean }) {
+export function VolumeRatingPicker({ rating, onChange, isDark, tint = ACCENT }: { rating: number; onChange: (r: number) => void; isDark: boolean; tint?: string }) {
   const [trackWidth, setTrackWidth] = useState(0);
   const inactiveColor = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
 
@@ -39,20 +39,20 @@ export function VolumeRatingPicker({ rating, onChange, isDark }: { rating: numbe
   return (
     <View style={s.container}>
       <View style={s.row}>
-        <FontAwesome name="volume-up" size={22} color={rating > 0 ? ACCENT : inactiveColor} />
+        <FontAwesome name="volume-up" size={22} color={rating > 0 ? tint : inactiveColor} />
         <View style={{ flex: 1 }} onLayout={e => setTrackWidth(e.nativeEvent.layout.width)}>
           {trackWidth > 0 && (
             <GestureDetector gesture={gesture}>
               <View style={s.track}>
                 {BAR_HEIGHTS.map((h, i) => (
-                  <View key={i} style={[s.bar, { height: h, backgroundColor: i + 1 <= rating ? ACCENT : inactiveColor }]} />
+                  <View key={i} style={[s.bar, { height: h, backgroundColor: i + 1 <= rating ? tint : inactiveColor }]} />
                 ))}
               </View>
             </GestureDetector>
           )}
         </View>
         <View style={s.numBox}>
-          <Text style={[s.num, { color: rating > 0 ? ACCENT : inactiveColor }]}>
+          <Text style={[s.num, { color: rating > 0 ? tint : inactiveColor }]}>
             {rating > 0 ? rating : '–'}
           </Text>
         </View>

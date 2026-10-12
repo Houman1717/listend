@@ -24,7 +24,6 @@ import { useSongReviews } from '@/context/SongReviewsContext';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 import type { SongMeta } from '@/lib/songReviews';
 
-const ACCENT = '#D4A017';
 
 /**
  * Your own rating / review of a song, plus marking it as the album's
@@ -64,9 +63,10 @@ export function SongReviewModal({
 
   if (!song) return null;
 
-  const border    = isDark ? '#2a1e14' : '#e5e5e5';
-  const muted     = isDark ? '#A08060' : '#6B4C35';
-  const fieldBg   = isDark ? '#1c1410' : '#f5f5f5';
+  const accent    = colors.tint;
+  const border    = colors.border;
+  const muted     = colors.subtext;
+  const fieldBg   = colors.surface;
   const dirty     = !existing || rating !== existing.rating || reviewText.trim() !== (existing.review ?? '');
   const canFavorite = !!song.albumId;
   const isFavorite  = !!existing?.isFavorite;
@@ -119,7 +119,7 @@ export function SongReviewModal({
               <Text style={[s.headerTitle, { color: colors.text }]}>{existing ? 'Your Review' : 'Rate & Review'}</Text>
               {canFavorite ? (
                 <Pressable onPress={handleFavorite} hitSlop={12} accessibilityLabel={isFavorite ? 'Unmark favourite track' : 'Mark as favourite track'}>
-                  <Ionicons name={isFavorite ? 'trophy' : 'trophy-outline'} size={19} color={isFavorite ? ACCENT : muted} />
+                  <Ionicons name={isFavorite ? 'trophy' : 'trophy-outline'} size={19} color={isFavorite ? accent : muted} />
                 </Pressable>
               ) : (
                 <View style={{ width: 18 }} />
@@ -152,7 +152,7 @@ export function SongReviewModal({
 
               {/* Your rating */}
               <Text style={[s.label, { color: muted }]}>YOUR RATING</Text>
-              <VolumeRatingPicker rating={rating} onChange={setRating} isDark={isDark} />
+              <VolumeRatingPicker rating={rating} onChange={setRating} isDark={isDark} tint={accent} />
 
               {/* Your review */}
               <Text style={[s.label, { color: muted, marginTop: 18 }]}>YOUR REVIEW</Text>
@@ -170,7 +170,7 @@ export function SongReviewModal({
               <Pressable
                 onPress={handleSave}
                 disabled={saving || !dirty}
-                style={({ pressed }) => [s.saveBtn, { backgroundColor: ACCENT, opacity: saving || !dirty ? 0.5 : pressed ? 0.8 : 1 }]}>
+                style={({ pressed }) => [s.saveBtn, { backgroundColor: accent, opacity: saving || !dirty ? 0.5 : pressed ? 0.8 : 1 }]}>
                 {saving
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <Text style={s.saveText}>{existing ? 'Save' : rating > 0 || reviewText.trim() ? 'Log song' : 'Log as listened'}</Text>}

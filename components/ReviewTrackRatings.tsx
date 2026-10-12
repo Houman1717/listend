@@ -50,7 +50,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
   userId: string | null | undefined;
   album:  { id?: string; title: string; artist: string };
   isDark: boolean;
-  colors: { text: string; subtext: string; background?: string };
+  colors: { text: string; subtext: string; background?: string; tint?: string };
 }) {
   const { user } = useAuth();
   const { songReviews, songsLoaded } = useSongReviews();
@@ -109,6 +109,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
   const favorite = songs.find(s => s.isFavorite);
 
   const border   = isDark ? '#2a1e14' : '#ececec';
+  const accent   = colors.tint ?? ACCENT;
   const shown    = expanded ? songs : songs.slice(0, PREVIEW_COUNT);
 
   return (
@@ -116,7 +117,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
       <Text style={[s.label, { color: colors.subtext }]}>TRACK RATINGS</Text>
       {favorite && (
         <View style={s.favLine}>
-          <Ionicons name="trophy" size={13} color={ACCENT} />
+          <Ionicons name="trophy" size={13} color={accent} />
           <Text style={[s.favLabel, { color: colors.subtext }]}>Favourite track</Text>
           <Text style={[s.favTitle, { color: colors.text }]} numberOfLines={1}>{favorite.title}</Text>
         </View>
@@ -131,7 +132,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
             <Text style={[s.title, { color: colors.text, fontWeight: song.isFavorite ? '700' : '500' }]} numberOfLines={1}>
               {song.title}
             </Text>
-            {song.isFavorite && <Ionicons name="trophy" size={12} color={ACCENT} />}
+            {song.isFavorite && <Ionicons name="trophy" size={12} color={accent} />}
             {song.rating > 0 ? (
               <CompactRating value={song.rating} />
             ) : (
@@ -151,7 +152,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
             setExpanded(v => !v);
           }}
           style={({ pressed }) => [s.more, { opacity: pressed ? 0.6 : 1 }]}>
-          <Text style={s.moreText}>{expanded ? 'Show less' : `Show all ${songs.length} tracks`}</Text>
+          <Text style={[s.moreText, { color: accent }]}>{expanded ? 'Show less' : `Show all ${songs.length} tracks`}</Text>
         </Pressable>
       )}
       {openSong && userId && (
@@ -190,5 +191,5 @@ const s = StyleSheet.create({
   listened: { fontSize: 11 },
   review: { fontSize: 13, lineHeight: 18, fontStyle: 'italic', marginLeft: 26 },
   more: { alignSelf: 'flex-start', paddingTop: 10 },
-  moreText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
+  moreText: { fontSize: 13, fontWeight: '600' },
 });
