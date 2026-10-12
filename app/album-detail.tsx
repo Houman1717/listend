@@ -862,9 +862,9 @@ export default function AlbumDetailScreen() {
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showSendSheet, setShowSendSheet] = useState(false);
   const { getSongReview } = useSongReviews();
-  // Tracklist shows one set of ratings at a time: yours, or Listend's average.
-  // null = not chosen yet → yours if you've rated anything here, else Listend.
-  const [trackViewChoice, setTrackViewChoice] = useState<'mine' | 'listend' | null>(null);
+  // Tracklist shows one set of ratings at a time: Listend's averages (default)
+  // or yours.
+  const [trackView, setTrackView] = useState<'listend' | 'mine'>('listend');
   const [trackStats, setTrackStats] = useState<Map<string, SongRatingStats>>(new Map());
   const [trackReviewCounts, setTrackReviewCounts] = useState<Map<string, number>>(new Map());
   const [showAllReviews, setShowAllReviews] = useState(false);
@@ -936,9 +936,6 @@ export default function AlbumDetailScreen() {
   // Remote data
   const [tracks, setTracks]               = useState<Track[] | null>(null);
   const [tracksLoading, setTracksLoading] = useState(true);
-  const trackView: 'mine' | 'listend' =
-    trackViewChoice ?? (tracks?.some(t => getSongReview(t.id)) ? 'mine' : 'listend');
-
   // Coming back from a Song page: pick up ratings / reviews written there.
   const trackIdsKey = tracks?.map(t => t.id).join(',') ?? '';
   useFocusEffect(useCallback(() => {
@@ -946,7 +943,7 @@ export default function AlbumDetailScreen() {
     const ids = trackIdsKey.split(',');
     let cancelled = false;
     fetchSongCommunityRatings(ids).then(m => { if (!cancelled && m) setTrackStats(m); });
-    fetchSongReviewCounts(ids).then(m => { if (!cancelled && m) setTrackReviewCounts(m); });
+    fetchSongReviewCounts(ids, user?.id).then(m => { if (!cancelled && m) setTrackReviewCounts(m); });
     return () => { cancelled = true; };
   }, [trackIdsKey]));
 
@@ -1078,7 +1075,7 @@ export default function AlbumDetailScreen() {
         fetchSongCommunityRatings(data.map(t => t.id)).then(m => {
           if (!cancelled && m) setTrackStats(m);
         });
-        fetchSongReviewCounts(data.map(t => t.id)).then(m => {
+        fetchSongReviewCounts(data.map(t => t.id), user?.id).then(m => {
           if (!cancelled && m) setTrackReviewCounts(m);
         });
         // Cache total duration so the Duration sort filter works.
@@ -2004,12 +2001,12 @@ export default function AlbumDetailScreen() {
             </View>
             {tracks && tracks.length > 0 && (
               <View style={[s.trackToggle, { borderColor }]}>
-                {(['mine', 'listend'] as const).map(k => {
+                {(['listend', 'mine'] as const).map(k => {
                   const active = trackView === k;
                   return (
                     <Pressable
                       key={k}
-                      onPress={() => setTrackViewChoice(k)}
+                      onPress={() => setTrackView(k)}
                       style={[s.trackToggleBtn, active && { backgroundColor: '#D4A017' }]}>
                       <Text style={[s.trackToggleText, { color: active ? '#fff' : colors.subtext }]}>
                         {k === 'mine' ? 'Mine' : 'Listend'}
@@ -2029,6 +2026,7 @@ export default function AlbumDetailScreen() {
             tracks.map(track => {
               const mine      = getSongReview(track.id);
               const community = withOwnRating(trackStats.get(track.id), mine?.rating);
+              // Other people's written reviews only — your own doesn't earn the ❝.
               const hasReviews = (trackReviewCounts.get(track.id) ?? 0) > 0;
               const showMine  = trackView === 'mine';
               return (

@@ -186,10 +186,10 @@ function escapeLike(s: string): string {
 }
 
 /**
- * Number of written reviews per song (everyone the caller can see, including
- * themselves). Null on failure.
+ * Number of written reviews per song from everyone the caller can see, minus
+ * `excludeUserId` (pass your own id to count only other people). Null on failure.
  */
-export async function fetchSongReviewCounts(songIds: string[]): Promise<Map<string, number> | null> {
+export async function fetchSongReviewCounts(songIds: string[], excludeUserId?: string): Promise<Map<string, number> | null> {
   const ids = [...new Set(songIds.filter(Boolean))];
   const out = new Map<string, number>();
   if (ids.length === 0) return out;
@@ -197,7 +197,7 @@ export async function fetchSongReviewCounts(songIds: string[]): Promise<Map<stri
     ids,
     (chunk, from, to) => supabase
       .from('song_reviews')
-      .select('song_id')
+      .select('song_id, user_id')
       .in('song_id', chunk)
       .not('review', 'is', null)
       .neq('review', '')
@@ -205,6 +205,9 @@ export async function fetchSongReviewCounts(songIds: string[]): Promise<Map<stri
     5,
   );
   if (!rows) return null;
-  for (const r of rows) out.set(r.song_id, (out.get(r.song_id) ?? 0) + 1);
+  for (const r of rows) {
+    if (excludeUserId && r.user_id === excludeUserId) continue;
+    out.set(r.song_id, (out.get(r.song_id) ?? 0) + 1);
+  }
   return out;
 }
