@@ -102,7 +102,7 @@ export function SendAlbumSheet({ visible, album, song, isDark, colors, onClose }
     if (state === 'sending' || state === 'sent') return;
     setSendState(prev => ({ ...prev, [friend.id]: 'sending' }));
     const ok = song
-      ? await sendSongMessage(user.id, friend.id, song, getSongReview(song.id))
+      ? await sendSongMessage(user.id, friend.id, song, getSongReview(song))
       : await sendAlbumMessage(user.id, friend.id, album!, loggedAlbums);
     setSendState(prev => ({ ...prev, [friend.id]: ok ? 'sent' : 'failed' }));
   }

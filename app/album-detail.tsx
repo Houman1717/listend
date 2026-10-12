@@ -941,13 +941,13 @@ export default function AlbumDetailScreen() {
   // Coming back from a Song page: pick up ratings / reviews written there.
   const trackIdsKey = tracks?.map(t => t.id).join(',') ?? '';
   useFocusEffect(useCallback(() => {
-    if (!trackIdsKey) return;
-    const ids = trackIdsKey.split(',');
+    if (!tracks?.length) return;
+    const refs = tracks.map(t => ({ id: t.id, title: t.title, artist: albumArtist }));
     let cancelled = false;
-    fetchSongCommunityRatings(ids).then(m => { if (!cancelled && m) setTrackStats(m); });
-    fetchSongReviewCounts(ids, user?.id).then(m => { if (!cancelled && m) setTrackReviewCounts(m); });
+    fetchSongCommunityRatings(refs).then(m => { if (!cancelled && m) setTrackStats(m); });
+    fetchSongReviewCounts(refs, user?.id).then(m => { if (!cancelled && m) setTrackReviewCounts(m); });
     return () => { cancelled = true; };
-  }, [trackIdsKey]));
+  }, [trackIdsKey, albumArtist]));
 
   // Edit mode's optional "Rate the tracks" section (same as Log Album).
   const trackDraft = useTrackRatingsDraft(
@@ -1074,10 +1074,11 @@ export default function AlbumDetailScreen() {
       .then((data: Track[]) => {
         if (cancelled) return;
         setTracks(data);
-        fetchSongCommunityRatings(data.map(t => t.id)).then(m => {
+        const refs = data.map(t => ({ id: t.id, title: t.title, artist: albumArtist }));
+        fetchSongCommunityRatings(refs).then(m => {
           if (!cancelled && m) setTrackStats(m);
         });
-        fetchSongReviewCounts(data.map(t => t.id), user?.id).then(m => {
+        fetchSongReviewCounts(refs, user?.id).then(m => {
           if (!cancelled && m) setTrackReviewCounts(m);
         });
         // Cache total duration so the Duration sort filter works.
@@ -2029,14 +2030,14 @@ export default function AlbumDetailScreen() {
               </View>
             )}
           </View>
-          {tracks && tracks.length > 0 && trackView === 'mine' && !tracks.some(t => getSongReview(t.id)) && (
+          {tracks && tracks.length > 0 && trackView === 'mine' && !tracks.some(t => getSongReview({ id: t.id, title: t.title, artist: albumArtist })) && (
             <Text style={[s.trackHint, { color: mutedText }]}>Tap a track to rate or review it</Text>
           )}
           {tracksLoading ? (
             <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
           ) : tracks && tracks.length > 0 ? (
             tracks.map(track => {
-              const mine      = getSongReview(track.id);
+              const mine      = getSongReview({ id: track.id, title: track.title, artist: albumArtist });
               const average   = withOwnRating(trackStats.get(track.id), mine?.rating);
               const community = average?.revealed ? average : null;
               // Other people's written reviews only — your own doesn't earn the ❝.

@@ -458,7 +458,7 @@ export default function DMConversationScreen() {
                   senderRating={item.album_data.sender_rating}
                   senderReview={item.album_data.sender_review}
                   // Only your own rating is known locally for songs.
-                  myLoggedEntry={!isMe ? getSongReview(item.album_data.id) : undefined}
+                  myLoggedEntry={!isMe ? getSongReview(item.album_data) : undefined}
                   onPress={() => {
                     const sd = item.album_data!;
                     openSongPage(router, {

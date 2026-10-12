@@ -4,6 +4,20 @@
 
 import { supabase } from '@/lib/supabase';
 import { fetchAllRowsIn, rowsOrNull } from '@/lib/supabaseQuery';
+import { fetchBlockedIds } from '@/lib/blocks';
+
+/**
+ * Groups versions of the same song (the single and the album track have
+ * different Apple Music ids): title without "(feat. …)" credits + artist,
+ * lower-cased. Must match public.song_key() in supabase/add-song-keys.sql.
+ */
+export function songKey(title: string, artist: string): string {
+  const t = (title ?? '').replace(/\s*[\(\[](feat|ft|with)\.?\s[^\)\]]*[\)\]]/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const a = (artist ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return `${t}|${a}`;
+}
+
+type SongRef = { id: string; title: string; artist: string };
 
 export type SongReview = {
   songId:      string;
@@ -65,21 +79,29 @@ export const SONG_MIN_RATINGS = 5;
 
 /**
  * Community rating sum/count per song, excluding the caller (combine with the
- * user's own rating via `withOwnRating`). Returns null if the request failed —
+ * user's own rating via `withOwnRating`), pooled across versions of the same
+ * song. Keyed by the song ids passed in. Returns null if the request failed —
  * an empty Map is a real "nobody has rated these".
  */
-export async function fetchSongCommunityRatings(songIds: string[]): Promise<Map<string, SongRatingStats> | null> {
+export async function fetchSongCommunityRatings(songs: SongRef[]): Promise<Map<string, SongRatingStats> | null> {
   const out = new Map<string, SongRatingStats>();
-  const ids = [...new Set(songIds.filter(Boolean))];
-  if (ids.length === 0) return out;
-  for (let i = 0; i < ids.length; i += 300) {
-    const { data, error } = await supabase.rpc('song_community_ratings', { p_song_ids: ids.slice(i, i + 300) });
+  const idsByKey = new Map<string, string[]>();
+  for (const s of songs) {
+    if (!s.id) continue;
+    const k = songKey(s.title, s.artist);
+    const list = idsByKey.get(k);
+    if (list) list.push(s.id); else idsByKey.set(k, [s.id]);
+  }
+  const keys = [...idsByKey.keys()];
+  for (let i = 0; i < keys.length; i += 300) {
+    const { data, error } = await supabase.rpc('song_community_ratings_by_key', { p_keys: keys.slice(i, i + 300) });
     if (error) {
       console.warn('[songReviews] community ratings error:', error.message);
       return null;
     }
     for (const r of (data ?? []) as any[]) {
-      out.set(r.song_id, { sum: Number(r.rating_sum) || 0, count: Number(r.rating_count) || 0 });
+      const stats = { sum: Number(r.rating_sum) || 0, count: Number(r.rating_count) || 0 };
+      for (const id of idsByKey.get(r.song_key) ?? []) out.set(id, stats);
     }
   }
   return out;
@@ -100,19 +122,28 @@ export function withOwnRating(stats: SongRatingStats | undefined, ownRating: num
 
 /**
  * Other users' reviews of a song (rated or written), newest first, with
- * profile info. Returns null on failure.
+ * profile info — across every version of the song, one per person. Leaves out
+ * the viewer and anyone they've blocked or been blocked by. Null on failure.
  */
-export async function fetchCommunitySongReviews(songId: string, excludeUserId?: string): Promise<CommunitySongReview[] | null> {
+export async function fetchCommunitySongReviews(song: SongRef, viewerId?: string): Promise<CommunitySongReview[] | null> {
   let q = supabase
     .from('song_reviews')
     .select(`user_id, ${SONG_REVIEW_COLUMNS}`)
-    .eq('song_id', songId)
+    .eq('song_key', songKey(song.title, song.artist))
     .or('rating.gt.0,review.neq.')
     .order('listened_at', { ascending: false })
     .limit(200);
-  if (excludeUserId) q = q.neq('user_id', excludeUserId);
-  const rows = rowsOrNull(await q);
-  if (!rows) return null;
+  if (viewerId) q = q.neq('user_id', viewerId);
+  const [res, blocked] = await Promise.all([q, fetchBlockedIds(viewerId)]);
+  const all = rowsOrNull(res);
+  if (!all) return null;
+  // Newest first, so the first row per person is their latest version.
+  const seen = new Set<string>();
+  const rows = all.filter((r: any) => {
+    if (blocked.has(r.user_id) || seen.has(r.user_id)) return false;
+    seen.add(r.user_id);
+    return true;
+  });
   if (rows.length === 0) return [];
 
   const userIds = [...new Set(rows.map((r: any) => r.user_id as string))];
@@ -193,28 +224,44 @@ function escapeLike(s: string): string {
 }
 
 /**
- * Number of written reviews per song from everyone the caller can see, minus
- * `excludeUserId` (pass your own id to count only other people). Null on failure.
+ * Number of people with a written review per song (any version), keyed by the
+ * song ids passed in. Leaves out the viewer and anyone blocked either way.
+ * Null on failure.
  */
-export async function fetchSongReviewCounts(songIds: string[], excludeUserId?: string): Promise<Map<string, number> | null> {
-  const ids = [...new Set(songIds.filter(Boolean))];
+export async function fetchSongReviewCounts(songs: SongRef[], viewerId?: string): Promise<Map<string, number> | null> {
   const out = new Map<string, number>();
-  if (ids.length === 0) return out;
-  const rows = await fetchAllRowsIn<any>(
-    ids,
-    (chunk, from, to) => supabase
-      .from('song_reviews')
-      .select('song_id, user_id')
-      .in('song_id', chunk)
-      .not('review', 'is', null)
-      .neq('review', '')
-      .range(from, to),
-    5,
-  );
+  const idsByKey = new Map<string, string[]>();
+  for (const s of songs) {
+    if (!s.id) continue;
+    const k = songKey(s.title, s.artist);
+    const list = idsByKey.get(k);
+    if (list) list.push(s.id); else idsByKey.set(k, [s.id]);
+  }
+  if (idsByKey.size === 0) return out;
+  const [rows, blocked] = await Promise.all([
+    fetchAllRowsIn<any>(
+      [...idsByKey.keys()],
+      (chunk, from, to) => supabase
+        .from('song_reviews')
+        .select('song_key, user_id')
+        .in('song_key', chunk)
+        .not('review', 'is', null)
+        .neq('review', '')
+        .range(from, to),
+      5,
+    ),
+    fetchBlockedIds(viewerId),
+  ]);
   if (!rows) return null;
+  const people = new Map<string, Set<string>>();
   for (const r of rows) {
-    if (excludeUserId && r.user_id === excludeUserId) continue;
-    out.set(r.song_id, (out.get(r.song_id) ?? 0) + 1);
+    if (r.user_id === viewerId || blocked.has(r.user_id)) continue;
+    const set = people.get(r.song_key) ?? new Set<string>();
+    set.add(r.user_id);
+    people.set(r.song_key, set);
+  }
+  for (const [k, set] of people) {
+    for (const id of idsByKey.get(k) ?? []) out.set(id, set.size);
   }
   return out;
 }

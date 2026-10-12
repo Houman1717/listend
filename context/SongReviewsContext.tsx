@@ -2,25 +2,44 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/supabaseQuery';
-import { SONG_REVIEW_COLUMNS, rowToSongReview, type SongMeta, type SongReview } from '@/lib/songReviews';
+import { SONG_REVIEW_COLUMNS, rowToSongReview, songKey, type SongMeta, type SongReview } from '@/lib/songReviews';
 
 type SaveInput = {
   song:    SongMeta;
   rating:  number;
   review?: string;
+  /** Move an existing log of another version of this song onto this one. */
+  preferThisVersion?: boolean;
 };
+
+/** A song id, or a song we can also match by title + artist (any version). */
+type SongRef = string | { id: string; title: string; artist: string };
+
+/**
+ * A log that came from a single / EP rather than the album: when the same song
+ * is later logged from its album, the log moves to the album version.
+ */
+function isWeakVersion(s: { title: string; albumId?: string; albumTitle?: string }): boolean {
+  if (!s.albumId || !s.albumTitle) return true;
+  const album = s.albumTitle.trim().toLowerCase();
+  return / - (single|ep)$/.test(album) || album === s.title.trim().toLowerCase();
+}
 
 type SongReviewsContextType = {
   /** The user's logged songs, newest listen first. Empty until loaded. */
   songReviews: SongReview[];
   /** False until the first successful load — don't treat [] as "none" before then. */
   songsLoaded: boolean;
-  getSongReview: (songId: string) => SongReview | undefined;
+  /**
+   * Your log of a song. Pass the song (not just its id) to also find a log of
+   * another version of it — the single vs the album track.
+   */
+  getSongReview: (song: SongRef) => SongReview | undefined;
   /** The user's logged songs on one album. */
   songsForAlbum: (albumId: string) => SongReview[];
   /** Log/update a song. Editing keeps the original listened_at. Returns false on failure. */
   saveSongReview: (input: SaveInput) => Promise<boolean>;
-  removeSongReview: (songId: string) => Promise<boolean>;
+  removeSongReview: (song: SongRef) => Promise<boolean>;
   /** Mark (or unmark) a song as the favourite on its album. Logs the song if needed. */
   setFavoriteSong: (song: SongMeta, on: boolean) => Promise<boolean>;
   refreshSongReviews: () => Promise<void>;
@@ -40,7 +59,14 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
     listRef.current = typeof next === 'function' ? next(listRef.current) : next;
     setSongReviewsState(listRef.current);
   }
-  const findSong = (songId: string) => listRef.current.find(s => s.songId === songId);
+  // By id first, then any version of the same song.
+  const findSong = (ref: SongRef) => {
+    const id = typeof ref === 'string' ? ref : ref.id;
+    const hit = listRef.current.find(s => s.songId === id);
+    if (hit || typeof ref === 'string') return hit;
+    const key = songKey(ref.title, ref.artist);
+    return listRef.current.find(s => songKey(s.title, s.artist) === key);
+  };
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -65,44 +91,68 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
     if (user) load();
   }, [user?.id]);
 
-  const byId = useMemo(() => new Map(songReviews.map(s => [s.songId, s])), [songReviews]);
+  const byId  = useMemo(() => new Map(songReviews.map(s => [s.songId, s])), [songReviews]);
+  const byKey = useMemo(() => {
+    const m = new Map<string, SongReview>();
+    for (const s of songReviews) {
+      const k = songKey(s.title, s.artist);
+      if (!m.has(k)) m.set(k, s); // newest first → keep the latest
+    }
+    return m;
+  }, [songReviews]);
 
-  const getSongReview = useCallback((songId: string) => byId.get(songId), [byId]);
+  const getSongReview = useCallback((ref: SongRef) => {
+    if (typeof ref === 'string') return byId.get(ref);
+    return byId.get(ref.id) ?? byKey.get(songKey(ref.title, ref.artist));
+  }, [byId, byKey]);
 
   const songsForAlbum = useCallback(
     (albumId: string) => songReviews.filter(s => s.albumId === albumId),
     [songReviews],
   );
 
-  async function saveSongReview({ song, rating, review }: SaveInput): Promise<boolean> {
+  async function saveSongReview({ song, rating, review, preferThisVersion }: SaveInput): Promise<boolean> {
     if (!user) return false;
-    const existing = findSong(song.id);
+    const existing = findSong(song);
     const trimmed  = review?.trim() || undefined;
     const listenedAt = existing?.listenedAt ?? new Date().toISOString();
 
+    // Already logged as another version of this song: keep one log per song.
+    // It moves to this version when this one is the album track (or asked
+    // to); otherwise the existing version's details stay.
+    const otherVersion = !!existing && existing.songId !== song.id;
+    const moveHere = !otherVersion
+      || (!!song.albumId && (preferThisVersion || (isWeakVersion(existing!) && !isWeakVersion(song))));
+    const base = moveHere ? song : {
+      id: existing!.songId, title: existing!.title, artist: existing!.artist, albumId: existing!.albumId,
+      albumTitle: existing!.albumTitle, artworkUrl: existing!.artworkUrl, durationMs: existing!.durationMs,
+    };
+    const albumChanged = !!existing && (base.albumId ?? existing.albumId) !== existing.albumId;
+
     const next: SongReview = {
-      songId:     song.id,
-      title:      song.title,
-      artist:     song.artist,
-      albumId:    song.albumId ?? existing?.albumId,
-      albumTitle: song.albumTitle ?? existing?.albumTitle,
-      artworkUrl: song.artworkUrl ?? existing?.artworkUrl,
-      durationMs: song.durationMs ?? existing?.durationMs,
+      songId:     base.id,
+      title:      base.title,
+      artist:     base.artist,
+      albumId:    base.albumId ?? existing?.albumId,
+      albumTitle: base.albumTitle ?? existing?.albumTitle,
+      artworkUrl: base.artworkUrl ?? existing?.artworkUrl,
+      durationMs: base.durationMs ?? existing?.durationMs,
       rating,
       review:     trimmed,
-      isFavorite: existing?.isFavorite ?? false,
+      // A favourite belongs to an album; moving albums drops it.
+      isFavorite: albumChanged ? false : (existing?.isFavorite ?? false),
       listenedAt,
     };
 
     // Optimistic
     setSongReviews(prev => existing
-      ? prev.map(s => s.songId === song.id ? next : s)
+      ? prev.map(s => s.songId === existing.songId ? next : s)
       : [next, ...prev]);
 
     // listened_at is only sent for a new row, so editing never bumps it.
     const payload: Record<string, any> = {
       user_id:     user.id,
-      song_id:     song.id,
+      song_id:     next.songId,
       title:       next.title,
       artist:      next.artist,
       album_id:    next.albumId ?? null,
@@ -114,24 +164,27 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
       updated_at:  new Date().toISOString(),
     };
     if (!existing) payload.listened_at = listenedAt;
+    if (albumChanged) payload.is_favorite = false;
 
-    const { error } = await supabase
-      .from('song_reviews')
-      .upsert(payload, { onConflict: 'user_id,song_id' });
+    // Moving to another version rewrites song_id, which an upsert can't do.
+    const { error } = existing && existing.songId !== next.songId
+      ? await supabase.from('song_reviews').update(payload).eq('user_id', user.id).eq('song_id', existing.songId)
+      : await supabase.from('song_reviews').upsert(payload, { onConflict: 'user_id,song_id' });
     if (error) {
       console.error('[SongReviews] save error:', error.message);
       setSongReviews(prev => existing
-        ? prev.map(s => s.songId === song.id ? existing : s)
-        : prev.filter(s => s.songId !== song.id));
+        ? prev.map(s => s.songId === next.songId ? existing : s)
+        : prev.filter(s => s.songId !== next.songId));
       return false;
     }
     return true;
   }
 
-  async function removeSongReview(songId: string): Promise<boolean> {
+  async function removeSongReview(ref: SongRef): Promise<boolean> {
     if (!user) return false;
-    const existing = findSong(songId);
+    const existing = findSong(ref);
     if (!existing) return true;
+    const songId = existing.songId;
     setSongReviews(prev => prev.filter(s => s.songId !== songId));
     const { error } = await supabase
       .from('song_reviews')
@@ -149,22 +202,28 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
   async function setFavoriteSong(song: SongMeta, on: boolean): Promise<boolean> {
     if (!user || !song.albumId) return false;
     const albumId = song.albumId;
-    if (!findSong(song.id)) {
+    const row = findSong(song);
+    if (!row) {
       if (!on) return true;
       const ok = await saveSongReview({ song, rating: 0 });
       if (!ok) return false;
+    } else if (row.songId !== song.id && on) {
+      // Logged as another version (e.g. the single): move it onto this album's track.
+      const ok = await saveSongReview({ song, rating: row.rating, review: row.review, preferThisVersion: true });
+      if (!ok) return false;
     }
+    const songId = findSong(song)?.songId ?? song.id;
 
     const before = listRef.current;
     setSongReviews(prev => prev.map(s => {
-      if (s.songId === song.id) return { ...s, isFavorite: on };
+      if (s.songId === songId) return { ...s, isFavorite: on };
       if (on && s.albumId === albumId && s.isFavorite) return { ...s, isFavorite: false };
       return s;
     }));
 
     const { error } = await supabase.rpc('set_favorite_song', {
       p_album_id: albumId,
-      p_song_id:  song.id,
+      p_song_id:  songId,
       p_on:       on,
     });
     if (error) {

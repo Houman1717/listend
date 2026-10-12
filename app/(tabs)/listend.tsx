@@ -1283,7 +1283,7 @@ export default function ListendScreen() {
   // A Top 5 song you've rated opens your review card (like an album in My
   // Listend); one you haven't goes straight to its Song page.
   function openTopSong(song: { id: string; title: string; artist: string; artworkUrl: string; releaseDate?: string }) {
-    const mine = getSongReview(song.id);
+    const mine = getSongReview(song);
     if (mine) { setCardSong(mine); return; }
     openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
   }

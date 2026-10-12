@@ -128,7 +128,7 @@ export default function MySongsScreen() {
     if (!COMMUNITY_SORTS.has(sortKey)) return;
     if (source.length === 0 || statsForCount.current === source.length) return;
     statsForCount.current = source.length;
-    fetchSongCommunityRatings(source.map(x => x.songId)).then(m => {
+    fetchSongCommunityRatings(source.map(x => ({ id: x.songId, title: x.title, artist: x.artist }))).then(m => {
       if (m) setStats(m); else statsForCount.current = -1;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps

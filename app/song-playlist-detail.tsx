@@ -204,7 +204,7 @@ export default function SongPlaylistDetailScreen() {
           </Text>
         }
         renderItem={({ item, index }) => {
-          const mine = getSongReview(item.id);
+          const mine = getSongReview(item);
           return (
             <Pressable
               onPress={() => !editing && openSongPage(router, {

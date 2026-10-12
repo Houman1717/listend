@@ -1029,7 +1029,7 @@ export default function SearchScreen() {
                   item={item}
                   isDark={isDark}
                   colors={colors}
-                  myRating={getSongReview(item.id)?.rating}
+                  myRating={getSongReview(item)?.rating}
                   onSaveRecent={() => saveRecentItem(item)}
                   onPress={() => openSongPage(router, { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl })}
                 />

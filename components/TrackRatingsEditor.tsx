@@ -67,7 +67,7 @@ export function useTrackRatingsDraft(album: TrackAlbum | null, preloadedTracks?:
     const rv: Record<string, string> = {};
     let fav: string | null = null;
     for (const t of list) {
-      const saved = getSongReview(t.id);
+      const saved = getSongReview(meta(t));
       if (saved) r[t.id] = saved.rating;
       if (saved?.review) rv[t.id] = saved.review;
       if (saved?.isFavorite) fav = t.id;
@@ -108,7 +108,7 @@ export function useTrackRatingsDraft(album: TrackAlbum | null, preloadedTracks?:
     if (!tracks || !album || seededFor !== tracks) return true;
     const writes: Promise<boolean>[] = [];
     for (const t of tracks) {
-      const existing   = getSongReview(t.id);
+      const existing   = getSongReview(meta(t));
       const next       = ratings[t.id] ?? 0;
       const nextReview = (reviews[t.id] ?? '').trim();
       const changed = existing
@@ -117,7 +117,7 @@ export function useTrackRatingsDraft(album: TrackAlbum | null, preloadedTracks?:
       if (changed) writes.push(saveSongReview({ song: meta(t), rating: next, review: nextReview }));
     }
     const results = await Promise.all(writes);
-    const prevFav = tracks.find(t => getSongReview(t.id)?.isFavorite)?.id ?? null;
+    const prevFav = tracks.find(t => getSongReview(meta(t))?.isFavorite)?.id ?? null;
     if (favoriteId !== prevFav) {
       const target = tracks.find(x => x.id === (favoriteId ?? prevFav));
       if (target) results.push(await setFavoriteSong(meta(target), !!favoriteId));

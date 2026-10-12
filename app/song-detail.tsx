@@ -88,7 +88,8 @@ export default function SongDetailScreen() {
     durationMs: params.durationMs ? Number(params.durationMs) : undefined,
   };
   const releaseDate = params.releaseDate || fetched?.releaseDate || '';
-  const mine = getSongReview(params.id);
+  // Your log of this song — this version or another one (single vs album).
+  const mine = getSongReview({ id: params.id, title: params.title ?? '', artist: params.artist || fetched?.artist || '' });
 
   // Fill in album / artist / date the caller didn't have.
   useEffect(() => {
@@ -109,14 +110,15 @@ export default function SongDetailScreen() {
     if (!params.id) return;
     let cancelled = false;
     setReviewsFailed(false);
-    fetchSongCommunityRatings([params.id]).then(m => { if (!cancelled && m) setStats(m.get(params.id)); });
-    fetchCommunitySongReviews(params.id).then(list => {
+    const ref = { id: params.id, title: song.title, artist: song.artist };
+    fetchSongCommunityRatings([ref]).then(m => { if (!cancelled && m) setStats(m.get(params.id)); });
+    fetchCommunitySongReviews(ref, user?.id).then(list => {
       if (cancelled) return;
-      if (list) setReviews(list.filter(r => !!r.review && r.userId !== user?.id));
+      if (list) setReviews(list.filter(r => !!r.review));
       else setReviewsFailed(true);
     });
     return () => { cancelled = true; };
-  }, [params.id, refreshTick, user?.id]);
+  }, [params.id, song.artist, refreshTick, user?.id]);
 
   const community = withOwnRating(stats, mine?.rating);
   const inactive  = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;

@@ -47,7 +47,7 @@ export function SongReviewModal({
   const insets = useSafeAreaInsets();
   const keyboardHeight = useAndroidKeyboardHeight();
 
-  const existing = song ? getSongReview(song.id) : undefined;
+  const existing = song ? getSongReview(song) : undefined;
 
   const [rating,     setRating]     = useState(0);
   const [reviewText, setReviewText] = useState('');
@@ -56,7 +56,7 @@ export function SongReviewModal({
   // Reset the form whenever a different song opens.
   useEffect(() => {
     if (!song) return;
-    const r = getSongReview(song.id);
+    const r = getSongReview(song);
     setRating(r?.rating ?? 0);
     setReviewText(r?.review ?? '');
     setSaving(false);
@@ -89,7 +89,7 @@ export function SongReviewModal({
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          const ok = await removeSongReview(song.id);
+          const ok = await removeSongReview(song);
           if (ok) onClose();
           else Alert.alert("Couldn't remove", 'Check your connection and try again.');
         },

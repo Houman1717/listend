@@ -21,7 +21,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SongReviewCard } from '@/components/SongReviewCard';
-import { SONG_REVIEW_COLUMNS, rowToSongReview, type SongReview } from '@/lib/songReviews';
+import { SONG_REVIEW_COLUMNS, rowToSongReview, songKey, type SongReview } from '@/lib/songReviews';
 import { countOrNull, displayCount, fetchAllRows } from '@/lib/supabaseQuery';
 import { openSongPage } from '@/lib/openSong';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -455,13 +455,15 @@ export default function UserProfileScreen() {
   const [cardSong, setCardSong] = useState<SongReview | null>(null);
   async function openTopSong(song: { id: string; title: string; artist: string; artworkUrl: string; releaseDate?: string }) {
     if (viewedUserId) {
+      // Any version of the song (single vs album track) counts.
       const { data } = await supabase
         .from('song_reviews')
         .select(SONG_REVIEW_COLUMNS)
         .eq('user_id', viewedUserId)
-        .eq('song_id', song.id)
-        .maybeSingle();
-      if (data) { setCardSong(rowToSongReview(data)); return; }
+        .eq('song_key', songKey(song.title, song.artist))
+        .order('listened_at', { ascending: false })
+        .limit(1);
+      if (data?.[0]) { setCardSong(rowToSongReview(data[0])); return; }
     }
     openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
   }
