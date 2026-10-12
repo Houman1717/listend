@@ -23,7 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchPlaylistAlbums, fetchMosaicArtwork } from '@/lib/playlistArtwork';
 import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
-import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { openSongPage } from '@/lib/openSong';
 import { ProBadge } from '@/components/ProBadge';
 import { fetchMembers, rankMembers, memberQuery } from '@/lib/memberSearch';
 
@@ -566,7 +566,6 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
-  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -753,7 +752,7 @@ export default function SearchScreen() {
       return;
     }
     if (item.kind === 'song') {
-      setActiveSong({ id: item.id, title: item.title, artist: item.albumArtist ?? '', artworkUrl: item.artworkUrl });
+      openSongPage(router, { id: item.id, title: item.title, artist: item.albumArtist ?? '', artworkUrl: item.artworkUrl });
       return;
     }
     if (item.kind === 'artist') {
@@ -821,13 +820,6 @@ export default function SearchScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
-      <SongInfoModal
-        song={activeSong}
-        onClose={() => setActiveSong(null)}
-        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-        onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
-        onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } })}
-      />
 
       {/* Search bar */}
       <View style={[s.searchBar, {
@@ -1041,7 +1033,7 @@ export default function SearchScreen() {
                   colors={colors}
                   myRating={getSongReview(item.id)?.rating}
                   onSaveRecent={() => saveRecentItem(item)}
-                  onPress={() => setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl })}
+                  onPress={() => openSongPage(router, { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl })}
                 />
               );
             }

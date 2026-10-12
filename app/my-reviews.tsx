@@ -41,7 +41,7 @@ import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { SongReviewsTab } from '@/components/SongReviewsTab';
-import { SongReviewModal } from '@/components/SongReviewModal';
+import { openSongPage } from '@/lib/openSong';
 import type { SongReview } from '@/lib/songReviews';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
@@ -414,7 +414,6 @@ export default function MyReviewsScreen() {
 
   const viewingOther = paramUserId || null;
   const [activeTab, setActiveTab]         = useState<'reviews' | 'songs' | 'liked'>('reviews');
-  const [openSong, setOpenSong]           = useState<SongReview | null>(null);
   const [query, setQuery]                 = useState('');
   const [searchOpen, setSearchOpen]       = useState(false);
   const searchInputRef = useRef<import('react-native').TextInput>(null);
@@ -1044,23 +1043,13 @@ export default function MyReviewsScreen() {
 
       {/* ── Song reviews tab ─────────────────────────────────────────────── */}
       {activeTab === 'songs' && (
-        <SongReviewsTab viewingUserId={viewingOther} colors={colors} isDark={isDark} onOpen={setOpenSong} />
+        <SongReviewsTab
+          viewingUserId={viewingOther}
+          colors={colors}
+          isDark={isDark}
+          onOpen={x => openSongPage(router, { id: x.songId, title: x.title, artist: x.artist, artworkUrl: x.artworkUrl, albumId: x.albumId, albumTitle: x.albumTitle, durationMs: x.durationMs })}
+        />
       )}
-      <SongReviewModal
-        song={openSong ? {
-          id:         openSong.songId,
-          title:      openSong.title,
-          artist:     openSong.artist,
-          albumId:    openSong.albumId,
-          albumTitle: openSong.albumTitle,
-          artworkUrl: openSong.artworkUrl,
-          durationMs: openSong.durationMs,
-        } : null}
-        isDark={isDark}
-        colors={colors}
-        onClose={() => setOpenSong(null)}
-        onUserPress={(userId) => { setOpenSong(null); router.push({ pathname: '/user-profile', params: { userId } }); }}
-      />
 
       {/* ── Liked Reviews tab ────────────────────────────────────────────── */}
       {activeTab === 'liked' && searchOpenLiked && (

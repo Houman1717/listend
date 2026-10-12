@@ -17,9 +17,9 @@ import {
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -40,7 +40,7 @@ import { fetchReviewComments, insertReviewComment, countReviewComments } from '@
 import { ProBadge } from '@/components/ProBadge';
 import { EditListenDateModal } from '@/components/EditListenDateModal';
 import { SendAlbumSheet } from '@/components/SendAlbumSheet';
-import { SongReviewModal } from '@/components/SongReviewModal';
+import { openSongPage } from '@/lib/openSong';
 import { TrackRatingsEditor, useTrackRatingsDraft } from '@/components/TrackRatingsEditor';
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { parseReviewTargetId } from '@/lib/reviewTargets';
@@ -862,7 +862,9 @@ export default function AlbumDetailScreen() {
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showSendSheet, setShowSendSheet] = useState(false);
   const { getSongReview } = useSongReviews();
-  const [openSong, setOpenSong] = useState<SongMeta | null>(null);
+  // Tracklist shows one set of ratings at a time: yours, or Listend's average.
+  // null = not chosen yet → yours if you've rated anything here, else Listend.
+  const [trackViewChoice, setTrackViewChoice] = useState<'mine' | 'listend' | null>(null);
   const [trackStats, setTrackStats] = useState<Map<string, SongRatingStats>>(new Map());
   const [trackReviewCounts, setTrackReviewCounts] = useState<Map<string, number>>(new Map());
   const [showAllReviews, setShowAllReviews] = useState(false);
@@ -934,6 +936,20 @@ export default function AlbumDetailScreen() {
   // Remote data
   const [tracks, setTracks]               = useState<Track[] | null>(null);
   const [tracksLoading, setTracksLoading] = useState(true);
+  const trackView: 'mine' | 'listend' =
+    trackViewChoice ?? (tracks?.some(t => getSongReview(t.id)) ? 'mine' : 'listend');
+
+  // Coming back from a Song page: pick up ratings / reviews written there.
+  const trackIdsKey = tracks?.map(t => t.id).join(',') ?? '';
+  useFocusEffect(useCallback(() => {
+    if (!trackIdsKey) return;
+    const ids = trackIdsKey.split(',');
+    let cancelled = false;
+    fetchSongCommunityRatings(ids).then(m => { if (!cancelled && m) setTrackStats(m); });
+    fetchSongReviewCounts(ids).then(m => { if (!cancelled && m) setTrackReviewCounts(m); });
+    return () => { cancelled = true; };
+  }, [trackIdsKey]));
+
   // Edit mode's optional "Rate the tracks" section (same as Log Album).
   const trackDraft = useTrackRatingsDraft(
     albumId ? { id: albumId, title: albumTitle, artist: albumArtist, artworkUrl: albumArtwork || undefined } : null,
@@ -1978,14 +1994,33 @@ export default function AlbumDetailScreen() {
         {/* ── 7. Tracklist ──────────────────────────────────────────────────── */}
         <View style={[s.section, { backgroundColor: sectionBg, borderColor }]}>
           <View style={s.tracklistHeader}>
-            <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 0 }]}>Tracklist</Text>
+            <View>
+              <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0, marginBottom: 0 }]}>Tracklist</Text>
+              {tracks && tracks.length > 0 && (
+                <Text style={[s.runtimeText, { color: colors.subtext, marginTop: 3 }]}>
+                  {tracks.length} tracks · {formatRuntime(tracks.reduce((sum, t) => sum + t.durationMs, 0))}
+                </Text>
+              )}
+            </View>
             {tracks && tracks.length > 0 && (
-              <Text style={[s.runtimeText, { color: colors.subtext }]}>
-                {tracks.length} tracks · {formatRuntime(tracks.reduce((sum, t) => sum + t.durationMs, 0))}
-              </Text>
+              <View style={[s.trackToggle, { borderColor }]}>
+                {(['mine', 'listend'] as const).map(k => {
+                  const active = trackView === k;
+                  return (
+                    <Pressable
+                      key={k}
+                      onPress={() => setTrackViewChoice(k)}
+                      style={[s.trackToggleBtn, active && { backgroundColor: '#D4A017' }]}>
+                      <Text style={[s.trackToggleText, { color: active ? '#fff' : colors.subtext }]}>
+                        {k === 'mine' ? 'Mine' : 'Listend'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             )}
           </View>
-          {tracks && tracks.length > 0 && !tracks.some(t => getSongReview(t.id)) && (
+          {tracks && tracks.length > 0 && trackView === 'mine' && !tracks.some(t => getSongReview(t.id)) && (
             <Text style={[s.trackHint, { color: mutedText }]}>Tap a track to rate or review it</Text>
           )}
           {tracksLoading ? (
@@ -1994,12 +2029,12 @@ export default function AlbumDetailScreen() {
             tracks.map(track => {
               const mine      = getSongReview(track.id);
               const community = withOwnRating(trackStats.get(track.id), mine?.rating);
-              // Includes your own review; re-fetched when the song sheet closes.
-              const reviewCount = trackReviewCounts.get(track.id) ?? 0;
+              const hasReviews = (trackReviewCounts.get(track.id) ?? 0) > 0;
+              const showMine  = trackView === 'mine';
               return (
                 <Pressable
                   key={track.id}
-                  onPress={() => setOpenSong({
+                  onPress={() => openSongPage(router, {
                     id:         track.id,
                     title:      track.title,
                     artist:     albumArtist,
@@ -2015,24 +2050,27 @@ export default function AlbumDetailScreen() {
                       <Text style={[s.trackTitle, { color: colors.text }]} numberOfLines={1}>
                         {track.title}
                       </Text>
-                      {mine?.isFavorite && <Ionicons name="trophy" size={12} color="#D4A017" />}
+                      {showMine && mine?.isFavorite && <Ionicons name="trophy" size={12} color="#D4A017" />}
+                      {!showMine && hasReviews && <FontAwesome name="quote-left" size={10} color="#D4A017" />}
                     </View>
-                    {(track.featuredArtists.length > 0 || community || reviewCount > 0) && (
-                      <View style={s.trackMetaRow}>
-                        {track.featuredArtists.length > 0 && (
-                          <Text style={[s.trackFeat, { color: colors.subtext, flexShrink: 1 }]} numberOfLines={1}>
-                            feat. {track.featuredArtists.join(', ')}
-                          </Text>
-                        )}
-                        {community && <AverageVolume avg={community.avg} isDark={isDark} />}
-                        {reviewCount > 0 && <FontAwesome name="quote-left" size={10} color="#D4A017" />}
-                      </View>
+                    {track.featuredArtists.length > 0 && (
+                      <Text style={[s.trackFeat, { color: colors.subtext }]} numberOfLines={1}>
+                        feat. {track.featuredArtists.join(', ')}
+                      </Text>
                     )}
                   </View>
-                  {mine && mine.rating > 0 && (
-                    <View style={s.trackMyRating}>
-                      <VolumeBadge rating={mine.rating} isDark={isDark} />
-                    </View>
+                  {showMine ? (
+                    mine && mine.rating > 0 && (
+                      <View style={s.trackMyRating}>
+                        <VolumeBadge rating={mine.rating} isDark={isDark} />
+                      </View>
+                    )
+                  ) : (
+                    community && (
+                      <View style={s.trackMyRating}>
+                        <AverageVolume avg={community.avg} isDark={isDark} />
+                      </View>
+                    )
                   )}
                   <Text style={[s.trackDuration, { color: colors.subtext }]}>
                     {formatDuration(track.durationMs)}
@@ -2311,17 +2349,6 @@ export default function AlbumDetailScreen() {
         onClose={() => setShowSendSheet(false)}
       />
 
-      <SongReviewModal
-        song={openSong}
-        isDark={isDark}
-        colors={colors}
-        onClose={() => {
-          setOpenSong(null);
-          // Pick up a review you just wrote or removed.
-          if (tracks?.length) fetchSongReviewCounts(tracks.map(t => t.id)).then(m => { if (m) setTrackReviewCounts(m); });
-        }}
-        onUserPress={(userId) => { setOpenSong(null); router.push({ pathname: '/user-profile', params: { userId } } as any); }}
-      />
 
       {showEditDateModal && loggedAlbum && (
         <EditListenDateModal
@@ -2511,7 +2538,9 @@ const s = StyleSheet.create({
   trackTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   trackTitle: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
   trackMyRating: { marginLeft: 10 },
-  trackMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trackToggle: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, padding: 2 },
+  trackToggleBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
+  trackToggleText: { fontSize: 12, fontWeight: '700' },
   trackHint: { fontSize: 12, marginBottom: 6 },
   trackFeat: { fontSize: 12 },
   trackDuration: { fontSize: 13, marginLeft: 12 },

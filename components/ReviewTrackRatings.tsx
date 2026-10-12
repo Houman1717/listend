@@ -7,6 +7,8 @@ import VolumeBars from '@/components/VolumeBars';
 import { useAuth } from '@/context/AuthContext';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchUserAlbumSongReviews, songsMatchingAlbum, type SongReview } from '@/lib/songReviews';
+import { supabase } from '@/lib/supabase';
+import { SongReviewDetailModal, type SongReviewAuthor } from '@/components/SongReviewDetailModal';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const ACCENT = '#D4A017';
@@ -49,7 +51,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
   userId: string | null | undefined;
   album:  { id?: string; title: string; artist: string };
   isDark: boolean;
-  colors: { text: string; subtext: string };
+  colors: { text: string; subtext: string; background?: string };
 }) {
   const { user } = useAuth();
   const { songReviews, songsLoaded } = useSongReviews();
@@ -57,6 +59,20 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
   const [fetched, setFetched] = useState<SongReview[] | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [positions, setPositions] = useState<Map<string, TrackPos> | null>(null);
+  const [openSong, setOpenSong] = useState<SongReview | null>(null);
+  const [author, setAuthor] = useState<SongReviewAuthor | null>(null);
+
+  // The reviewer's name/avatar, for the single-review page.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    supabase.from('profiles').select('username, display_name, avatar_url').eq('id', userId).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setAuthor({ userId, username: (data as any).username, displayName: (data as any).display_name, avatarUrl: (data as any).avatar_url });
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   // Your own reviews come from context so edits show up straight away.
   useEffect(() => {
@@ -108,7 +124,10 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
         </View>
       )}
       {shown.map(song => (
-        <View key={song.songId} style={[s.row, { borderBottomColor: border }]}>
+        <Pressable
+          key={song.songId}
+          onPress={() => setOpenSong(song)}
+          style={({ pressed }) => [s.row, { borderBottomColor: border, opacity: pressed ? 0.6 : 1 }]}>
           <View style={s.head}>
             <Text style={[s.num, { color: colors.subtext }]}>{positions?.get(song.songId)?.number ?? '·'}</Text>
             <Text style={[s.title, { color: colors.text, fontWeight: song.isFavorite ? '700' : '500' }]} numberOfLines={1}>
@@ -126,9 +145,9 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
             )}
           </View>
           {!!song.review && (
-            <Text style={[s.review, { color: colors.subtext }]}>"{song.review}"</Text>
+            <Text style={[s.review, { color: colors.subtext }]} numberOfLines={2}>"{song.review}"</Text>
           )}
-        </View>
+        </Pressable>
       ))}
       {songs.length > PREVIEW_COUNT && (
         <Pressable
@@ -140,6 +159,25 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
           style={({ pressed }) => [s.more, { opacity: pressed ? 0.6 : 1 }]}>
           <Text style={s.moreText}>{expanded ? 'Show less' : `Show all ${songs.length} tracks`}</Text>
         </Pressable>
+      )}
+      {openSong && userId && (
+        <SongReviewDetailModal
+          song={{
+            id: openSong.songId, title: openSong.title, artist: openSong.artist,
+            albumId: openSong.albumId, albumTitle: openSong.albumTitle, artworkUrl: openSong.artworkUrl,
+          }}
+          entry={{
+            ...(author ?? { userId }),
+            rating: openSong.rating,
+            review: openSong.review,
+            isFavorite: openSong.isFavorite,
+            listenedAt: openSong.listenedAt,
+          }}
+          isDark={isDark}
+          // Full theme when the caller passed one, otherwise the default palette.
+          colors={colors.background ? colors : undefined}
+          onClose={() => setOpenSong(null)}
+        />
       )}
     </View>
   );

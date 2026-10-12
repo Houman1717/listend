@@ -21,7 +21,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { countOrNull, displayCount, fetchAllRows } from '@/lib/supabaseQuery';
-import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { openSongPage } from '@/lib/openSong';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
@@ -467,7 +467,6 @@ export default function UserProfileScreen() {
   const [draftTopSongs,   setDraftTopSongs]   = useState<FavSong[]>([]);
   const [draftTopArtists, setDraftTopArtists] = useState<FavArtist[]>([]);
   const [slotPicker, setSlotPicker] = useState<{ type: 'album' | 'song' | 'artist'; index: number } | null>(null);
-  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   const [isFollowing,    setIsFollowing]    = useState(false);
   // Pending follow request to a private account — the follow only exists once
@@ -928,14 +927,6 @@ export default function UserProfileScreen() {
 
   return (
     <>
-    <SongInfoModal
-      song={activeSong}
-      onClose={() => setActiveSong(null)}
-      onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-      onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
-      onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } } as any)}
-      colors={(profile?.is_pro && profile.pro_theme && profile.pro_theme !== 'default') ? colors : undefined}
-    />
     <ScrollView
       style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.content}
@@ -1196,7 +1187,7 @@ export default function UserProfileScreen() {
                     colors={colors}
                     onSongPress={i => {
                       const sg = profile.top_songs[i];
-                      if (sg) setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate });
+                      if (sg) openSongPage(router, { id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate });
                     }}
                     onAddPress={isOwnProfile ? () => {
                     handleEnterEditMode();
@@ -1220,7 +1211,7 @@ export default function UserProfileScreen() {
                         <FavSlotReadOnly
                           key={i}
                           item={sg ? { artworkUrl: sg.artworkUrl, title: sg.title } : undefined}
-                          onPress={sg ? () => setActiveSong({ id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
+                          onPress={sg ? () => openSongPage(router, { id: sg.id, title: sg.title, artist: sg.artist, artworkUrl: sg.artworkUrl, releaseDate: sg.releaseDate }) : undefined}
                           colors={colors}
                         />
                       );

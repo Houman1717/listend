@@ -18,48 +18,31 @@ import { Image as ExpoImage } from 'expo-image';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
-import VolumeBars from '@/components/VolumeBars';
-import { AverageVolume } from '@/components/AverageVolume';
+import Colors from '@/constants/Colors';
 import { VolumeRatingPicker } from '@/components/VolumeRatingPicker';
-import { avatarColor } from '@/components/ReviewComments';
-import { useAuth } from '@/context/AuthContext';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
-import { handleOrName } from '@/lib/userHandle';
-import {
-  fetchCommunitySongReviews,
-  fetchSongCommunityRatings,
-  withOwnRating,
-  type CommunitySongReview,
-  type SongMeta,
-  type SongRatingStats,
-} from '@/lib/songReviews';
+import type { SongMeta } from '@/lib/songReviews';
 
 const ACCENT = '#D4A017';
 
 /**
- * Rate / review a single song, mark it as the album's favourite, and read what
- * other users wrote. Opening it never logs anything — only Save does.
- *
- * Lives in a <Modal>, so navigation goes through callbacks (useRouter inside a
- * Modal silently fails).
+ * Your own rating / review of a song, plus marking it as the album's
+ * favourite. Opening it never logs anything — only Save does. Other people's
+ * reviews live on the Song page, not here.
  */
 export function SongReviewModal({
   song,
   onClose,
   isDark,
   colors: colorsProp,
-  onUserPress,
 }: {
-  song:         SongMeta | null;
-  onClose:      () => void;
-  isDark:       boolean;
-  colors?:      any;
-  onUserPress?: (userId: string) => void;
+  song:    SongMeta | null;
+  onClose: () => void;
+  isDark:  boolean;
+  colors?: any;
 }) {
   const colors = colorsProp ?? Colors[isDark ? 'dark' : 'light'];
-  const { user } = useAuth();
   const { getSongReview, saveSongReview, removeSongReview, setFavoriteSong } = useSongReviews();
   const insets = useSafeAreaInsets();
   const keyboardHeight = useAndroidKeyboardHeight();
@@ -69,9 +52,6 @@ export function SongReviewModal({
   const [rating,     setRating]     = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [saving,     setSaving]     = useState(false);
-  const [stats,      setStats]      = useState<SongRatingStats | undefined>(undefined);
-  const [others,     setOthers]     = useState<CommunitySongReview[] | null>(null);
-  const [othersFailed, setOthersFailed] = useState(false);
 
   // Reset the form whenever a different song opens.
   useEffect(() => {
@@ -82,31 +62,11 @@ export function SongReviewModal({
     setSaving(false);
   }, [song?.id]);
 
-  useEffect(() => {
-    if (!song) return;
-    let cancelled = false;
-    setStats(undefined);
-    setOthers(null);
-    setOthersFailed(false);
-    fetchSongCommunityRatings([song.id]).then(m => {
-      if (!cancelled && m) setStats(m.get(song.id));
-    });
-    fetchCommunitySongReviews(song.id, user?.id).then(list => {
-      if (cancelled) return;
-      if (list) setOthers(list);
-      else setOthersFailed(true);
-    });
-    return () => { cancelled = true; };
-  }, [song?.id, user?.id]);
-
   if (!song) return null;
 
   const border    = isDark ? '#2a1e14' : '#e5e5e5';
   const muted     = isDark ? '#A08060' : '#6B4C35';
-  const inactive  = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   const fieldBg   = isDark ? '#1c1410' : '#f5f5f5';
-  // Community average with the in-progress rating folded in, so it moves as you rate.
-  const community = withOwnRating(stats, rating);
   const dirty     = !existing || rating !== existing.rating || reviewText.trim() !== (existing.review ?? '');
   const canFavorite = !!song.albumId;
   const isFavorite  = !!existing?.isFavorite;
@@ -156,7 +116,7 @@ export function SongReviewModal({
               <Pressable onPress={onClose} hitSlop={12}>
                 <FontAwesome name="chevron-down" size={16} color={muted} />
               </Pressable>
-              <Text style={[s.headerTitle, { color: colors.text }]}>Song</Text>
+              <Text style={[s.headerTitle, { color: colors.text }]}>{existing ? 'Your Review' : 'Rate & Review'}</Text>
               {canFavorite ? (
                 <Pressable onPress={handleFavorite} hitSlop={12} accessibilityLabel={isFavorite ? 'Unmark favourite track' : 'Mark as favourite track'}>
                   <Ionicons name={isFavorite ? 'trophy' : 'trophy-outline'} size={19} color={isFavorite ? ACCENT : muted} />
@@ -188,21 +148,6 @@ export function SongReviewModal({
                     <Text style={[s.songAlbum, { color: muted }]} numberOfLines={1}>{song.albumTitle}</Text>
                   )}
                 </View>
-              </View>
-
-              {/* Community average */}
-              <View style={[s.avgRow, { borderColor: border }]}>
-                {community ? (
-                  <>
-                    <AverageVolume avg={community.avg} isDark={isDark} size="md" numberColor={colors.text} />
-                    <Text style={[s.avgSub, { color: muted }]}>Listend average</Text>
-                  </>
-                ) : (
-                  <>
-                    <FontAwesome name="volume-up" size={12} color={inactive} />
-                    <Text style={[s.avgSub, { color: muted }]}>No ratings yet — be the first</Text>
-                  </>
-                )}
               </View>
 
               {/* Your rating */}
@@ -237,47 +182,6 @@ export function SongReviewModal({
                 </Pressable>
               )}
 
-              {/* What others said */}
-              <Text style={[s.label, { color: muted, marginTop: 28 }]}>WHAT OTHERS SAID</Text>
-              {others === null && !othersFailed ? (
-                <ActivityIndicator size="small" color={ACCENT} style={{ marginVertical: 16 }} />
-              ) : othersFailed ? (
-                <Text style={[s.empty, { color: muted }]}>Couldn't load reviews. Try again in a moment.</Text>
-              ) : others && others.length === 0 ? (
-                <Text style={[s.empty, { color: muted }]}>Nobody else has rated this song yet.</Text>
-              ) : (
-                others!.map(r => {
-                  const handle = handleOrName(r.username, r.displayName, r.userId);
-                  return (
-                    <View key={r.userId} style={[s.otherRow, { borderBottomColor: border }]}>
-                      <Pressable
-                        onPress={() => onUserPress?.(r.userId)}
-                        disabled={!onUserPress}
-                        style={s.otherHead}>
-                        {r.avatarUrl ? (
-                          <ExpoImage source={{ uri: r.avatarUrl }} style={s.avatar} contentFit="cover" cachePolicy="disk" />
-                        ) : (
-                          <View style={[s.avatar, { backgroundColor: avatarColor(r.username || r.userId), alignItems: 'center', justifyContent: 'center' }]}>
-                            <Text style={s.avatarInitial}>{(r.username || r.displayName || '?').charAt(0).toUpperCase()}</Text>
-                          </View>
-                        )}
-                        <Text style={[s.otherName, { color: colors.text }]} numberOfLines={1}>{handle}</Text>
-                        {r.rating > 0 && (
-                          <View style={s.otherRating}>
-                            <FontAwesome name="volume-up" size={10} color={ACCENT} />
-                            <VolumeBars rating={r.rating} activeColor={ACCENT} inactiveColor={inactive} />
-                            <Text style={s.otherRatingNum}>{r.rating}</Text>
-                          </View>
-                        )}
-                        {r.isFavorite && <Ionicons name="trophy" size={12} color={ACCENT} />}
-                      </Pressable>
-                      {!!r.review && (
-                        <Text style={[s.otherReview, { color: colors.text }]}>{r.review}</Text>
-                      )}
-                    </View>
-                  );
-                })
-              )}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -295,22 +199,10 @@ const s = StyleSheet.create({
   songTitle: { fontSize: 18, fontWeight: '700' },
   songArtist: { fontSize: 14 },
   songAlbum: { fontSize: 12 },
-  avgRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
-  avgText: { fontSize: 15, fontWeight: '700' },
-  avgSub: { fontSize: 12, flexShrink: 1 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 20 },
   input: { minHeight: 100, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 12, fontSize: 15, marginTop: 8 },
   saveBtn: { height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   saveText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   removeBtn: { alignSelf: 'center', marginTop: 14, paddingVertical: 4 },
   removeText: { fontSize: 13 },
-  empty: { fontSize: 14, marginTop: 10 },
-  otherRow: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, gap: 6 },
-  otherHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar: { width: 26, height: 26, borderRadius: 13 },
-  avatarInitial: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  otherName: { fontSize: 14, fontWeight: '600', flexShrink: 1 },
-  otherRating: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  otherRatingNum: { color: ACCENT, fontSize: 10, fontWeight: '700' },
-  otherReview: { fontSize: 14, lineHeight: 20 },
 });

@@ -11,23 +11,27 @@ const snap = (dp: number) => Math.max(1, Math.round(dp * PixelRatio.get())) / Pi
 const SIZES = {
   sm: { heights: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12], bar: 2,   gap: 1,   icon: 10, font: 11 },
   md: { heights: [4, 5, 7, 8, 10, 11, 13, 14, 16, 18], bar: 3, gap: 1.5, icon: 13, font: 15 },
+  lg: { heights: [8, 12, 16, 20, 24, 30, 35, 41, 46, 51], bar: 0, gap: 4, icon: 18, font: 15 },
 } as const;
 
-export function AverageVolume({ avg, isDark, size = 'sm', color = '#D4A017', numberColor }: {
+export function AverageVolume({ avg, isDark, size = 'sm', color = '#D4A017', numberColor, showNumber = true }: {
   avg: number;
   isDark: boolean;
+  /** lg stretches its bars to fill the row, like the album page's Ratings block. */
   size?: keyof typeof SIZES;
   color?: string;
   numberColor?: string;
+  showNumber?: boolean;
 }) {
+  const stretch = size === 'lg';
   const cfg = SIZES[size];
   const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   const full = Math.floor(avg);
   const frac = avg - full;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+    <View style={{ flexDirection: 'row', alignItems: stretch ? 'flex-end' : 'center', gap: stretch ? 10 : 4, flex: stretch ? 1 : undefined }}>
       <FontAwesome name="volume-up" size={cfg.icon} color={color} />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: snap(cfg.gap) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: snap(cfg.gap), flex: stretch ? 1 : undefined }}>
         {cfg.heights.map((h, i) => {
           const isFull = i + 1 <= full;
           const isPartial = i === full && frac > 0;
@@ -35,9 +39,9 @@ export function AverageVolume({ avg, isDark, size = 'sm', color = '#D4A017', num
             <View
               key={i}
               style={{
-                width: snap(cfg.bar),
+                ...(stretch ? { flex: 1 } : { width: snap(cfg.bar) }),
                 height: snap(h),
-                borderRadius: 1,
+                borderRadius: stretch ? 2 : 1,
                 backgroundColor: isFull || isPartial ? color : inactive,
                 opacity: isPartial ? Math.max(0.25, frac) : 1,
               }}
@@ -45,7 +49,9 @@ export function AverageVolume({ avg, isDark, size = 'sm', color = '#D4A017', num
           );
         })}
       </View>
-      <Text style={{ color: numberColor ?? color, fontSize: cfg.font, fontWeight: '700' }}>{avg.toFixed(1)}</Text>
+      {showNumber && (
+        <Text style={{ color: numberColor ?? color, fontSize: cfg.font, fontWeight: '700' }}>{avg.toFixed(1)}</Text>
+      )}
     </View>
   );
 }

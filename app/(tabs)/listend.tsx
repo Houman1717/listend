@@ -32,7 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { useSongReviews } from '@/context/SongReviewsContext';
-import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { openSongPage } from '@/lib/openSong';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { LoggedAlbum } from '@/context/AlbumsContext';
 
@@ -1133,7 +1133,6 @@ export default function ListendScreen() {
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [top5EditMode, setTop5EditMode] = useState(false);
-  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
   const [selectedTopAlbum, setSelectedTopAlbum] = useState<LoggedAlbum | null>(null);
 
   // Profile data — re-fetched each time the tab comes into focus
@@ -1297,14 +1296,6 @@ export default function ListendScreen() {
 
   return (
     <>
-    <SongInfoModal
-      song={activeSong}
-      onClose={() => setActiveSong(null)}
-      onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-      onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
-      onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } } as any)}
-      colors={(isPro && proTheme !== 'default') ? colors : undefined}
-    />
     <ScrollView
       style={[s.container, { backgroundColor: colors.background }]}
       contentContainerStyle={s.content}
@@ -1428,7 +1419,7 @@ export default function ListendScreen() {
             colors={colors}
             onSongPress={i => {
               const song = topSongs[i];
-              if (song) setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+              if (song) openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
             }}
             onAddPress={() => {
               // Land back in edit mode so the other four slots are ready to fill
@@ -1452,7 +1443,7 @@ export default function ListendScreen() {
               if (top5EditMode) {
                 if (!song) router.push({ pathname: '/pick-item', params: { type: 'song', slotIndex: String(i) } });
               } else {
-                if (song) setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
+                if (song) openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
               }
             }}
           />

@@ -19,7 +19,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useAuth } from '@/context/AuthContext';
 import { useSongPlaylists } from '@/context/SongPlaylistsContext';
 import { useSongReviews } from '@/context/SongReviewsContext';
-import { SongInfoModal, type SongInfo } from '@/components/SongInfoModal';
+import { openSongPage } from '@/lib/openSong';
 import { SongPlaylistMosaic } from '@/components/SongPlaylistsTab';
 import PlaylistFormModal from '@/components/PlaylistFormModal';
 import { supabase } from '@/lib/supabase';
@@ -57,7 +57,6 @@ export default function SongPlaylistDetailScreen() {
   const [ownerHandle, setOwnerHandle] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
-  const [openSong, setOpenSong] = useState<SongInfo | null>(null);
 
   // Not one of ours (or ours haven't loaded yet) → fetch it directly.
   useEffect(() => {
@@ -209,7 +208,7 @@ export default function SongPlaylistDetailScreen() {
           const mine = getSongReview(item.id);
           return (
             <Pressable
-              onPress={() => !editing && setOpenSong({
+              onPress={() => !editing && openSongPage(router, {
                 id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl,
                 albumId: item.albumId, albumTitle: item.albumTitle,
               })}
@@ -258,14 +257,6 @@ export default function SongPlaylistDetailScreen() {
         }}
       />
 
-      <SongInfoModal
-        song={openSong}
-        colors={colors}
-        onClose={() => setOpenSong(null)}
-        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-        onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
-        onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } })}
-      />
 
       {isOwner && (
         <PlaylistFormModal

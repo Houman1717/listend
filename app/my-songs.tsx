@@ -19,7 +19,7 @@ import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { SortBar, SortSheet, applySort, SortKey, COMMUNITY_SORTS } from '@/components/SortSheet';
-import { SongReviewModal } from '@/components/SongReviewModal';
+import { openSongPage } from '@/lib/openSong';
 import { fetchSongCommunityRatings, fetchUserSongReviews, type SongReview, type SongRatingStats } from '@/lib/songReviews';
 
 // My Songs — every song the user has logged (rated, reviewed or just marked
@@ -106,7 +106,6 @@ export default function MySongsScreen() {
   const [sheetOpen, setSheetOpen]   = useState(false);
   const [query, setQuery]           = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [openSong, setOpenSong]     = useState<SongReview | null>(null);
   const [stats, setStats]           = useState<Map<string, SongRatingStats>>(new Map());
   const searchInputRef = useRef<TextInput>(null);
 
@@ -166,7 +165,10 @@ export default function MySongsScreen() {
     setSortKey(key);
   }
 
-  const handlePress = useCallback((song: SongReview) => setOpenSong(song), []);
+  const handlePress = useCallback((song: SongReview) => openSongPage(router, {
+    id: song.songId, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl,
+    albumId: song.albumId, albumTitle: song.albumTitle, durationMs: song.durationMs,
+  }), [router]);
   const renderItem = useCallback(({ item }: { item: SongReview }) => (
     <SongRow song={item} colors={colors} isDark={isDark} onPress={handlePress} />
   ), [colors, isDark, handlePress]);
@@ -247,21 +249,6 @@ export default function MySongsScreen() {
         excludeKeys={EXCLUDED_SORTS}
       />
 
-      <SongReviewModal
-        song={openSong ? {
-          id:         openSong.songId,
-          title:      openSong.title,
-          artist:     openSong.artist,
-          albumId:    openSong.albumId,
-          albumTitle: openSong.albumTitle,
-          artworkUrl: openSong.artworkUrl,
-          durationMs: openSong.durationMs,
-        } : null}
-        isDark={isDark}
-        colors={colors}
-        onClose={() => setOpenSong(null)}
-        onUserPress={(userId) => { setOpenSong(null); router.push({ pathname: '/user-profile', params: { userId } }); }}
-      />
     </View>
   );
 }

@@ -25,7 +25,7 @@ import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogServ
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
-import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { openSongPage } from '@/lib/openSong';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -1158,7 +1158,6 @@ export default function HomeScreen() {
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
   const pendingLikeToggles = useRef<Set<string>>(new Set());
 
-  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   const [friendsActivity,        setFriendsActivity]        = useState<FriendActivityItem[]>([]);
   const [friendsActivityLoading, setFriendsActivityLoading] = useState(false);
@@ -1432,7 +1431,7 @@ export default function HomeScreen() {
   }
 
   function handleSongPress(item: CatalogTrack) {
-    setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate });
+    openSongPage(router, { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate });
   }
 
   return (
@@ -1720,13 +1719,6 @@ export default function HomeScreen() {
       )}
 
       {/* Song info modal */}
-      <SongInfoModal
-        song={activeSong}
-        onClose={() => setActiveSong(null)}
-        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-        onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
-        onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } } as any)}
-      />
 
       {/* Expanded review modal */}
       {expandedReview && (

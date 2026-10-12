@@ -7,7 +7,7 @@ import type { SongMeta } from '@/lib/songReviews';
 
 /**
  * Bottom sheet listing your song playlists; tap one to add (or remove) the
- * song. Rendered inside another Modal (SongInfoModal), so no router here.
+ * song. Rendered as a Modal, so navigation (if any) goes through callbacks.
  */
 export function AddToSongPlaylistSheet({ song, visible, onClose, isDark, colors }: {
   song:    SongMeta;

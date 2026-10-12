@@ -17,7 +17,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { discoverSections } from '@/context/discoverSections';
-import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { openSongPage } from '@/lib/openSong';
 import { useAlbums } from '@/context/AlbumsContext';
 import { FLIP_POOL } from '@/constants/FlipPool';
 
@@ -397,7 +397,6 @@ export default function DiscoverScreen() {
 
   const [sectionsLoading,  setSectionsLoading]  = useState(discoverSections.newReleases.length === 0);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -446,13 +445,6 @@ export default function DiscoverScreen() {
 
   return (
     <>
-    <SongInfoModal
-        song={activeSong}
-        onClose={() => setActiveSong(null)}
-        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-        onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
-        onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } } as any)}
-      />
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.content}
@@ -610,7 +602,7 @@ export default function DiscoverScreen() {
                 item={item}
                 index={index}
                 isDark={isDark}
-                onPress={() => setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate })}
+                onPress={() => openSongPage(router, { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate })}
               />
             )}
             ListFooterComponent={<SeeMoreButton onPress={() => router.push('/discover-top-songs' as any)} isDark={isDark} />}

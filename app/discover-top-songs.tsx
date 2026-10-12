@@ -5,7 +5,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumGridCard, AlbumGridCardPlaceholder, cardWidth, COLS, GAP, PADDING } from '@/components/AlbumGridCard';
 import { CatalogTrack } from '@/context/CatalogService';
-import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
+import { openSongPage } from '@/lib/openSong';
 import { discoverSections } from '@/context/discoverSections';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -21,7 +21,6 @@ export default function DiscoverTopSongsScreen() {
 
   const [songs, setSongs] = useState<CatalogTrack[]>(() => discoverSections.topSongs);
   const [loading, setLoading] = useState(discoverSections.topSongs.length === 0);
-  const [activeSong, setActiveSong] = useState<SongInfo | null>(null);
 
   useEffect(() => {
     if (songs.length > 0) return;
@@ -38,13 +37,6 @@ export default function DiscoverTopSongsScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Top Songs', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false }} />
-      <SongInfoModal
-        song={activeSong}
-        onClose={() => setActiveSong(null)}
-        onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
-        onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
-        onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } } as any)}
-      />
       <FlatList
         data={loading
           ? Array.from({ length: PLACEHOLDER_COUNT }, (_, i) => ({ id: `placeholder-${i}` } as CatalogTrack))
@@ -69,7 +61,7 @@ export default function DiscoverTopSongsScreen() {
               isDark={isDark}
               textColor={colors.text}
               subColor={isDark ? '#a07850' : '#7a5535'}
-              onPress={() => setActiveSong({ id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate })}
+              onPress={() => openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate })}
             />
           )
         )}
