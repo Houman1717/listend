@@ -2699,6 +2699,36 @@ app.get('/api/discover/community-top-songs', async (req, res) => {
 
 const HOME_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Listend is young and growing fast, so a raw "most logged this week" chart is
+// mostly the classics every new user logs first (OK Computer, Graduation…).
+// Lead with what's new instead: alternate blocks of 5 recent releases (this
+// year's and last year's, so the new slots don't empty out on 1 January) with
+// 5 from the overall chart. Each album shows once, and when the recent list
+// runs out the overall chart fills the rest.
+const NEW_RELEASE_BLOCK = 5;
+
+function interleaveNewReleases(ranked, limit) {
+  const thisYear = new Date().getUTCFullYear();
+  const recent = ranked.filter(a => a.year >= thisYear - 1);
+  const used = new Set();
+  const out = [];
+  let ri = 0, ai = 0;
+  const takeBlock = (list, i) => {
+    for (let n = 0; n < NEW_RELEASE_BLOCK && i < list.length && out.length < limit; i++) {
+      if (used.has(list[i])) continue;
+      used.add(list[i]);
+      out.push(list[i]);
+      n++;
+    }
+    return i;
+  };
+  while (out.length < limit && (ri < recent.length || ai < ranked.length)) {
+    ri = takeBlock(recent, ri);
+    ai = takeBlock(ranked, ai);
+  }
+  return out;
+}
+
 async function computeTopAlbumsThisWeek(since) {
   const [data, relistenData] = await Promise.all([
     fetchAllRows((from, to) => supabase
@@ -2736,10 +2766,10 @@ async function computeTopAlbumsThisWeek(since) {
     getEntry(r).relistenUsers.add(r.user_id);
   }
 
-  return Array.from(entries.values())
+  const ranked = Array.from(entries.values())
     .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
-    .slice(0, 51)
     .map(e => ({ ...e.album, year: mostCommonYear(e.yearCounts) }));
+  return interleaveNewReleases(ranked, 51);
 }
 
 async function computeTopSongsThisWeek(since) {
