@@ -14,8 +14,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
-import VolumeBars from '@/components/VolumeBars';
+import Colors from '@/constants/Colors';
+import { CompactRating } from '@/components/CompactRating';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { useAlbums, PendingAlbum, WantToListenAlbum } from '@/context/AlbumsContext';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
@@ -313,9 +313,7 @@ function SongRow({ item, isDark, colors, myRating, onSaveRecent, onPress }: {
         {myRating !== undefined && (
           myRating > 0 ? (
             <View style={s.songRating}>
-              <FontAwesome name="volume-up" size={10} color="#D4A017" />
-              <VolumeBars rating={myRating} activeColor="#D4A017" inactiveColor={isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT} />
-              <Text style={s.songRatingNum}>{myRating}</Text>
+              <CompactRating value={myRating} />
             </View>
           ) : (
             <FontAwesome name="check" size={12} color="#D4A017" />
@@ -1072,7 +1070,6 @@ const s = StyleSheet.create({
   searchIcon: { marginTop: 1 },
   input: { flex: 1, fontSize: 15, height: '100%' },
   songRating: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 8 },
-  songRatingNum: { color: '#D4A017', fontSize: 10, fontWeight: '700' },
 
 
   // ── Recent searches ─────────────────────────────────────────────────────────

@@ -13,8 +13,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
-import VolumeBars from '@/components/VolumeBars';
+import Colors from '@/constants/Colors';
+import { CompactRating } from '@/components/CompactRating';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useSongReviews } from '@/context/SongReviewsContext';
@@ -46,7 +46,6 @@ const SongRow = memo(function SongRow({ song, colors, isDark, onPress }: {
   isDark: boolean;
   onPress: (song: SongReview) => void;
 }) {
-  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   return (
     <Pressable
       onPress={() => onPress(song)}
@@ -69,11 +68,7 @@ const SongRow = memo(function SongRow({ song, colors, isDark, onPress }: {
       </View>
       <View style={s.right}>
         {song.rating > 0 ? (
-          <View style={s.badge}>
-            <FontAwesome name="volume-up" size={9} color={colors.tint} />
-            <VolumeBars rating={song.rating} activeColor={colors.tint} inactiveColor={inactive} />
-            <Text style={[s.badgeNum, { color: colors.tint }]}>{song.rating}</Text>
-          </View>
+          <CompactRating value={song.rating} color={colors.tint} />
         ) : (
           <Text style={[s.listened, { color: colors.subtext }]}>Listened</Text>
         )}
@@ -263,8 +258,6 @@ const s = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
   sub: { fontSize: 12 },
   right: { alignItems: 'flex-end', gap: 5 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  badgeNum: { fontSize: 11, fontWeight: '700' },
   listened: { fontSize: 11 },
   emptyText: { textAlign: 'center', marginTop: 80, fontSize: 15, paddingHorizontal: 32, lineHeight: 21 },
   searchBar: {

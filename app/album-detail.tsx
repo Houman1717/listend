@@ -25,7 +25,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
-import { AverageVolume } from '@/components/AverageVolume';
+import { CompactRating } from '@/components/CompactRating';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePro } from '@/context/ProContext';
@@ -2060,13 +2060,13 @@ export default function AlbumDetailScreen() {
                   {showMine ? (
                     mine && mine.rating > 0 && (
                       <View style={s.trackMyRating}>
-                        <VolumeBadge rating={mine.rating} isDark={isDark} />
+                        <CompactRating value={mine.rating} />
                       </View>
                     )
                   ) : (
                     community && (
                       <View style={s.trackMyRating}>
-                        <AverageVolume avg={community.avg} isDark={isDark} />
+                        <CompactRating value={community.avg} average />
                       </View>
                     )
                   )}
@@ -2535,13 +2535,14 @@ const s = StyleSheet.create({
   trackInfo: { flex: 1, gap: 2 },
   trackTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   trackTitle: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
-  trackMyRating: { marginLeft: 10 },
+  // Fixed width so ratings line up in a column down the tracklist.
+  trackMyRating: { marginLeft: 10, width: 54, alignItems: 'flex-end' },
   trackToggle: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, padding: 2 },
   trackToggleBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   trackToggleText: { fontSize: 12, fontWeight: '700' },
   trackHint: { fontSize: 12, marginBottom: 6 },
   trackFeat: { fontSize: 12 },
-  trackDuration: { fontSize: 13, marginLeft: 12 },
+  trackDuration: { fontSize: 13, marginLeft: 12, minWidth: 34, textAlign: 'right', fontVariant: ['tabular-nums'] },
   emptyText: { fontSize: 13, textAlign: 'center', paddingVertical: 16 },
 
   // Credits

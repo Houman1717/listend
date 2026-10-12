@@ -25,6 +25,7 @@ import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape, VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
+import { CompactRating } from '@/components/CompactRating';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
@@ -888,9 +889,7 @@ function SongRow({ item, onPress, colors }: { item: SongItem; onPress: () => voi
       </View>
       {song.rating > 0 && (
         <View style={s.bars}>
-          <FontAwesome name="volume-up" size={10} color={colors.tint} />
-          <VolumeBars rating={song.rating} activeColor={colors.tint} inactiveColor={colors.border} heights={BAR_HEIGHTS} barWidth={2.5} gap={2.5} />
-          <Text style={[s.ratingNum, { color: colors.tint }]}>{song.rating}</Text>
+          <CompactRating value={song.rating} color={colors.tint} size={13} />
         </View>
       )}
     </Pressable>

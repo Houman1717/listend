@@ -12,8 +12,8 @@ import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
-import VolumeBars from '@/components/VolumeBars';
+import Colors from '@/constants/Colors';
+import { CompactRating } from '@/components/CompactRating';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { useAuth } from '@/context/AuthContext';
@@ -89,7 +89,6 @@ export default function SongPlaylistDetailScreen() {
     [isOwner, paramProTheme, isPro, themeKey, colorScheme],
   );
   const isDark = colors.isDark;
-  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
 
   if (!playlist) {
     return (
@@ -243,11 +242,7 @@ export default function SongPlaylistDetailScreen() {
               ) : (
                 <View style={s.right}>
                   {mine && mine.rating > 0 && (
-                    <View style={s.badge}>
-                      <FontAwesome name="volume-up" size={9} color={colors.tint} />
-                      <VolumeBars rating={mine.rating} activeColor={colors.tint} inactiveColor={inactive} />
-                      <Text style={[s.badgeNum, { color: colors.tint }]}>{mine.rating}</Text>
-                    </View>
+                    <CompactRating value={mine.rating} color={colors.tint} />
                   )}
                   <Text style={[s.dur, { color: colors.subtext }]}>{formatDuration(item.durationMs)}</Text>
                 </View>
@@ -301,8 +296,6 @@ const s = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '600' },
   sub: { fontSize: 12 },
   right: { alignItems: 'flex-end', gap: 4 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  badgeNum: { fontSize: 11, fontWeight: '700' },
   dur: { fontSize: 12 },
   editBtns: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingLeft: 6 },
 });

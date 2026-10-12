@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
+import { CompactRating } from '@/components/CompactRating';
 import { AverageVolume } from '@/components/AverageVolume';
 import { avatarColor } from '@/components/ReviewComments';
 import { SongReviewModal } from '@/components/SongReviewModal';
@@ -254,11 +255,7 @@ export default function SongDetailScreen() {
                     {r.isFavorite && <Ionicons name="trophy" size={12} color={ACCENT} />}
                     <View style={{ flex: 1 }} />
                     {r.rating > 0 && (
-                      <View style={s.reviewRating}>
-                        <FontAwesome name="volume-up" size={10} color={ACCENT} />
-                        <VolumeBars rating={r.rating} activeColor={ACCENT} inactiveColor={inactive} />
-                        <Text style={s.reviewRatingNum}>{r.rating}</Text>
-                      </View>
+                      <CompactRating value={r.rating} />
                     )}
                   </View>
                   <Text style={[s.reviewText, { color: colors.text }]} numberOfLines={4}>"{r.review}"</Text>
@@ -331,8 +328,6 @@ const s = StyleSheet.create({
   avatar: { width: 28, height: 28, borderRadius: 14 },
   avatarLetter: { color: '#fff', fontSize: 12, fontWeight: '700' },
   reviewHandle: { color: ACCENT, fontSize: 14, fontWeight: '600', flexShrink: 1 },
-  reviewRating: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  reviewRatingNum: { color: ACCENT, fontSize: 11, fontWeight: '700' },
   reviewText: { fontSize: 14, lineHeight: 20, fontStyle: 'italic' },
   reviewDate: { fontSize: 12 },
 });

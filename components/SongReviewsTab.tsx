@@ -3,8 +3,7 @@ import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
-import VolumeBars from '@/components/VolumeBars';
+import { CompactRating } from '@/components/CompactRating';
 import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchUserSongReviews, type SongReview } from '@/lib/songReviews';
@@ -70,7 +69,6 @@ export function SongReviewsTab({ viewingUserId, colors, isDark, onOpen }: {
       (x.review ?? '').toLowerCase().includes(q));
   }, [sorted, query]);
 
-  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   const divider  = isDark ? '#2e2018' : '#ebebeb';
 
   return (
@@ -153,11 +151,7 @@ export function SongReviewsTab({ viewingUserId, colors, isDark, onOpen }: {
               </Text>
               <View style={s.metaRow}>
                 {item.rating > 0 && (
-                  <View style={s.badge}>
-                    <FontAwesome name="volume-up" size={9} color={colors.tint} />
-                    <VolumeBars rating={item.rating} activeColor={colors.tint} inactiveColor={inactive} />
-                    <Text style={[s.badgeNum, { color: colors.tint }]}>{item.rating}</Text>
-                  </View>
+                  <CompactRating value={item.rating} color={colors.tint} size={11} />
                 )}
                 <Text style={[s.date, { color: colors.subtext }]}>{formatDate(item.listenedAt)}</Text>
               </View>
@@ -192,8 +186,6 @@ const s = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
   sub: { fontSize: 12 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 1 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  badgeNum: { fontSize: 11, fontWeight: '700' },
   date: { fontSize: 11 },
   review: { fontSize: 14, lineHeight: 20, fontStyle: 'italic', marginTop: 3 },
   empty: { alignItems: 'center', marginTop: 80, paddingHorizontal: 32, gap: 8 },

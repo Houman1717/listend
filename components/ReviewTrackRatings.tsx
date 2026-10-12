@@ -2,8 +2,7 @@ import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native
 import { useEffect, useMemo, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
-import VolumeBars from '@/components/VolumeBars';
+import { CompactRating } from '@/components/CompactRating';
 import { useAuth } from '@/context/AuthContext';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchUserAlbumSongReviews, songsMatchingAlbum, type SongReview } from '@/lib/songReviews';
@@ -109,7 +108,6 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
 
   const favorite = songs.find(s => s.isFavorite);
 
-  const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   const border   = isDark ? '#2a1e14' : '#ececec';
   const shown    = expanded ? songs : songs.slice(0, PREVIEW_COUNT);
 
@@ -135,11 +133,7 @@ export function ReviewTrackRatings({ userId, album, isDark, colors }: {
             </Text>
             {song.isFavorite && <Ionicons name="trophy" size={12} color={ACCENT} />}
             {song.rating > 0 ? (
-              <View style={s.rating}>
-                <FontAwesome name="volume-up" size={10} color={ACCENT} />
-                <VolumeBars rating={song.rating} activeColor={ACCENT} inactiveColor={inactive} />
-                <Text style={s.ratingNum}>{song.rating}</Text>
-              </View>
+              <CompactRating value={song.rating} />
             ) : (
               <Text style={[s.listened, { color: colors.subtext }]}>Listened</Text>
             )}
@@ -193,8 +187,6 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   num: { width: 18, fontSize: 12, textAlign: 'right' },
   title: { flex: 1, fontSize: 14 },
-  rating: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  ratingNum: { color: ACCENT, fontSize: 11, fontWeight: '700', minWidth: 14, textAlign: 'right' },
   listened: { fontSize: 11 },
   review: { fontSize: 13, lineHeight: 18, fontStyle: 'italic', marginLeft: 26 },
   more: { alignSelf: 'flex-start', paddingTop: 10 },
