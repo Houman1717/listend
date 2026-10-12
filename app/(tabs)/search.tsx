@@ -14,7 +14,9 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
+import { useSongReviews } from '@/context/SongReviewsContext';
 import { useAlbums, PendingAlbum, WantToListenAlbum } from '@/context/AlbumsContext';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
 import { useAuth } from '@/context/AuthContext';
@@ -281,10 +283,12 @@ function AlbumRow({
   );
 }
 
-function SongRow({ item, isDark, colors, onSaveRecent, onPress }: {
+function SongRow({ item, isDark, colors, myRating, onSaveRecent, onPress }: {
   item: CatalogTrack & { kind: 'song' };
   isDark: boolean;
   colors: typeof Colors.light;
+  /** The user's own rating, when they've logged this song (0 = listened, unrated). */
+  myRating?: number;
   onSaveRecent: () => void;
   onPress: () => void;
 }) {
@@ -306,6 +310,17 @@ function SongRow({ item, isDark, colors, onSaveRecent, onPress }: {
           <Text style={[s.resultTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
           <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>{item.artist}</Text>
         </View>
+        {myRating !== undefined && (
+          myRating > 0 ? (
+            <View style={s.songRating}>
+              <FontAwesome name="volume-up" size={10} color="#D4A017" />
+              <VolumeBars rating={myRating} activeColor="#D4A017" inactiveColor={isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT} />
+              <Text style={s.songRatingNum}>{myRating}</Text>
+            </View>
+          ) : (
+            <FontAwesome name="check" size={12} color="#D4A017" />
+          )
+        )}
       </View>
     </Pressable>
   );
@@ -541,6 +556,7 @@ export default function SearchScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { setPendingAlbum, wantToListen, addToWantToListen, removeFromWantToListen, loggedAlbums } = useAlbums();
+  const { getSongReview } = useSongReviews();
 
   const [activeTab, setActiveTab] = useState<SearchTab>('albums');
   const [query, setQuery] = useState('');
@@ -810,6 +826,7 @@ export default function SearchScreen() {
         onClose={() => setActiveSong(null)}
         onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
         onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
+        onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } })}
       />
 
       {/* Search bar */}
@@ -1022,6 +1039,7 @@ export default function SearchScreen() {
                   item={item}
                   isDark={isDark}
                   colors={colors}
+                  myRating={getSongReview(item.id)?.rating}
                   onSaveRecent={() => saveRecentItem(item)}
                   onPress={() => setActiveSong({ id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl })}
                 />
@@ -1061,6 +1079,8 @@ const s = StyleSheet.create({
   },
   searchIcon: { marginTop: 1 },
   input: { flex: 1, fontSize: 15, height: '100%' },
+  songRating: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 8 },
+  songRatingNum: { color: '#D4A017', fontSize: 10, fontWeight: '700' },
 
 
   // ── Recent searches ─────────────────────────────────────────────────────────

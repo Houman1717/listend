@@ -10,7 +10,11 @@ import { Image as ExpoImage } from 'expo-image';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
+import VolumeBars from '@/components/VolumeBars';
+import { SongReviewModal } from '@/components/SongReviewModal';
+import { useSongReviews } from '@/context/SongReviewsContext';
+import { fetchSongCommunityRatings, withOwnRating, type SongRatingStats } from '@/lib/songReviews';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -54,12 +58,15 @@ export function SongInfoModal({
   onClose,
   onArtistPress,
   onAlbumPress,
+  onUserPress,
   colors: colorsProp,
 }: {
   song:           SongInfo | null;
   onClose:        () => void;
   onArtistPress?: (name: string) => void;
   onAlbumPress?:  (params: AlbumNavParams) => void;
+  /** Tapping a reviewer in the rate/review screen. */
+  onUserPress?:   (userId: string) => void;
   colors?:        any;
 }) {
   const colorScheme = useColorScheme();
@@ -68,6 +75,20 @@ export function SongInfoModal({
   const [fetchedAlbumId,    setFetchedAlbumId]    = useState<string>('');
   const [fetchedAlbumTitle, setFetchedAlbumTitle] = useState<string>('');
   const [fetchedArtist,     setFetchedArtist]     = useState<string>('');
+  const [reviewing,         setReviewing]         = useState(false);
+  const [ratingStats,       setRatingStats]       = useState<SongRatingStats | undefined>(undefined);
+  const { getSongReview } = useSongReviews();
+
+  useEffect(() => {
+    setReviewing(false);
+    setRatingStats(undefined);
+    if (!song?.id) return;
+    let cancelled = false;
+    fetchSongCommunityRatings([song.id]).then(m => {
+      if (!cancelled && m) setRatingStats(m.get(song.id!));
+    });
+    return () => { cancelled = true; };
+  }, [song?.id]);
 
   useEffect(() => {
     setFetchedDate('');
@@ -94,6 +115,11 @@ export function SongInfoModal({
   const displayAlbumId    = song?.albumId    || fetchedAlbumId;
   const displayAlbumTitle = song?.albumTitle || fetchedAlbumTitle;
   const displayArtist     = song?.artist     || fetchedArtist;
+
+  const mine      = song?.id ? getSongReview(song.id) : undefined;
+  const community = withOwnRating(ratingStats, mine?.rating);
+  const subtext   = colorsProp ? colorsProp.subtext : isDark ? '#7a5535' : '#a07850';
+  const inactive  = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
 
   return (
     <Modal
@@ -180,6 +206,34 @@ export function SongInfoModal({
           </View>
         </View>
 
+        {/* Ratings + rate/review */}
+        {song?.id ? (
+          <View style={s.rateBlock}>
+            <View style={s.rateStats}>
+              {mine && mine.rating > 0 ? (
+                <View style={s.rateStat}>
+                  <Text style={[s.rateStatLabel, { color: subtext }]}>You</Text>
+                  <FontAwesome name="volume-up" size={10} color="#D4A017" />
+                  <VolumeBars rating={mine.rating} activeColor="#D4A017" inactiveColor={inactive} />
+                  <Text style={s.rateStatNum}>{mine.rating}</Text>
+                  {mine.isFavorite && <FontAwesome name="star" size={11} color="#D4A017" />}
+                </View>
+              ) : mine ? (
+                <Text style={[s.rateStatLabel, { color: subtext }]}>Listened</Text>
+              ) : null}
+              <Text style={[s.rateStatLabel, { color: subtext }]}>
+                {community ? `Listend avg ${community.avg.toFixed(1)} (${community.count})` : 'No ratings yet'}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setReviewing(true)}
+              style={({ pressed }) => [s.rateBtn, { opacity: pressed ? 0.8 : 1 }]}>
+              <FontAwesome name={mine ? 'pencil' : 'volume-up'} size={13} color="#fff" />
+              <Text style={s.rateBtnText}>{mine ? 'Edit your rating' : 'Rate & Review'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Close button */}
         <Pressable
           onPress={onClose}
@@ -189,6 +243,22 @@ export function SongInfoModal({
           <Text style={[s.closeBtnText, { color: colorsProp ? colorsProp.subtext : isDark ? '#a07850' : '#7a5535' }]}>Done</Text>
         </Pressable>
       </View>
+
+      {/* Nested so iOS presents it on top of this sheet rather than racing its dismissal. */}
+      <SongReviewModal
+        song={reviewing && song?.id ? {
+          id:         song.id,
+          title:      song.title,
+          artist:     displayArtist,
+          albumId:    displayAlbumId || undefined,
+          albumTitle: displayAlbumTitle || undefined,
+          artworkUrl: song.artworkUrl,
+        } : null}
+        isDark={isDark}
+        colors={colorsProp}
+        onClose={() => setReviewing(false)}
+        onUserPress={onUserPress ? (userId) => { setReviewing(false); onClose(); onUserPress(userId); } : undefined}
+      />
     </Modal>
   );
 }
@@ -264,6 +334,43 @@ const s = StyleSheet.create({
   },
   date: {
     fontSize: 12,
+  },
+  rateBlock: {
+    gap: 12,
+  },
+  rateStats: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    flexWrap:       'wrap',
+    gap: 8,
+  },
+  rateStat: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap: 5,
+  },
+  rateStatLabel: {
+    fontSize: 12,
+  },
+  rateStatNum: {
+    color:      '#D4A017',
+    fontSize:   11,
+    fontWeight: '700',
+  },
+  rateBtn: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'center',
+    gap: 8,
+    backgroundColor: '#D4A017',
+    borderRadius:    10,
+    paddingVertical: 12,
+  },
+  rateBtnText: {
+    color:      '#fff',
+    fontSize:   15,
+    fontWeight: '700',
   },
   closeBtn: {
     borderRadius:    10,

@@ -933,6 +933,7 @@ export default function UserProfileScreen() {
       onClose={() => setActiveSong(null)}
       onArtistPress={(name) => router.push({ pathname: '/artist-detail', params: { name } })}
       onAlbumPress={(p) => router.push({ pathname: '/album-detail', params: p } as any)}
+      onUserPress={(userId) => router.push({ pathname: '/user-profile', params: { userId } } as any)}
       colors={(profile?.is_pro && profile.pro_theme && profile.pro_theme !== 'default') ? colors : undefined}
     />
     <ScrollView
