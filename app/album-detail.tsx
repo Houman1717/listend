@@ -40,6 +40,7 @@ import { ProBadge } from '@/components/ProBadge';
 import { EditListenDateModal } from '@/components/EditListenDateModal';
 import { SendAlbumSheet } from '@/components/SendAlbumSheet';
 import { SongReviewModal } from '@/components/SongReviewModal';
+import { TrackRatingsEditor, useTrackRatingsDraft } from '@/components/TrackRatingsEditor';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchSongCommunityRatings, withOwnRating, type SongMeta, type SongRatingStats } from '@/lib/songReviews';
 
@@ -922,6 +923,11 @@ export default function AlbumDetailScreen() {
   // Remote data
   const [tracks, setTracks]               = useState<Track[] | null>(null);
   const [tracksLoading, setTracksLoading] = useState(true);
+  // Edit mode's optional "Rate the tracks" section (same as Log Album).
+  const trackDraft = useTrackRatingsDraft(
+    albumId ? { id: albumId, title: albumTitle, artist: albumArtist, artworkUrl: albumArtwork || undefined } : null,
+    tracks,
+  );
   const [lastfm, setLastfm]               = useState<LastfmAlbum | null>(null);
   const [albumTags, setAlbumTags]         = useState<string[]>([]);
   const [genius, setGenius]               = useState<GeniusCredits | null>(null);
@@ -1483,11 +1489,13 @@ export default function AlbumDetailScreen() {
     const ok = loggedAlbum?.isRelistened
       ? await updateReListenReview(myAlbumId, rating, review)
       : await updateReview(myAlbumId, rating, review);
-    setSaving(false);
-
     if (ok) {
+      const tracksOk = await trackDraft.save();
+      setSaving(false);
+      if (!tracksOk) Alert.alert('Some track ratings didn\'t save', 'Your album review was saved. Check your connection and try the tracks again.');
       setEditMode(false);
     } else {
+      setSaving(false);
       Alert.alert('Couldn\'t save', 'Check your connection and try again — your changes are still here.');
     }
   }
@@ -1502,11 +1510,13 @@ export default function AlbumDetailScreen() {
 
   function handleStartEdit() {
     resetDraftFromLog();
+    trackDraft.reset();
     setEditMode(true);
   }
 
   function handleCancelEdit() {
     resetDraftFromLog();
+    trackDraft.reset();
     setEditMode(false);
   }
 
@@ -1673,6 +1683,7 @@ export default function AlbumDetailScreen() {
               {review.length > 0 && (
                 <Text style={[s.charCount, { color: colors.subtext }]}>{review.length}/1000</Text>
               )}
+              <TrackRatingsEditor draft={trackDraft} isDark={isDark} colors={colors} />
               <View style={s.editBtnRow}>
                 <Pressable
                   style={[s.primaryBtn, s.editBtnFlex, { backgroundColor: '#D4A017', opacity: saving ? 0.6 : 1 }]}
