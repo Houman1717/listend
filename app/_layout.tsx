@@ -247,6 +247,8 @@ function AuthGate() {
       } else if (data.type === 'like_playlist' && data.targetId) {
         if ((data.targetId as string).startsWith('featured:')) {
           router.push({ pathname: '/discover-featured-playlist', params: { id: (data.targetId as string).replace('featured:', '') } } as any);
+        } else if ((data.targetId as string).startsWith('song:')) {
+          router.push({ pathname: '/song-playlist-detail', params: { id: (data.targetId as string).replace('song:', '') } } as any);
         } else {
           router.push({ pathname: '/playlist-detail', params: { id: data.targetId } } as any);
         }

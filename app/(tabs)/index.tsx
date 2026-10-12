@@ -898,7 +898,7 @@ async function fetchFriendsActivity(uid: string): Promise<FriendActivityItem[]> 
     await Promise.all([
       supabase.from('top5_changes').select('id, user_id, category, item_id, item_name, item_image_url, position, changed_at').in('user_id', friendIds).order('changed_at', { ascending: false }).limit(60),
       supabase.from('liked_artists').select('user_id, artist_id, name, artwork_url, created_at').in('user_id', friendIds).order('created_at', { ascending: false }).limit(60),
-      supabase.from('likes').select('user_id, target_id, created_at').in('user_id', friendIds).eq('target_type', 'playlist').not('target_id', 'ilike', 'featured:%').order('created_at', { ascending: false }).limit(60),
+      supabase.from('likes').select('user_id, target_id, created_at').in('user_id', friendIds).eq('target_type', 'playlist').not('target_id', 'ilike', 'featured:%').not('target_id', 'ilike', 'song:%').order('created_at', { ascending: false }).limit(60),
       supabase.from('playlists').select('id, user_id, name, created_at').in('user_id', friendIds).order('created_at', { ascending: false }).limit(60),
       supabase.from('want_to_listen').select('user_id, spotify_id, title, artist, artwork_url, created_at').in('user_id', friendIds).order('created_at', { ascending: false }).limit(60),
       supabase.from('flip_records').select('id, user_id, album_title, album_artist, artwork_url, flipped_at').in('user_id', friendIds).order('flipped_at', { ascending: false }).limit(60),

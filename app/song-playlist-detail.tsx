@@ -10,7 +10,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { CompactRating } from '@/components/CompactRating';
@@ -24,7 +24,7 @@ import { SongPlaylistMosaic } from '@/components/SongPlaylistsTab';
 import PlaylistFormModal from '@/components/PlaylistFormModal';
 import { supabase } from '@/lib/supabase';
 import { handleOrName } from '@/lib/userHandle';
-import { fetchSongPlaylist, totalDurationMs, type SongPlaylist } from '@/lib/songPlaylists';
+import { fetchSongPlaylist, fetchSongPlaylistLikes, setSongPlaylistLiked, totalDurationMs, type SongPlaylist } from '@/lib/songPlaylists';
 import type { SongMeta } from '@/lib/songReviews';
 
 function formatDuration(ms?: number): string {
@@ -71,6 +71,24 @@ export default function SongPlaylistDetailScreen() {
 
   const playlist = own ?? remote;
   const isOwner = !!playlist && playlist.userId === user?.id;
+
+  const [likes, setLikes] = useState<{ count: number; liked: boolean }>({ count: 0, liked: false });
+  const likeBusy = useRef(false);
+  useEffect(() => {
+    if (!id) return;
+    fetchSongPlaylistLikes(id, user?.id).then(l => { if (l) setLikes(l); });
+  }, [id, user?.id]);
+
+  async function toggleLike() {
+    if (!playlist || !user?.id || likeBusy.current) return;
+    likeBusy.current = true;
+    const before = likes;
+    const like = !likes.liked;
+    setLikes({ liked: like, count: Math.max(0, likes.count + (like ? 1 : -1)) });
+    const ok = await setSongPlaylistLiked(playlist, user.id, like);
+    if (!ok) setLikes(before);
+    likeBusy.current = false;
+  }
 
   useEffect(() => {
     if (!playlist || isOwner) return;
@@ -150,6 +168,19 @@ export default function SongPlaylistDetailScreen() {
       <Text style={[s.count, { color: colors.subtext }]}>
         {songs.length === 1 ? '1 song' : `${songs.length} songs`}{runtime > 0 ? ` · ${formatRuntime(runtime)}` : ''}
       </Text>
+      {isOwner ? (
+        likes.count > 0 ? (
+          <View style={s.likeRow}>
+            <FontAwesome name="heart" size={13} color={colors.tint} />
+            <Text style={[s.likeText, { color: colors.subtext }]}>{likes.count}</Text>
+          </View>
+        ) : null
+      ) : (
+        <Pressable onPress={toggleLike} hitSlop={10} style={({ pressed }) => [s.likeRow, { opacity: pressed ? 0.6 : 1 }]}>
+          <FontAwesome name={likes.liked ? 'heart' : 'heart-o'} size={18} color={likes.liked ? colors.tint : colors.subtext} />
+          {likes.count > 0 && <Text style={[s.likeText, { color: likes.liked ? colors.tint : colors.subtext }]}>{likes.count}</Text>}
+        </Pressable>
+      )}
 
       {isOwner && (
         <View style={s.actions}>
@@ -282,6 +313,8 @@ const s = StyleSheet.create({
   by: { fontSize: 14, fontWeight: '600' },
   desc: { fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 12 },
   count: { fontSize: 13 },
+  likeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  likeText: { fontSize: 14, fontWeight: '600' },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
   primaryBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, height: 40, borderRadius: 20 },
   primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },

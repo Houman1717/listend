@@ -1258,7 +1258,7 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="repeat"     label="Re-listend"      sub="Albums re-listend"              onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } } as any)} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="list"       label="Playlists"       sub="Album lists"                    onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
+            <NavRow icon="list"       label="Playlists"       sub="Album & song lists"                  onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="heart"      label="Liked Artists"   sub="Their favourites"               onPress={() => router.push({ pathname: '/liked-artists',    params: { readOnly: '1', userId: viewedUserId,                     ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />

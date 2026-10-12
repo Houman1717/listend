@@ -267,6 +267,8 @@ export default function NotificationsScreen() {
               } else if (item.type === 'like_playlist' && item.targetId) {
                 if (item.targetId.startsWith('featured:')) {
                   router.push({ pathname: '/discover-featured-playlist', params: { id: item.targetId.replace('featured:', '') } } as any);
+                } else if (item.targetId.startsWith('song:')) {
+                  router.push({ pathname: '/song-playlist-detail', params: { id: item.targetId.replace('song:', '') } } as any);
                 } else {
                   router.push({ pathname: '/playlist-detail', params: { id: item.targetId } } as any);
                 }

@@ -37,6 +37,9 @@ import { SongReviewCard } from '@/components/SongReviewCard';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { fetchUserSongReviews, type SongReview } from '@/lib/songReviews';
+import {
+  SONG_PLAYLIST_LIKE_PREFIX, fetchSongPlaylistsByIds, fetchUserSongPlaylists, isSongPlaylistLikeId, songPlaylistCovers,
+} from '@/lib/songPlaylists';
 
 // ─── Static metadata ──────────────────────────────────────────────────────────
 
@@ -106,6 +109,8 @@ type LikedPlaylistItem = {
 type CreatedPlaylistItem = {
   key:         string;
   playlistId:  string;
+  /** A song playlist (song_playlists) rather than an album playlist. */
+  isSongPlaylist?: boolean;
   name:        string;
   artworkUrls: string[];
   dateMs:      number;
@@ -260,7 +265,7 @@ async function fetchLikedArtistsForUser(uid: string): Promise<LikedArtistItem[]>
 async function fetchLikedPlaylistsForUser(uid: string): Promise<LikedPlaylistItem[]> {
   // Only user-created playlists; featured playlists are handled via context for own
   // user or separately for other users below
-  const { data: likedRows } = await supabase
+  const { data: allLikedRows } = await supabase
     .from('likes')
     .select('target_id, created_at')
     .eq('user_id', uid)
@@ -269,7 +274,25 @@ async function fetchLikedPlaylistsForUser(uid: string): Promise<LikedPlaylistIte
     .order('created_at', { ascending: false })
     .limit(30);
 
-  if (!likedRows || likedRows.length === 0) return [];
+  if (!allLikedRows || allLikedRows.length === 0) return [];
+
+  // Song playlist likes carry a 'song:' prefix and live in song_playlists.
+  const songLikes = (allLikedRows as any[]).filter(r => isSongPlaylistLikeId(r.target_id));
+  const likedRows = (allLikedRows as any[]).filter(r => !isSongPlaylistLikeId(r.target_id));
+  const songItems: LikedPlaylistItem[] = [];
+  if (songLikes.length > 0) {
+    const pls = await fetchSongPlaylistsByIds(songLikes.map(r => (r.target_id as string).slice(SONG_PLAYLIST_LIKE_PREFIX.length)));
+    const byId = new Map((pls ?? []).map(p => [p.id, p]));
+    for (const r of songLikes) {
+      const pl = byId.get((r.target_id as string).slice(SONG_PLAYLIST_LIKE_PREFIX.length));
+      if (!pl) continue;
+      songItems.push({
+        key: `liked-pl-${r.target_id}`, targetId: r.target_id, ownerId: pl.userId, name: pl.name,
+        artworkUrls: songPlaylistCovers(pl), dateMs: new Date(r.created_at).getTime(), dateLabel: formatDateLabel(r.created_at),
+      });
+    }
+  }
+  if (likedRows.length === 0) return songItems;
 
   const userIds = (likedRows as any[]).map((r: any) => r.target_id as string);
   const nameMap    = new Map<string, string>();
@@ -281,7 +304,7 @@ async function fetchLikedPlaylistsForUser(uid: string): Promise<LikedPlaylistIte
   const plArtwork = await fetchPlaylistCovers(userIds);
   plArtwork.forEach((urls, id) => artworkMap.set(id, urls));
 
-  return (likedRows as any[]).map((r: any): LikedPlaylistItem => ({
+  return [...songItems, ...(likedRows as any[]).map((r: any): LikedPlaylistItem => ({
     key:         `liked-pl-${r.target_id}`,
     targetId:    r.target_id,
     ownerId:     ownerMap.get(r.target_id) ?? null,
@@ -289,7 +312,7 @@ async function fetchLikedPlaylistsForUser(uid: string): Promise<LikedPlaylistIte
     artworkUrls: artworkMap.get(r.target_id) ?? [],
     dateMs:      new Date(r.created_at).getTime(),
     dateLabel:   formatDateLabel(r.created_at),
-  }));
+  }))];
 }
 
 async function fetchLikedFeaturedPlaylistsForUser(uid: string): Promise<LikedPlaylistItem[]> {
@@ -331,26 +354,39 @@ async function fetchLikedFeaturedPlaylistsForUser(uid: string): Promise<LikedPla
 }
 
 async function fetchCreatedPlaylistsForUser(uid: string): Promise<CreatedPlaylistItem[]> {
-  const { data } = await supabase
-    .from('playlists')
-    .select('id, name, created_at')
-    .eq('user_id', uid)
-    .order('created_at', { ascending: false })
-    .limit(30);
+  const [{ data }, songPls] = await Promise.all([
+    supabase
+      .from('playlists')
+      .select('id, name, created_at')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false })
+      .limit(30),
+    fetchUserSongPlaylists(uid),
+  ]);
 
-  if (!data || data.length === 0) return [];
+  const songItems: CreatedPlaylistItem[] = (songPls ?? []).slice(0, 30).map(pl => ({
+    key:            `created-spl-${pl.id}`,
+    playlistId:     pl.id,
+    isSongPlaylist: true,
+    name:           pl.name,
+    artworkUrls:    songPlaylistCovers(pl),
+    dateMs:         new Date(pl.createdAt).getTime(),
+    dateLabel:      formatDateLabel(pl.createdAt),
+  }));
+
+  if (!data || data.length === 0) return songItems;
 
   const ids = data.map((r: any) => r.id as string);
   const artworkMap = await fetchPlaylistCovers(ids);
 
-  return data.map((r: any): CreatedPlaylistItem => ({
+  return [...songItems, ...data.map((r: any): CreatedPlaylistItem => ({
     key:         `created-pl-${r.id}`,
     playlistId:  r.id,
     name:        r.name ?? 'Playlist',
     artworkUrls: artworkMap.get(r.id) ?? [],
     dateMs:      new Date(r.created_at).getTime(),
     dateLabel:   formatDateLabel(r.created_at),
-  }));
+  }))];
 }
 
 async function fetchActivityForUser(uid: string): Promise<ActivityItem[]> {
@@ -829,7 +865,7 @@ function CreatedPlaylistRow({ item, onPress, colors }: { item: CreatedPlaylistIt
         <View style={s.meta}>
           <View style={[s.typePill, { borderColor: colors.tint }]}>
             <FontAwesome name="list" size={9} color={colors.tint} />
-            <Text style={[s.typeLabel, { color: colors.tint }]}>Created Playlist</Text>
+            <Text style={[s.typeLabel, { color: colors.tint }]}>{item.isSongPlaylist ? 'Created Song Playlist' : 'Created Playlist'}</Text>
           </View>
           {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
         </View>
@@ -1352,6 +1388,8 @@ export default function RecentActivityScreen() {
                 const isFeature = item.data.targetId.startsWith('featured:');
                 if (isFeature) {
                   router.push({ pathname: '/discover-featured-playlist', params: { id: item.data.targetId.replace('featured:', ''), name: item.data.name } } as any);
+                } else if (isSongPlaylistLikeId(item.data.targetId)) {
+                  router.push({ pathname: '/song-playlist-detail', params: { id: item.data.targetId.slice(SONG_PLAYLIST_LIKE_PREFIX.length) } });
                 } else {
                   router.push({ pathname: '/playlist-detail', params: { id: item.data.targetId, ...(item.data.ownerId ? { userId: item.data.ownerId } : {}) } });
                 }
@@ -1364,7 +1402,9 @@ export default function RecentActivityScreen() {
             <CreatedPlaylistRow
               item={item.data}
               colors={colors}
-              onPress={() => router.push({ pathname: '/playlist-detail', params: { id: item.data.playlistId, ...(viewingOther ? { userId: viewingOther } : {}) } })}
+              onPress={() => item.data.isSongPlaylist
+                ? router.push({ pathname: '/song-playlist-detail', params: { id: item.data.playlistId } })
+                : router.push({ pathname: '/playlist-detail', params: { id: item.data.playlistId, ...(viewingOther ? { userId: viewingOther } : {}) } })}
             />
           );
         }

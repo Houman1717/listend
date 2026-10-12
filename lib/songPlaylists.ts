@@ -105,3 +105,84 @@ export async function fetchSongPlaylist(id: string): Promise<SongPlaylist | null
 export function totalDurationMs(songs: SongMeta[]): number {
   return songs.reduce((sum, x) => sum + (x.durationMs ?? 0), 0);
 }
+
+// ─── Likes ───────────────────────────────────────────────────────────────────
+// Song playlists reuse the likes table (target_type 'playlist') with a
+// 'song:' prefix on target_id, the way featured playlists use 'featured:'.
+// Anything reading playlist likes must route 'song:' ids to song_playlists.
+
+export const SONG_PLAYLIST_LIKE_PREFIX = 'song:';
+
+export function songPlaylistLikeId(playlistId: string): string {
+  return `${SONG_PLAYLIST_LIKE_PREFIX}${playlistId}`;
+}
+
+export function isSongPlaylistLikeId(targetId: string): boolean {
+  return targetId.startsWith(SONG_PLAYLIST_LIKE_PREFIX);
+}
+
+/** Like count and whether `viewerId` has liked it. Null on failure. */
+export async function fetchSongPlaylistLikes(playlistId: string, viewerId?: string): Promise<{ count: number; liked: boolean } | null> {
+  const rows = rowsOrNull(
+    await supabase
+      .from('likes')
+      .select('user_id')
+      .eq('target_type', 'playlist')
+      .eq('target_id', songPlaylistLikeId(playlistId)),
+  );
+  if (!rows) return null;
+  return { count: rows.length, liked: !!viewerId && rows.some((r: any) => r.user_id === viewerId) };
+}
+
+/** Likes or unlikes; notifies the owner on a like. Returns false on failure. */
+export async function setSongPlaylistLiked(playlist: { id: string; userId: string }, viewerId: string, like: boolean): Promise<boolean> {
+  const targetId = songPlaylistLikeId(playlist.id);
+  if (!like) {
+    const { error } = await supabase.from('likes').delete()
+      .eq('user_id', viewerId).eq('target_type', 'playlist').eq('target_id', targetId);
+    return !error;
+  }
+  const { error } = await supabase.from('likes').insert({
+    user_id: viewerId, target_type: 'playlist', target_id: targetId, target_owner_id: playlist.userId,
+  });
+  if (error) return false;
+  if (playlist.userId !== viewerId) {
+    supabase.from('notifications').insert({
+      user_id: playlist.userId, type: 'like_playlist', actor_id: viewerId, target_id: targetId,
+    }).then(({ error: e }) => { if (e) console.error('[SongPlaylists] like notification error:', e.message); });
+  }
+  return true;
+}
+
+/** Several song playlists by id, with songs. Missing/private ones are left out. Null on failure. */
+export async function fetchSongPlaylistsByIds(ids: string[]): Promise<SongPlaylist[] | null> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return [];
+  const pls = await fetchAllRowsIn<any>(
+    unique,
+    (chunk, from, to) => supabase.from('song_playlists').select('id, user_id, name, description, created_at').in('id', chunk).range(from, to),
+    2,
+  );
+  if (!pls) return null;
+  if (pls.length === 0) return [];
+  const items = await fetchAllRowsIn<any>(
+    pls.map((p: any) => p.id),
+    (chunk, from, to) => supabase.from('song_playlist_items').select(SONG_ITEM_COLUMNS).in('playlist_id', chunk).order('position', { ascending: true }).range(from, to),
+    10,
+  );
+  if (!items) return null;
+  return pls.map((p: any) => ({
+    id: p.id, userId: p.user_id, name: p.name, description: p.description ?? undefined, createdAt: p.created_at,
+    songs: items.filter((it: any) => it.playlist_id === p.id).sort((a: any, b: any) => a.position - b.position).map(itemRowToSong),
+  }));
+}
+
+/** First four distinct covers, for mosaics outside the song playlist screens. */
+export function songPlaylistCovers(playlist: SongPlaylist): string[] {
+  const covers: string[] = [];
+  for (const s of playlist.songs) {
+    if (s.artworkUrl && !covers.includes(s.artworkUrl)) covers.push(s.artworkUrl);
+    if (covers.length === 4) break;
+  }
+  return covers;
+}

@@ -22,6 +22,7 @@ import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogServ
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchPlaylistAlbums, fetchMosaicArtwork } from '@/lib/playlistArtwork';
+import { SONG_PLAYLIST_LIKE_PREFIX, fetchSongPlaylistsByIds, isSongPlaylistLikeId, songPlaylistCovers } from '@/lib/songPlaylists';
 import { handleText, handleOrName, nameOrHandle } from '@/lib/userHandle';
 import { openSongPage } from '@/lib/openSong';
 import { ProBadge } from '@/components/ProBadge';
@@ -54,6 +55,8 @@ type PlaylistSearchResult = {
   isFeatured: boolean;
   featuredEmoji?: string;
   rawFeaturedId?: string;
+  /** Song playlist: id is 'song:{uuid}' and albumCount counts songs. */
+  isSongPlaylist?: boolean;
 };
 
 type ResultItem =
@@ -186,6 +189,36 @@ async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
         ownerId:       p.user_id,
         ownerUsername: handleById.get(p.user_id) ?? '',
         isFeatured:    false,
+      });
+    }
+  }
+
+  // Song playlists (separate table; shown after album playlists)
+  const { data: spls } = await supabase
+    .from('song_playlists')
+    .select('id, name, description, user_id, created_at')
+    .or(`name.ilike.${pattern},description.ilike.${pattern}`)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  if (spls && spls.length > 0) {
+    const [full, profilesResult] = await Promise.all([
+      fetchSongPlaylistsByIds((spls as any[]).map(p => p.id as string)),
+      supabase.from('profiles').select('id, username, display_name').in('id', [...new Set((spls as any[]).map(p => p.user_id as string))]),
+    ]);
+    const handleById = new Map<string, string>(
+      (profilesResult.data ?? []).map((p: any) => [p.id as string, handleOrName(p.username, p.display_name, p.id, '')])
+    );
+    for (const pl of full ?? []) {
+      results.push({
+        id:             `${SONG_PLAYLIST_LIKE_PREFIX}${pl.id}`,
+        name:           pl.name,
+        description:    pl.description,
+        albumCount:     pl.songs.length,
+        artworkUrls:    songPlaylistCovers(pl),
+        ownerId:        pl.userId,
+        ownerUsername:  handleById.get(pl.userId) ?? '',
+        isFeatured:     false,
+        isSongPlaylist: true,
       });
     }
   }
@@ -405,7 +438,7 @@ function PlaylistRow({
           <Text style={[s.resultSub, { color: colors.subtext }]} numberOfLines={1}>
             {item.isFeatured
               ? (item.description ?? '')
-              : `${item.albumCount === 1 ? '1 album' : `${item.albumCount} albums`}${item.ownerUsername ? `  ·  ${item.ownerUsername}` : ''}`
+              : `${item.albumCount === 1 ? `1 ${item.isSongPlaylist ? 'song' : 'album'}` : `${item.albumCount} ${item.isSongPlaylist ? 'songs' : 'albums'}`}${item.ownerUsername ? `  ·  ${item.ownerUsername}` : ''}`
             }
           </Text>
         </View>
@@ -773,6 +806,8 @@ export default function SearchScreen() {
             artworkUrlsJson: JSON.stringify(item.artworkUrls ?? []),
           },
         } as any);
+      } else if (isSongPlaylistLikeId(item.id)) {
+        router.push({ pathname: '/song-playlist-detail', params: { id: item.id.slice(SONG_PLAYLIST_LIKE_PREFIX.length) } });
       } else {
         router.push({ pathname: '/playlist-detail', params: { id: item.id, userId: item.playlistOwnerId ?? '' } });
       }
@@ -988,6 +1023,8 @@ export default function SearchScreen() {
                       artworkUrlsJson: JSON.stringify(item.artworkUrls),
                     },
                   } as any);
+                } else if (item.isSongPlaylist) {
+                  router.push({ pathname: '/song-playlist-detail', params: { id: item.id.slice(SONG_PLAYLIST_LIKE_PREFIX.length) } });
                 } else {
                   router.push({
                     pathname: '/playlist-detail',

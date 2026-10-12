@@ -22,7 +22,10 @@ import { supabase } from '@/lib/supabase';
 import { fetchPlaylistAlbums, fetchMosaicArtwork } from '@/lib/playlistArtwork';
 import { handleOrName } from '@/lib/userHandle';
 import { useSongPlaylists } from '@/context/SongPlaylistsContext';
-import { SongPlaylistsTab } from '@/components/SongPlaylistsTab';
+import { SongPlaylistsTab, SongPlaylistMosaic } from '@/components/SongPlaylistsTab';
+import {
+  SONG_PLAYLIST_LIKE_PREFIX, fetchSongPlaylistsByIds, isSongPlaylistLikeId, setSongPlaylistLiked, type SongPlaylist,
+} from '@/lib/songPlaylists';
 import PlaylistFormModal from '@/components/PlaylistFormModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -31,7 +34,8 @@ type LikeState = { liked: boolean; count: number };
 
 type LikedEntry =
   | { kind: 'featured'; likedAt: string; pl: any }
-  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string };
+  | { kind: 'user'; likedAt: string; playlist: Playlist; ownerId: string; username: string }
+  | { kind: 'song'; likedAt: string; playlist: SongPlaylist; username: string };
 
 // ─── Playlist artwork mosaic (2×2 grid of first 4 covers) ────────────────────
 
@@ -174,7 +178,8 @@ async function buildLikedEntries(
 
   const rows: any[] = likedRows ?? [];
   const featuredRows = rows.filter(r => (r.target_id as string).startsWith('featured:'));
-  const userRows     = rows.filter(r => !(r.target_id as string).startsWith('featured:'));
+  const songRows     = rows.filter(r => isSongPlaylistLikeId(r.target_id as string));
+  const userRows     = rows.filter(r => !(r.target_id as string).startsWith('featured:') && !isSongPlaylistLikeId(r.target_id as string));
 
   const entries: LikedEntry[] = [];
 
@@ -235,6 +240,21 @@ async function buildLikedEntries(
           ownerId:  p.user_id,
           username: usernameByUserId.get(p.user_id) ?? '',
         });
+      }
+    }
+  }
+
+  if (songRows.length > 0) {
+    const likedAtById = new Map<string, string>(
+      songRows.map((r: any) => [(r.target_id as string).slice(SONG_PLAYLIST_LIKE_PREFIX.length), r.created_at as string])
+    );
+    const songPls = await fetchSongPlaylistsByIds([...likedAtById.keys()]);
+    if (songPls && songPls.length > 0) {
+      const ownerIds = [...new Set(songPls.map(p => p.userId))];
+      const { data: profiles } = await supabase.from('profiles').select('id, username, display_name').in('id', ownerIds);
+      const nameById = new Map<string, string>((profiles ?? []).map((p: any) => [p.id as string, handleOrName(p.username, p.display_name, p.id, '')]));
+      for (const pl of songPls) {
+        entries.push({ kind: 'song', likedAt: likedAtById.get(pl.id) ?? '', playlist: pl, username: nameById.get(pl.userId) ?? '' });
       }
     }
   }
@@ -436,6 +456,14 @@ export default function MyPlaylistsScreen() {
       .eq('user_id', user.id)
       .eq('target_type', 'playlist')
       .eq('target_id', `featured:${id}`);
+  }
+
+  // ── Unlike a song playlist from the liked tab ─────────────────────────────
+  async function handleUnlikeSongPlaylist(playlist: SongPlaylist) {
+    if (!user) return;
+    setLikedEntries(prev => prev.filter(e => !(e.kind === 'song' && e.playlist.id === playlist.id)));
+    const ok = await setSongPlaylistLiked(playlist, user.id, false);
+    if (!ok) console.error('[Playlists] unlike song playlist failed');
   }
 
   // ── Unlike a playlist from the liked tab (removes it from the list) ───────
@@ -761,7 +789,26 @@ export default function MyPlaylistsScreen() {
               </View>
             ) : (
               filteredEntries.map(entry =>
-                entry.kind === 'featured' ? (
+                entry.kind === 'song' ? (
+                  <Pressable
+                    key={`song-${entry.playlist.id}`}
+                    onPress={() => router.push({ pathname: '/song-playlist-detail', params: { id: entry.playlist.id } })}
+                    style={({ pressed }) => [s.playlistCard, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+                    <SongPlaylistMosaic playlist={entry.playlist} size={64} fallbackColor={isDark ? '#3a2820' : '#EDE9E3'} />
+                    <View style={s.playlistInfo}>
+                      <Text style={[s.playlistName, { color: colors.text }]} numberOfLines={1}>{entry.playlist.name}</Text>
+                      {entry.username ? <Text style={[s.playlistMeta, { color: colors.tint }]} numberOfLines={1}>by {entry.username}</Text> : null}
+                      <Text style={[s.playlistMeta, { color: colors.subtext }]}>
+                        {entry.playlist.songs.length === 1 ? '1 song' : `${entry.playlist.songs.length} songs`}
+                      </Text>
+                    </View>
+                    {!viewingOther && (
+                      <Pressable onPress={() => handleUnlikeSongPlaylist(entry.playlist)} hitSlop={12} style={{ padding: 4 }}>
+                        <FontAwesome name="heart" size={18} color={colors.tint} />
+                      </Pressable>
+                    )}
+                  </Pressable>
+                ) : entry.kind === 'featured' ? (
                   <Pressable
                     key={`featured-${entry.pl.id}`}
                     onPress={() => router.push({ pathname: '/discover-featured-playlist', params: { id: entry.pl.id, name: entry.pl.name, emoji: entry.pl.emoji, description: entry.pl.description, artworkUrlsJson: JSON.stringify(entry.pl.artworkUrls ?? []) } } as any)}
