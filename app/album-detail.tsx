@@ -1603,8 +1603,6 @@ export default function AlbumDetailScreen() {
   const sectionBg  = isDark ? '#1c1410' : '#f5f5f5';
   const borderColor = isDark ? '#2a1e14' : '#e8e8e8';
   const mutedText  = isDark ? '#7a5535' : '#a07850';
-  // Only reserve the tracklist's review-count column when some track has one.
-  const anyTrackReviews = [...trackReviewCounts.values()].some(n => n > 0);
 
   return (
     // Same fix as dm-conversation. This screen stays mounted under log-album,
@@ -2066,23 +2064,26 @@ export default function AlbumDetailScreen() {
                       </Text>
                       {showMine && mine?.isFavorite && <Ionicons name="trophy" size={12} color="#D4A017" />}
                     </View>
-                    {track.featuredArtists.length > 0 && (
-                      <Text style={[s.trackFeat, { color: colors.subtext }]} numberOfLines={1}>
-                        feat. {track.featuredArtists.join(', ')}
-                      </Text>
+                    {(track.featuredArtists.length > 0 || (!showMine && reviewCount > 0)) && (
+                      // Sub-line under the title, so the review count doesn't
+                      // take width from it.
+                      <View style={s.trackSubRow}>
+                        {track.featuredArtists.length > 0 && (
+                          <Text style={[s.trackFeat, { color: colors.subtext, flexShrink: 1 }]} numberOfLines={1}>
+                            feat. {track.featuredArtists.join(', ')}
+                          </Text>
+                        )}
+                        {!showMine && reviewCount > 0 && (
+                          <View style={s.trackReviewCount}>
+                            <FontAwesome name="comment-o" size={10} color={colors.subtext} />
+                            <Text style={[s.trackFeat, { color: colors.subtext }]}>
+                              {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     )}
                   </View>
-                  {!showMine && anyTrackReviews && (
-                    // Fixed width (empty when 0) so the averages stay in one column.
-                    <View style={s.trackReviewCount}>
-                      {reviewCount > 0 && (
-                        <>
-                          <FontAwesome name="comment-o" size={11} color={colors.subtext} />
-                          <Text style={[s.trackReviewCountText, { color: colors.subtext }]}>{reviewCount}</Text>
-                        </>
-                      )}
-                    </View>
-                  )}
                   {showMine ? (
                     mine && mine.rating > 0 && (
                       <View style={s.trackMyRating}>
@@ -2563,8 +2564,8 @@ const s = StyleSheet.create({
   trackTitle: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
   // Fixed width so ratings line up in a column down the tracklist.
   trackMyRating: { marginLeft: 10, width: 54, alignItems: 'flex-end' },
-  trackReviewCount: { marginLeft: 8, width: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
-  trackReviewCountText: { fontSize: 12, fontWeight: '600' },
+  trackSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trackReviewCount: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
   trackToggle: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, padding: 2 },
   trackToggleBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   trackToggleText: { fontSize: 12, fontWeight: '700' },
