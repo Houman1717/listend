@@ -10,6 +10,7 @@ import {
   Keyboard,
   ActivityIndicator,
   LayoutAnimation,
+  Modal,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
@@ -157,6 +158,7 @@ export default function LogAlbumScreen() {
   const [favoriteId, setFavoriteId] = useState<string | null>(null);
   const [trackReviews, setTrackReviews] = useState<Record<string, string>>({});
   const [openReviewId, setOpenReviewId] = useState<string | null>(null);
+  const [favPickerOpen, setFavPickerOpen] = useState(false);
   const androidKeyboardHeight = useAndroidKeyboardHeight();
   const insets = useSafeAreaInsets();
 
@@ -403,8 +405,18 @@ export default function LogAlbumScreen() {
             <Text style={[styles.tracksEmpty, { color: colors.subtext }]}>No tracks available.</Text>
           ) : (
             <>
+              <Pressable
+                style={[styles.favRow, { borderColor: isDark ? '#3a2818' : '#e0e0e0' }]}
+                onPress={() => setFavPickerOpen(true)}>
+                <Ionicons name="trophy" size={14} color="#D4A017" />
+                <Text style={[styles.favLabel, { color: colors.subtext }]}>Favourite track</Text>
+                <Text style={[styles.favValue, { color: favoriteId ? colors.text : colors.subtext }]} numberOfLines={1}>
+                  {tracks!.find(t => t.id === favoriteId)?.title ?? 'Choose'}
+                </Text>
+                <FontAwesome name="chevron-right" size={11} color={colors.subtext} />
+              </Pressable>
               <Text style={[styles.tracksHint, { color: colors.subtext }]}>
-                Tap or drag the bars to rate. Tap a track name to review it. The trophy marks your favourite.
+                Tap or drag the bars to rate. Tap a track name to review it.
               </Text>
               {tracks!.map(t => {
                 const fav        = favoriteId === t.id;
@@ -423,6 +435,7 @@ export default function LogAlbumScreen() {
                           setOpenReviewId(reviewOpen ? null : t.id);
                         }}>
                         <Text style={[styles.trackTitle, { color: colors.text }]} numberOfLines={1}>{t.title}</Text>
+                        {fav && <Ionicons name="trophy" size={12} color="#D4A017" />}
                         {(hasReview || reviewOpen) && (
                           <FontAwesome name="pencil" size={11} color="#D4A017" />
                         )}
@@ -433,12 +446,6 @@ export default function LogAlbumScreen() {
                         isDark={isDark}
                         width={80}
                       />
-                      <Pressable
-                        onPress={() => setFavoriteId(fav ? null : t.id)}
-                        hitSlop={8}
-                        accessibilityLabel={fav ? 'Unmark favourite track' : 'Mark as favourite track'}>
-                        <Ionicons name={fav ? 'trophy' : 'trophy-outline'} size={16} color={fav ? '#D4A017' : colors.subtext} />
-                      </Pressable>
                     </View>
                     {reviewOpen && (
                       <TextInput
@@ -467,6 +474,33 @@ export default function LogAlbumScreen() {
           )}
         </View>
       )}
+
+      <Modal visible={favPickerOpen && !!tracks} transparent animationType="slide" onRequestClose={() => setFavPickerOpen(false)}>
+        <Pressable style={styles.favBackdrop} onPress={() => setFavPickerOpen(false)} />
+        <View style={[styles.favSheet, { backgroundColor: isDark ? '#141414' : '#fff', paddingBottom: 20 + insets.bottom }]}>
+          <View style={styles.favHandle} />
+          <Text style={[styles.favSheetTitle, { color: colors.text }]}>Favourite track</Text>
+          <ScrollView style={{ flexGrow: 0 }} showsVerticalScrollIndicator={false}>
+            {[{ id: '', number: 0, title: 'No favourite' }, ...(tracks ?? [])].map(t => {
+              const selected = (favoriteId ?? '') === t.id;
+              return (
+                <Pressable
+                  key={t.id || 'none'}
+                  onPress={() => { setFavoriteId(t.id || null); setFavPickerOpen(false); }}
+                  style={({ pressed }) => [styles.favOption, { borderBottomColor: isDark ? '#2a1e14' : '#ececec', opacity: pressed ? 0.6 : 1 }]}>
+                  <Text style={[styles.trackNum, { color: colors.subtext }]}>{t.number || ''}</Text>
+                  <Text
+                    style={[styles.favOptionText, { color: t.id ? colors.text : colors.subtext, fontWeight: selected ? '700' : '400' }]}
+                    numberOfLines={1}>
+                    {t.title}
+                  </Text>
+                  {selected && <FontAwesome name="check" size={13} color="#D4A017" />}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
 
       <Pressable
         style={[styles.logButton, { backgroundColor: '#D4A017', opacity: saving ? 0.6 : 1 }]}
@@ -615,6 +649,60 @@ const styles = StyleSheet.create({
   tracksList: {
     width: '100%',
     marginTop: 6,
+  },
+  favRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+  },
+  favLabel: {
+    fontSize: 13,
+  },
+  favValue: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  favBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  favSheet: {
+    maxHeight: '70%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 10,
+    paddingHorizontal: 20,
+  },
+  favHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#4a3020',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  favSheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  favOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  favOptionText: {
+    flex: 1,
+    fontSize: 15,
   },
   tracksHint: {
     fontSize: 12,
