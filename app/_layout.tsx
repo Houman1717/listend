@@ -19,6 +19,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AlbumsProvider } from '@/context/AlbumsContext';
 import { SongReviewsProvider } from '@/context/SongReviewsContext';
+import { SongPlaylistsProvider } from '@/context/SongPlaylistsContext';
 import { FlipProvider } from '@/context/FlipContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { NotificationsProvider } from '@/context/NotificationsContext';
@@ -317,6 +318,7 @@ function ThemedApp() {
     <NotificationsProvider>
     <AlbumsProvider>
     <SongReviewsProvider>
+    <SongPlaylistsProvider>
     <LikedArtistsProvider>
     <LikedFeaturedPlaylistsProvider>
     <FlipProvider>
@@ -369,6 +371,8 @@ function ThemedApp() {
           <Stack.Screen name="recent-listens" options={{ title: 'Recent Listens', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="my-reviews" options={{ title: 'My Reviews', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="my-songs" options={{ title: 'My Songs', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="song-playlist-detail" options={{ title: 'Playlist', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="song-playlist-add" options={{ title: 'Add Songs', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="edit-profile" options={{ title: 'Edit Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           {/* Mandatory first-run step — no header and no swipe-back, so it
@@ -396,6 +400,7 @@ function ThemedApp() {
     </FlipProvider>
     </LikedFeaturedPlaylistsProvider>
     </LikedArtistsProvider>
+    </SongPlaylistsProvider>
     </SongReviewsProvider>
     </AlbumsProvider>
     </NotificationsProvider>

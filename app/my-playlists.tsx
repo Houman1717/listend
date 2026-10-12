@@ -21,6 +21,8 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchPlaylistAlbums, fetchMosaicArtwork } from '@/lib/playlistArtwork';
 import { handleOrName } from '@/lib/userHandle';
+import { useSongPlaylists } from '@/context/SongPlaylistsContext';
+import { SongPlaylistsTab } from '@/components/SongPlaylistsTab';
 import PlaylistFormModal from '@/components/PlaylistFormModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -266,7 +268,10 @@ export default function MyPlaylistsScreen() {
   const viewingOther = paramUserId || null;
 
   // ── Own user — tab state ──────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'mine' | 'liked'>('mine');
+  const [activeTab, setActiveTab] = useState<'mine' | 'songs' | 'liked'>('mine');
+  const { songPlaylists } = useSongPlaylists();
+  // Free tier: 3 playlists in total, album and song playlists combined.
+  const totalPlaylists = playlists.length + songPlaylists.length;
 
   // ── Liked playlists ───────────────────────────────────────────────────────
   const [likedEntries,    setLikedEntries]    = useState<LikedEntry[]>([]);
@@ -528,17 +533,24 @@ export default function MyPlaylistsScreen() {
           onPress={() => setActiveTab('mine')}
           style={[s.tab, activeTab === 'mine' && [s.tabActive, { borderBottomColor: colors.tint }]]}>
           <Text style={[s.tabText, { color: activeTab === 'mine' ? colors.tint : '#a07850' }]}>
-            {viewingOther ? 'Playlists' : 'My Playlists'}
+            Albums
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setActiveTab('songs')}
+          style={[s.tab, activeTab === 'songs' && [s.tabActive, { borderBottomColor: colors.tint }]]}>
+          <Text style={[s.tabText, { color: activeTab === 'songs' ? colors.tint : '#a07850' }]}>
+            Songs
           </Text>
         </Pressable>
         <Pressable
           onPress={() => setActiveTab('liked')}
           style={[s.tab, activeTab === 'liked' && [s.tabActive, { borderBottomColor: colors.tint }]]}>
           <Text style={[s.tabText, { color: activeTab === 'liked' ? colors.tint : '#a07850' }]}>
-            Liked Playlists
+            Liked
           </Text>
         </Pressable>
-        {activeTab === 'mine' && (
+        {(activeTab === 'mine' || activeTab === 'songs') && (
           <Pressable
             onPress={() => {
               const next = !searchOpen;
@@ -571,7 +583,7 @@ export default function MyPlaylistsScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, marginTop: 14, marginBottom: 4 }}>
           <Pressable
             onPress={() => {
-              if (!isPro && playlists.length >= 3) { showPaywall(); return; }
+              if (!isPro && totalPlaylists >= 3) { showPaywall(); return; }
               setShowNewPlaylist(true);
             }}
             style={({ pressed }) => [s.newBtn, { marginHorizontal: 0, marginTop: 0, marginBottom: 0, opacity: pressed ? 0.7 : 1 }]}>
@@ -581,7 +593,7 @@ export default function MyPlaylistsScreen() {
           {/* Free-tier counter doubles as the upsell — at the limit it goes gold
               so the wall is visible before it's hit, not only on the 4th tap. */}
           {proLoaded && !isPro && (() => {
-            const atLimit = playlists.length >= 3;
+            const atLimit = totalPlaylists >= 3;
             return (
               <Pressable
                 onPress={showPaywall}
@@ -595,7 +607,7 @@ export default function MyPlaylistsScreen() {
                   opacity: pressed ? 0.7 : 1,
                 })}>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: atLimit ? '#D4A017' : colors.subtext }}>
-                  {atLimit ? 'Go unlimited' : `${playlists.length}/3 free`}
+                  {atLimit ? 'Go unlimited' : `${totalPlaylists}/3 free`}
                 </Text>
                 <FontAwesome name="chevron-right" size={9} color={atLimit ? '#D4A017' : colors.subtext} />
               </Pressable>
@@ -605,7 +617,7 @@ export default function MyPlaylistsScreen() {
       )}
 
       {/* Search bar — toggled by magnifying glass */}
-      {activeTab === 'mine' && searchOpen && (
+      {(activeTab === 'mine' || activeTab === 'songs') && searchOpen && (
         <View style={[s.searchBar, { borderBottomColor: isDark ? '#2e2018' : '#e8e8e8' }]}>
           <FontAwesome name="search" size={14} color={colors.subtext} />
           <TextInput
@@ -800,6 +812,18 @@ export default function MyPlaylistsScreen() {
             })()}
           </ScrollView>
         )
+      )}
+
+      {/* ── Song playlists tab ───────────────────────────────────────────── */}
+      {activeTab === 'songs' && (
+        <SongPlaylistsTab
+          viewingUserId={viewingOther}
+          albumPlaylistCount={playlists.length}
+          query={query}
+          colors={colors}
+          isDark={isDark}
+          onOpen={(id) => router.push({ pathname: '/song-playlist-detail', params: { id, ...(viewingOther && paramProTheme ? { proTheme: paramProTheme } : {}) } })}
+        />
       )}
 
       {/* New Playlist modal — own user only */}

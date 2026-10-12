@@ -1882,6 +1882,8 @@ app.get('/search', [
         artist: item.attributes?.artistName ?? '',
         artworkUrl: artworkUrl(item.attributes?.artwork),
         releaseDate: item.attributes?.releaseDate?.slice(0, 4) ?? '',
+        albumTitle: item.attributes?.albumName ?? '',
+        durationMs: item.attributes?.durationInMillis ?? 0,
       }));
     } else {
       results = (data.results?.artists?.data ?? []).map(item => {

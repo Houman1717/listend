@@ -14,6 +14,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
 import { SongReviewModal } from '@/components/SongReviewModal';
+import { AddToSongPlaylistSheet } from '@/components/AddToSongPlaylistSheet';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchSongCommunityRatings, withOwnRating, type SongRatingStats } from '@/lib/songReviews';
 
@@ -77,11 +78,13 @@ export function SongInfoModal({
   const [fetchedAlbumTitle, setFetchedAlbumTitle] = useState<string>('');
   const [fetchedArtist,     setFetchedArtist]     = useState<string>('');
   const [reviewing,         setReviewing]         = useState(false);
+  const [addingToPlaylist,  setAddingToPlaylist]  = useState(false);
   const [ratingStats,       setRatingStats]       = useState<SongRatingStats | undefined>(undefined);
   const { getSongReview } = useSongReviews();
 
   useEffect(() => {
     setReviewing(false);
+    setAddingToPlaylist(false);
     setRatingStats(undefined);
     if (!song?.id) return;
     let cancelled = false;
@@ -226,12 +229,24 @@ export function SongInfoModal({
                 {community ? `Listend avg ${community.avg.toFixed(1)} (${community.count})` : 'No ratings yet'}
               </Text>
             </View>
-            <Pressable
-              onPress={() => setReviewing(true)}
-              style={({ pressed }) => [s.rateBtn, { opacity: pressed ? 0.8 : 1 }]}>
-              <FontAwesome name={mine ? 'pencil' : 'volume-up'} size={13} color="#fff" />
-              <Text style={s.rateBtnText}>{mine ? 'Edit your rating' : 'Rate & Review'}</Text>
-            </Pressable>
+            <View style={s.rateBtnRow}>
+              <Pressable
+                onPress={() => setReviewing(true)}
+                style={({ pressed }) => [s.rateBtn, { flex: 1, opacity: pressed ? 0.8 : 1 }]}>
+                <FontAwesome name={mine ? 'pencil' : 'volume-up'} size={13} color="#fff" />
+                <Text style={s.rateBtnText}>{mine ? 'Edit your rating' : 'Rate & Review'}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setAddingToPlaylist(true)}
+                accessibilityLabel="Add to playlist"
+                style={({ pressed }) => [s.playlistBtn, {
+                  borderColor: colorsProp ? colorsProp.tint : '#D4A017',
+                  opacity: pressed ? 0.7 : 1,
+                }]}>
+                <FontAwesome name="list" size={13} color={colorsProp ? colorsProp.tint : '#D4A017'} />
+                <FontAwesome name="plus" size={9} color={colorsProp ? colorsProp.tint : '#D4A017'} />
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
@@ -244,6 +259,28 @@ export function SongInfoModal({
           <Text style={[s.closeBtnText, { color: colorsProp ? colorsProp.subtext : isDark ? '#a07850' : '#7a5535' }]}>Done</Text>
         </Pressable>
       </View>
+
+      {song?.id ? (
+        <AddToSongPlaylistSheet
+          song={{
+            id:         song.id,
+            title:      song.title,
+            artist:     displayArtist,
+            albumId:    displayAlbumId || undefined,
+            albumTitle: displayAlbumTitle || undefined,
+            artworkUrl: song.artworkUrl,
+          }}
+          visible={addingToPlaylist}
+          onClose={() => setAddingToPlaylist(false)}
+          isDark={isDark}
+          colors={{
+            text:    colorsProp ? colorsProp.text    : isDark ? '#f5e6c8' : '#1c1410',
+            subtext: colorsProp ? colorsProp.subtext : isDark ? '#a07850' : '#7a5535',
+            border:  colorsProp ? colorsProp.border  : isDark ? '#2a1e14' : '#e8e8e8',
+            tint:    colorsProp ? colorsProp.tint    : '#D4A017',
+          }}
+        />
+      ) : null}
 
       {/* Nested so iOS presents it on top of this sheet rather than racing its dismissal. */}
       <SongReviewModal
@@ -358,6 +395,19 @@ const s = StyleSheet.create({
     color:      '#D4A017',
     fontSize:   11,
     fontWeight: '700',
+  },
+  rateBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  playlistBtn: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'center',
+    gap: 3,
+    width:          56,
+    borderRadius:   10,
+    borderWidth:    1.5,
   },
   rateBtn: {
     flexDirection:   'row',

@@ -16,6 +16,9 @@ export type CatalogTrack = {
   artist: string;
   artworkUrl: string;
   releaseDate?: string;
+  /** Present on search results (may be missing from older cached results). */
+  albumTitle?: string;
+  durationMs?: number;
 };
 
 export type CatalogArtist = {
