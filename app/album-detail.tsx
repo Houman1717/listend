@@ -2063,25 +2063,19 @@ export default function AlbumDetailScreen() {
                         {track.title}
                       </Text>
                       {showMine && mine?.isFavorite && <Ionicons name="trophy" size={12} color="#D4A017" />}
+                      {/* ❝ N — how many people wrote a review (❝ = review across the app). Inline so
+                          rows stay one line; the title truncates first. */}
+                      {!showMine && reviewCount > 0 && (
+                        <View style={s.trackReviewCount}>
+                          <FontAwesome name="quote-left" size={9} color={colors.subtext} />
+                          <Text style={[s.trackReviewCountText, { color: colors.subtext }]}>{reviewCount}</Text>
+                        </View>
+                      )}
                     </View>
-                    {(track.featuredArtists.length > 0 || (!showMine && reviewCount > 0)) && (
-                      // Sub-line under the title, so the review count doesn't
-                      // take width from it.
-                      <View style={s.trackSubRow}>
-                        {track.featuredArtists.length > 0 && (
-                          <Text style={[s.trackFeat, { color: colors.subtext, flexShrink: 1 }]} numberOfLines={1}>
-                            feat. {track.featuredArtists.join(', ')}
-                          </Text>
-                        )}
-                        {!showMine && reviewCount > 0 && (
-                          <View style={s.trackReviewCount}>
-                            <FontAwesome name="comment-o" size={10} color={colors.subtext} />
-                            <Text style={[s.trackFeat, { color: colors.subtext }]}>
-                              {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
+                    {track.featuredArtists.length > 0 && (
+                      <Text style={[s.trackFeat, { color: colors.subtext }]} numberOfLines={1}>
+                        feat. {track.featuredArtists.join(', ')}
+                      </Text>
                     )}
                   </View>
                   {showMine ? (
@@ -2564,8 +2558,8 @@ const s = StyleSheet.create({
   trackTitle: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
   // Fixed width so ratings line up in a column down the tracklist.
   trackMyRating: { marginLeft: 10, width: 54, alignItems: 'flex-end' },
-  trackSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  trackReviewCount: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
+  trackReviewCount: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 0 },
+  trackReviewCountText: { fontSize: 12, fontWeight: '600' },
   trackToggle: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, padding: 2 },
   trackToggleBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   trackToggleText: { fontSize: 12, fontWeight: '700' },
