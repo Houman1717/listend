@@ -1603,6 +1603,8 @@ export default function AlbumDetailScreen() {
   const sectionBg  = isDark ? '#1c1410' : '#f5f5f5';
   const borderColor = isDark ? '#2a1e14' : '#e8e8e8';
   const mutedText  = isDark ? '#7a5535' : '#a07850';
+  // Only reserve the tracklist's review-count column when some track has one.
+  const anyTrackReviews = [...trackReviewCounts.values()].some(n => n > 0);
 
   return (
     // Same fix as dm-conversation. This screen stays mounted under log-album,
@@ -2070,7 +2072,7 @@ export default function AlbumDetailScreen() {
                       </Text>
                     )}
                   </View>
-                  {!showMine && (
+                  {!showMine && anyTrackReviews && (
                     // Fixed width (empty when 0) so the averages stay in one column.
                     <View style={s.trackReviewCount}>
                       {reviewCount > 0 && (
