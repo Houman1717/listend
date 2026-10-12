@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
+import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 
 function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
   const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
@@ -242,6 +243,13 @@ export function AlbumReviewModal({
                 No written review.
               </Text>
             )}
+
+            <ReviewTrackRatings
+              userId={reviewUserId}
+              album={{ id: album.id, title: album.title, artist: album.artist }}
+              isDark={isDark}
+              colors={colors}
+            />
 
             {/* Like + comment row */}
             <View style={[s.likeCommentRow, { borderColor: border }]}>

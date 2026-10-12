@@ -31,6 +31,7 @@ import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
 import { ProBadge } from '@/components/ProBadge';
+import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 
 // ─── Static metadata ──────────────────────────────────────────────────────────
 
@@ -470,6 +471,7 @@ function ReviewCardModal({
   onClose,
   onAlbumPress,
   onUsernamePress,
+  reviewerId,
 }: {
   item: ActivityItem;
   colors: ColorsShape;
@@ -483,6 +485,8 @@ function ReviewCardModal({
   onClose: () => void;
   onAlbumPress: () => void;
   onUsernamePress?: (username: string) => void;
+  /** Whose activity this is — for their track ratings on the album. */
+  reviewerId?: string | null;
 }) {
   const router = useRouter();
   const border = isDark ? '#2a1e14' : '#e5e5e5';
@@ -590,6 +594,13 @@ function ReviewCardModal({
                 No written review.
               </Text>
             )}
+
+            <ReviewTrackRatings
+              userId={reviewerId}
+              album={{ id: item.id, title: item.title, artist: item.artist }}
+              isDark={isDark}
+              colors={colors}
+            />
 
             {/* Like + comments row */}
             <View style={[rm.likeCommentRow, { borderColor: border }]}>
@@ -1256,6 +1267,7 @@ export default function RecentActivityScreen() {
           item={selectedReview}
           colors={colors}
           isDark={isDark}
+          reviewerId={viewingOther ?? user?.id}
           reviewerUsername={reviewUsername}
           reviewerHandle={reviewHandle}
           avatarUrl={reviewAvatarUrl}

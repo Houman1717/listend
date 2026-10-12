@@ -41,6 +41,8 @@ import { EditListenDateModal } from '@/components/EditListenDateModal';
 import { SendAlbumSheet } from '@/components/SendAlbumSheet';
 import { SongReviewModal } from '@/components/SongReviewModal';
 import { TrackRatingsEditor, useTrackRatingsDraft } from '@/components/TrackRatingsEditor';
+import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
+import { parseReviewTargetId } from '@/lib/reviewTargets';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchSongCommunityRatings, withOwnRating, type SongMeta, type SongRatingStats } from '@/lib/songReviews';
 
@@ -709,6 +711,13 @@ function AlbumSingleReviewModal({
                 No written review.
               </Text>
             )}
+
+            <ReviewTrackRatings
+              userId={review.userId}
+              album={{ id: parseReviewTargetId(review.id)?.spotifyId, title: albumTitle, artist: albumArtist }}
+              isDark={isDark}
+              colors={colors}
+            />
 
             {/* Like + comments row */}
             <View style={[arm.likeCommentRow, { borderColor: border }]}>

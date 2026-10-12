@@ -140,3 +140,47 @@ export async function fetchUserSongReviews(userId: string): Promise<SongReview[]
   );
   return rows ? rows.map(rowToSongReview) : null;
 }
+
+/**
+ * One user's song reviews for one album. Matches on album_id, and on album
+ * title + artist too — logging can canonicalise the album id (another
+ * edition), so the review card's id and the songs' album_id can differ.
+ * Null on failure.
+ */
+export async function fetchUserAlbumSongReviews(
+  userId: string,
+  album: { id?: string; title: string; artist: string },
+): Promise<SongReview[] | null> {
+  const byId = album.id
+    ? supabase.from('song_reviews').select(SONG_REVIEW_COLUMNS).eq('user_id', userId).eq('album_id', album.id).limit(200)
+    : null;
+  const byTitle = album.title
+    ? supabase.from('song_reviews').select(SONG_REVIEW_COLUMNS).eq('user_id', userId).ilike('album_title', escapeLike(album.title)).limit(200)
+    : null;
+  const [a, b] = await Promise.all([byId, byTitle]);
+  const rowsA = a ? rowsOrNull(a) : [];
+  const rowsB = b ? rowsOrNull(b) : [];
+  if (!rowsA || !rowsB) return null;
+  const artist = album.artist.trim().toLowerCase();
+  const out = new Map<string, SongReview>();
+  for (const r of rowsA) out.set(r.song_id, rowToSongReview(r));
+  for (const r of rowsB) {
+    if (artist && (r.artist ?? '').trim().toLowerCase() !== artist) continue;
+    out.set(r.song_id, rowToSongReview(r));
+  }
+  return [...out.values()];
+}
+
+/** Same matching as fetchUserAlbumSongReviews, over an in-memory list. */
+export function songsMatchingAlbum(list: SongReview[], album: { id?: string; title: string; artist: string }): SongReview[] {
+  const title  = album.title.trim().toLowerCase();
+  const artist = album.artist.trim().toLowerCase();
+  return list.filter(s =>
+    (album.id && s.albumId === album.id) ||
+    (!!title && (s.albumTitle ?? '').trim().toLowerCase() === title && s.artist.trim().toLowerCase() === artist),
+  );
+}
+
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, m => `\\${m}`);
+}

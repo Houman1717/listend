@@ -39,6 +39,7 @@ import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
+import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
 
@@ -315,6 +316,13 @@ function ReviewDetailModal({
                 No written review.
               </Text>
             )}
+
+            <ReviewTrackRatings
+              userId={parseReviewTargetId(reviewId)?.userId}
+              album={{ id: album.id, title: album.title, artist: album.artist }}
+              isDark={isDark}
+              colors={colors}
+            />
 
             {/* Like + comments row */}
             <View style={[mrd.likeCommentRow, { borderColor: border }]}>

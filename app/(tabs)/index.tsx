@@ -31,7 +31,8 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchPlaylistCovers } from '@/lib/playlistArtwork';
 import { handleOrName } from '@/lib/userHandle';
-import { reviewOwnerId } from '@/lib/reviewTargets';
+import { reviewOwnerId, parseReviewTargetId } from '@/lib/reviewTargets';
+import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { reportContent } from '@/lib/reports';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
@@ -452,6 +453,13 @@ function PopularReviewModal({
               "{review.review}"
             </Text>
 
+            <ReviewTrackRatings
+              userId={review.userId}
+              album={{ id: parseReviewTargetId(review.id)?.spotifyId, title: review.albumTitle, artist: review.albumArtist }}
+              isDark={isDark}
+              colors={colors}
+            />
+
             {/* Like + comment toggle row */}
             <View style={[frm.likeCommentRow, { borderColor: border }]}>
               <Pressable onPress={onLike} hitSlop={8} style={frm.likeBtn}>
@@ -794,6 +802,13 @@ function FriendReviewModal({
                 No written review.
               </Text>
             )}
+
+            <ReviewTrackRatings
+              userId={parseReviewTargetId(friend.id)?.userId}
+              album={{ id: friend.albumId || undefined, title: friend.album, artist: friend.artist }}
+              isDark={isDark}
+              colors={colors}
+            />
 
             {/* Like + comment toggle row */}
             <View style={[frm.likeCommentRow, { borderColor: border }]}>
