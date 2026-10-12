@@ -154,6 +154,8 @@ export default function LogAlbumScreen() {
   const [tracksFailed, setTracksFailed] = useState(false);
   const [trackRatings, setTrackRatings] = useState<Record<string, number>>({});
   const [favoriteId, setFavoriteId] = useState<string | null>(null);
+  const [trackReviews, setTrackReviews] = useState<Record<string, string>>({});
+  const [openReviewId, setOpenReviewId] = useState<string | null>(null);
   const androidKeyboardHeight = useAndroidKeyboardHeight();
   const insets = useSafeAreaInsets();
 
@@ -193,13 +195,16 @@ export default function LogAlbumScreen() {
         if (cancelled) return;
         setTracks(data);
         const seeded: Record<string, number> = {};
+        const seededReviews: Record<string, string> = {};
         let fav: string | null = null;
         for (const t of data) {
           const r = getSongReview(t.id);
           if (r) seeded[t.id] = r.rating;
+          if (r?.review) seededReviews[t.id] = r.review;
           if (r?.isFavorite) fav = t.id;
         }
         setTrackRatings(seeded);
+        setTrackReviews(seededReviews);
         setFavoriteId(fav);
       })
       .catch(() => { if (!cancelled) setTracksFailed(true); });
@@ -221,17 +226,21 @@ export default function LogAlbumScreen() {
   }
 
   /**
-   * Saves only the tracks the user actually touched: a changed rating, or a
-   * new favourite. Untouched tracks are never logged as listened.
+   * Saves only the tracks the user actually touched: a changed rating or
+   * review, or a new favourite. Untouched tracks are never logged as listened.
    */
   async function saveTrackRatings(): Promise<boolean> {
     if (!tracks) return true;
     const writes: Promise<boolean>[] = [];
     for (const t of tracks) {
-      const existing = getSongReview(t.id);
-      const next = trackRatings[t.id] ?? 0;
-      if (existing ? existing.rating !== next : next > 0) {
-        writes.push(saveSongReview({ song: trackMeta(t), rating: next, review: existing?.review }));
+      const existing   = getSongReview(t.id);
+      const next       = trackRatings[t.id] ?? 0;
+      const nextReview = (trackReviews[t.id] ?? '').trim();
+      const changed = existing
+        ? existing.rating !== next || (existing.review ?? '') !== nextReview
+        : next > 0 || nextReview.length > 0;
+      if (changed) {
+        writes.push(saveSongReview({ song: trackMeta(t), rating: next, review: nextReview }));
       }
     }
     const results = await Promise.all(writes);
@@ -394,26 +403,62 @@ export default function LogAlbumScreen() {
           ) : (
             <>
               <Text style={[styles.tracksHint, { color: colors.subtext }]}>
-                Tap or drag the bars to rate. ☆ marks your favourite track.
+                Tap or drag the bars to rate. Tap a track name to review it. ☆ marks your favourite.
               </Text>
               {tracks!.map(t => {
-                const fav = favoriteId === t.id;
+                const fav        = favoriteId === t.id;
+                const reviewOpen = openReviewId === t.id;
+                const hasReview  = (trackReviews[t.id] ?? '').trim().length > 0;
+                const divider    = isDark ? '#2a1e14' : '#ececec';
                 return (
-                  <View key={t.id} style={[styles.trackRow, { borderBottomColor: isDark ? '#2a1e14' : '#ececec' }]}>
-                    <Text style={[styles.trackNum, { color: colors.subtext }]}>{t.number}</Text>
-                    <Text style={[styles.trackTitle, { color: colors.text }]} numberOfLines={1}>{t.title}</Text>
-                    <Pressable
-                      onPress={() => setFavoriteId(fav ? null : t.id)}
-                      hitSlop={8}
-                      accessibilityLabel={fav ? 'Unmark favourite track' : 'Mark as favourite track'}>
-                      <FontAwesome name={fav ? 'star' : 'star-o'} size={15} color={fav ? '#D4A017' : colors.subtext} />
-                    </Pressable>
-                    <CompactVolumePicker
-                      rating={trackRatings[t.id] ?? 0}
-                      onChange={r => setTrackRatings(prev => ({ ...prev, [t.id]: r }))}
-                      isDark={isDark}
-                      width={90}
-                    />
+                  <View key={t.id} style={[styles.trackBlock, { borderBottomColor: divider }]}>
+                    <View style={styles.trackRow}>
+                      <Text style={[styles.trackNum, { color: colors.subtext }]}>{t.number}</Text>
+                      <Pressable
+                        style={styles.trackTitleBtn}
+                        hitSlop={{ top: 8, bottom: 8 }}
+                        onPress={() => {
+                          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                          setOpenReviewId(reviewOpen ? null : t.id);
+                        }}>
+                        <Text style={[styles.trackTitle, { color: colors.text }]} numberOfLines={1}>{t.title}</Text>
+                        {(hasReview || reviewOpen) && (
+                          <FontAwesome name="pencil" size={11} color="#D4A017" />
+                        )}
+                      </Pressable>
+                      <CompactVolumePicker
+                        rating={trackRatings[t.id] ?? 0}
+                        onChange={r => setTrackRatings(prev => ({ ...prev, [t.id]: r }))}
+                        isDark={isDark}
+                        width={80}
+                      />
+                      <Pressable
+                        onPress={() => setFavoriteId(fav ? null : t.id)}
+                        hitSlop={8}
+                        accessibilityLabel={fav ? 'Unmark favourite track' : 'Mark as favourite track'}>
+                        <FontAwesome name={fav ? 'star' : 'star-o'} size={15} color={fav ? '#D4A017' : colors.subtext} />
+                      </Pressable>
+                    </View>
+                    {reviewOpen && (
+                      <TextInput
+                        style={[
+                          styles.trackReviewInput,
+                          {
+                            color: colors.text,
+                            backgroundColor: isDark ? '#2e2018' : '#f2f2f2',
+                            borderColor: isDark ? '#3a2818' : '#e0e0e0',
+                          },
+                        ]}
+                        placeholder={`Your thoughts on "${t.title}"…`}
+                        placeholderTextColor={colors.subtext}
+                        value={trackReviews[t.id] ?? ''}
+                        onChangeText={text => setTrackReviews(prev => ({ ...prev, [t.id]: text }))}
+                        multiline
+                        autoFocus
+                        textAlignVertical="top"
+                        maxLength={5000}
+                      />
+                    )}
                   </View>
                 );
               })}
@@ -579,12 +624,30 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     textAlign: 'center',
   },
+  trackBlock: {
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   trackRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  trackTitleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trackReviewInput: {
+    marginTop: 8,
+    marginLeft: 30,
+    minHeight: 64,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
+    fontSize: 14,
+    lineHeight: 20,
   },
   trackNum: {
     width: 20,
@@ -592,7 +655,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   trackTitle: {
-    flex: 1,
+    flexShrink: 1,
     fontSize: 14,
   },
   logButton: {

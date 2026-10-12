@@ -104,6 +104,7 @@ export function CompactVolumePicker({ rating, onChange, isDark, width = 120 }: {
 
   return (
     <View style={c.row}>
+      <FontAwesome name="volume-up" size={12} color={rating > 0 ? ACCENT : inactiveColor} />
       <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
         <View style={[c.track, { width }]} hitSlop={{ top: 10, bottom: 10 }}>
           {COMPACT_HEIGHTS.map((h, i) => (
@@ -117,7 +118,7 @@ export function CompactVolumePicker({ rating, onChange, isDark, width = 120 }: {
 }
 
 const c = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   track: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 22, paddingBottom: 2 },
   bar: { flex: 1, borderRadius: 1.5 },
   num: { width: 18, fontSize: 13, fontWeight: '700', textAlign: 'right' },
