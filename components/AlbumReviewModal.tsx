@@ -43,6 +43,7 @@ export function AlbumReviewModal({
   isOwner = false,
   onUndoReListen,
   onDelete,
+  onEdit,
   onReport,
 }: {
   album: LoggedAlbum;
@@ -60,6 +61,8 @@ export function AlbumReviewModal({
   isOwner?: boolean;
   onUndoReListen?: () => void;
   onDelete?: () => void;
+  /** Owner only: edit the rating/review (opens the album page in edit mode). */
+  onEdit?: () => void;
   onReport?: () => void;
 }) {
   const { user } = useAuth();
@@ -297,10 +300,18 @@ export function AlbumReviewModal({
               />
             )}
 
+            {isOwner && onEdit && (
+              <Pressable
+                onPress={onEdit}
+                style={({ pressed }) => [s.editBtn, { borderColor: colors.tint, opacity: pressed ? 0.7 : 1 }]}>
+                <FontAwesome name="pencil" size={13} color={colors.tint} />
+                <Text style={[s.editBtnText, { color: colors.tint }]}>Edit Review</Text>
+              </Pressable>
+            )}
             {isOwner && album.isRelistened && onUndoReListen && (
               <Pressable
                 onPress={onUndoReListen}
-                style={({ pressed }) => [s.undoRelistenBtn, { opacity: pressed ? 0.7 : 1 }]}>
+                style={({ pressed }) => [s.undoRelistenBtn, onEdit && { marginTop: 10 }, { opacity: pressed ? 0.7 : 1 }]}>
                 <FontAwesome name="undo" size={13} color="#8B1A1A" />
                 <Text style={s.undoRelistenBtnText}>Undo Last Re-listen</Text>
               </Pressable>
@@ -308,7 +319,7 @@ export function AlbumReviewModal({
             {isOwner && onDelete && !album.isRelistened && (
               <Pressable
                 onPress={onDelete}
-                style={({ pressed }) => [s.deleteBtn, { opacity: pressed ? 0.7 : 1 }]}>
+                style={({ pressed }) => [s.deleteBtn, onEdit && { marginTop: 10 }, { opacity: pressed ? 0.7 : 1 }]}>
                 <FontAwesome name="trash" size={13} color="#8B1A1A" />
                 <Text style={s.deleteBtnText}>Remove from Listend</Text>
               </Pressable>
@@ -351,6 +362,11 @@ const s = StyleSheet.create({
     padding: 12, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, marginBottom: 12,
   },
   commentsToggleText: { fontSize: 14, fontWeight: '500' },
+  editBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 24, paddingVertical: 12, borderRadius: 10, borderWidth: 1,
+  },
+  editBtnText: { fontWeight: '600', fontSize: 14 },
   deleteBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     marginTop: 24, paddingVertical: 12, borderRadius: 10,

@@ -1505,6 +1505,11 @@ export default function ListendScreen() {
         isDark={isDark}
         colors={colors}
         isOwner
+        onEdit={() => {
+          const a = selectedTopAlbum;
+          setSelectedTopAlbum(null);
+          navigateToAlbum(router, a, { edit: true });
+        }}
       />
     )}
     <SongReviewCard

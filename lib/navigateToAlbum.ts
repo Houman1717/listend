@@ -14,7 +14,7 @@ export interface AlbumNavInput {
  * callsite in the app lands on the same album-detail page regardless of
  * which Supabase record the ID came from.
  */
-export async function navigateToAlbum(router: Router, album: AlbumNavInput) {
+export async function navigateToAlbum(router: Router, album: AlbumNavInput, opts?: { edit?: boolean }) {
   const resolved = await resolveCanonicalAlbum(album);
   router.push({
     pathname: '/album-detail',
@@ -24,6 +24,8 @@ export async function navigateToAlbum(router: Router, album: AlbumNavInput) {
       artist:     resolved.artist,
       year:       String(resolved.year || ''),
       artworkUrl: resolved.artworkUrl,
+      // Opens straight into the logged album's edit mode (rating, review, tracks).
+      ...(opts?.edit ? { edit: '1' } : {}),
     },
   } as any);
 }

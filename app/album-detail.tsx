@@ -809,6 +809,8 @@ export default function AlbumDetailScreen() {
 
   const params = useLocalSearchParams<{
     id: string; title?: string; artist?: string; year?: string; artworkUrl?: string; reviewId?: string; openComments?: string; highlightCommentId?: string;
+    /** '1' = open the logged album's edit mode on arrival (Edit on a review card). */
+    edit?: string;
   }>();
 
   const { user } = useAuth();
@@ -1546,6 +1548,16 @@ export default function AlbumDetailScreen() {
     trackDraft.reset();
     setEditMode(false);
   }
+
+  // Arrived from a review card's Edit: open edit mode once the log is known,
+  // and bring the editor into view.
+  const autoEditDone = useRef(false);
+  useEffect(() => {
+    if (params.edit !== '1' || autoEditDone.current || !isLogged) return;
+    autoEditDone.current = true;
+    handleStartEdit();
+    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(editBlockYRef.current - 20, 0), animated: true }), 400);
+  }, [params.edit, isLogged]);
 
   function handleLog() {
     setPendingAlbum({ spotifyId: myAlbumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork });

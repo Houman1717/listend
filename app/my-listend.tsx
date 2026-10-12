@@ -427,6 +427,11 @@ export default function MyListendScreen() {
           isDark={isDark}
           colors={colors}
           isOwner={!viewingOther}
+          onEdit={!viewingOther ? () => {
+            const a = selectedAlbum;
+            setSelectedAlbum(null);
+            navigateToAlbum(router, a, { edit: true });
+          } : undefined}
           onReport={viewingOther ? () => reportContent({
             contentType: 'review',
             contentId: `${viewingOther}_${selectedAlbum.id}`,
