@@ -31,6 +31,7 @@ import { useLikedArtists } from '@/context/LikedArtistsContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { useSongReviews } from '@/context/SongReviewsContext';
 import { SongInfoModal, SongInfo } from '@/components/SongInfoModal';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { LoggedAlbum } from '@/context/AlbumsContext';
@@ -1276,6 +1277,7 @@ export default function ListendScreen() {
   }, [navigation, openSettings, openShareProfile, unreadCount, unreadDMCount, router, headerIconColor, colors.background, colors.text, colors.subtext, profileUsername, profileDisplayName, user?.id]);
 
   const reviewCount = loggedAlbums.filter((a) => !!(a.lastReview ?? a.review)).length;
+  const { songReviews, songsLoaded } = useSongReviews();
 
   // ── Profile stats ────────────────────────────────────────────────────────────
   // "Do we actually know this user's library?" — true once we have rows from
@@ -1466,6 +1468,8 @@ export default function ListendScreen() {
         <NavRow colors={colors} icon="bookmark-o" label="Want to Listen"  sub={`${wantToListen.length} saved`}                                             onPress={() => router.push('/want-to-listen')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="quote-left" label="My Reviews"      sub={`${reviewCount} reviews`}                                                    onPress={() => router.push('/my-reviews')} />
+        <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+        <NavRow colors={colors} icon="play-circle-o" label="My Songs"     sub={songsLoaded ? `${songReviews.length} songs` : 'Your rated songs'}            onPress={() => router.push('/my-songs')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="clock-o"    label="Recent Activity" sub="Your recent activity"                                                        onPress={() => router.push('/recent-activity')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />

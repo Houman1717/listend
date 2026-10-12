@@ -1241,6 +1241,8 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="quote-left" label="Reviews"         sub={`${reviewCount} reviews`}       onPress={() => router.push({ pathname: '/my-reviews',       params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
+            <NavRow icon="play-circle-o" label="Songs"        sub="Rated songs"                    onPress={() => router.push({ pathname: '/my-songs',         params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
+            <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`}  onPress={() => router.push({ pathname: '/recent-activity',  params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="repeat"     label="Re-listend"      sub="Albums re-listend"              onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } } as any)} colors={colors} />

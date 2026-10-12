@@ -32,6 +32,10 @@ import { navigateToProfile } from '@/lib/navigateToProfile';
 import { useLikedFeaturedPlaylists } from '@/context/LikedFeaturedPlaylistsContext';
 import { ProBadge } from '@/components/ProBadge';
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
+import { SongReviewModal } from '@/components/SongReviewModal';
+import { useSongReviews } from '@/context/SongReviewsContext';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import type { SongReview } from '@/lib/songReviews';
 
 // ─── Static metadata ──────────────────────────────────────────────────────────
 
@@ -136,7 +140,19 @@ type FeedItem =
   | { kind: 'likedArtist';     data: LikedArtistItem }
   | { kind: 'likedPlaylist';   data: LikedPlaylistItem }
   | { kind: 'createdPlaylist'; data: CreatedPlaylistItem }
-  | { kind: 'flippedRecord';   data: FlipItem };
+  | { kind: 'flippedRecord';   data: FlipItem }
+  | { kind: 'song';            data: SongItem };
+
+// A song you logged. Only ever in your own feed — songs never appear in other
+// people's activity (or friends' feeds), by design.
+// Songs from one album logged on the same day collapse into one row, so rating
+// a whole tracklist doesn't flood the feed.
+type SongItem = {
+  key:       string;
+  songs:     SongReview[];   // newest first; one entry = a single song row
+  dateMs:    number;
+  dateLabel: string;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -845,6 +861,75 @@ function FlippedRecordRow({ item, colors }: { item: FlipItem; colors: ColorsType
   );
 }
 
+function SongRow({ item, onPress, colors }: { item: SongItem; onPress: () => void; colors: ColorsType }) {
+  if (item.songs.length > 1) return <AlbumSongsRow item={item} onPress={onPress} colors={colors} />;
+  const song = item.songs[0];
+  const label = song.review ? 'Reviewed Song' : song.rating > 0 ? 'Rated Song' : 'Listened to Song';
+  return (
+    <Pressable style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]} onPress={onPress}>
+      {song.artworkUrl ? (
+        <ExpoImage source={{ uri: song.artworkUrl }} style={s.art} contentFit="cover" cachePolicy="disk" />
+      ) : (
+        <View style={[s.art, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={s.artInitial}>{song.title.charAt(0)}</Text>
+        </View>
+      )}
+      <View style={s.info}>
+        <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{song.title}</Text>
+        <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>{song.artist}</Text>
+        <View style={s.meta}>
+          <View style={[s.typePill, { borderColor: colors.tint }]}>
+            <FontAwesome name="music" size={9} color={colors.tint} />
+            <Text style={[s.typeLabel, { color: colors.tint }]}>{label}</Text>
+          </View>
+          {song.isFavorite && <Ionicons name="trophy" size={11} color={colors.tint} />}
+          {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
+        </View>
+      </View>
+      {song.rating > 0 && (
+        <View style={s.bars}>
+          <FontAwesome name="volume-up" size={10} color={colors.tint} />
+          <VolumeBars rating={song.rating} activeColor={colors.tint} inactiveColor={colors.border} heights={BAR_HEIGHTS} barWidth={2.5} gap={2.5} />
+          <Text style={[s.ratingNum, { color: colors.tint }]}>{song.rating}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function AlbumSongsRow({ item, onPress, colors }: { item: SongItem; onPress: () => void; colors: ColorsType }) {
+  const first = item.songs[0];
+  const rated = item.songs.filter(x => x.rating > 0).length;
+  const fav   = item.songs.find(x => x.isFavorite);
+  return (
+    <Pressable style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]} onPress={onPress}>
+      {first.artworkUrl ? (
+        <ExpoImage source={{ uri: first.artworkUrl }} style={s.art} contentFit="cover" cachePolicy="disk" />
+      ) : (
+        <View style={[s.art, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={s.artInitial}>{(first.albumTitle ?? first.title).charAt(0)}</Text>
+        </View>
+      )}
+      <View style={s.info}>
+        <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{first.albumTitle ?? first.artist}</Text>
+        <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>
+          {fav ? `Favourite: ${fav.title}` : first.artist}
+        </Text>
+        <View style={s.meta}>
+          <View style={[s.typePill, { borderColor: colors.tint }]}>
+            <FontAwesome name="music" size={9} color={colors.tint} />
+            <Text style={[s.typeLabel, { color: colors.tint }]}>
+              {rated > 0 ? `Rated ${rated} track${rated === 1 ? '' : 's'}` : `Listened to ${item.songs.length} tracks`}
+            </Text>
+          </View>
+          {fav && <Ionicons name="trophy" size={11} color={colors.tint} />}
+          {item.dateLabel ? <Text style={[s.date, { color: colors.subtext }]}>{item.dateLabel}</Text> : null}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 function Top5Row({ item, onPress, colors }: { item: Top5ChangeItem; onPress: () => void; colors: ColorsType }) {
   const catLabel = TOP5_CATEGORY_LABEL[item.category] ?? 'Top 5';
   return (
@@ -1095,6 +1180,24 @@ export default function RecentActivityScreen() {
     });
   }, [featuredLikedPlaylists, featuredLikeDates, viewingOther]);
 
+  const { songReviews } = useSongReviews();
+  const [openSong, setOpenSong] = useState<SongReview | null>(null);
+  const ownSongItems = useMemo((): SongItem[] => {
+    const groups = new Map<string, SongReview[]>();
+    for (const song of songReviews) {
+      const day = song.listenedAt.slice(0, 10);
+      const k = song.albumId ? `${song.albumId}|${day}` : `single|${song.songId}`;
+      const g = groups.get(k);
+      if (g) g.push(song); else groups.set(k, [song]);
+    }
+    return [...groups.entries()].map(([k, songs]) => ({
+      key:       `song-${k}`,
+      songs,
+      dateMs:    new Date(songs[0].listenedAt).getTime(),
+      dateLabel: formatDateLabel(songs[0].listenedAt),
+    }));
+  }, [songReviews]);
+
   const feed = useMemo((): FeedItem[] => {
     const activityItems      = viewingOther ? otherActivity         : [...ownActivityItems, ...ownReListens];
     const friendItems        = viewingOther ? otherFriends          : ownFriendItems;
@@ -1106,6 +1209,7 @@ export default function RecentActivityScreen() {
     const createdPlaylistItems = viewingOther ? otherCreatedPlaylists : ownCreatedPlaylists;
 
     const flipItems = viewingOther ? otherFlips : ownFlips;
+    const songItems = viewingOther ? [] : ownSongItems;
 
     const combined: FeedItem[] = [
       ...activityItems.map(d       => ({ kind: 'activity'        as const, data: d })),
@@ -1115,6 +1219,7 @@ export default function RecentActivityScreen() {
       ...likedPlaylistItems.map(d  => ({ kind: 'likedPlaylist'   as const, data: d })),
       ...createdPlaylistItems.map(d=> ({ kind: 'createdPlaylist' as const, data: d })),
       ...flipItems.map(d           => ({ kind: 'flippedRecord'   as const, data: d })),
+      ...songItems.map(d           => ({ kind: 'song'            as const, data: d })),
     ];
 
     combined.sort((a, b) => {
@@ -1135,6 +1240,7 @@ export default function RecentActivityScreen() {
     ownLikedPlaylists, otherLikedPlaylists, ownFeaturedLikedPlaylists, featuredLikeDates,
     ownCreatedPlaylists, otherCreatedPlaylists,
     ownFlips, otherFlips,
+    ownSongItems,
     viewingOther,
   ]);
 
@@ -1246,6 +1352,20 @@ export default function RecentActivityScreen() {
         if (item.kind === 'flippedRecord') {
           return <FlippedRecordRow item={item.data} colors={colors} />;
         }
+        if (item.kind === 'song') {
+          const songs = item.data.songs;
+          return (
+            <SongRow
+              item={item.data}
+              colors={colors}
+              onPress={() => {
+                if (songs.length === 1) { setOpenSong(songs[0]); return; }
+                const first = songs[0];
+                router.push({ pathname: '/album-detail', params: { id: first.albumId!, title: first.albumTitle ?? '', artist: first.artist, artworkUrl: first.artworkUrl ?? '' } });
+              }}
+            />
+          );
+        }
         return (
           <ActivityRow
             item={item.data}
@@ -1306,6 +1426,21 @@ export default function RecentActivityScreen() {
           onUsernamePress={viewingOther ? (username) => { setSelectedReview(null); navigateToProfile(username, router); } : undefined}
         />
       )}
+      <SongReviewModal
+        song={openSong ? {
+          id:         openSong.songId,
+          title:      openSong.title,
+          artist:     openSong.artist,
+          albumId:    openSong.albumId,
+          albumTitle: openSong.albumTitle,
+          artworkUrl: openSong.artworkUrl,
+          durationMs: openSong.durationMs,
+        } : null}
+        isDark={isDark}
+        colors={colors}
+        onClose={() => setOpenSong(null)}
+        onUserPress={(userId) => { setOpenSong(null); router.push({ pathname: '/user-profile', params: { userId } }); }}
+      />
     </>
   );
 }
