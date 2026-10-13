@@ -39,7 +39,9 @@ export async function navigateToReviewNotification(
     // Likes/comments made from album-detail's Friends row used to be keyed
     // `{userId}_{album_title_slug}` ("in_tension") instead of the catalog id.
     // `_` is ILIKE's single-char wildcard, so the slug still matches the title.
-    if (!data && /^[a-z0-9_]+$/i.test(spotifyId) && spotifyId.includes('_')) {
+    // No shape check: slugs can be one word ("amnesiac") or keep punctuation
+    // ("the_fall-off"), and a real catalog id never matches a title anyway.
+    if (!data) {
       const { data: rows } = await supabase
         .from('user_albums')
         .select('spotify_id, title, artist, year, artwork_url')
