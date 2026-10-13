@@ -145,6 +145,8 @@ type ReviewTab  = 'all' | 'friends' | 'own';
 
 type FriendActivity = {
   userId:    string;
+  /** The friend's own catalog id for this album — review ids are `{userId}_{spotifyId}`. */
+  spotifyId?: string;
   username:  string;
   displayName?: string | null;
   avatarUrl?: string | null;
@@ -1292,7 +1294,7 @@ export default function AlbumDetailScreen() {
       const [{ data: listened }, { data: wanted }, { data: reListenRows }] = await Promise.allSettled([
         supabase
           .from('user_albums')
-          .select('user_id, rating, review, listened_at')
+          .select('user_id, rating, review, listened_at, spotify_id')
           .in('user_id', ids)
           .ilike('title', albumTitle)
           .not('listened_at', 'is', null),
@@ -1303,7 +1305,7 @@ export default function AlbumDetailScreen() {
           .ilike('title', albumTitle),
         supabase
           .from('re_listens')
-          .select('user_id, rating, review, listened_at')
+          .select('user_id, rating, review, listened_at, spotify_id')
           .in('user_id', ids)
           .ilike('title', albumTitle)
           .order('listened_at', { ascending: false }),
@@ -1333,11 +1335,11 @@ export default function AlbumDetailScreen() {
       );
 
       // Build re-listen map: most recent re-listen per user
-      const reListenByUser = new Map<string, { count: number; rating: number; review?: string; listenedAt?: string }>();
+      const reListenByUser = new Map<string, { count: number; rating: number; review?: string; listenedAt?: string; spotifyId?: string }>();
       for (const row of (reListenRows ?? []) as any[]) {
         const existing = reListenByUser.get(row.user_id);
         if (!existing) {
-          reListenByUser.set(row.user_id, { count: 1, rating: row.rating ?? 0, review: row.review ?? undefined, listenedAt: row.listened_at ?? undefined });
+          reListenByUser.set(row.user_id, { count: 1, rating: row.rating ?? 0, review: row.review ?? undefined, listenedAt: row.listened_at ?? undefined, spotifyId: row.spotify_id ?? undefined });
         } else {
           existing.count++;
         }
@@ -1362,6 +1364,7 @@ export default function AlbumDetailScreen() {
         const rl = reListenByUser.get(row.user_id);
         activities.push({
           userId:     row.user_id,
+          spotifyId:  row.spotify_id ?? undefined,
           username,
           displayName: displayNameMap.get(row.user_id) ?? null,
           avatarUrl:  avatarMap.get(row.user_id) ?? null,
@@ -1385,6 +1388,7 @@ export default function AlbumDetailScreen() {
         if (!username || uid === user?.id) continue;
         activities.push({
           userId:     uid,
+          spotifyId:  rl.spotifyId,
           username,
           displayName: displayNameMap.get(uid) ?? null,
           avatarUrl:  avatarMap.get(uid) ?? null,
@@ -1925,7 +1929,13 @@ export default function AlbumDetailScreen() {
                       navigateToProfile(friend.username, router);
                       return;
                     }
-                    const reviewId = `${friend.userId}_${albumTitle.toLowerCase().replace(/\s+/g, '_')}`;
+                    // Must be the real `{userId}_{spotifyId}` — likes, comments and the
+                    // notifications they send are all keyed on it, and a tapped
+                    // notification resolves the album from that spotifyId. A title
+                    // slug here sent people to a blank album page.
+                    const communityMatch = communityReviews.find(r => r.userId === friend.userId);
+                    const reviewId = communityMatch?.id
+                      ?? (friend.spotifyId ? `${friend.userId}_${friend.spotifyId}` : `${friend.userId}_${myAlbumId}`);
                     const fakeReview: CommunityReview = {
                       id:           reviewId,
                       userId:       friend.userId,
@@ -1939,8 +1949,8 @@ export default function AlbumDetailScreen() {
                       dateStr:      displayDate
                         ? new Date(displayDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
                         : undefined,
-                      likeCount:    0,
-                      commentCount: 0,
+                      likeCount:    communityMatch?.likeCount ?? 0,
+                      commentCount: communityMatch?.commentCount ?? 0,
                     };
                     openReview(fakeReview, false);
                   }

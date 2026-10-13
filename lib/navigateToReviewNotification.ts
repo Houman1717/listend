@@ -27,14 +27,29 @@ export async function navigateToReviewNotification(
   let year: string | undefined;
   let artworkUrl: string | undefined;
 
+  let albumId = spotifyId;
+
   if (userId && spotifyId) {
-    const { data } = await supabase
+    let { data } = await supabase
       .from('user_albums')
-      .select('title, artist, year, artwork_url')
+      .select('spotify_id, title, artist, year, artwork_url')
       .eq('user_id', userId)
       .eq('spotify_id', spotifyId)
       .maybeSingle();
+    // Likes/comments made from album-detail's Friends row used to be keyed
+    // `{userId}_{album_title_slug}` ("in_tension") instead of the catalog id.
+    // `_` is ILIKE's single-char wildcard, so the slug still matches the title.
+    if (!data && /^[a-z0-9_]+$/i.test(spotifyId) && spotifyId.includes('_')) {
+      const { data: rows } = await supabase
+        .from('user_albums')
+        .select('spotify_id, title, artist, year, artwork_url')
+        .eq('user_id', userId)
+        .ilike('title', spotifyId)
+        .limit(1);
+      data = rows?.[0] ?? null;
+    }
     if (data) {
+      albumId    = data.spotify_id ?? spotifyId;
       title      = data.title      ?? undefined;
       artist     = data.artist     ?? undefined;
       year       = data.year ? String(data.year) : undefined;
@@ -45,7 +60,7 @@ export async function navigateToReviewNotification(
   router.push({
     pathname: '/album-detail',
     params: {
-      id: spotifyId ?? '',
+      id: albumId ?? '',
       title, artist, year, artworkUrl,
       reviewId: targetId,
       openComments: openComments ? '1' : undefined,
