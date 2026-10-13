@@ -1030,6 +1030,26 @@ const MANUAL_ALBUMS = [
       { number: 11, id: 'lst-korova-milky-bar-t11', title: 'Szklany człowiek / Pocztówka z lotniska', durationMs: 984333 },
     ],
   },
+  {
+    id: 'lst-in-tension',
+    title: 'In Tension',
+    artist: 'Light Asylum',
+    artistId: '433559884',
+    year: 2011,
+    // Their debut EP, which Apple doesn't carry. The Mexican Summer release
+    // (digital and 12") that MusicBrainz and Discogs both date 2011; an
+    // undated-label 2010 issue exists, and the CD adds a radio mix. Tracklist
+    // and timings from MusicBrainz's digital release.
+    artworkUrl: 'https://coverartarchive.org/release-group/66745fd5-390e-4feb-b6e0-1549b70061ac/front-500',
+    musicbrainzReleaseId: 'e798697e-1184-406e-a9fa-1734deb29d12',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-in-tension-t1', title: 'A Certain Person', durationMs: 268000 },
+      { number: 2, id: 'lst-in-tension-t2', title: 'Knights and Week Ends', durationMs: 267000 },
+      { number: 3, id: 'lst-in-tension-t3', title: 'Dark Allies', durationMs: 362000 },
+      { number: 4, id: 'lst-in-tension-t4', title: 'Skull Fuct', durationMs: 317000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────

@@ -499,6 +499,58 @@ pinStorefront('pl', [
   '1046880183', '1046880184', '1046880305', '1046880306', '1046880308', '1046880309',
   '1046880310',
 ]);
+// Subsonica — Microchip emozionale (2001)
+pinStorefront('it', [
+  '716686233',
+  '716686396', '716686444', '716686515', '716686517', '716686518', '716686519',
+  '716686520', '716686527', '716686531', '716686532', '716686533', '716686539',
+  '716686540', '716686542',
+]);
+// Subsonica — Amorematico (2002)
+pinStorefront('it', [
+  '715981025',
+  '715982172', '715982191', '715982214', '715982247', '715982288', '715982316',
+  '715982399', '715982447', '715982452', '715982458', '715982538', '715982545',
+  '715982559', '715982568',
+]);
+// Subsonica — Terrestre (2005)
+pinStorefront('it', [
+  '715817377',
+  '715817622', '715817637', '715817656', '715817680', '715817776', '715817826',
+  '715817837', '715817883', '715819005', '715819178', '715819328', '715819354',
+  '715819373', '715819425',
+]);
+// Subsonica — L'eclissi (2007)
+pinStorefront('it', [
+  '715526200',
+  '715526499', '715526501', '715526503', '715526510', '715526523', '715526537',
+  '715526542', '715526571', '715526574', '715526599', '715526602', '715526610',
+]);
+// Subsonica — Eden (Deluxe Edition) (2011)
+pinStorefront('it', [
+  '888396571',
+  '888396620', '888396622', '888396624', '888396625', '888396639', '888396641',
+  '888396642', '888396644', '888396647', '888396651', '888396727', '888396733',
+  '888396738',
+]);
+// Subsonica — Subsonica (2012)
+pinStorefront('it', [
+  '716071359',
+  '716071561', '716071563', '716071567', '716071570', '716071577', '716071583',
+  '716071651', '716071654', '716071657', '716071662', '716071669', '716071675',
+]);
+// Subsonica — The Platinum Collection (2016)
+pinStorefront('it', [
+  '1443308060',
+  '1443308063', '1443308069', '1443308072', '1443308075', '1443308078', '1443308142',
+  '1443308146', '1443308150', '1443308152', '1443308155', '1443308161', '1443308165',
+  '1443308170', '1443308233', '1443308240', '1443308243', '1443308249', '1443308254',
+  '1443308259', '1443308325', '1443308329', '1443308335', '1443308340', '1443308344',
+  '1443308348', '1443308383', '1443308385', '1443308390', '1443308393', '1443308398',
+  '1443308403', '1443308406', '1443308532', '1443308537', '1443308540', '1443308546',
+  '1443308549', '1443308554', '1443308558', '1443308560', '1443308629', '1443308631',
+  '1443308635', '1443308639', '1443308640', '1443308647', '1443308802', '1443308809',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -866,6 +918,34 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'kayah::stereotyp': {
     id: '1046879822', title: 'Stereo Typ', artist: 'Kayah', year: 2004,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/7e/b9/95/7eb99564-896f-d6b0-f547-8ecb79090cfa/886445509236.jpg/500x500bb.jpg',
+  },
+  'subsonica::microchipemozionale': {
+    id: '716686233', title: 'Microchip emozionale', artist: 'Subsonica', year: 2001,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/51/20/a3/5120a358-399b-f08b-8586-ead60a26284d/05099963542554.jpg/500x500bb.jpg',
+  },
+  'subsonica::amorematico': {
+    id: '715981025', title: 'Amorematico', artist: 'Subsonica', year: 2002,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/b5/82/63/b58263ba-977b-6752-2078-ea8c92ce05ab/05099963542653.jpg/500x500bb.jpg',
+  },
+  'subsonica::terrestre': {
+    id: '715817377', title: 'Terrestre', artist: 'Subsonica', year: 2005,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/05/45/33/0545332d-3b90-e170-29c7-065fe6054ed4/05099963542752.jpg/500x500bb.jpg',
+  },
+  'subsonica::leclissi': {
+    id: '715526200', title: 'L\'eclissi', artist: 'Subsonica', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/62/fa/2d/62fa2d7b-16ef-2f40-aa95-b9dc199fcd63/05099963542851.jpg/500x500bb.jpg',
+  },
+  'subsonica::edendeluxeedition': {
+    id: '888396571', title: 'Eden (Deluxe Edition)', artist: 'Subsonica', year: 2011,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/7d/36/d7/7d36d7a2-95a7-ce79-6462-c34579706a0d/05099994172256.jpg/500x500bb.jpg',
+  },
+  'subsonica::subsonica': {
+    id: '716071359', title: 'Subsonica', artist: 'Subsonica', year: 2012,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/7a/61/0e/7a610ea9-1d8e-577d-938b-dd79b8980311/05099963542455.jpg/500x500bb.jpg',
+  },
+  'subsonica::theplatinumcollection': {
+    id: '1443308060', title: 'The Platinum Collection', artist: 'Subsonica', year: 2016,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/80/44/13/804413fb-b245-1f9d-2549-24737e8dbdb5/00602547902573.rgb.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -4414,6 +4494,50 @@ const ARTIST_ALBUM_OVERRIDES = {
       url: 'https://music.apple.com/pl/album/stereo-typ/1046879822', type: 'album',
     },
   ],
+  '41908023': [ // Subsonica — not licensed for `us`
+    {
+      id: '716686233', title: 'Microchip emozionale',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/51/20/a3/5120a358-399b-f08b-8586-ead60a26284d/05099963542554.jpg/500x500bb.jpg',
+      year: 2001, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/it/album/microchip-emozionale/716686233', type: 'album',
+    },
+    {
+      id: '715981025', title: 'Amorematico',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/b5/82/63/b58263ba-977b-6752-2078-ea8c92ce05ab/05099963542653.jpg/500x500bb.jpg',
+      year: 2002, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/it/album/amorematico/715981025', type: 'album',
+    },
+    {
+      id: '715817377', title: 'Terrestre',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/05/45/33/0545332d-3b90-e170-29c7-065fe6054ed4/05099963542752.jpg/500x500bb.jpg',
+      year: 2005, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/it/album/terrestre/715817377', type: 'album',
+    },
+    {
+      id: '715526200', title: 'L\'eclissi',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/62/fa/2d/62fa2d7b-16ef-2f40-aa95-b9dc199fcd63/05099963542851.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 12,
+      url: 'https://music.apple.com/it/album/leclissi/715526200', type: 'album',
+    },
+    {
+      id: '888396571', title: 'Eden (Deluxe Edition)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/7d/36/d7/7d36d7a2-95a7-ce79-6462-c34579706a0d/05099994172256.jpg/500x500bb.jpg',
+      year: 2011, isSingle: false, isCompilation: false, trackCount: 13,
+      url: 'https://music.apple.com/it/album/eden-deluxe-edition/888396571', type: 'album',
+    },
+    {
+      id: '716071359', title: 'Subsonica',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/7a/61/0e/7a610ea9-1d8e-577d-938b-dd79b8980311/05099963542455.jpg/500x500bb.jpg',
+      year: 2012, isSingle: false, isCompilation: false, trackCount: 12,
+      url: 'https://music.apple.com/it/album/subsonica/716071359', type: 'album',
+    },
+    {
+      id: '1443308060', title: 'The Platinum Collection',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/80/44/13/804413fb-b245-1f9d-2549-24737e8dbdb5/00602547902573.rgb.jpg/500x500bb.jpg',
+      year: 2016, isSingle: false, isCompilation: true, trackCount: 48,
+      url: 'https://music.apple.com/it/album/the-platinum-collection/1443308060', type: 'album',
+    },
+  ],
   '469647548': [ // Cro — not licensed for `us`
     {
       id: '1579322186', title: 'trip',
@@ -4714,7 +4838,9 @@ async function buildArtistDiscography(id, bust = false) {
   ];
   const isFalseCompilation = title => NOT_COMPILATION_TITLES.includes(title.toLowerCase());
 
-  const LIVE_RE       = /\b(live|concert|tour|session|performance)\b|apple(?:\s+music)?\s+presents|chopnotslop|chopped\s+not\s+slopped/i;
+  // "dal vivo" / "en vivo" / "ao vivo": Italian, Spanish and Portuguese for
+  // live — Subsonica's Una nave in una foresta dal vivo sat under Albums.
+  const LIVE_RE       = /\b(live|concert|tour|session|performance)\b|\b(dal|en|ao)\s+vivo\b|apple(?:\s+music)?\s+presents|chopnotslop|chopped\s+not\s+slopped/i;
   const COLLECTION_RE = /\b(greatest\s+hits?|highlights?|collection|deluxe)\b|best\s+of\b/i;
   // The dotted spelling needs its own alternative: \bep\b does not match "E.P.".
   // It used to land in EPs anyway via the track-count rule, so the gap only
