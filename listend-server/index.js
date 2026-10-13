@@ -1378,10 +1378,16 @@ const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
 // suffix after it ("Weezer (Red Album) [Deluxe Edition]") still goes.
 const NAMED_ALBUM_RE = /^.*?[\(\[]([^()\[\]]*\balbum)\s*[\)\]]/i;
 
+// The nickname is keyed without a leading "the", so Apple's "The Beatles (The
+// White Album)" and "The Beatles (White Album) (Super Deluxe…)" are one record.
 const baseTitle = title => {
   const t = title ?? '';
   const named = t.match(NAMED_ALBUM_RE);
-  if (named && !hasQualifier(named[1])) return named[0].trim().toLowerCase();
+  if (named && !hasQualifier(named[1])) {
+    const open = Math.max(named[0].lastIndexOf('('), named[0].lastIndexOf('['));
+    const nick = named[1].trim().replace(/^the\s+/i, '');
+    return `${named[0].slice(0, open).trim()} (${nick})`.toLowerCase();
+  }
   return t.replace(VARIANT_SUFFIX_RE, '').trim().toLowerCase();
 };
 
@@ -4854,6 +4860,7 @@ async function buildArtistDiscography(id, bust = false) {
     'long.live.a$ap',
     'live a little',   // Elvis — Live a Little, Love a Little
     'live at the sand trap',   // Dos Gringos — studio album; written on deployment in Iraq
+    'magical mystery tour',    // The Beatles — studio album
   ];
   const isLiveFalsePositive = title => LIVE_FALSE_POSITIVES.some(t => title.toLowerCase().includes(t));
 
@@ -5007,10 +5014,27 @@ async function buildArtistDiscography(id, bust = false) {
   // bucket rather than albums alone: Kanye's Collections tab carried both
   // "Watch the Throne (Deluxe)" and "Watch the Throne (Deluxe Version)",
   // identical 16-track 2011 editions that the title+year dedup can't see.
+  // A plain edition of a nicknamed album folds into it when the nickname is the
+  // only one on that base: Apple's "The Beatles (Remastered)" is the White
+  // Album. Weezer has six nicknames on one base, so none of them absorb it.
+  const NICKNAME_KEY_RE = /\s+\([^()]*\balbum\)$/;
+  const nicknamesByPlain = new Map();
+  for (const item of nonSingles) {
+    const key = baseTitle(item.title);
+    if (!NICKNAME_KEY_RE.test(key)) continue;
+    const plain = key.replace(NICKNAME_KEY_RE, '');
+    nicknamesByPlain.set(plain, (nicknamesByPlain.get(plain) ?? new Set()).add(key));
+  }
+  const groupKey = title => {
+    const key = baseTitle(title);
+    const nicks = nicknamesByPlain.get(key);
+    return nicks?.size === 1 ? [...nicks][0] : key;
+  };
+
   const dedupByBaseTitle = items => {
     const byBase = new Map();
     for (const item of items) {
-      const key = baseTitle(item.title);
+      const key = groupKey(item.title);
       const existing = byBase.get(key);
       if (!existing) { byBase.set(key, item); continue; }
       const itemHasSuffix     = /[\(\[]/.test(item.title);
