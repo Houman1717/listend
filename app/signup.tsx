@@ -23,6 +23,7 @@ import { PASSWORD_HINT, passwordProblem, weakPasswordMessage } from '@/lib/auth/
 import {
   RESEND_COOLDOWN_SECONDS,
   isConfirmationSendFailure,
+  isExistingAccount,
   resendConfirmationEmail,
 } from '@/lib/auth/confirmationEmail';
 
@@ -99,11 +100,24 @@ export default function SignUpScreen() {
       return;
     }
 
+    setLoading(false);
+
+    if (isExistingAccount(data.user)) {
+      capture('sign_up_existing_account', { method: 'email' });
+      Alert.alert(
+        'You already have an account',
+        `${email.trim()} is already registered, so no new email was sent. Sign in with your password — or reset it if you've forgotten it.`,
+        [
+          { text: 'Reset password', onPress: () => router.replace('/forgot-password') },
+          { text: 'Sign In', style: 'cancel', onPress: () => router.back() },
+        ],
+      );
+      return;
+    }
+
     if (data.user) {
       capture('sign_up', { method: 'email' });
     }
-
-    setLoading(false);
 
     // With email confirmation off, signUp() returns a live session —
     // ensureProfile (AuthContext) creates the profiles row on the resulting

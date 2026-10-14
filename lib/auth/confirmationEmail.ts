@@ -1,4 +1,4 @@
-import type { AuthError } from '@supabase/supabase-js';
+import type { AuthError, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
 // Supabase only lets one confirmation email go out per address per 60s
@@ -13,6 +13,17 @@ export const RESEND_COOLDOWN_SECONDS = 60;
  */
 export function isConfirmationSendFailure(error: AuthError): boolean {
   return /sending confirmation email/i.test(error.message);
+}
+
+/**
+ * signUp() on an email that already has a CONFIRMED account (they tapped the
+ * first link, or signed up with Google/Apple) returns no error and no session
+ * — just an obfuscated user with an empty identities array — and sends NO
+ * email. Without this check the app shows "Check your email" for a mail that
+ * never comes, and the user retries forever instead of signing in.
+ */
+export function isExistingAccount(user: User | null): boolean {
+  return !!user && Array.isArray(user.identities) && user.identities.length === 0;
 }
 
 export function isEmailNotConfirmed(error: AuthError): boolean {
