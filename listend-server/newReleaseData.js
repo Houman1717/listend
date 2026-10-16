@@ -3,6 +3,12 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Fontaines D.C.',         title: 'Dopamine Chamber' },
+  { artist: 'Ashe',                   title: 'The Girl Of Your Dreams' },
+  { artist: 'The Avalanches',         title: 'No Bad Memories' },
+  { artist: 'LUCKI',                  title: 'Last Laugh (archive tape)' },
+  { artist: 'Lucky Daye',             title: 'ALOUD!' },
+  { artist: 'Rachel Chinouriri',      title: 'I think I spoke too soon' },
   { artist: 'Troye Sivan',            title: 'She’s the Best' },
   { artist: 'Remi Wolf',              title: 'Mud' },
   { artist: 'Greta Van Fleet',        title: 'Palace for the People' },

@@ -1054,6 +1054,32 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '6802241223', title: 'Ghosts (100 Days of Morning)', artist: 'Jamie T', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/8d/85/b3/8d85b384-a176-55ac-0282-0a876e93ab3e/26UM1IM02156.rgb.jpg/500x500bb.jpg',
   },
+  // Released 2026-10-16 and already in the catalog by id, but Apple's search
+  // index hadn't picked them up yet, so populate-new-releases couldn't find them.
+  'fontainesdc::dopaminechamber': {
+    id: '6792085051', title: 'Dopamine Chamber', artist: 'Fontaines D.C.', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/24/10/8c/24108c9c-845b-40f3-6175-9effb95e1d5c/191404167373.png/500x500bb.jpg',
+  },
+  'ashe::thegirlofyourdreams': {
+    id: '6805240956', title: 'The Girl Of Your Dreams', artist: 'Ashe', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/1b/86/c9/1b86c988-03b8-ca21-10a5-0963d09f5bcf/075679561893.jpg/500x500bb.jpg',
+  },
+  'theavalanches::nobadmemories': {
+    id: '6794202148', title: 'No Bad Memories', artist: 'The Avalanches', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ba/f2/3c/baf23ce1-3ebc-f950-024e-52d9b38e62e1/26UMGIM98135.rgb.jpg/500x500bb.jpg',
+  },
+  'lucki::lastlaugharchivetape': {
+    id: '6821145872', title: 'Last Laugh (archive tape)', artist: 'LUCKI', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/f2/86/5b/f2865b24-38e4-3dd5-ec09-79237f827052/199316782172_cover.jpg/500x500bb.jpg',
+  },
+  'luckydaye::aloud': {
+    id: '6815831824', title: 'ALOUD!', artist: 'Lucky Daye', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/34/1e/a5/341ea54e-9d83-75b3-e4db-861facb919d4/093624820109.jpg/500x500bb.jpg',
+  },
+  'rachelchinouriri::ithinkispoketoosoon': {
+    id: '6792960696', title: 'I think I spoke too soon', artist: 'Rachel Chinouriri', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/be/f0/af/bef0afae-6902-b97b-084a-1222eff76df7/1200214614201.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],
