@@ -62,6 +62,9 @@ export default function SongDetailScreen() {
   const [fetched, setFetched] = useState<{ albumId?: string; albumTitle?: string; artist?: string; releaseDate?: string } | null>(null);
   const [stats, setStats] = useState<SongRatingStats | undefined>(undefined);
   const [reviews, setReviews] = useState<CommunitySongReview[] | null>(null);
+  // Everyone else who rated or reviewed it — the Friends row picks from this.
+  const [others, setOthers] = useState<CommunitySongReview[]>([]);
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
   const [reviewsFailed, setReviewsFailed] = useState(false);
   const [editing, setEditing] = useState(params.edit === '1');
   const [addingToPlaylist, setAddingToPlaylist] = useState(false);
@@ -114,13 +117,29 @@ export default function SongDetailScreen() {
     fetchSongCommunityRatings([ref]).then(m => { if (!cancelled && m) setStats(m.get(params.id)); });
     fetchCommunitySongReviews(ref, user?.id).then(list => {
       if (cancelled) return;
-      if (list) setReviews(list.filter(r => !!r.review));
+      if (list) { setReviews(list.filter(r => !!r.review)); setOthers(list); }
       else setReviewsFailed(true);
     });
     return () => { cancelled = true; };
   }, [params.id, song.artist, refreshTick, user?.id]);
 
+  // Friends = mutual follows, same as the album page's Friends row.
+  useEffect(() => {
+    if (!user?.id) return;
+    Promise.all([
+      supabase.from('follows').select('following_id').eq('follower_id', user.id),
+      supabase.from('follows').select('follower_id').eq('following_id', user.id),
+    ]).then(([{ data: outRows }, { data: inRows }]) => {
+      if (!outRows?.length || !inRows?.length) return;
+      const inSet = new Set((inRows as any[]).map(r => r.follower_id as string));
+      setFriendIds(new Set(
+        (outRows as any[]).filter(r => inSet.has(r.following_id)).map(r => r.following_id as string)
+      ));
+    });
+  }, [user?.id]);
+
   const community = withOwnRating(stats, mine?.rating);
+  const friends   = others.filter(r => friendIds.has(r.userId));
   const inactive  = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
   const sectionBg = isDark ? '#1c1410' : '#f5f5f5';
   const border    = isDark ? '#2a1e14' : '#e8e8e8';
@@ -239,7 +258,10 @@ export default function SongDetailScreen() {
           <Text style={[s.sectionLabel, { color: colors.subtext }]}>Ratings</Text>
           {community?.revealed ? (
             <View style={s.ratingsRow}>
-              <Text style={[s.ratingsAvg, { color: colors.text }]}>{community.avg.toFixed(1)}</Text>
+              <View>
+                <Text style={[s.ratingsAvg, { color: colors.text }]}>{community.avg.toFixed(1)}</Text>
+                <Text style={[s.ratingsCount, { color: colors.subtext }]}>{community.count} ratings</Text>
+              </View>
               <AverageVolume avg={community.avg} isDark={isDark} size="lg" showNumber={false} />
             </View>
           ) : community ? (
@@ -290,6 +312,45 @@ export default function SongDetailScreen() {
             })
           )}
         </View>
+
+        {/* ── Friends ──────────────────────────────────────────────────── */}
+        {friends.length > 0 && (
+          <View style={[s.section, { backgroundColor: sectionBg, borderColor: border }]}>
+            <Text style={[s.sectionLabel, { color: colors.subtext }]}>Friends</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+              <View style={{ flexDirection: 'row', gap: 16, paddingHorizontal: 4, paddingBottom: 2 }}>
+                {friends.map(f => {
+                  const handle = handleOrName(f.username, f.displayName, f.userId);
+                  return (
+                    <Pressable
+                      key={f.userId}
+                      onPress={() => setOpenEntry(f)}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, alignItems: 'center', gap: 6 })}>
+                      <View style={{ position: 'relative' }}>
+                        <View style={[s.friendAvatar, { backgroundColor: avatarColor(f.username || f.userId) }]}>
+                          {f.avatarUrl
+                            ? <ExpoImage source={{ uri: f.avatarUrl }} style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} contentFit="cover" cachePolicy="disk" />
+                            : <Text style={s.friendAvatarText}>{(f.username || '?').slice(0, 2).toUpperCase()}</Text>}
+                        </View>
+                        {f.rating > 0 && (
+                          <View style={s.friendRatingBadge}>
+                            <Text style={s.friendRatingText}>{f.rating}</Text>
+                          </View>
+                        )}
+                        {!!f.review && (
+                          <View style={s.friendPenBadge}>
+                            <FontAwesome name="quote-left" size={7} color="#fff" />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[s.friendUsername, { color: colors.subtext }]} numberOfLines={1}>{handle}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        )}
       </ScrollView>
 
       <SongReviewModal
@@ -356,6 +417,13 @@ const s = StyleSheet.create({
   sectionLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 },
   ratingsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
   ratingsAvg: { fontSize: 44, fontWeight: '800', lineHeight: 48 },
+  ratingsCount: { fontSize: 11, marginTop: 2 },
+  friendAvatar:       { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  friendAvatarText:   { color: '#fff', fontSize: 15, fontWeight: '700' },
+  friendUsername:     { fontSize: 11, maxWidth: 56, textAlign: 'center' },
+  friendRatingBadge:  { position: 'absolute', bottom: -2, left: -4, backgroundColor: ACCENT, borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1 },
+  friendRatingText:   { color: '#fff', fontSize: 9, fontWeight: '700' },
+  friendPenBadge:     { position: 'absolute', bottom: -2, left: 16, width: 16, height: 16, borderRadius: 8, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontSize: 14 },
 
   reviewCard: { paddingVertical: 12, gap: 6 },
