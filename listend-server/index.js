@@ -551,6 +551,27 @@ pinStorefront('it', [
   '1443308549', '1443308554', '1443308558', '1443308560', '1443308629', '1443308631',
   '1443308635', '1443308639', '1443308640', '1443308647', '1443308802', '1443308809',
 ]);
+// Nimo — K¡K¡ (2017). Not licensed for `us`; Apple only carries the edition
+// with the 16 instrumentals appended.
+pinStorefront('de', [
+  '1440890163',
+  '1440890165', '1440890168', '1440890170', '1440890472', '1440890474', '1440890476',
+  '1440890480', '1440890483', '1440890485', '1440890487', '1440890489', '1440890491',
+  '1440890496', '1440890498', '1440890500', '1440890713', '1440890717', '1440890719',
+  '1440890721', '1440890724', '1440890728', '1440890737', '1440890893', '1440890897',
+  '1440890899', '1440890901', '1440890904', '1440890908', '1440890910', '1440890920',
+  '1440890962', '1440890963',
+]);
+// Haftbefehl — Russisch Roulette (2014). Not licensed for `us`; the Deluxe
+// edition is the only one Apple carries anywhere.
+pinStorefront('de', [
+  '1443215360',
+  '1443215362', '1443215363', '1443215365', '1443215369', '1443215370', '1443215371',
+  '1443215373', '1443215376', '1443215378', '1443215379', '1443215591', '1443215595',
+  '1443215597', '1443215599', '1443215603', '1443215609', '1443215613', '1443215616',
+  '1443215619', '1443215714', '1443215719', '1443215722', '1443215725', '1443215730',
+  '1443215734', '1443215738', '1443215802', '1443215809', '1443215815',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1142,6 +1163,20 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'jorgebenjor::forabruta': {
     id: '1402139880', title: 'Força Bruta', artist: 'Jorge Ben Jor', year: 1970,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/bf/13/b2/bf13b2eb-a141-f0d2-4a8f-76448b17163e/18UMGIM38575.rgb.jpg/500x500bb.jpg',
+  },  // "¡" keys to nothing, so without the alias a search for "kiki" misses it.
+  'nimo::kk': {
+    id: '1440890163', title: 'K¡K¡', artist: 'Nimo', year: 2017,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/a1/a4/4a/a1a44a74-792d-bbe8-d0db-7c9e6e36a499/00602557584561.rgb.jpg/500x500bb.jpg',
+    aliases: ['KiKi'],
+  },
+  // Only the Deluxe exists on Apple Music, so the plain title resolves to it too.
+  'haftbefehl::russischroulettedeluxe': {
+    id: '1443215360', title: 'Russisch Roulette (Deluxe)', artist: 'Haftbefehl', year: 2014,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/eb/95/15/eb9515b2-1535-4e74-ea52-b5b4f12b3009/00602547098498.rgb.jpg/500x500bb.jpg',
+  },
+  'haftbefehl::russischroulette': {
+    id: '1443215360', title: 'Russisch Roulette (Deluxe)', artist: 'Haftbefehl', year: 2014,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/eb/95/15/eb9515b2-1535-4e74-ea52-b5b4f12b3009/00602547098498.rgb.jpg/500x500bb.jpg',
   },
 };
 
@@ -4204,6 +4239,22 @@ app.get(['/catalog/artist/:id/top-tracks', '/spotify/artist/:id/top-tracks'], [
 // the id-based dedup below means a duplicate from Apple is harmless either
 // way.
 const ARTIST_ALBUM_OVERRIDES = {
+  '1073702819': [ // Nimo — K¡K¡ isn't licensed for `us` (present on de)
+    {
+      id: '1440890163', title: 'K¡K¡',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/a1/a4/4a/a1a44a74-792d-bbe8-d0db-7c9e6e36a499/00602557584561.rgb.jpg/500x500bb.jpg',
+      year: 2017, isSingle: false, isCompilation: false, trackCount: 32,
+      url: 'https://music.apple.com/de/album/k-k/1440890163', type: 'album',
+    },
+  ],
+  '321946239': [ // Haftbefehl — Russisch Roulette isn't licensed for `us` (present on de)
+    {
+      id: '1443215360', title: 'Russisch Roulette (Deluxe)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/eb/95/15/eb9515b2-1535-4e74-ea52-b5b4f12b3009/00602547098498.rgb.jpg/500x500bb.jpg',
+      year: 2014, isSingle: false, isCompilation: false, trackCount: 29,
+      url: 'https://music.apple.com/de/album/russisch-roulette-deluxe/1443215360', type: 'album',
+    },
+  ],
   '128050210': [ // Future
     {
       id: '6784327271', title: 'The Real Me',
