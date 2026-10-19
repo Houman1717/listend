@@ -1050,6 +1050,29 @@ const MANUAL_ALBUMS = [
       { number: 4, id: 'lst-in-tension-t4', title: 'Skull Fuct', durationMs: 317000 },
     ],
   },
+  {
+    id: 'lst-nice-day-collection',
+    title: 'Nice Day: A Collection of Singles',
+    artist: 'Magdalena Bay',
+    artistId: '1119954914',
+    year: 2026,
+    isCompilation: true,          // files under Collections, not beside the studio albums
+    // Mom+Pop's four-7" box of the 2025 double singles; Apple Music only has the singles separately.
+    // Track lengths come from those Apple Music singles — the vinyl listing on MusicBrainz has none.
+    artworkUrl: 'https://coverartarchive.org/release-group/94693eda-0d16-46ce-8436-525305e89e27/front-500',
+    musicbrainzReleaseId: '59f1b4be-1829-4633-b8e0-4935bf4e9c6a',
+    trackCount: 8,
+    tracks: [
+      { number: 1, id: 'lst-nice-day-collection-t1', title: 'Second Sleep', durationMs: 288453 },
+      { number: 2, id: 'lst-nice-day-collection-t2', title: 'Star Eyes', durationMs: 214587 },
+      { number: 3, id: 'lst-nice-day-collection-t3', title: 'Human Happens', durationMs: 243053 },
+      { number: 4, id: 'lst-nice-day-collection-t4', title: 'Paint Me a Picture', durationMs: 231720 },
+      { number: 5, id: 'lst-nice-day-collection-t5', title: 'Unoriginal', durationMs: 178053 },
+      { number: 6, id: 'lst-nice-day-collection-t6', title: 'Black-Eyed Susan Climb', durationMs: 243920 },
+      { number: 7, id: 'lst-nice-day-collection-t7', title: 'This Is the World (I Made It for You)', durationMs: 281787 },
+      { number: 8, id: 'lst-nice-day-collection-t8', title: 'Nice Day', durationMs: 153173 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
