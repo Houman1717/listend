@@ -29,21 +29,39 @@ function stripEditions(title: string): string {
 // other scripts don't all collapse to the same empty key.
 function loose(s: string): string {
   return s
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/&/g, ' and ')
     .replace(/^\W*the\s+/, '')
-    .replace(/[ -⁯　-〿]/g, '')
-    .replace(/[^\wÀ-￿]|_/g, '');
+    .replace(/[\u2000-\u206f\u3000-\u303f]/g, '')
+    .replace(/[^\w\u00c0-\uffff]|_/g, '');
 }
 
-// Artists match when equal, or when one credit contains the other and the
-// shorter one isn't trivially short — "Prince & The Revolution" ⊃ "Prince",
-// but "Air" can't match "Fairport Convention".
+// Artist credit as words, same folding as loose(), for matching one credit
+// inside a fuller one.
+function words(s: string): string[] {
+  return s
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[\u2000-\u206f\u3000-\u303f]/g, ' ')
+    .split(/[^\w\u00c0-\uffff]+|_/)
+    .filter(w => w && w !== 'the');
+}
+
+// Artists match when equal (ignoring punctuation and spacing — "Run-D.M.C."
+// is "Run-DMC"), or when one credit appears word-for-word inside the other:
+// "Prince & The Revolution" contains "Prince", but "Black Sabbath" does not
+// contain "ABBA" just because the letters line up.
 function artistsMatch(a: string, b: string): boolean {
-  if (a === b) return true;
-  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  return short.length >= 4 && long.includes(short);
+  const wa = words(a), wb = words(b);
+  if (wa.join('') === wb.join('')) return true;
+  const [short, long] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  if (short.length === 0 || short.join('').length < 3) return false;
+  for (let i = 0; i + short.length <= long.length; i++) {
+    if (short.every((w, j) => long[i + j] === w)) return true;
+  }
+  return false;
 }
 
 // Builds a matcher over a library. The title must match exactly (after
@@ -57,13 +75,12 @@ export function libraryMatcher(library: MatchAlbum[]): (album: MatchAlbum) => bo
     const t = loose(stripEditions(a.title));
     if (!t) continue;
     const list = artistsByTitle.get(t);
-    const artist = loose(a.artist ?? '');
+    const artist = a.artist ?? '';
     if (list) list.push(artist); else artistsByTitle.set(t, [artist]);
   }
   return (album) => {
     const artists = artistsByTitle.get(loose(stripEditions(album.title)));
     if (!artists) return false;
-    const artist = loose(album.artist ?? '');
-    return artists.some(a => artistsMatch(a, artist));
+    return artists.some(a => artistsMatch(a, album.artist ?? ''));
   };
 }

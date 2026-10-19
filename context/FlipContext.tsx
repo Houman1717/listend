@@ -52,7 +52,9 @@ export function poolLoggedIds(albums: { title: string; artist?: string | null }[
   const isLogged = libraryMatcher(albums);
   const ids = new Set<string>();
   for (const a of FLIP_POOL) {
-    if (isLogged(a)) ids.add(a.id);
+    const titles  = [a.title, ...(a.matchTitles ?? [])];
+    const artists = [a.artist, ...(a.matchArtists ?? [])];
+    if (titles.some(title => artists.some(artist => isLogged({ title, artist })))) ids.add(a.id);
   }
   return ids;
 }
