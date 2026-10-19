@@ -14,7 +14,8 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
-import { PopularReview, fetchPopularReviewsThisWeek } from '@/lib/homeData';
+import { PopularReview, fetchPopularReviews } from '@/lib/homeData';
+import { getHomePopularReviews } from './(tabs)/index';
 import { ReviewComment, CommentsSection, avatarColor } from '@/components/ReviewComments';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
@@ -180,13 +181,16 @@ export default function PopularReviewsScreen() {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useAndroidKeyboardHeight();
 
-  const [reviews,      setReviews]      = useState<PopularReview[]>([]);
+  const [reviews,      setReviews]      = useState<PopularReview[]>(() => getHomePopularReviews(user?.id) ?? []);
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
   const pendingLikeToggles = useRef<Set<string>>(new Set());
   const [commentsMap,  setCommentsMap]  = useState<Map<string, ReviewComment[]>>(new Map());
 
+  // Open on the list Home's preview row is showing, so its ten line up with
+  // the top of this one; only fetch when Home hasn't loaded it.
   useEffect(() => {
-    fetchPopularReviewsThisWeek(user?.id).then(setReviews);
+    if (getHomePopularReviews(user?.id)?.length) return;
+    fetchPopularReviews(user?.id).then(setReviews);
   }, [user?.id]);
 
   const reviewIdsKey = reviews.map(r => r.id).join(',');

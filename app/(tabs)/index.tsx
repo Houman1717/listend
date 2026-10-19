@@ -124,6 +124,12 @@ const cache: {
 // bypasses it.
 const HOME_CACHE_TTL = 3 * 60 * 1000;
 
+// The Popular Reviews list Home's preview row is showing, so the See More
+// screen opens on the same ranking instead of fetching one that may differ.
+export function getHomePopularReviews(userId?: string): PopularReview[] | undefined {
+  return cache.userId === userId ? cache.popularReviews : undefined;
+}
+
 // avatarColor is re-exported so popular-reviews.tsx can import it from here
 export { avatarColor };
 

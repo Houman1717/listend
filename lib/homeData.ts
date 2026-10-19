@@ -415,6 +415,25 @@ async function withHandles(reviews: PopularReview[]): Promise<PopularReview[]> {
   return reviews.map(r => ({ ...r, handle: handleById.get(r.userId) ?? `@${r.username}` }));
 }
 
+// The full Popular Reviews list for the See More screen. Reads the same server
+// ranking Home's preview row comes from, so the first ten line up exactly — the
+// on-device version uses unpaged queries that truncate once there's enough
+// weekly activity, and ranks a different set. Falls back to it only if the
+// endpoint is unavailable.
+export async function fetchPopularReviews(currentUserId?: string): Promise<PopularReview[]> {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+  const qs = currentUserId ? `?userId=${encodeURIComponent(currentUserId)}` : '';
+  try {
+    const res = await fetchWithTimeout(`${API_URL}/api/home/this-week${qs}`, 8000);
+    if (!res.ok) throw new Error(`home/this-week → ${res.status}`);
+    const data = await res.json();
+    return await withHandles(Array.isArray(data?.popularReviews) ? data.popularReviews : []);
+  } catch (err) {
+    console.warn('[PopularReviews] this-week endpoint failed, using on-device fallback:', (err as Error).message);
+    return fetchPopularReviewsThisWeek(currentUserId);
+  }
+}
+
 // Single call for the four "This Week" home sections. The server aggregates and
 // caches them (rolling 7-day window), so the app no longer pulls ~2,000 raw rows
 // and de-dupes on-device every time Home gains focus. Falls back to the
