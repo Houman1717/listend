@@ -19,7 +19,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -161,6 +161,10 @@ type FriendActivity = {
   reListenReview?: string;
   reListenAt?:     string;
 };
+
+function ReviewListGap() {
+  return <View style={{ height: 12 }} />;
+}
 
 function sortReviews(reviews: CommunityReview[], sort: ReviewSort): CommunityReview[] {
   return [...reviews].sort((a, b) => {
@@ -874,8 +878,6 @@ export default function AlbumDetailScreen() {
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const modalScrollRef = useRef<ScrollView>(null);
-  const reviewYPositions = useRef<Map<string, number>>(new Map());
   const editBlockYRef = useRef(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -1049,22 +1051,28 @@ export default function AlbumDetailScreen() {
     }
   }, [params.reviewId, params.openComments, ownReview?.id, communityReviews, myProfileLoaded]);
 
-  // All reviews including own — used for ratings average and preview
-  const allReviews = ownReview ? [ownReview, ...communityReviews] : communityReviews;
+  // All reviews including own — used for ratings average and preview.
+  // Memoised along with the sorted lists below: a popular album has 700+
+  // entries, and re-sorting them on every render (each keystroke in a comment,
+  // each like) made the page and the reviews modal stutter.
+  const allReviews = useMemo(
+    () => ownReview ? [ownReview, ...communityReviews] : communityReviews,
+    [ownReview, communityReviews],
+  );
   const communityRatings = otherRatings
     ? (ownReview && ownReview.rating > 0 ? [ownReview.rating, ...otherRatings] : otherRatings)
     : allReviews.filter(r => r.rating > 0).map(r => r.rating);
 
   // Preview: top 4 most popular — include own review so it can rank in
-  const previewReviews = sortReviews(allReviews, 'popular').slice(0, 4);
+  const previewReviews = useMemo(() => sortReviews(allReviews, 'popular').slice(0, 4), [allReviews]);
 
   // Modal list: filtered by tab then sorted
-  const modalReviews: CommunityReview[] = (() => {
+  const modalReviews: CommunityReview[] = useMemo(() => {
     if (reviewTab === 'own')     return ownReview ? [ownReview] : [];
     if (reviewTab === 'friends') return sortReviews(communityReviews.filter(r => friendIds.has(r.userId)), reviewSort);
     // All tab — own review competes alongside everyone else's
     return sortReviews(allReviews, reviewSort);
-  })();
+  }, [reviewTab, reviewSort, ownReview, communityReviews, allReviews, friendIds]);
 
   // ── Fetch tracklist + Last.fm ──────────────────────────────────────────────
   useEffect(() => {
@@ -2261,19 +2269,26 @@ export default function AlbumDetailScreen() {
             </View>
           )}
 
-          <ScrollView
-            ref={modalScrollRef}
-            contentContainerStyle={[s.allReviewsList, { gap: 12, paddingHorizontal: 16 }]}
+          {/* Virtualised: a popular album has 700+ reviews, and mounting every
+              card at once froze the modal for seconds on open. */}
+          <FlatList
+            data={modalReviews}
+            keyExtractor={r => r.id}
+            extraData={[reviewLikesMap, commentsMap, expandedCommentsId, highlightedReviewId]}
+            initialNumToRender={6}
+            maxToRenderPerBatch={8}
+            windowSize={9}
+            contentContainerStyle={[s.allReviewsList, { paddingHorizontal: 16 }]}
+            ItemSeparatorComponent={ReviewListGap}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled">
-
-            {modalReviews.length === 0 ? (
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
               <Text style={[s.emptyText, { color: mutedText, textAlign: 'center', paddingVertical: 32 }]}>
                 {reviewTab === 'own' ? 'You haven\'t logged this album yet.' : reviewTab === 'friends' ? 'None of your friends have reviewed this album.' : 'No reviews yet.'}
               </Text>
-            ) : modalReviews.map(r => (
+            }
+            renderItem={({ item: r }) => (
               <AlbumReviewCard
-                key={r.id}
                 review={r}
                 liked={reviewLikesMap.get(r.id)?.liked ?? false}
                 onLike={() => handleToggleLike(r)}
@@ -2291,10 +2306,9 @@ export default function AlbumDetailScreen() {
                 isOwn={r.userId === user?.id}
                 fullWidth
                 highlighted={r.id === highlightedReviewId}
-                onLayout={(y) => { reviewYPositions.current.set(r.id, y); }}
               />
-            ))}
-          </ScrollView>
+            )}
+          />
         </View>
       </Modal>
 
