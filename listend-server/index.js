@@ -3279,6 +3279,166 @@ app.get('/api/home/this-week', async (req, res) => {
   }
 });
 
+// ── GET /api/album-reviews ────────────────────────────────────────────────────
+// Every Listend review of one album, with reviewer profile, like and comment
+// counts already joined. album-detail used to build this on the phone: every
+// user_albums row for the title, then chunked profile / comment / like lookups
+// over all of them — 3–4 round trips and ~8 requests each on Graduation (738
+// logs) before a single review showed. One cached request instead.
+//
+// Matched by title + year like the app always has (never spotify_id — users'
+// stored ids diverge), accepting year 0/null from old logs. One entry per user,
+// their latest log. The base list is shared across viewers and cached briefly;
+// the caller's own liked flags are read fresh so their recent likes never show
+// stale. Past a minute the cached list is still served at once while a fresh
+// one is built in the background, so only the first viewer of an album in half
+// an hour waits for the build.
+const ALBUM_REVIEWS_FRESH_MS = 60 * 1000;
+const ALBUM_REVIEWS_STALE_MS = 30 * 60 * 1000;
+const ALBUM_REVIEWS_MAX_ENTRIES = 300;   // Graduation's list is ~250 KB
+// 150 review ids ≈ 8.5 KB of URL — well under the ~16 KB gateway limit, and
+// half the sequential round trips of the default 100.
+const ALBUM_REVIEWS_CHUNK = 150;
+const albumReviewsCache = new Map();     // key → { data, at }, oldest first
+const albumReviewsInflight = new Map();
+
+function loadAlbumReviews(title, year) {
+  const key = `${title.toLowerCase()}::${year}`;
+  const entry = albumReviewsCache.get(key);
+  const age = entry ? Date.now() - entry.at : Infinity;
+  if (age < ALBUM_REVIEWS_FRESH_MS) return Promise.resolve(entry.data);
+
+  let build = albumReviewsInflight.get(key);
+  if (!build) {
+    build = computeAlbumReviews(title, year)
+      .then(data => {
+        albumReviewsCache.delete(key);
+        albumReviewsCache.set(key, { data, at: Date.now() });
+        while (albumReviewsCache.size > ALBUM_REVIEWS_MAX_ENTRIES) {
+          albumReviewsCache.delete(albumReviewsCache.keys().next().value);
+        }
+        return data;
+      })
+      .finally(() => albumReviewsInflight.delete(key));
+    albumReviewsInflight.set(key, build);
+  }
+  if (age < ALBUM_REVIEWS_STALE_MS) {
+    build.catch(err => console.error('[/api/album-reviews] refresh failed:', err.message ?? err));
+    return Promise.resolve(entry.data);
+  }
+  return build;
+}
+
+async function computeAlbumReviews(title, year) {
+  const logs = await fetchAllRows((from, to) => {
+    let q = supabase
+      .from('user_albums')
+      .select('user_id, rating, review, listened_at, spotify_id')
+      .ilike('title', title)
+      .not('listened_at', 'is', null);
+    if (year > 0) q = q.or(`year.eq.${year},year.is.null,year.eq.0`);
+    return q.order('listened_at', { ascending: false }).range(from, to);
+  });
+
+  const seen = new Set();
+  const rows = [];
+  for (const r of logs) {
+    if (seen.has(r.user_id)) continue;
+    seen.add(r.user_id);
+    rows.push(r);
+  }
+  if (rows.length === 0) return { reviews: [], likers: {} };
+
+  const userIds   = rows.map(r => r.user_id);
+  const targetIds = rows.map(r => `${r.user_id}_${r.spotify_id}`);
+  const [profiles, comments, likes] = await Promise.all([
+    fetchAllRowsIn(userIds, (chunk, from, to) => supabase
+      .from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
+    fetchAllRowsIn(targetIds, (chunk, from, to) => supabase
+      .from('review_comments').select('review_id').in('review_id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
+    fetchAllRowsIn(targetIds, (chunk, from, to) => supabase
+      .from('likes').select('target_id, user_id').eq('target_type', 'review').in('target_id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
+  ]);
+
+  const profileById = new Map(profiles.map(p => [p.id, p]));
+  const commentCounts = new Map();
+  for (const c of comments) commentCounts.set(c.review_id, (commentCounts.get(c.review_id) ?? 0) + 1);
+  // Who liked each review, so a request can tell the caller's own like apart.
+  const likers = {};
+  for (const l of likes) (likers[l.target_id] ??= []).push(l.user_id);
+
+  const reviews = rows.map(r => {
+    const id = `${r.user_id}_${r.spotify_id}`;
+    const p = profileById.get(r.user_id);
+    return {
+      id,
+      userId:       r.user_id,
+      username:     p?.username ?? r.user_id,
+      displayName:  p?.display_name ?? null,
+      avatarUrl:    p?.avatar_url ?? null,
+      isPro:        !!p?.is_pro,
+      rating:       r.rating ?? 0,
+      text:         r.review || null,
+      listenedAt:   r.listened_at,
+      commentCount: commentCounts.get(id) ?? 0,
+    };
+  });
+  return { reviews, likers };
+}
+
+app.get('/api/album-reviews', async (req, res) => {
+  const title = typeof req.query.title === 'string' ? req.query.title.trim() : '';
+  const year = Number.parseInt(req.query.year, 10) || 0;
+  const rawUserId = typeof req.query.userId === 'string' ? req.query.userId : '';
+  const userId = /^[0-9a-f-]{36}$/i.test(rawUserId) ? rawUserId : null;
+  // The caller's own review id (`{userId}_{albumId}`) — its like count is
+  // returned separately, since the caller is left out of `reviews`.
+  const ownTarget = userId && typeof req.query.ownTarget === 'string' && req.query.ownTarget.startsWith(`${userId}_`)
+    ? req.query.ownTarget.slice(0, 120)
+    : null;
+  if (!title || title.length > 300) return res.status(400).json({ error: 'title required' });
+
+  try {
+    const base = await loadAlbumReviews(title, year);
+
+    // The caller's liked reviews, read fresh — a like they just made must not
+    // flip back for a minute because the shared list is cached.
+    const myLikes = new Set();
+    if (userId) {
+      const mine = await fetchAllRows((from, to) => supabase
+        .from('likes').select('target_id').eq('user_id', userId).eq('target_type', 'review').range(from, to));
+      for (const l of mine) myLikes.add(l.target_id);
+    }
+    const likeState = id => {
+      const others = (base.likers[id] ?? []).filter(u => u !== userId).length;
+      const liked = myLikes.has(id);
+      return { likeCount: others + (liked ? 1 : 0), liked };
+    };
+
+    const reviews = base.reviews
+      .filter(r => r.userId !== userId)
+      .map(r => ({ ...r, ...likeState(r.id) }));
+
+    let own = null;
+    if (ownTarget) {
+      if (base.likers[ownTarget] || base.reviews.some(r => r.id === ownTarget)) {
+        own = { id: ownTarget, ...likeState(ownTarget) };
+      } else {
+        // Logged under a different album id than the shared list holds.
+        const { count } = await supabase
+          .from('likes').select('target_id', { count: 'exact', head: true })
+          .eq('target_type', 'review').eq('target_id', ownTarget);
+        own = { id: ownTarget, likeCount: count ?? 0, liked: myLikes.has(ownTarget) };
+      }
+    }
+
+    res.json({ reviews, own });
+  } catch (err) {
+    console.error('[/api/album-reviews]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /discover/recommended ─────────────────────────────────────────────────
 
 app.get('/discover/recommended', async (req, res) => {

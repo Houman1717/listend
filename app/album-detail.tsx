@@ -1005,6 +1005,9 @@ export default function AlbumDetailScreen() {
   const [otherRatings, setOtherRatings] = useState<number[] | null>(null);
   const [reviewLikesMap, setReviewLikesMap]     = useState<Map<string, LikeState>>(new Map());
   const pendingLikeToggles = useRef<Set<string>>(new Set());
+  // True once /api/album-reviews answered — it already carries every like
+  // count and your liked flags, so the like-sync effect skips its own lookups.
+  const reviewsFromServer = useRef(false);
 
   const isLogged = !!loggedAlbum;
   const isWanted = wantToListen.some(a => a.id === myAlbumId);
@@ -1160,8 +1163,57 @@ export default function AlbumDetailScreen() {
   useEffect(() => {
     if (!albumId) return;
 
+    // One cached server request with profiles, likes and comment counts already
+    // joined. Building it here took 3–4 round trips over every log of the album
+    // (Graduation: 738) before a single review could show.
+    async function loadFromServer(): Promise<boolean> {
+      const qs = new URLSearchParams({ title: albumTitle, year: String(albumYear) });
+      if (user?.id) {
+        qs.set('userId', user.id);
+        qs.set('ownTarget', `${user.id}_${myAlbumId}`);
+      }
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const res = await fetch(`${API_URL}/api/album-reviews?${qs}`, { signal: ctrl.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!Array.isArray(data?.reviews)) throw new Error('bad payload');
+
+        const likes = new Map<string, LikeState>();
+        for (const r of data.reviews) likes.set(r.id, { liked: !!r.liked, count: r.likeCount ?? 0 });
+        if (data.own?.id) likes.set(data.own.id, { liked: !!data.own.liked, count: data.own.likeCount ?? 0 });
+
+        reviewsFromServer.current = true;
+        setReviewLikesMap(likes);
+        setCommunityReviews(data.reviews.map((r: any): CommunityReview => ({
+          id:           r.id,
+          userId:       r.userId,
+          username:     r.username,
+          displayName:  r.displayName ?? null,
+          avatarUrl:    r.avatarUrl ?? null,
+          isPro:        !!r.isPro,
+          rating:       r.rating ?? 0,
+          text:         r.text ?? undefined,
+          dateStr:      r.listenedAt ? formatLoggedDate(r.listenedAt) : undefined,
+          listenedAt:   r.listenedAt ?? undefined,
+          likeCount:    r.likeCount ?? 0,
+          commentCount: r.commentCount ?? 0,
+        })));
+        return true;
+      } catch (err) {
+        console.warn('[album-detail] album-reviews endpoint failed, loading directly:', (err as Error).message);
+        return false;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     async function loadCommunityReviews() {
-      // Query by title + year so we find all reviews regardless of which AM
+      reviewsFromServer.current = false;
+      if (await loadFromServer()) return;
+
+      // Fallback: query by title + year so we find all reviews regardless of which AM
       // catalog ID each user happened to store (IDs diverge across accounts/time).
       // Paged — PostgREST stops at 1000 rows and Graduation is past 600.
       const titleRows = await fetchAllRows<any>((from, to) => {
@@ -1245,8 +1297,11 @@ export default function AlbumDetailScreen() {
   useEffect(() => {
     if (!albumId) return;
 
-    const targetIds = communityReviews.map(r => r.id);
     const ownTargetId = user?.id && myAlbumId ? `${user.id}_${myAlbumId}` : null;
+    // The server list already holds everyone's counts — only your own review
+    // can be missing, when your log's album id resolved after the request.
+    const targetIds = reviewsFromServer.current ? [] : communityReviews.map(r => r.id);
+    if (reviewsFromServer.current && (!ownTargetId || reviewLikesMap.has(ownTargetId))) return;
     const allTargetIds = ownTargetId ? [...targetIds, ownTargetId] : targetIds;
     if (allTargetIds.length === 0) return;
 
@@ -1268,7 +1323,15 @@ export default function AlbumDetailScreen() {
             liked: existing.liked || like.user_id === user?.id,
           });
         }
-        setReviewLikesMap(newMap);
+        // Merge rather than replace, so a server-filled map keeps its entries.
+        setReviewLikesMap(prev => {
+          const merged = new Map(prev);
+          for (const id of allTargetIds) {
+            const st = newMap.get(id);
+            if (st) merged.set(id, st); else merged.delete(id);
+          }
+          return merged;
+        });
         setCommunityReviews(prev => prev.map(r => ({
           ...r,
           likeCount: newMap.get(r.id)?.count ?? r.likeCount,
