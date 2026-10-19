@@ -768,9 +768,12 @@ const hasQualifier = s => EDITION_QUALIFIERS.some(w => (s ?? '').toLowerCase().i
 // expanded editions, which usually add genuinely different bonus content and
 // should stay separately findable (e.g. an artist's Collections tab already
 // correctly lists a deluxe edition as its own distinct item).
+// A dated new mix — "Abbey Road (2019 Mix)", "Revolver (2022 Remix)" — is the
+// same record too, unlike a "(Remixes)" album, so only "<year> mix" counts.
 const SAME_CONTENT_QUALIFIERS = ['remaster', 'anniversary', 'reissue'];
+const DATED_MIX_RE = /\b\d{4}\s+(?:stereo\s+)?(?:re)?mix(?:ed)?\b/i;
 const stripSameContentQualifier = title => (title ?? '')
-  .replace(/[([][^)\]]*\b(?:remaster(?:ed)?|anniversary|reissue)\b[^)\]]*[)\]]/gi, '')
+  .replace(/[([][^)\]]*\b(?:remaster(?:ed)?|anniversary|reissue|\d{4}\s+(?:stereo\s+)?(?:re)?mix(?:ed)?)\b[^)\]]*[)\]]/gi, '')
   .trim();
 
 // Explicit/clean is a content-advisory marker some catalog entries bake
@@ -789,6 +792,9 @@ function editionScore(title) {
   let score = 0;
   if (SAME_CONTENT_QUALIFIERS.some(w => t.includes(w))) score += 1;
   if (CONTENT_TAGS.some(w => t.includes(w))) score += 1;
+  // Behind a remaster: the remaster is the record most people logged, and
+  // the one whose page carries the ratings (Abbey Road: 294 vs the mix's 71).
+  if (DATED_MIX_RE.test(t)) score += 2;
   return score;
 }
 
@@ -1958,7 +1964,7 @@ app.get('/search', [
 
   // v2: 25 candidates per query (was 10) so ranking has something to work with.
   // v3: albums take a second page — see below.
-  const CACHE_KEY = `search3:${type}:${q.trim().toLowerCase()}`;
+  const CACHE_KEY = `search4:${type}:${q.trim().toLowerCase()}`;
 
   const withOverrides = rawResults => {
     const results = rankSearchResults(type, q, rawResults);
@@ -2496,8 +2502,11 @@ function communityAlbumKey(title, artist) {
   return `${foldDiacritics(baseTitle(title))}::${foldDiacritics(artist)}`;
 }
 
-// Which catalog entry stands for a merged group: a plain title (no edition
-// suffix) wins, then whichever id the most rows use.
+// Which catalog entry stands for a merged group: whichever id the most rows
+// use, a plain title (no edition suffix) only breaking ties. The plain title
+// used to win outright, but album-detail counts ratings by exact title — one
+// stray "Abbey Road" log beat 294 "Abbey Road (Remastered)" ones, and Top
+// Rated opened Abbey Road showing 0 ratings.
 function tallyRepresentative(reps, r) {
   const e = reps.get(r.spotify_id);
   if (e) { e.count++; if (!e.artworkUrl && r.artwork_url) e.artworkUrl = r.artwork_url; return; }
@@ -2508,8 +2517,8 @@ function pickRepresentative(reps) {
   let best = null;
   for (const r of reps.values()) {
     if (!best
-      || (plain(r.title) && !plain(best.title))
-      || (plain(r.title) === plain(best.title) && r.count > best.count)) best = r;
+      || r.count > best.count
+      || (r.count === best.count && plain(r.title) && !plain(best.title))) best = r;
   }
   const artworkUrl = best.artworkUrl || ([...reps.values()].find(r => r.artworkUrl)?.artworkUrl ?? '');
   return { id: best.id, title: best.title, artist: best.artist, artworkUrl };
@@ -5965,11 +5974,12 @@ app.get('/api/admin/purge-artist-rating-cache', requireAdmin, async (req, res) =
 app.get('/api/admin/purge-search-cache', requireAdmin, async (req, res) => {
   try {
     for (const key of memCache.keys()) {
-      if (key.startsWith('search:') || key.startsWith('search2:') || key.startsWith('search3:')) memCache.delete(key);
+      if (key.startsWith('search:') || key.startsWith('search2:') || key.startsWith('search3:') || key.startsWith('search4:')) memCache.delete(key);
     }
     await deleteCachePrefix('search:');
     await deleteCachePrefix('search2:');
     await deleteCachePrefix('search3:');
+    await deleteCachePrefix('search4:');
     console.log('[/api/admin/purge-search-cache] done.');
     res.json({ success: true });
   } catch (err) {
