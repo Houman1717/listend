@@ -5128,7 +5128,12 @@ async function buildArtistDiscography(id, bust = false) {
 
   const dedupByBaseTitle = items => {
     const byBase = new Map();
+    // A record Listend carries itself (manualAlbums.js) was added on purpose and
+    // is never another edition of an Apple album — Elis Regina's 1980 "Elis"
+    // was folding into one of her five other self-titled LPs and vanishing.
+    const carried = [];
     for (const item of items) {
+      if (String(item.id).startsWith('lst-')) { carried.push(item); continue; }
       const key = groupKey(item.title);
       const existing = byBase.get(key);
       if (!existing) { byBase.set(key, item); continue; }
@@ -5144,7 +5149,7 @@ async function buildArtistDiscography(id, bust = false) {
       // "(Deluxe Version)" — instead of whichever Apple happened to list first.
       if (item.title.length < existing.title.length) byBase.set(key, item);
     }
-    return [...byBase.values()];
+    return [...byBase.values(), ...carried];
   };
 
   const grouped = {
