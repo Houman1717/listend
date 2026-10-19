@@ -3318,15 +3318,15 @@ const ALBUM_REVIEWS_CHUNK = 150;
 const albumReviewsCache = new Map();     // key → { data, at }, oldest first
 const albumReviewsInflight = new Map();
 
-function loadAlbumReviews(title, year) {
-  const key = `${sameRecordKey(title)}::${year}`;
+function loadAlbumReviews(title, year, albumId) {
+  const key = `${sameRecordKey(title)}::${year}::${albumId}`;
   const entry = albumReviewsCache.get(key);
   const age = entry ? Date.now() - entry.at : Infinity;
   if (age < ALBUM_REVIEWS_FRESH_MS) return Promise.resolve(entry.data);
 
   let build = albumReviewsInflight.get(key);
   if (!build) {
-    build = computeAlbumReviews(title, year)
+    build = computeAlbumReviews(title, year, albumId)
       .then(data => {
         albumReviewsCache.delete(key);
         albumReviewsCache.set(key, { data, at: Date.now() });
@@ -3347,11 +3347,27 @@ function loadAlbumReviews(title, year) {
 
 const sameRecordKey = title => foldDiacritics(stripContentTag(stripSameContentQualifier(title)));
 
-async function computeAlbumReviews(title, year) {
+// The year is the one the page was opened with — but callers don't always
+// know the album's year: the song page passes the song's (a single released
+// the year before), so Revenge opened as 2016 and hid all eleven 2017 logs.
+// Whatever year people logged this exact catalog id under counts too, and is
+// returned as `albumYear` so the page can correct itself.
+async function computeAlbumReviews(title, year, albumId) {
   const core = stripContentTag(stripSameContentQualifier(title)) || title;
   const coreKey = sameRecordKey(core);
   // The plain title plus anything suffixed "(…" or "[…"; the exact match on
   // the stripped title below decides what really belongs.
+  // Years this exact album was logged under (by catalog id), most common first.
+  const idYearCounts = new Map();
+  if (albumId) {
+    const idRows = await fetchAllRows((from, to) => supabase
+      .from('user_albums').select('year').eq('spotify_id', albumId).not('listened_at', 'is', null).range(from, to));
+    for (const r of idRows) if (r.year > 0) idYearCounts.set(r.year, (idYearCounts.get(r.year) ?? 0) + 1);
+  }
+  const albumYear = mostCommonYear(idYearCounts) || year;
+  // Old logs without a year (0/null) always count, as they always have.
+  const years = year > 0 ? [...new Set([year, ...idYearCounts.keys()])] : null;
+
   const patterns = [core, `${core} (%`, `${core} [%`];
   const batches = await Promise.all(patterns.map(pattern => fetchAllRows((from, to) => {
     let q = supabase
@@ -3359,7 +3375,7 @@ async function computeAlbumReviews(title, year) {
       .select('user_id, title, rating, review, listened_at, spotify_id')
       .ilike('title', pattern)
       .not('listened_at', 'is', null);
-    if (year > 0) q = q.or(`year.eq.${year},year.is.null,year.eq.0`);
+    if (years) q = q.or(`year.in.(${years.join(',')}),year.is.null,year.eq.0`);
     return q.order('listened_at', { ascending: false }).range(from, to);
   })));
   const byRow = new Map();
@@ -3376,7 +3392,7 @@ async function computeAlbumReviews(title, year) {
     seen.add(r.user_id);
     rows.push(r);
   }
-  if (rows.length === 0) return { reviews: [], likers: {} };
+  if (rows.length === 0) return { reviews: [], likers: {}, albumYear };
 
   const userIds   = rows.map(r => r.user_id);
   const targetIds = rows.map(r => `${r.user_id}_${r.spotify_id}`);
@@ -3413,12 +3429,13 @@ async function computeAlbumReviews(title, year) {
       commentCount: commentCounts.get(id) ?? 0,
     };
   });
-  return { reviews, likers };
+  return { reviews, likers, albumYear };
 }
 
 app.get('/api/album-reviews', async (req, res) => {
   const title = typeof req.query.title === 'string' ? req.query.title.trim() : '';
   const year = Number.parseInt(req.query.year, 10) || 0;
+  const albumId = typeof req.query.albumId === 'string' && /^[\w.-]{1,64}$/.test(req.query.albumId) ? req.query.albumId : '';
   const rawUserId = typeof req.query.userId === 'string' ? req.query.userId : '';
   const userId = /^[0-9a-f-]{36}$/i.test(rawUserId) ? rawUserId : null;
   // The caller's own review id (`{userId}_{albumId}`) — its like count is
@@ -3429,7 +3446,7 @@ app.get('/api/album-reviews', async (req, res) => {
   if (!title || title.length > 300) return res.status(400).json({ error: 'title required' });
 
   try {
-    const base = await loadAlbumReviews(title, year);
+    const base = await loadAlbumReviews(title, year, albumId);
 
     // The caller's liked reviews, read fresh — a like they just made must not
     // flip back for a minute because the shared list is cached.
@@ -3472,7 +3489,7 @@ app.get('/api/album-reviews', async (req, res) => {
       }
     }
 
-    res.json({ reviews, own, ratings });
+    res.json({ reviews, own, ratings, albumYear: base.albumYear || null });
   } catch (err) {
     console.error('[/api/album-reviews]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });

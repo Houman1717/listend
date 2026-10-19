@@ -859,7 +859,11 @@ export default function AlbumDetailScreen() {
   const myAlbumId     = loggedAlbum?.id ?? albumId;
   const albumTitle    = params.title    ?? loggedAlbum?.title    ?? '';
   const albumArtist   = params.artist   ?? loggedAlbum?.artist   ?? '';
-  const albumYear     = params.year ? parseInt(params.year, 10) : (loggedAlbum?.year ?? 0);
+  // Callers don't always know the album's year — the song page passes the
+  // song's, so Revenge (2017) opened as 2016 and hid everyone's logs. The
+  // reviews endpoint answers with the year this album id was logged under.
+  const [yearFromLogs, setYearFromLogs] = useState<number | null>(null);
+  const albumYear     = yearFromLogs ?? (params.year ? parseInt(params.year, 10) : (loggedAlbum?.year ?? 0));
   const albumArtwork  = params.artworkUrl ?? loggedAlbum?.artworkUrl ?? '';
   const albumCoverColor = loggedAlbum?.coverColor ?? '#2e2018';
 
@@ -1168,6 +1172,7 @@ export default function AlbumDetailScreen() {
     // (Graduation: 738) before a single review could show.
     async function loadFromServer(): Promise<boolean> {
       const qs = new URLSearchParams({ title: albumTitle, year: String(albumYear) });
+      if (albumId) qs.set('albumId', albumId);
       if (user?.id) {
         qs.set('userId', user.id);
         qs.set('ownTarget', `${user.id}_${myAlbumId}`);
@@ -1185,6 +1190,7 @@ export default function AlbumDetailScreen() {
         if (data.own?.id) likes.set(data.own.id, { liked: !!data.own.liked, count: data.own.likeCount ?? 0 });
 
         reviewsFromServer.current = true;
+        if (data.albumYear > 0 && data.albumYear !== albumYear) setYearFromLogs(data.albumYear);
         setReviewLikesMap(likes);
         // Pooled across editions of the same recording (remasters, dated
         // mixes), and counting private accounts anonymously — so it replaces
