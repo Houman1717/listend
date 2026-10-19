@@ -1167,7 +1167,9 @@ export default function AlbumDetailScreen() {
     // joined. Building it here took 3–4 round trips over every log of the album
     // (Graduation: 738) before a single review could show.
     async function loadFromServer(): Promise<boolean> {
-      const qs = new URLSearchParams({ title: albumTitle, year: String(albumYear) });
+      // The artist lets the server pool deluxe editions in too (same grouping
+      // as Top Rated), without merging another artist's same-titled album.
+      const qs = new URLSearchParams({ title: albumTitle, year: String(albumYear), artist: albumArtist });
       if (user?.id) {
         qs.set('userId', user.id);
         qs.set('ownTarget', `${user.id}_${myAlbumId}`);

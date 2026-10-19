@@ -3299,8 +3299,11 @@ app.get('/api/home/this-week', async (req, res) => {
 // stored ids diverge), accepting year 0/null from old logs — and pooled across
 // editions that are the same recording: the plain title, its remasters, dated
 // new mixes, anniversary editions and reissues ("Abbey Road (Remastered)" +
-// "(2019 Mix)" + "(Remastered 2009)"). Deluxe editions carry other tracks and
-// stay separate. One entry per user, their latest log of any of them.
+// "(2019 Mix)" + "(Remastered 2009)"). When the caller passes the artist, every
+// edition the community lists already treat as one album joins too — deluxe,
+// expanded, super deluxe (good kid, m.A.A.d city + "(Deluxe)" + "(Deluxe
+// Version)") — as long as it's the same artist, so two albums that merely
+// share a title don't merge. One entry per user, their latest log of any.
 //
 // Private accounts: their reviews only go to themselves and their followers
 // (the service key skips RLS, so this is enforced here), but their ratings
@@ -3318,15 +3321,18 @@ const ALBUM_REVIEWS_CHUNK = 150;
 const albumReviewsCache = new Map();     // key → { data, at }, oldest first
 const albumReviewsInflight = new Map();
 
-function loadAlbumReviews(title, year) {
-  const key = `${sameRecordKey(title)}::${year}`;
+function loadAlbumReviews(title, year, artist) {
+  const artistKey = foldDiacritics(artist);
+  const key = artistKey
+    ? `${editionPoolKey(title)}@${artistKey}::${year}`
+    : `${sameRecordKey(title)}::${year}`;
   const entry = albumReviewsCache.get(key);
   const age = entry ? Date.now() - entry.at : Infinity;
   if (age < ALBUM_REVIEWS_FRESH_MS) return Promise.resolve(entry.data);
 
   let build = albumReviewsInflight.get(key);
   if (!build) {
-    build = computeAlbumReviews(title, year)
+    build = computeAlbumReviews(title, year, artist)
       .then(data => {
         albumReviewsCache.delete(key);
         albumReviewsCache.set(key, { data, at: Date.now() });
@@ -3346,17 +3352,26 @@ function loadAlbumReviews(title, year) {
 }
 
 const sameRecordKey = title => foldDiacritics(stripContentTag(stripSameContentQualifier(title)));
+// Same grouping as communityAlbumKey (Top Rated etc.), minus the artist.
+const editionPoolKey = title => foldDiacritics(baseTitle(title));
 
-async function computeAlbumReviews(title, year) {
-  const core = stripContentTag(stripSameContentQualifier(title)) || title;
-  const coreKey = sameRecordKey(core);
-  // The plain title plus anything suffixed "(…" or "[…"; the exact match on
-  // the stripped title below decides what really belongs.
+async function computeAlbumReviews(title, year, artist) {
+  const artistKey = foldDiacritics(artist);
+  const recordKey = sameRecordKey(title);
+  const poolKey = editionPoolKey(title);
+  const core = artistKey
+    ? (baseTitle(title) || title)
+    : (stripContentTag(stripSameContentQualifier(title)) || title);
+  const belongs = r =>
+    sameRecordKey(r.title) === recordKey
+    || (!!artistKey && editionPoolKey(r.title) === poolKey && foldDiacritics(r.artist) === artistKey);
+  // The plain title plus anything suffixed "(…" or "[…"; `belongs` decides
+  // what really joins.
   const patterns = [core, `${core} (%`, `${core} [%`];
   const batches = await Promise.all(patterns.map(pattern => fetchAllRows((from, to) => {
     let q = supabase
       .from('user_albums')
-      .select('user_id, title, rating, review, listened_at, spotify_id')
+      .select('user_id, title, artist, rating, review, listened_at, spotify_id')
       .ilike('title', pattern)
       .not('listened_at', 'is', null);
     if (year > 0) q = q.or(`year.eq.${year},year.is.null,year.eq.0`);
@@ -3364,7 +3379,7 @@ async function computeAlbumReviews(title, year) {
   })));
   const byRow = new Map();
   for (const r of batches.flat()) {
-    if (sameRecordKey(r.title) !== coreKey) continue;
+    if (!belongs(r)) continue;
     byRow.set(`${r.user_id}_${r.spotify_id}_${r.listened_at}`, r);
   }
   const logs = [...byRow.values()].sort((a, b) => Date.parse(b.listened_at) - Date.parse(a.listened_at));
@@ -3419,6 +3434,7 @@ async function computeAlbumReviews(title, year) {
 app.get('/api/album-reviews', async (req, res) => {
   const title = typeof req.query.title === 'string' ? req.query.title.trim() : '';
   const year = Number.parseInt(req.query.year, 10) || 0;
+  const artist = typeof req.query.artist === 'string' ? req.query.artist.trim().slice(0, 300) : '';
   const rawUserId = typeof req.query.userId === 'string' ? req.query.userId : '';
   const userId = /^[0-9a-f-]{36}$/i.test(rawUserId) ? rawUserId : null;
   // The caller's own review id (`{userId}_{albumId}`) — its like count is
@@ -3429,7 +3445,7 @@ app.get('/api/album-reviews', async (req, res) => {
   if (!title || title.length > 300) return res.status(400).json({ error: 'title required' });
 
   try {
-    const base = await loadAlbumReviews(title, year);
+    const base = await loadAlbumReviews(title, year, artist);
 
     // The caller's liked reviews, read fresh — a like they just made must not
     // flip back for a minute because the shared list is cached.
