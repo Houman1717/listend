@@ -3296,8 +3296,15 @@ app.get('/api/home/this-week', async (req, res) => {
 // logs) before a single review showed. One cached request instead.
 //
 // Matched by title + year like the app always has (never spotify_id — users'
-// stored ids diverge), accepting year 0/null from old logs. One entry per user,
-// their latest log. The base list is shared across viewers and cached briefly;
+// stored ids diverge), accepting year 0/null from old logs — and pooled across
+// editions that are the same recording: the plain title, its remasters, dated
+// new mixes, anniversary editions and reissues ("Abbey Road (Remastered)" +
+// "(2019 Mix)" + "(Remastered 2009)"). Deluxe editions carry other tracks and
+// stay separate. One entry per user, their latest log of any of them.
+//
+// Private accounts: their reviews only go to themselves and their followers
+// (the service key skips RLS, so this is enforced here), but their ratings
+// still count anonymously in `ratings` — same rule as album_community_ratings. The base list is shared across viewers and cached briefly;
 // the caller's own liked flags are read fresh so their recent likes never show
 // stale. Past a minute the cached list is still served at once while a fresh
 // one is built in the background, so only the first viewer of an album in half
@@ -3312,7 +3319,7 @@ const albumReviewsCache = new Map();     // key → { data, at }, oldest first
 const albumReviewsInflight = new Map();
 
 function loadAlbumReviews(title, year) {
-  const key = `${title.toLowerCase()}::${year}`;
+  const key = `${sameRecordKey(title)}::${year}`;
   const entry = albumReviewsCache.get(key);
   const age = entry ? Date.now() - entry.at : Infinity;
   if (age < ALBUM_REVIEWS_FRESH_MS) return Promise.resolve(entry.data);
@@ -3338,16 +3345,29 @@ function loadAlbumReviews(title, year) {
   return build;
 }
 
+const sameRecordKey = title => foldDiacritics(stripContentTag(stripSameContentQualifier(title)));
+
 async function computeAlbumReviews(title, year) {
-  const logs = await fetchAllRows((from, to) => {
+  const core = stripContentTag(stripSameContentQualifier(title)) || title;
+  const coreKey = sameRecordKey(core);
+  // The plain title plus anything suffixed "(…" or "[…"; the exact match on
+  // the stripped title below decides what really belongs.
+  const patterns = [core, `${core} (%`, `${core} [%`];
+  const batches = await Promise.all(patterns.map(pattern => fetchAllRows((from, to) => {
     let q = supabase
       .from('user_albums')
-      .select('user_id, rating, review, listened_at, spotify_id')
-      .ilike('title', title)
+      .select('user_id, title, rating, review, listened_at, spotify_id')
+      .ilike('title', pattern)
       .not('listened_at', 'is', null);
     if (year > 0) q = q.or(`year.eq.${year},year.is.null,year.eq.0`);
     return q.order('listened_at', { ascending: false }).range(from, to);
-  });
+  })));
+  const byRow = new Map();
+  for (const r of batches.flat()) {
+    if (sameRecordKey(r.title) !== coreKey) continue;
+    byRow.set(`${r.user_id}_${r.spotify_id}_${r.listened_at}`, r);
+  }
+  const logs = [...byRow.values()].sort((a, b) => Date.parse(b.listened_at) - Date.parse(a.listened_at));
 
   const seen = new Set();
   const rows = [];
@@ -3362,7 +3382,7 @@ async function computeAlbumReviews(title, year) {
   const targetIds = rows.map(r => `${r.user_id}_${r.spotify_id}`);
   const [profiles, comments, likes] = await Promise.all([
     fetchAllRowsIn(userIds, (chunk, from, to) => supabase
-      .from('profiles').select('id, username, display_name, avatar_url, is_pro').in('id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
+      .from('profiles').select('id, username, display_name, avatar_url, is_pro, is_private').in('id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
     fetchAllRowsIn(targetIds, (chunk, from, to) => supabase
       .from('review_comments').select('review_id').in('review_id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
     fetchAllRowsIn(targetIds, (chunk, from, to) => supabase
@@ -3386,6 +3406,7 @@ async function computeAlbumReviews(title, year) {
       displayName:  p?.display_name ?? null,
       avatarUrl:    p?.avatar_url ?? null,
       isPro:        !!p?.is_pro,
+      isPrivate:    !!p?.is_private,
       rating:       r.rating ?? 0,
       text:         r.review || null,
       listenedAt:   r.listened_at,
@@ -3424,9 +3445,19 @@ app.get('/api/album-reviews', async (req, res) => {
       return { likeCount: others + (liked ? 1 : 0), liked };
     };
 
-    const reviews = base.reviews
-      .filter(r => r.userId !== userId)
-      .map(r => ({ ...r, ...likeState(r.id) }));
+    // Whom the caller follows (accepted only — `follows` never holds pending).
+    const following = new Set();
+    if (userId && base.reviews.some(r => r.isPrivate)) {
+      const rows = await fetchAllRows((from, to) => supabase
+        .from('follows').select('following_id').eq('follower_id', userId).range(from, to));
+      for (const f of rows) following.add(f.following_id);
+    }
+
+    const others = base.reviews.filter(r => r.userId !== userId);
+    const reviews = others
+      .filter(r => !r.isPrivate || following.has(r.userId))
+      .map(({ isPrivate, ...r }) => ({ ...r, ...likeState(r.id) }));
+    const ratings = others.filter(r => r.rating > 0).map(r => r.rating);
 
     let own = null;
     if (ownTarget) {
@@ -3441,7 +3472,7 @@ app.get('/api/album-reviews', async (req, res) => {
       }
     }
 
-    res.json({ reviews, own });
+    res.json({ reviews, own, ratings });
   } catch (err) {
     console.error('[/api/album-reviews]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });

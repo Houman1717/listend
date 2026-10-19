@@ -1186,6 +1186,10 @@ export default function AlbumDetailScreen() {
 
         reviewsFromServer.current = true;
         setReviewLikesMap(likes);
+        // Pooled across editions of the same recording (remasters, dated
+        // mixes), and counting private accounts anonymously — so it replaces
+        // the exact-title album_community_ratings result.
+        if (Array.isArray(data.ratings)) setOtherRatings(data.ratings.map(Number).filter((n: number) => n > 0));
         setCommunityReviews(data.reviews.map((r: any): CommunityReview => ({
           id:           r.id,
           userId:       r.userId,
@@ -1284,6 +1288,7 @@ export default function AlbumDetailScreen() {
     supabase
       .rpc('album_community_ratings', { p_title: albumTitle, p_year: albumYear })
       .then(({ data, error }) => {
+        if (reviewsFromServer.current) return; // the server's pooled ratings win
         if (error) {
           console.error('[album-detail] album_community_ratings error:', error.message);
           setOtherRatings(null);
