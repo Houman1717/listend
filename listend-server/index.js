@@ -4347,6 +4347,49 @@ const TRACKLIST_CAPS = {
 const capTracklist = (id, tracks) =>
   TRACKLIST_CAPS[id] && Array.isArray(tracks) ? tracks.slice(0, TRACKLIST_CAPS[id]) : tracks;
 
+// ── GET /catalog/album/:id/artist ─────────────────────────────────────────────
+// The album's own artist, by catalog id. Tapping the artist on an album page
+// used to search the name and open the first hit, so two artists who share a
+// name (two "The Starchild"s) always landed on whichever Apple ranks first.
+// `?name=` picks the matching credit on a multi-artist album.
+app.get('/catalog/album/:id/artist', [
+  param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
+  query('name').optional().trim().isLength({ max: 200 }),
+  validate,
+], async (req, res) => {
+  const { id } = req.params;
+  const name = req.query.name ?? '';
+
+  const manual = manualAlbumById(id);
+  if (manual) {
+    if (!manual.artistId) return res.status(404).json({ error: 'No artist for this album' });
+    return res.json({ id: manual.artistId, name: manualArtistById(manual.artistId)?.name ?? manual.artist });
+  }
+
+  const CACHE_KEY = `catalog_album_artist_${id}`;
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(pickAlbumArtist(mem, name));
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db?.length) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(pickAlbumArtist(db, name)); }
+
+  try {
+    const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/artists`);
+    const artists = (data.data ?? []).map(a => ({ id: a.id, name: a.attributes?.name ?? '' }));
+    if (!artists.length) return res.status(404).json({ error: 'No artist for this album' });
+    cacheSet(CACHE_KEY, artists, TTL_6H);
+    await setCache(CACHE_KEY, artists);
+    res.json(pickAlbumArtist(artists, name));
+  } catch (err) {
+    console.error('[/catalog/album/artist]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+function pickAlbumArtist(artists, name) {
+  const want = normalizeKey(name);
+  return artists.find(a => normalizeKey(a.name) === want) ?? artists[0];
+}
+
 app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   param('id').trim().matches(/^[a-zA-Z0-9_-]+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,

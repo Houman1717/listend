@@ -108,6 +108,22 @@ export default function SongDetailScreen() {
     return () => { cancelled = true; };
   }, [params.id]);
 
+  // The artist's id via the song's album, so tapping the name opens this
+  // artist rather than whichever same-named one search ranks first.
+  const [artistId, setArtistId] = useState<string | null>(null);
+  const songAlbumId = params.albumId || fetched?.albumId || '';
+  const songArtist  = params.artist || fetched?.artist || '';
+  useEffect(() => {
+    setArtistId(null);
+    if (!songAlbumId) return;
+    let cancelled = false;
+    fetch(`${API_URL}/catalog/album/${encodeURIComponent(songAlbumId)}/artist?name=${encodeURIComponent(songArtist)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((a: { id?: string } | null) => { if (!cancelled && a?.id) setArtistId(a.id); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [songAlbumId, songArtist]);
+
   // Ratings + reviews; re-fetched after you save or remove your own.
   useEffect(() => {
     if (!params.id) return;
@@ -183,7 +199,7 @@ export default function SongDetailScreen() {
         <Text style={[s.title, { color: colors.text }]}>{song.title}</Text>
         <Pressable
           disabled={!song.artist}
-          onPress={() => router.push({ pathname: '/artist-detail', params: { name: song.artist } })}>
+          onPress={() => router.push({ pathname: '/artist-detail', params: artistId ? { id: artistId, name: song.artist } : { name: song.artist } })}>
           <Text style={s.artist}>{song.artist}{year ? ` · ${year}` : ''}</Text>
         </Pressable>
         {song.albumId && song.albumTitle ? (

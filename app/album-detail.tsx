@@ -1082,6 +1082,19 @@ export default function AlbumDetailScreen() {
   }, [reviewTab, reviewSort, ownReview, communityReviews, allReviews, friendIds]);
 
   // ── Fetch tracklist + Last.fm ──────────────────────────────────────────────
+  // The album's own artist id, looked up ahead of a tap on the artist name.
+  const [albumArtistId, setAlbumArtistId] = useState<string | null>(null);
+  useEffect(() => {
+    setAlbumArtistId(null);
+    if (!albumId) return;
+    let cancelled = false;
+    fetch(`${API_URL}/catalog/album/${encodeURIComponent(albumId)}/artist?name=${encodeURIComponent(albumArtist)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((a: { id?: string } | null) => { if (!cancelled && a?.id) setAlbumArtistId(a.id); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [albumId, albumArtist]);
+
   useEffect(() => {
     if (!albumId) return;
     let cancelled = false;
@@ -1683,7 +1696,12 @@ export default function AlbumDetailScreen() {
   }
 
   function handleArtistPress() {
-    router.push({ pathname: '/artist-detail', params: { name: albumArtist } });
+    // Open by id when we have it — a name alone opens whichever same-named
+    // artist search ranks first.
+    router.push({
+      pathname: '/artist-detail',
+      params: albumArtistId ? { id: albumArtistId, name: albumArtist } : { name: albumArtist },
+    });
   }
 
   const sectionBg  = isDark ? '#1c1410' : '#f5f5f5';
