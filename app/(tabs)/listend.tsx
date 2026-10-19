@@ -474,6 +474,7 @@ const FAV_SLOT_SIZE = Math.floor(
   (Dimensions.get('window').width - 40 - FAV_GAP * (FAV_SLOTS - 1)) / FAV_SLOTS
 );
 const SLOT_STEP = FAV_SLOT_SIZE + FAV_GAP;
+const FAV_BADGE_SIZE = 20;
 
 // ─── Favourite slot ───────────────────────────────────────────────────────────
 
@@ -505,8 +506,20 @@ function FavSlot({
     return <View style={[s.favSlot, s.favEmpty, { borderRadius: radius }]} />;
   }
 
+  // The × sits on the slot's top-right. A fixed 3px corner inset only works
+  // for square covers — on a circular artist slot that corner is outside the
+  // circle, and once slots get big (iPad: ~150px) the badge landed entirely
+  // outside it and was clipped away, still tappable but invisible. Pull it
+  // in to where the circle's edge crosses the diagonal instead; on a phone
+  // that works out to the same 3px.
+  const badgeInset = circular
+    ? Math.max(3, Math.round(radius * (1 - Math.SQRT1_2)) + 2 - FAV_BADGE_SIZE / 2)
+    : 3;
+
   return (
-    <View style={[s.favSlot, { borderRadius: radius, overflow: 'hidden' }]}>
+    // overflow is visible so the badge isn't cut off by the circle — the
+    // artwork Pressable below does its own rounding/clipping.
+    <View style={[s.favSlot, { borderRadius: radius, overflow: 'visible' }]}>
       <Pressable
         onPress={editMode ? undefined : onPress}
         disabled={editMode}
@@ -528,7 +541,7 @@ function FavSlot({
         <Pressable
           onPress={onRemove}
           hitSlop={8}
-          style={s.favRemoveBtn}>
+          style={[s.favRemoveBtn, { top: badgeInset, right: badgeInset }]}>
           <FontAwesome name="times" size={9} color="#fff" />
         </Pressable>
       )}
@@ -1572,11 +1585,9 @@ const s = StyleSheet.create({
   },
   favRemoveBtn: {
     position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: FAV_BADGE_SIZE,
+    height: FAV_BADGE_SIZE,
+    borderRadius: FAV_BADGE_SIZE / 2,
     backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
