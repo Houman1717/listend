@@ -151,7 +151,7 @@ export default function LogAlbumScreen() {
 
   // Once the keys are up, scroll the whole review box (and the Log button under
   // it) into view — otherwise it opens behind the keyboard, or on iOS with
-  // only its first line showing. Android waits for the padding below to render.
+  // only its first line showing.
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
     const sub = Keyboard.addListener('keyboardDidShow', () => {
@@ -159,11 +159,22 @@ export default function LogAlbumScreen() {
     });
     return () => sub.remove();
   }, []);
-  useEffect(() => {
-    if (androidKeyboardHeight > 0 && reviewFocused.current) {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }
-  }, [androidKeyboardHeight]);
+  // Android: the window never resizes, so scroll the review box's bottom (where
+  // the cursor sits while typing, plus the char count) above the keys ourselves.
+  // Re-run once the padding has laid out (onContentSizeChange — a scroll sent in
+  // the same commit runs against the old content size) and whenever the box
+  // grows a line. Targets the box, not the end: with the track list open,
+  // scrollToEnd threw the review off the top of the screen.
+  const scrollY = useRef(0);
+  const viewportHeight = useRef(0);
+  const reviewFrame = useRef({ y: 0, height: 0 });
+  function keepReviewAboveKeyboard() {
+    if (androidKeyboardHeight === 0 || !reviewFocused.current) return;
+    const visibleBottom = viewportHeight.current - (androidKeyboardHeight + insets.bottom);
+    const needed = reviewFrame.current.y + reviewFrame.current.height + 32 - visibleBottom;
+    if (needed > scrollY.current) scrollRef.current?.scrollTo({ y: needed, animated: true });
+  }
+  useEffect(() => { keepReviewAboveKeyboard(); }, [androidKeyboardHeight]);
 
   // Clears reListenMode on every dismissal path (Cancel, swipe-down, hardware
   // back) — it was previously only reset after a successful submit, so
@@ -210,6 +221,10 @@ export default function LogAlbumScreen() {
         androidKeyboardHeight > 0 && { paddingBottom: 40 + androidKeyboardHeight + insets.bottom },
       ]}
       keyboardShouldPersistTaps="handled"
+      onLayout={e => { viewportHeight.current = e.nativeEvent.layout.height; }}
+      onScroll={e => { scrollY.current = e.nativeEvent.contentOffset.y; }}
+      scrollEventThrottle={16}
+      onContentSizeChange={keepReviewAboveKeyboard}
       // iOS: inset the content by the keyboard. A KeyboardAvoidingView here
       // left the review box under the keys until the user scrolled by hand.
       automaticallyAdjustKeyboardInsets>
@@ -285,8 +300,13 @@ export default function LogAlbumScreen() {
         placeholderTextColor={colors.subtext}
         value={review}
         onChangeText={setReview}
-        onFocus={() => { reviewFocused.current = true; }}
+        onFocus={() => { reviewFocused.current = true; keepReviewAboveKeyboard(); }}
         onBlur={() => { reviewFocused.current = false; }}
+        onLayout={e => {
+          const { y, height } = e.nativeEvent.layout;
+          reviewFrame.current = { y, height };
+          keepReviewAboveKeyboard();
+        }}
         multiline
         textAlignVertical="top"
         maxLength={1000}
