@@ -1441,7 +1441,10 @@ function foldDiacritics(s) {
 // and "Album [Remastered]" are the same record as "Album". Used both to dedupe
 // a discography and to match logged albums back onto it, so an edition suffix
 // on either side can't split one album's ratings across two buckets.
-const VARIANT_SUFFIX_RE = /\s*[\(\[].*[\)\]]\s*$/i;
+// A bracket at the very start is part of the title, not a suffix: without the
+// lookbehind "(What's the Story) Morning Glory? [Deluxe…]" stripped to "" and
+// the deluxe edition was promoted into Albums as an edition-only release.
+const VARIANT_SUFFIX_RE = /(?<=\S)\s*[\(\[].*[\)\]]\s*$/i;
 
 // Except a "(… Album)" nickname, which is the title itself: every Weezer
 // self-titled record is "Weezer (Blue/Green/Red/White/Teal/Black Album)",
