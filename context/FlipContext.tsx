@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { FLIP_POOL } from '@/constants/FlipPool';
 import { scheduleFlipCooldownNotification, cancelFlipCooldownNotification } from '@/lib/flipNotification';
 import { capture } from '@/lib/analytics';
-import { communityStatsKey } from '@/lib/communityStats';
+import { libraryMatcher } from '@/lib/albumMatch';
 
 const FLIP_POOL_BY_ID = new Map(FLIP_POOL.map(a => [a.id, a]));
 
@@ -44,11 +44,17 @@ type FlipContextType = {
 // to migrate any pre-existing local history into Supabase on first load.
 const flipKey = (uid: string) => `@listend:flipData_v1_${uid}`;
 
-// Apple Music search often returns an edition/remaster suffix in parens or
-// brackets ("Led Zeppelin (Remastered)") that the pool's plain title doesn't
-// have — strip a trailing one before matching so those still count as logged.
-function stripEdition(title: string): string {
-  return title.replace(/\s*[([][^()[\]]*[)\]]\s*$/, '').trim();
+// Pool IDs that match albums in a Listend library — see lib/albumMatch for
+// how loose the match is (edition tags, punctuation, fuller artist credits)
+// and why the title must still match exactly. Shared with My Stats so its
+// pool-progress ring can never drift from the Flip a Record screen's count.
+export function poolLoggedIds(albums: { title: string; artist?: string | null }[]): Set<string> {
+  const isLogged = libraryMatcher(albums);
+  const ids = new Set<string>();
+  for (const a of FLIP_POOL) {
+    if (isLogged(a)) ids.add(a.id);
+  }
+  return ids;
 }
 
 function rowToRecord(row: any): FlippedRecord {
@@ -179,18 +185,7 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     history.filter(r => r.status === 'pending' || r.status === 'logged').map(r => r.id)
   ), [history]);
 
-  // Pool IDs that match albums already in the user's Listend library — matched
-  // by title+artist (not title alone), otherwise unrelated albums that just
-  // share a pool title (e.g. Pop Smoke's "Faith" vs George Michael's "Faith")
-  // get falsely treated as already logged.
-  const libraryLoggedIds = useMemo(() => {
-    const loggedKeys = new Set(loggedAlbums.map(a => communityStatsKey(stripEdition(a.title), a.artist)));
-    const ids = new Set<string>();
-    for (const a of FLIP_POOL) {
-      if (loggedKeys.has(communityStatsKey(stripEdition(a.title), a.artist))) ids.add(a.id);
-    }
-    return ids;
-  }, [loggedAlbums]);
+  const libraryLoggedIds = useMemo(() => poolLoggedIds(loggedAlbums), [loggedAlbums]);
 
   const poolExhausted = FLIP_POOL.filter(
     a => !excludedByHistory.has(a.id) && !libraryLoggedIds.has(a.id)

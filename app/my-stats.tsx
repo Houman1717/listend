@@ -19,7 +19,8 @@ import { fetchMembers, rankMembers, memberQuery, type MemberRow } from '@/lib/me
 import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 import { FLIP_POOL } from '@/constants/FlipPool';
-import { useFlip } from '@/context/FlipContext';
+import { useFlip, poolLoggedIds } from '@/context/FlipContext';
+import { libraryMatcher } from '@/lib/albumMatch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MAIN_GENRES } from '@/lib/genres';
 import { StatsMilestones } from '@/components/StatsMilestones';
@@ -1365,36 +1366,29 @@ export default function MyStatsScreen() {
   }, [artistCompNamesKey]);
 
   // ── Playlist progress ─────────────────────────────────────────────────────
-  const loggedSet = new Set(
-    loggedAlbums.map(a => `${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
-  );
+  const isLogged = libraryMatcher(loggedAlbums);
 
   const flipTotal = FLIP_POOL.length;
-  const flipDone  = FLIP_POOL.filter(
-    a => loggedSet.has(`${a.title.toLowerCase()}::${a.artist.toLowerCase()}`)
-  ).length;
+  // Same matcher as the Flip a Record screen — an exact title compare here
+  // missed every album Apple Music returns with an edition suffix
+  // ("Green (Remastered 2013)"), so this ring undercounted the flip screen.
+  const flipDone  = poolLoggedIds(loggedAlbums).size;
 
   const playlistProgress = [
     ...FEATURED_PLAYLISTS.map(pl => {
       if (pl.id === 'flip-a-record') return { ...pl, kind: 'featured' as const, done: flipDone, total: flipTotal };
       const albums = playlistAlbums[pl.id] ?? [];
-      const done = albums.filter(
-        a => loggedSet.has(`${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
-      ).length;
+      const done = albums.filter(isLogged).length;
       return { ...pl, kind: 'featured' as const, done, total: albums.length };
     }),
     ...GENRE_LABELS.map(label => {
       const albums = genreAlbums[label] ?? [];
-      const done = albums.filter(
-        a => loggedSet.has(`${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
-      ).length;
+      const done = albums.filter(isLogged).length;
       return { id: label, name: label, kind: 'genre' as const, done, total: albums.length };
     }),
     ...DECADE_LABELS.map(label => {
       const albums = decadeAlbums[label] ?? [];
-      const done = albums.filter(
-        a => loggedSet.has(`${a.title.toLowerCase()}::${(a.artist ?? '').toLowerCase()}`)
-      ).length;
+      const done = albums.filter(isLogged).length;
       return { id: label, name: label, kind: 'decade' as const, done, total: albums.length };
     }),
   ];
