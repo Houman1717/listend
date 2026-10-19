@@ -1073,6 +1073,146 @@ const MANUAL_ALBUMS = [
       { number: 8, id: 'lst-nice-day-collection-t8', title: 'Nice Day', durationMs: 153173 },
     ],
   },
+  {
+    id: 'lst-idea-zavalloni',
+    title: 'Idea',
+    artist: 'Cristina Zavalloni',
+    artistId: '136978073',
+    year: 2006,
+    // Egea Records; on Deezer but not Apple Music. Cover from Deezer, hosted here — the
+    // Cover Art Archive has none.
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/idea-zavalloni.jpg`,
+    musicbrainzReleaseId: '311e8485-daf9-4b36-b13a-a3e6d81bcb0f',
+    trackCount: 11,
+    tracks: [
+      { number: 1, id: 'lst-idea-zavalloni-t1', title: 'Nati per adeguarsi', durationMs: 286840 },
+      { number: 2, id: 'lst-idea-zavalloni-t2', title: 'Bastava quel cielo', durationMs: 159453 },
+      { number: 3, id: 'lst-idea-zavalloni-t3', title: 'Trilha dos caranguejos', durationMs: 296920 },
+      { number: 4, id: 'lst-idea-zavalloni-t4', title: 'Bouqueirão', durationMs: 322000 },
+      { number: 5, id: 'lst-idea-zavalloni-t5', title: 'Instinti Languidi A Riposo In Attesa', durationMs: 257573 },
+      { number: 6, id: 'lst-idea-zavalloni-t6', title: 'Idea', durationMs: 202133 },
+      { number: 7, id: 'lst-idea-zavalloni-t7', title: 'Amore mio mannaggiatte\'', durationMs: 309000 },
+      { number: 8, id: 'lst-idea-zavalloni-t8', title: 'Cavaquinho', durationMs: 143813 },
+      { number: 9, id: 'lst-idea-zavalloni-t9', title: 'But I Love Her!', durationMs: 264400 },
+      { number: 10, id: 'lst-idea-zavalloni-t10', title: 'Have Yourself a Merry Little Christmas', durationMs: 275506 },
+      { number: 11, id: 'lst-idea-zavalloni-t11', title: 'Per Alfredo', durationMs: 278173 },
+    ],
+  },
+  {
+    id: 'lst-inferno-metamorfosi',
+    title: 'Inferno',
+    artist: 'Metamorfosi',
+    artistId: 'lst-artist-metamorfosi',
+    year: 1973,
+    // the Rome prog band's Dante concept album. Tracklist from the 1989 reissue — the 1973
+    // listing on MusicBrainz splits the medleys and lacks most lengths.
+    artworkUrl: 'https://coverartarchive.org/release-group/0774ff04-5efe-353d-acaa-90ad9c957ed3/front-500',
+    musicbrainzReleaseId: '505565b5-f1e9-4bb5-a3a8-d04ca5363360',
+    trackCount: 12,
+    tracks: [
+      { number: 1, id: 'lst-inferno-metamorfosi-t1', title: 'Introduzione / Selva oscura', durationMs: 470000 },
+      { number: 2, id: 'lst-inferno-metamorfosi-t2', title: 'Porta dell\'Inferno', durationMs: 80333 },
+      { number: 3, id: 'lst-inferno-metamorfosi-t3', title: 'Caronte', durationMs: 78826 },
+      { number: 4, id: 'lst-inferno-metamorfosi-t4', title: 'Spacciatore di droga / Terremoto / Limbo', durationMs: 381506 },
+      { number: 5, id: 'lst-inferno-metamorfosi-t5', title: 'Lussuriosi', durationMs: 194666 },
+      { number: 6, id: 'lst-inferno-metamorfosi-t6', title: 'Avari', durationMs: 92333 },
+      { number: 7, id: 'lst-inferno-metamorfosi-t7', title: 'Violenti', durationMs: 224826 },
+      { number: 8, id: 'lst-inferno-metamorfosi-t8', title: 'Malebolge', durationMs: 91840 },
+      { number: 9, id: 'lst-inferno-metamorfosi-t9', title: 'Sfruttatori', durationMs: 341333 },
+      { number: 10, id: 'lst-inferno-metamorfosi-t10', title: 'Razzisti / Fossa dei giganti', durationMs: 205333 },
+      { number: 11, id: 'lst-inferno-metamorfosi-t11', title: 'Lucifero (Politicanti)', durationMs: 152000 },
+      { number: 12, id: 'lst-inferno-metamorfosi-t12', title: 'Conclusione', durationMs: 97000 },
+    ],
+  },
+  {
+    id: 'lst-mas-alla-mentes-diminutas',
+    title: 'Más allá de nuestras mentes diminutas',
+    artist: 'CAI',
+    artistId: '1308749426',
+    year: 1978,
+    // their 1978 debut; Apple only has the band's later Noche Abierta and Canción de la Primavera.
+    // Lengths from disc 1 of the 2007 two-on-one CD — the 1978 LP listing has none.
+    artworkUrl: 'https://coverartarchive.org/release-group/4a63236c-61f3-4a89-a734-c048068ee6ac/front-500',
+    musicbrainzReleaseId: '6917ac0f-e618-4c0c-aa0c-1a34e740272a',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-mas-alla-mentes-diminutas-t1', title: 'Alameda', durationMs: 564000 },
+      { number: 2, id: 'lst-mas-alla-mentes-diminutas-t2', title: 'Mas allá de nuestras mentes diminutas', durationMs: 444000 },
+      { number: 3, id: 'lst-mas-alla-mentes-diminutas-t3', title: 'Solución a un viejo problema', durationMs: 374000 },
+      { number: 4, id: 'lst-mas-alla-mentes-diminutas-t4', title: 'Pasa un día', durationMs: 643000 },
+    ],
+  },
+  {
+    id: 'lst-elis-1980',
+    title: 'Elis',
+    artist: 'Elis Regina',
+    artistId: '117940',
+    year: 1980,
+    aliases: ['Elis 1980'],
+    // her 1980 EMI album, usually called "Elis 1980" to tell it from her other self-titled LPs —
+    // Apple has the 1966/72/73/74/77 ones but not this.
+    artworkUrl: 'https://coverartarchive.org/release-group/e3f00603-c147-3810-ae0d-29cb2cc60992/front-500',
+    musicbrainzReleaseId: '9df66018-1b7a-41bf-9fc9-1df1d0db05ab',
+    trackCount: 9,
+    tracks: [
+      { number: 1, id: 'lst-elis-1980-t1', title: 'Sai dessa', durationMs: 129000 },
+      { number: 2, id: 'lst-elis-1980-t2', title: 'Rebento', durationMs: 312000 },
+      { number: 3, id: 'lst-elis-1980-t3', title: 'Nova estação', durationMs: 202000 },
+      { number: 4, id: 'lst-elis-1980-t4', title: 'O medo de amar é o medo de ser livre', durationMs: 263000 },
+      { number: 5, id: 'lst-elis-1980-t5', title: 'Aprendendo a jogar', durationMs: 250000 },
+      { number: 6, id: 'lst-elis-1980-t6', title: 'Só Deus é quem sabe', durationMs: 235000 },
+      { number: 7, id: 'lst-elis-1980-t7', title: 'O trem azul', durationMs: 270000 },
+      { number: 8, id: 'lst-elis-1980-t8', title: 'Vento de maio', durationMs: 249000 },
+      { number: 9, id: 'lst-elis-1980-t9', title: 'Calcanhar de Aquiles', durationMs: 190000 },
+    ],
+  },
+  {
+    id: 'lst-imyra-tayra-ipy',
+    title: 'Imyra, Tayra, Ipy',
+    artist: 'Taiguara',
+    artistId: '98230725',
+    year: 1976,
+    // pulled from shops by the censors soon after release; not on Apple Music or Deezer.
+    // Cover from Discogs, hosted here — the Cover Art Archive has none.
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/imyra-tayra-ipy.jpg`,
+    musicbrainzReleaseId: 'ea015e30-c1ff-4958-9008-a21db63c880f',
+    trackCount: 14,
+    tracks: [
+      { number: 1, id: 'lst-imyra-tayra-ipy-t1', title: 'Pianice (Pecinha Sinfônica)', durationMs: 88000 },
+      { number: 2, id: 'lst-imyra-tayra-ipy-t2', title: 'Delírio Transatlântico e Chegada no Rio', durationMs: 36000 },
+      { number: 3, id: 'lst-imyra-tayra-ipy-t3', title: 'Público', durationMs: 294000 },
+      { number: 4, id: 'lst-imyra-tayra-ipy-t4', title: 'Terra das Palmeiras', durationMs: 291000 },
+      { number: 5, id: 'lst-imyra-tayra-ipy-t5', title: 'Como em Guernica', durationMs: 211000 },
+      { number: 6, id: 'lst-imyra-tayra-ipy-t6', title: 'A Volta do Pássaro Ameríndio', durationMs: 258000 },
+      { number: 7, id: 'lst-imyra-tayra-ipy-t7', title: 'Luanda, Violeta Africana', durationMs: 81000 },
+      { number: 8, id: 'lst-imyra-tayra-ipy-t8', title: 'Aquarela de um País na Lua', durationMs: 220000 },
+      { number: 9, id: 'lst-imyra-tayra-ipy-t9', title: 'Situação', durationMs: 232000 },
+      { number: 10, id: 'lst-imyra-tayra-ipy-t10', title: 'Sete Cenas de Imyra', durationMs: 285000 },
+      { number: 11, id: 'lst-imyra-tayra-ipy-t11', title: 'Três Pontas', durationMs: 222000 },
+      { number: 12, id: 'lst-imyra-tayra-ipy-t12', title: 'Samba das Cinco', durationMs: 165000 },
+      { number: 13, id: 'lst-imyra-tayra-ipy-t13', title: 'Primeira Bateria', durationMs: 168000 },
+      { number: 14, id: 'lst-imyra-tayra-ipy-t14', title: 'Outra Cena', durationMs: 69000 },
+    ],
+  },
+  {
+    id: 'lst-ciclos-canarios',
+    title: 'Ciclos',
+    artist: 'Canarios',
+    artistId: '313845296',
+    year: 1974,
+    aliases: ['Los Canarios'],
+    // the Vivaldi Four Seasons rock opera, four side-long "transmigraciones". Credited as
+    // Canarios on the record; often listed as Los Canarios, hence the alias.
+    artworkUrl: 'https://coverartarchive.org/release-group/e3de6154-c60b-3ea7-9c59-903ce2d00bee/front-500',
+    musicbrainzReleaseId: 'b19a9b07-0ac6-458a-81f8-695ef5d8d99a',
+    trackCount: 4,
+    tracks: [
+      { number: 1, id: 'lst-ciclos-canarios-t1', title: 'Primera transmigración (El paraíso remoto)', durationMs: 1010000 },
+      { number: 2, id: 'lst-ciclos-canarios-t2', title: 'Segunda transmigración (El abismo próximo)', durationMs: 1005000 },
+      { number: 3, id: 'lst-ciclos-canarios-t3', title: 'Tercera transmigración (El entorno futuro)', durationMs: 1067000 },
+      { number: 4, id: 'lst-ciclos-canarios-t4', title: 'Cuarta transmigración (El eslabón recobrado)', durationMs: 1313000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
@@ -1119,6 +1259,13 @@ const MANUAL_ARTISTS = [
     name: 'In The Panchine',
     genre: 'Hip-Hop/Rap',
     artworkUrl: 'https://coverartarchive.org/release-group/a68913ae-35d1-49fb-aecf-252e370cfc9a/front-500',
+  },
+  {
+    // The 1970s Rome prog band. Apple's two Metamorfosis are newer, unrelated acts.
+    id: 'lst-artist-metamorfosi',
+    name: 'Metamorfosi',
+    genre: 'Rock',
+    artworkUrl: 'https://coverartarchive.org/release-group/0774ff04-5efe-353d-acaa-90ad9c957ed3/front-500',
   },
 ];
 

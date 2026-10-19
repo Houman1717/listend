@@ -572,6 +572,12 @@ pinStorefront('de', [
   '1443215619', '1443215714', '1443215719', '1443215722', '1443215725', '1443215730',
   '1443215734', '1443215738', '1443215802', '1443215809', '1443215815',
 ]);
+// Bloque — Hombre, Tierra y Alma (1979). Not licensed for `us`.
+pinStorefront('es', [
+  '256078220',
+  '256078328', '256078761', '256078954', '256079032', '256079059', '256079340',
+  '256079448',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1173,6 +1179,10 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'haftbefehl::russischroulettedeluxe': {
     id: '1443215360', title: 'Russisch Roulette (Deluxe)', artist: 'Haftbefehl', year: 2014,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/eb/95/15/eb9515b2-1535-4e74-ea52-b5b4f12b3009/00602547098498.rgb.jpg/500x500bb.jpg',
+  },
+  'bloque::hombretierrayalma': {
+    id: '256078220', title: 'Hombre, Tierra y Alma', artist: 'Bloque', year: 1979,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/2f/d3/58/mzi.gvtugzgg.jpg/500x500bb.jpg',
   },
   'haftbefehl::russischroulette': {
     id: '1443215360', title: 'Russisch Roulette (Deluxe)', artist: 'Haftbefehl', year: 2014,
@@ -4239,6 +4249,14 @@ app.get(['/catalog/artist/:id/top-tracks', '/spotify/artist/:id/top-tracks'], [
 // the id-based dedup below means a duplicate from Apple is harmless either
 // way.
 const ARTIST_ALBUM_OVERRIDES = {
+  '28169523': [ // Bloque — Hombre, Tierra y Alma isn't licensed for `us` (present on es)
+    {
+      id: '256078220', title: 'Hombre, Tierra y Alma',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/2f/d3/58/mzi.gvtugzgg.jpg/500x500bb.jpg',
+      year: 1979, isSingle: false, isCompilation: false, trackCount: 7,
+      url: 'https://music.apple.com/es/album/hombre-tierra-y-alma/256078220', type: 'album',
+    },
+  ],
   '1073702819': [ // Nimo — K¡K¡ isn't licensed for `us` (present on de)
     {
       id: '1440890163', title: 'K¡K¡',
