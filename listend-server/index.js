@@ -2784,7 +2784,9 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
 const ARTIST_PRIOR_WEIGHT = 10;
 
 app.get('/api/discover/community-top-artists', async (req, res) => {
-  const CACHE_KEY = 'discover:community-top-artists';
+  // v2: the blended ranking — a new key so the old likes/Top 5 list, cached
+  // for up to 6 h, isn't served after the deploy.
+  const CACHE_KEY = 'discover:community-top-artists-v2';
 
   // Image overrides run on the cached copies too, or a day-old row keeps
   // serving Apple's blank square.
@@ -6254,7 +6256,7 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
     const keys = ['discover:new-releases', 'discover:popular', 'discover:coming-soon',
                   'discover:classics', 'discover:top-rated', 'discover:recommended',
                   'discover:community-popular', 'discover:community-top-rated',
-                  'discover:community-top-artists', 'discover:community-top-songs',
+                  'discover:community-top-artists-v2', 'discover:community-top-songs',
                   'discover:community-most-listend-songs', 'discover:community-highest-rated-songs'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
