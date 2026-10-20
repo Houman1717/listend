@@ -2764,10 +2764,24 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
 });
 
 // ── GET /api/discover/community-top-artists ───────────────────────────────────
-// All-time top artists from real Listend user data.
-// Mirrors fetchTopArtistsThisWeek() in lib/homeData.ts but with no date filter.
-// Sources: liked_artists + top5_changes category=artists + user_albums (logged albums).
-// Cached 1 h in-memory, 6 h in Supabase.
+// Discover's Top Artists: how widely an artist is heard on Listend, blended
+// with how they're rated. It used to add up artist likes, Top 5 additions and
+// every album log — one person logging a whole discography counted like a
+// dozen listeners.
+//
+//   listeners — different people who logged an album, re-listen or song by
+//               them, counted on a log scale (10 → 100 matters more than
+//               500 → 590, so the biggest names don't lock the top forever).
+//   rating    — those people's album ratings, one vote per person (their
+//               average across the artist's albums), pulled toward the
+//               site-wide mean by ARTIST_PRIOR_WEIGHT votes so a few 10/10
+//               fans can't lift a niche artist.
+//   score     = ln(1 + listeners) × rating
+//
+// No score is shown, so the rating comes straight from album logs rather than
+// the per-artist Discography Score. Cached 1 h in-memory, 6 h in Supabase.
+
+const ARTIST_PRIOR_WEIGHT = 10;
 
 app.get('/api/discover/community-top-artists', async (req, res) => {
   const CACHE_KEY = 'discover:community-top-artists';
@@ -2781,101 +2795,47 @@ app.get('/api/discover/community-top-artists', async (req, res) => {
   if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(withArtistImages(db)); }
 
   try {
-    const [likedRows, top5Rows, albumRows] = await Promise.all([
-      fetchAllRows((from, to) => supabase.from('liked_artists').select('artist_id, name, artwork_url').range(from, to)),
-      fetchAllRows((from, to) => supabase.from('top5_changes').select('item_id, item_name, item_image_url').eq('category', 'artists').range(from, to)),
-      fetchAllRows((from, to) => supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).range(from, to)),
+    const [albumRows, relistenRows, songRows] = await Promise.all([
+      fetchAllRows((from, to) => supabase.from('user_albums').select('user_id, spotify_id, artist, rating').not('listened_at', 'is', null).range(from, to)),
+      fetchAllRows((from, to) => supabase.from('re_listens').select('user_id, spotify_id, artist').not('listened_at', 'is', null).range(from, to)),
+      fetchAllRows((from, to) => supabase.from('song_reviews').select('user_id, album_id, artist').range(from, to)),
     ]);
 
-    const counts = new Map();
-    for (const r of (likedRows ?? [])) {
-      if (!r.artist_id) continue;
-      const e = counts.get(r.artist_id);
-      if (e) e.count++;
-      else counts.set(r.artist_id, { artist: { id: r.artist_id, name: r.name ?? '', genre: '', artworkUrl: r.artwork_url ?? '' }, count: 1 });
-    }
-    for (const r of (top5Rows ?? [])) {
-      if (!r.item_id) continue;
-      const e = counts.get(r.item_id);
-      if (e) e.count++;
-      else counts.set(r.item_id, { artist: { id: r.item_id, name: r.item_name ?? '', genre: '', artworkUrl: r.item_image_url ?? '' }, count: 1 });
+    const byName = tallyArtistListeners(albumRows, relistenRows, songRows);
+    for (const r of albumRows ?? []) {
+      if (!(r.rating > 0)) continue;
+      const e = byName.get(foldDiacritics(r.artist?.trim()));
+      if (!e) continue;
+      const u = e.ratings.get(r.user_id) ?? { sum: 0, n: 0 };
+      u.sum += r.rating; u.n++;
+      e.ratings.set(r.user_id, u);
     }
 
-    // Dedup by name, picking best artworkUrl
-    const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
-    const byName = new Map();
-    for (const entry of sorted) {
-      const key = foldDiacritics(entry.artist.name);
-      if (!key) continue;
-      const existing = byName.get(key);
-      if (existing) {
-        existing.count += entry.count;
-        if (!existing.artist.artworkUrl && entry.artist.artworkUrl)
-          existing.artist = { ...existing.artist, artworkUrl: entry.artist.artworkUrl };
-      } else {
-        byName.set(key, { artist: { ...entry.artist }, count: entry.count });
-      }
-    }
-
-    // Add album log counts — only name available, no artwork (artwork_url is album art not artist)
-    for (const r of (albumRows ?? [])) {
-      const name = r.artist?.trim();
-      if (!name) continue;
-      const key = foldDiacritics(name);
-      const existing = byName.get(key);
-      if (existing) {
-        existing.count++;
-      } else {
-        byName.set(key, { artist: { id: `name:${key}`, name, genre: '', artworkUrl: '' }, count: 1 });
-      }
-    }
+    let voteSum = 0, votes = 0;
+    for (const e of byName.values()) for (const u of e.ratings.values()) { voteSum += u.sum / u.n; votes++; }
+    const mean = votes > 0 ? voteSum / votes : 0;
+    const score = e => {
+      let sum = 0;
+      for (const u of e.ratings.values()) sum += u.sum / u.n;
+      return Math.log1p(e.users.size) * ((sum + mean * ARTIST_PRIOR_WEIGHT) / (e.ratings.size + ARTIST_PRIOR_WEIGHT));
+    };
 
     const ranked = Array.from(byName.values())
-      .sort((a, b) => b.count - a.count)
+      .map(e => ({ e, s: score(e) }))
+      .sort((a, b) => b.s - a.s)
       .slice(0, 99)
-      .map(e => e.artist);
+      .map(x => x.e);
 
-    // Resolve a real AM ID + artwork for any artist that only came from album
-    // logs (no artwork yet) — without this, every one of them permanently
-    // gets the `name:xxx` placeholder id (invalid — routes reject it), which
-    // is what was breaking so many well-known artists on this screen.
-    const missing = ranked.filter(a => !a.artworkUrl);
-    if (missing.length > 0) {
-      const resolved = await Promise.allSettled(
-        missing.map(a =>
-          fetch(`https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(a.name)}&types=artists&limit=1`, {
-            headers: { Authorization: `Bearer ${generateAppleToken()}` },
-          })
-            .then(r => r.ok ? r.json() : null)
-            .then(data => {
-              const hit = data?.results?.artists?.data?.[0];
-              return { name: a.name, id: hit?.id ?? '', artworkUrl: artistImageFor(hit?.id, a.name, (hit?.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500')) };
-            })
-            .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
-        )
-      );
-      const artworkMap = {};
-      for (const r of resolved) {
-        if (r.status === 'fulfilled' && r.value.artworkUrl) {
-          artworkMap[r.value.name.toLowerCase()] = { id: r.value.id, artworkUrl: r.value.artworkUrl };
-        }
-      }
-      for (const artist of ranked) {
-        if (!artist.artworkUrl) {
-          const hit = artworkMap[artist.name.toLowerCase()];
-          if (hit) {
-            artist.artworkUrl = hit.artworkUrl;
-            if (hit.id) artist.id = hit.id;
-          }
-        }
-      }
+    // Apple lookups a few at a time — a cold cache is ~200 of them.
+    const results = [];
+    for (let i = 0; i < ranked.length; i += 8) {
+      results.push(...await Promise.all(ranked.slice(i, i + 8).map(resolveLoggedArtist)));
     }
 
-    const results = withArtistImages(ranked);
-
-    cacheSet(CACHE_KEY, results, TTL_1H);
-    await setCache(CACHE_KEY, results);
-    res.json(results);
+    const out = withArtistImages(results);
+    cacheSet(CACHE_KEY, out, TTL_1H);
+    await setCache(CACHE_KEY, out);
+    res.json(out);
   } catch (err) {
     console.error('[/api/discover/community-top-artists]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
@@ -3167,48 +3127,58 @@ async function computeTopArtistsThisWeek(since) {
     fetchAllRows((from, to) => supabase.from('song_reviews').select('user_id, album_id, artist').gte('listened_at', since).range(from, to)),
   ]);
 
+  const ranked = Array.from(tallyArtistListeners(albumRows, relistenRows, songRows).values())
+    .sort((a, b) => b.users.size - a.users.size)
+    .slice(0, 21);
+  return Promise.all(ranked.map(resolveLoggedArtist));
+}
+
+// Artist name → { name, users (distinct people who logged anything by them),
+// albums (album id → log count, for identifying them), ratings (filled by the
+// caller) } from album, re-listen and song logs.
+function tallyArtistListeners(albumRows, relistenRows, songRows) {
   const byName = new Map();
   const add = (userId, artist, albumId) => {
     const name = artist?.trim();
     const key = foldDiacritics(name);
     if (!userId || !key) return;
     let e = byName.get(key);
-    if (!e) { e = { name, users: new Set(), albums: new Map() }; byName.set(key, e); }
+    if (!e) { e = { name, users: new Set(), albums: new Map(), ratings: new Map() }; byName.set(key, e); }
     e.users.add(userId);
     if (albumId && !String(albumId).startsWith('lst-')) e.albums.set(albumId, (e.albums.get(albumId) ?? 0) + 1);
   };
   for (const r of albumRows ?? [])    add(r.user_id, r.artist, r.spotify_id);
   for (const r of relistenRows ?? []) add(r.user_id, r.artist, r.spotify_id);
   for (const r of songRows ?? [])     add(r.user_id, r.artist, r.album_id);
+  return byName;
+}
 
-  const ranked = Array.from(byName.values())
-    .sort((a, b) => b.users.size - a.users.size)
-    .slice(0, 21);
-
-  return Promise.all(ranked.map(async e => {
-    // The album most of them logged speaks for the artist.
-    const albumId = [...e.albums.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    let info = null;
-    try {
-      if (albumId) {
-        const credit = pickAlbumArtist(await albumArtists(albumId), e.name);
-        if (credit?.id) info = await artistInfo(credit.id);
-      }
-    } catch { /* fall through to the name search */ }
-    if (!info) {
-      try {
-        const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(e.name)}&types=artists&limit=1`);
-        const hit = data?.results?.artists?.data?.[0];
-        if (hit?.id) info = { id: hit.id, name: hit.attributes?.name ?? e.name, artworkUrl: artistImageFor(hit.id, e.name, (hit.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500')) };
-      } catch { /* keep the bare name */ }
+// Logs only store the artist's name, so identify the artist through the album
+// most people logged (Apple's album → artist link) rather than a name search,
+// which opens whichever same-named artist ranks first. The search is only the
+// fallback for an artist with no usable album.
+async function resolveLoggedArtist(e) {
+  const albumId = [...e.albums.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  let info = null;
+  try {
+    if (albumId) {
+      const credit = pickAlbumArtist(await albumArtists(albumId), e.name);
+      if (credit?.id) info = await artistInfo(credit.id);
     }
-    return {
-      id: info?.id ?? `name:${foldDiacritics(e.name)}`,
-      name: e.name,
-      genre: '',
-      artworkUrl: info?.artworkUrl ?? '',
-    };
-  }));
+  } catch { /* fall through to the name search */ }
+  if (!info) {
+    try {
+      const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(e.name)}&types=artists&limit=1`);
+      const hit = data?.results?.artists?.data?.[0];
+      if (hit?.id) info = { id: hit.id, artworkUrl: artistImageFor(hit.id, e.name, (hit.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500')) };
+    } catch { /* keep the bare name */ }
+  }
+  return {
+    id: info?.id ?? `name:${foldDiacritics(e.name)}`,
+    name: e.name,
+    genre: '',
+    artworkUrl: info?.artworkUrl ?? '',
+  };
 }
 
 // Review like/comment target_ids come in two shapes: `{userId}_{spotifyId}` for
@@ -6284,7 +6254,8 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
     const keys = ['discover:new-releases', 'discover:popular', 'discover:coming-soon',
                   'discover:classics', 'discover:top-rated', 'discover:recommended',
                   'discover:community-popular', 'discover:community-top-rated',
-                  'discover:community-top-artists', 'discover:community-top-songs'];
+                  'discover:community-top-artists', 'discover:community-top-songs',
+                  'discover:community-most-listend-songs', 'discover:community-highest-rated-songs'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-discover-cache] done.');
