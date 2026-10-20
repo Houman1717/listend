@@ -2931,6 +2931,134 @@ app.get('/api/discover/community-top-songs', async (req, res) => {
   }
 });
 
+// ── Song charts from song logs ───────────────────────────────────────────────
+// Most Listend Songs (Home, this week; Discover, all time) and Highest Rated
+// Songs (Discover) — built on song_reviews the way the album charts are built
+// on user_albums. They used to count Top 5 additions, which aren't listens.
+//
+// A song is grouped by song_key (title minus feat. credits + artist, same as the
+// song page) and also across remasters and dated mixes of the same recording —
+// "Oh! Darling (2019 Mix)" pools into "Oh! Darling". Mirrors the app's
+// stripSameRecording in lib/songReviews.ts. One entry per person per song,
+// their latest log; each song shows as its most-logged version.
+
+const SAME_RECORDING_SONG_RE = /[([][^)\]]*\b(?:remaster(?:ed)?|anniversary|reissue|\d{4}\s+(?:stereo\s+)?(?:re)?mix(?:ed)?)\b[^)\]]*[)\]]/gi;
+const SAME_RECORDING_DASH_RE = /\s+-\s+(?:\d{4}\s+)?(?:remaster(?:ed)?|\d{4}\s+(?:stereo\s+)?(?:re)?mix)\b.*$/i;
+const songChartKey = (title, artist) => {
+  const t = (title ?? '')
+    .replace(SAME_RECORDING_SONG_RE, '')
+    .replace(SAME_RECORDING_DASH_RE, '')
+    .replace(/\s*[([](feat|ft|with)\.?\s[^)\]]*[)\]]/gi, '');
+  return `${foldDiacritics(t).replace(/\s+/g, ' ').trim()}|${foldDiacritics(artist ?? '').replace(/\s+/g, ' ').trim()}`;
+};
+
+// Like the album charts: a song needs this many ratings to be ranked, and its
+// average is pulled toward the site-wide song mean by SONG_PRIOR_WEIGHT
+// ratings' worth, so three 10s can't outrank forty ratings at 9.4.
+const SONG_CHART_MIN_RATINGS = 5;
+const SONG_PRIOR_WEIGHT = 5;
+// One album's tracklist rated in a sitting can otherwise fill a chart.
+const SONG_CHART_MAX_PER_ALBUM = 3;
+
+async function fetchSongLogs(filter) {
+  return fetchAllRows((from, to) => filter(supabase
+    .from('song_reviews')
+    .select('user_id, song_id, song_key, title, artist, album_id, album_title, artwork_url, duration_ms, rating, listened_at'))
+    .range(from, to));
+}
+
+function rankSongs(rows, by, limit) {
+  const songs = new Map();
+  for (const r of rows ?? []) {
+    if (!r.song_id || !r.user_id || !r.title || !r.artist) continue;
+    const key = songChartKey(r.title, r.artist);
+    let e = songs.get(key);
+    if (!e) { e = { versions: new Map(), latest: new Map() }; songs.set(key, e); }
+    const vKey = r.song_key ?? r.song_id;
+    let v = e.versions.get(vKey);
+    if (!v) { v = { row: r, users: new Set() }; e.versions.set(vKey, v); }
+    v.users.add(r.user_id);
+    // Show the album version when there is one, not the single.
+    if (!v.row.album_id && r.album_id) v.row = r;
+    const prev = e.latest.get(r.user_id);
+    if (!prev || (r.listened_at ?? '') > (prev.listened_at ?? '')) e.latest.set(r.user_id, r);
+  }
+
+  const entries = [];
+  for (const e of songs.values()) {
+    let rep = null, most = -1;
+    for (const v of e.versions.values()) if (v.users.size > most) { most = v.users.size; rep = v.row; }
+    let sum = 0, rated = 0, lastAt = '';
+    for (const l of e.latest.values()) {
+      if (l.rating > 0) { sum += l.rating; rated++; }
+      if ((l.listened_at ?? '') > lastAt) lastAt = l.listened_at ?? '';
+    }
+    entries.push({
+      track: {
+        id: rep.song_id,
+        title: rep.title ?? '',
+        artist: rep.artist ?? '',
+        artworkUrl: rep.artwork_url ?? '',
+        albumId: rep.album_id ?? undefined,
+        albumTitle: rep.album_title ?? undefined,
+        durationMs: rep.duration_ms ?? undefined,
+      },
+      album: `${foldDiacritics(rep.album_title ?? rep.song_id)}|${foldDiacritics(rep.artist ?? '')}`,
+      listens: e.latest.size, sum, rated, lastAt,
+    });
+  }
+
+  let ranked;
+  if (by === 'rating') {
+    const qualifying = entries.filter(e => e.rated >= SONG_CHART_MIN_RATINGS);
+    const n = qualifying.reduce((a, e) => a + e.rated, 0);
+    const mean = n > 0 ? qualifying.reduce((a, e) => a + e.sum, 0) / n : 0;
+    const weighted = e => (e.sum + mean * SONG_PRIOR_WEIGHT) / (e.rated + SONG_PRIOR_WEIGHT);
+    ranked = qualifying.sort((a, b) => weighted(b) - weighted(a) || b.rated - a.rated);
+  } else {
+    // Equal counts → the one logged most recently first.
+    ranked = entries.sort((a, b) => b.listens - a.listens || b.lastAt.localeCompare(a.lastAt));
+  }
+
+  const perAlbum = new Map();
+  const out = [];
+  for (const e of ranked) {
+    const n = perAlbum.get(e.album) ?? 0;
+    if (n >= SONG_CHART_MAX_PER_ALBUM) continue;
+    perAlbum.set(e.album, n + 1);
+    out.push(e.track);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+// ── GET /api/discover/community-most-listend-songs ───────────────────────────
+// ── GET /api/discover/community-highest-rated-songs ──────────────────────────
+// All-time song charts. Cached 30 min like the album charts.
+
+for (const [path, by] of [
+  ['/api/discover/community-most-listend-songs', 'listens'],
+  ['/api/discover/community-highest-rated-songs', 'rating'],
+]) {
+  app.get(path, async (req, res) => {
+    const CACHE_KEY = `discover:${path.split('/').pop()}`;
+    const mem = cacheGet(CACHE_KEY);
+    if (mem) return res.json(mem);
+    const db = await getCached(CACHE_KEY, TTL_30M);
+    if (db) { cacheSet(CACHE_KEY, db, TTL_30M); return res.json(db); }
+    try {
+      const rows = await fetchSongLogs(q => q.not('listened_at', 'is', null));
+      const results = rankSongs(rows, by, 75);
+      cacheSet(CACHE_KEY, results, TTL_30M);
+      await setCache(CACHE_KEY, results);
+      res.json(results);
+    } catch (err) {
+      console.error(`[${path}]`, err.message ?? err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+}
+
 // ── GET /api/home/this-week ──────────────────────────────────────────────────
 // The four "This Week" home sections (top albums / songs / artists / popular
 // reviews), computed server-side over a rolling 7-day window and cached, so the
@@ -3019,27 +3147,8 @@ async function computeTopAlbumsThisWeek(since) {
 }
 
 async function computeTopSongsThisWeek(since) {
-  const data = await fetchAllRows((from, to) => supabase
-    .from('top5_changes')
-    .select('item_id, item_name, item_image_url')
-    .eq('category', 'songs')
-    .gte('changed_at', since)
-    .range(from, to));
-
-  const counts = new Map();
-  for (const r of (data ?? [])) {
-    if (!r.item_id) continue;
-    const e = counts.get(r.item_id);
-    if (e) e.count++;
-    else counts.set(r.item_id, {
-      track: { id: r.item_id, title: r.item_name ?? '', artist: '', artworkUrl: r.item_image_url ?? '' },
-      count: 1,
-    });
-  }
-
-  return attachSongArtists(
-    Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 21).map(e => e.track)
-  );
+  const rows = await fetchSongLogs(q => q.gte('listened_at', since));
+  return rankSongs(rows, 'listens', 21);
 }
 
 async function computeTopArtistsThisWeek(since) {
