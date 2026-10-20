@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -20,6 +20,9 @@ import { supabase } from '@/lib/supabase';
 import { SortSheet, applySort, sortLabel, SortKey, COMMUNITY_SORTS, DURATION_SORTS } from '@/components/SortSheet';
 import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
 import { fetchAlbumDurations } from '@/lib/albumDurations';
+import { fetchArtistTopSongs, ArtistTopSongs } from '@/lib/songReviews';
+import { openSongPage } from '@/lib/openSong';
+import { CompactRating } from '@/components/CompactRating';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -103,28 +106,35 @@ function SectionHeader({ label, color }: { label: string; color: string }) {
 }
 
 function TrackRow({
-  track, index, borderColor, textColor, subColor,
+  index, title, sub, artworkUrl, right, onPress, borderColor, textColor, subColor,
 }: {
-  track: CatalogTrack;
   index: number;
+  title: string;
+  sub?: string;
+  artworkUrl?: string;
+  right: React.ReactNode;
+  onPress?: () => void;
   borderColor: string;
   textColor: string;
   subColor: string;
 }) {
   return (
-    <View style={[sc.trackRow, { borderBottomColor: borderColor }]}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [sc.trackRow, { borderBottomColor: borderColor, opacity: pressed ? 0.6 : 1 }]}>
       <Text style={[sc.trackNum, { color: subColor }]}>{index + 1}</Text>
-      {track.artworkUrl ? (
-        <ExpoImage source={{ uri: track.artworkUrl }} style={sc.trackArt} contentFit="cover" cachePolicy="disk" />
+      {artworkUrl ? (
+        <ExpoImage source={{ uri: artworkUrl }} style={sc.trackArt} contentFit="cover" cachePolicy="disk" />
       ) : (
         <View style={[sc.trackArt, { backgroundColor: '#2a1e14' }]} />
       )}
       <View style={sc.trackInfo}>
-        <Text style={[sc.trackTitle, { color: textColor }]} numberOfLines={1}>{track.title}</Text>
-        <Text style={[sc.trackSub, { color: subColor }]} numberOfLines={1}>{track.albumTitle}</Text>
+        <Text style={[sc.trackTitle, { color: textColor }]} numberOfLines={1}>{title}</Text>
+        {sub ? <Text style={[sc.trackSub, { color: subColor }]} numberOfLines={1}>{sub}</Text> : null}
       </View>
-      <Text style={[sc.trackDuration, { color: subColor }]}>{formatDuration(track.durationMs)}</Text>
-    </View>
+      {right}
+    </Pressable>
   );
 }
 
@@ -179,6 +189,11 @@ export default function ArtistDetailScreen() {
 
   const [artistRating, setArtistRating]   = useState<ArtistRating | null>(null);
 
+  // Top songs from Listend logs. Apple Music's top songs are only the
+  // fallback, for an artist with too few songs logged on Listend.
+  const [listendTopSongs, setListendTopSongs] = useState<ArtistTopSongs | null>(null);
+  const [tracksView, setTracksView]           = useState<'listend' | 'rated'>('listend');
+
   const [bioExpanded, setBioExpanded]     = useState(false);
   const [activeDiscTab, setActiveDiscTab] = useState<DiscTab>('albums');
   const [discSortKey, setDiscSortKey]     = useState<SortKey>('release_new');
@@ -211,14 +226,18 @@ export default function ArtistDetailScreen() {
   // ── Listened % — derived from already-fetched discography + logged albums ────
   const albumsOnly   = discography?.albums ?? [];
   const totalAlbums  = albumsOnly.length;
-  const listenedCount = totalAlbums === 0 ? 0 : albumsOnly.filter(catalogAlbum => {
+  // By id, or by title for the same album logged under another catalog id.
+  const loggedMatch = useMemo(() => {
+    const ids = new Set<string>();
+    const titles = new Set<string>();
     const artistLower = artistName.toLowerCase();
-    return loggedAlbums.some(logged =>
-      logged.id === catalogAlbum.id ||
-      (logged.title.toLowerCase() === catalogAlbum.title.toLowerCase() &&
-       logged.artist.toLowerCase() === artistLower)
-    );
-  }).length;
+    for (const logged of loggedAlbums) {
+      ids.add(logged.id);
+      if (logged.artist.toLowerCase() === artistLower) titles.add(logged.title.toLowerCase());
+    }
+    return (album: { id: string; title: string }) => ids.has(album.id) || titles.has(album.title.toLowerCase());
+  }, [loggedAlbums, artistName]);
+  const listenedCount = albumsOnly.filter(loggedMatch).length;
   const listenedPct  = totalAlbums === 0 ? null : Math.round((listenedCount / totalAlbums) * 100);
 
   const hasScore    = !!artistRating?.eligible && artistRating.score !== null;
@@ -297,6 +316,26 @@ export default function ArtistDetailScreen() {
     items.sort((a, b) => b.year - a.year);
     return applySort(items, discSortKey);
   }, [discography, activeDiscTab, discSortKey, discStats, discDurations, artistName]);
+
+  // ── Listend top songs (only needs artistName) ──────────────────────────────
+  useEffect(() => {
+    if (!artistName) return;
+    let cancelled = false;
+    setListendTopSongs(null);
+    setTracksView('listend');
+    fetchArtistTopSongs(artistName).then(songs => {
+      if (!cancelled) setListendTopSongs(songs ?? { mostListend: [], topRated: [] });
+    });
+    return () => { cancelled = true; };
+  }, [artistName]);
+
+  // Three ranked songs is the least that reads as a "top" list.
+  const trackTabs = ([
+    ['listend', 'Most Listend', listendTopSongs?.mostListend ?? []],
+    ['rated',   'Top Rated',    listendTopSongs?.topRated ?? []],
+  ] as const).filter(([, , songs]) => songs.length >= 3);
+  const activeTrackTab = trackTabs.find(([key]) => key === tracksView) ?? trackTabs[0];
+  const listendSongs = activeTrackTab?.[2] ?? null;
 
   // ── Fetch Last.fm (independent — only needs artistName) ────────────────────
   useEffect(() => {
@@ -492,6 +531,9 @@ export default function ArtistDetailScreen() {
                 <FontAwesome name="music" size={24} color="#4a3020" />
               </View>
             )}
+            {loggedMatch(album) && (
+              <Ionicons name="headset" size={14} color="#D4A017" style={sc.loggedBadge} />
+            )}
             <Text style={[sc.albumTitle, { color: colors.text }]} numberOfLines={2}>{album.title}</Text>
             <Text style={[sc.albumYear, { color: colors.subtext }]}>{album.year > 0 ? album.year : ''}</Text>
           </Pressable>
@@ -593,7 +635,44 @@ export default function ArtistDetailScreen() {
       {/* ── 3. Top Tracks ────────────────────────────────────────────────────── */}
       <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
         <SectionHeader label="Top Tracks" color={colors.subtext} />
-        {tracksLoading ? (
+        {trackTabs.length > 0 && (
+          <View style={[sc.discTabBar, { marginBottom: 8 }]}>
+            {trackTabs.map(([key, label]) => {
+              const active = activeTrackTab?.[0] === key;
+              return (
+                <Pressable key={key} style={[sc.discTab, active && sc.discTabActive]} onPress={() => setTracksView(key)}>
+                  <Text style={[sc.discTabText, active && sc.discTabTextActive]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+        {listendSongs ? (
+          listendSongs.map((song, i) => (
+            <TrackRow
+              key={song.songId}
+              index={i}
+              title={song.title}
+              sub={song.albumTitle}
+              artworkUrl={song.artworkUrl}
+              right={activeTrackTab?.[0] === 'rated'
+                ? <View style={sc.trackRating}><CompactRating value={song.avg} average /></View>
+                : <Text style={[sc.trackDuration, { color: colors.subtext }]}>{song.durationMs ? formatDuration(song.durationMs) : ''}</Text>}
+              onPress={() => openSongPage(router, {
+                id:         song.songId,
+                title:      song.title,
+                artist:     song.artist,
+                albumId:    song.albumId,
+                albumTitle: song.albumTitle,
+                artworkUrl: song.artworkUrl,
+                durationMs: song.durationMs,
+              })}
+              borderColor={borderColor}
+              textColor={colors.text}
+              subColor={colors.subtext}
+            />
+          ))
+        ) : tracksLoading ? (
           <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
         ) : tracksError ? (
           <Text style={[sc.empty, { color: mutedText }]}>No tracks available</Text>
@@ -601,8 +680,19 @@ export default function ArtistDetailScreen() {
           topTracks.slice(0, 5).map((track, i) => (
             <TrackRow
               key={track.id}
-              track={track}
               index={i}
+              title={track.title}
+              sub={track.albumTitle}
+              artworkUrl={track.artworkUrl}
+              right={<Text style={[sc.trackDuration, { color: colors.subtext }]}>{formatDuration(track.durationMs)}</Text>}
+              onPress={() => openSongPage(router, {
+                id:         track.id,
+                title:      track.title,
+                artist:     artistName,
+                albumTitle: track.albumTitle,
+                artworkUrl: track.artworkUrl,
+                durationMs: track.durationMs,
+              })}
               borderColor={borderColor}
               textColor={colors.text}
               subColor={colors.subtext}
@@ -774,6 +864,7 @@ const sc = StyleSheet.create({
   trackTitle: { fontSize: 14, fontWeight: '500' },
   trackSub: { fontSize: 12 },
   trackDuration: { fontSize: 13, marginLeft: 8 },
+  trackRating: { marginLeft: 8 },
 
   // Discography tabs
   discTabBar:       { flexDirection: 'row', gap: 6, paddingVertical: 2 },
@@ -787,6 +878,8 @@ const sc = StyleSheet.create({
   albumRowContent: { paddingRight: 4 },
   albumCard: { width: 120, marginRight: 12 },
   albumArt: { width: 120, height: 120, borderRadius: 8 },
+  // Same headset mark as the Listend badge on every other album grid.
+  loggedBadge: { position: 'absolute', top: 120 - 18, right: 4 },
   albumTitle: { fontSize: 12, fontWeight: '500', marginTop: 6, lineHeight: 16 },
   albumYear: { fontSize: 11, marginTop: 2 },
 

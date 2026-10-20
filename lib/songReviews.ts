@@ -3,7 +3,7 @@
 // user_albums, so nothing album-shaped changes when a song is logged.
 
 import { supabase } from '@/lib/supabase';
-import { fetchAllRowsIn, rowsOrNull } from '@/lib/supabaseQuery';
+import { fetchAllRows, fetchAllRowsIn, rowsOrNull } from '@/lib/supabaseQuery';
 import { fetchBlockedIds } from '@/lib/blocks';
 
 /**
@@ -269,4 +269,109 @@ export async function fetchSongReviewCounts(songs: SongRef[], viewerId?: string)
     for (const id of idsByKey.get(k) ?? []) out.set(id, set.size);
   }
   return out;
+}
+
+/** One of an artist's songs with its Listend numbers, for the artist page. */
+export type ArtistTopSong = {
+  songId:      string;
+  title:       string;
+  artist:      string;
+  albumId?:    string;
+  albumTitle?: string;
+  artworkUrl?: string;
+  durationMs?: number;
+  /** Average of the ratings (0 if nobody rated). */
+  avg:         number;
+  /** How many people rated it. */
+  ratingCount: number;
+  /** How many people logged it, rated or not. */
+  listenCount: number;
+};
+
+export type ArtistTopSongs = {
+  /** Most-logged first. */
+  mostListend: ArtistTopSong[];
+  /** Highest average first — only songs with at least SONG_MIN_RATINGS ratings. */
+  topRated:    ArtistTopSong[];
+};
+
+// Same recording, re-released: "(Remastered 2009)", "(2019 Mix)", "- Remastered",
+// "(50th Anniversary)". Mirrors stripSameContentQualifier on the server (album
+// reviews pool editions the same way), plus the dash form track titles use.
+// Remixes, live and acoustic versions stay separate songs.
+function stripSameRecording(title: string): string {
+  return (title ?? '')
+    .replace(/[([][^)\]]*\b(?:remaster(?:ed)?|anniversary|reissue|\d{4}\s+(?:stereo\s+)?(?:re)?mix(?:ed)?)\b[^)\]]*[)\]]/gi, '')
+    .replace(/\s+-\s+(?:\d{4}\s+)?(?:remaster(?:ed)?|\d{4}\s+(?:stereo\s+)?(?:re)?mix)\b.*$/i, '')
+    .trim();
+}
+
+// An artist with a big following can have thousands of song logs; ten pages
+// covers that without letting one artist page pull an unbounded amount.
+const ARTIST_SONG_PAGES = 10;
+
+/**
+ * An artist's most-logged and highest-rated songs on Listend. One entry per
+ * person per song (their latest log), pooled across versions by song_key like
+ * the song page, and also across remasters and dated mixes of the same
+ * recording — otherwise "Oh! Darling (2019 Mix)" ranked as its own song next
+ * to the remaster. Each song shows as its most-logged version. Matched on the credited artist, so collaborations
+ * credited to "A & B" don't count toward A. Null if the request failed.
+ */
+export async function fetchArtistTopSongs(artist: string, limit = 5): Promise<ArtistTopSongs | null> {
+  const name = artist.trim();
+  if (!name) return { mostListend: [], topRated: [] };
+  // ilike without wildcards is a case-insensitive equals — escape any the name contains.
+  const pattern = name.replace(/[\\%_]/g, c => `\\${c}`);
+  const rows = await fetchAllRows<any>((from, to) => supabase
+    .from('song_reviews')
+    .select('user_id, song_id, song_key, title, artist, album_id, album_title, artwork_url, duration_ms, rating, listened_at')
+    .ilike('artist', pattern)
+    .range(from, to), ARTIST_SONG_PAGES);
+  if (!rows) return null;
+
+  type Version = { meta: any; users: Set<string> };
+  const bySong = new Map<string, { versions: Map<string, Version>; latest: Map<string, { rating: number; at: string }> }>();
+  for (const r of rows) {
+    if (!r.song_key || !r.user_id) continue;
+    const key = songKey(stripSameRecording(r.title), r.artist);
+    let e = bySong.get(key);
+    if (!e) { e = { versions: new Map(), latest: new Map() }; bySong.set(key, e); }
+    let v = e.versions.get(r.song_key);
+    if (!v) { v = { meta: r, users: new Set() }; e.versions.set(r.song_key, v); }
+    v.users.add(r.user_id);
+    // Show the album version when there is one, not the single.
+    if (!v.meta.album_id && r.album_id) v.meta = r;
+    const prev = e.latest.get(r.user_id);
+    if (!prev || (r.listened_at ?? '') > prev.at) e.latest.set(r.user_id, { rating: r.rating ?? 0, at: r.listened_at ?? '' });
+  }
+
+  const songs: ArtistTopSong[] = [];
+  bySong.forEach(({ versions, latest }) => {
+    let meta: any = null, most = -1;
+    versions.forEach(v => { if (v.users.size > most) { most = v.users.size; meta = v.meta; } });
+    let sum = 0, rated = 0;
+    latest.forEach(v => { if (v.rating > 0) { sum += v.rating; rated++; } });
+    songs.push({
+      songId:      meta.song_id,
+      title:       meta.title,
+      artist:      meta.artist,
+      albumId:     meta.album_id ?? undefined,
+      albumTitle:  meta.album_title ?? undefined,
+      artworkUrl:  meta.artwork_url ?? undefined,
+      durationMs:  meta.duration_ms ?? undefined,
+      avg:         rated > 0 ? Math.round((sum / rated) * 10) / 10 : 0,
+      ratingCount: rated,
+      listenCount: latest.size,
+    });
+  });
+
+  const mostListend = [...songs]
+    .sort((a, b) => b.listenCount - a.listenCount || b.avg - a.avg)
+    .slice(0, limit);
+  const topRated = songs
+    .filter(s => s.ratingCount >= SONG_MIN_RATINGS)
+    .sort((a, b) => b.avg - a.avg || b.ratingCount - a.ratingCount)
+    .slice(0, limit);
+  return { mostListend, topRated };
 }
