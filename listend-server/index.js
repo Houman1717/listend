@@ -2599,6 +2599,23 @@ function pickRepresentative(reps) {
   return { id: best.id, title: best.title, artist: best.artist, artworkUrl };
 }
 
+// Discover's all-time album charts read every album log (~115k rows), so
+// rebuilding them on request — every 30 min, whenever the cache ran out — left
+// whoever opened Discover next on placeholders until it finished. Cron
+// rebuilds them instead; warmChart shares one in-flight build per chart.
+const chartBuilds = new Map();
+function warmChart(key, compute) {
+  if (!chartBuilds.has(key)) {
+    chartBuilds.set(key, (async () => {
+      const results = await compute();
+      cacheSet(key, results, TTL_1H);
+      await setCache(key, results);
+      return results;
+    })().finally(() => chartBuilds.delete(key)));
+  }
+  return chartBuilds.get(key);
+}
+
 // ── GET /api/discover/community-popular ──────────────────────────────────────
 // All-time most-logged albums from real Listend user data.
 // Aggregates in JS (same pattern as fetchTopAlbumsThisWeek) over up to 5000 rows.
@@ -2607,71 +2624,71 @@ function pickRepresentative(reps) {
 
 app.get('/api/discover/community-popular', async (req, res) => {
   const CACHE_KEY = 'discover:community-popular';
-
+  // Up to a day old — cron rebuilds it every 30 min (see warmChart).
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(mem);
-
-  const db = await getCached(CACHE_KEY, TTL_30M);
+  const db = await getCached(CACHE_KEY, TTL_24H);
   if (db) { cacheSet(CACHE_KEY, db, TTL_30M); return res.json(db); }
-
   try {
-    const [data, relistenData] = await Promise.all([
-      fetchAllRows((from, to) => supabase
-        .from('user_albums')
-        .select('spotify_id, user_id, title, artist, year, artwork_url')
-        .not('listened_at', 'is', null)
-        .range(from, to)),
-      fetchAllRows((from, to) => supabase
-        .from('re_listens')
-        .select('spotify_id, user_id, title, artist, year, artwork_url')
-        .not('listened_at', 'is', null)
-        .range(from, to)),
-    ]);
-
-    // Cap each user's contribution to an album at 2 (one base log + one
-    // re-listen bonus) regardless of how many times they actually re-listen —
-    // otherwise a single user could spam re-listens to push an album to the
-    // top on their own.
-    //
-    // Grouped by title (edition tags stripped) + artist rather than
-    // spotify_id — the same release often gets logged under different catalog
-    // IDs (reissues, remasters, deluxe editions), which used to split its
-    // popularity count into separate buckets and show the album twice.
-    const entries = new Map();
-    const getEntry = (r) => {
-      const key = communityAlbumKey(r.title, r.artist);
-      let e = entries.get(key);
-      if (!e) {
-        e = { reps: new Map(), baseUsers: new Set(), relistenUsers: new Set(), yearCounts: new Map() };
-        entries.set(key, e);
-      }
-      tallyRepresentative(e.reps, r);
-      tallyYear(e.yearCounts, r.year);
-      return e;
-    };
-
-    for (const r of (data ?? [])) {
-      if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
-      getEntry(r).baseUsers.add(r.user_id);
-    }
-    for (const r of (relistenData ?? [])) {
-      if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
-      getEntry(r).relistenUsers.add(r.user_id);
-    }
-
-    const results = Array.from(entries.values())
-      .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
-      .slice(0, 201)
-      .map(e => ({ ...pickRepresentative(e.reps), year: mostCommonYear(e.yearCounts) }));
-
-    cacheSet(CACHE_KEY, results, TTL_30M);
-    await setCache(CACHE_KEY, results);
-    res.json(results);
+    res.json(await warmChart(CACHE_KEY, computeCommunityPopular));
   } catch (err) {
     console.error('[/api/discover/community-popular]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+async function computeCommunityPopular() {
+  const [data, relistenData] = await Promise.all([
+    fetchAllRows((from, to) => supabase
+      .from('user_albums')
+      .select('spotify_id, user_id, title, artist, year, artwork_url')
+      .not('listened_at', 'is', null)
+      .range(from, to)),
+    fetchAllRows((from, to) => supabase
+      .from('re_listens')
+      .select('spotify_id, user_id, title, artist, year, artwork_url')
+      .not('listened_at', 'is', null)
+      .range(from, to)),
+  ]);
+
+  // Cap each user's contribution to an album at 2 (one base log + one
+  // re-listen bonus) regardless of how many times they actually re-listen —
+  // otherwise a single user could spam re-listens to push an album to the
+  // top on their own.
+  //
+  // Grouped by title (edition tags stripped) + artist rather than
+  // spotify_id — the same release often gets logged under different catalog
+  // IDs (reissues, remasters, deluxe editions), which used to split its
+  // popularity count into separate buckets and show the album twice.
+  const entries = new Map();
+  const getEntry = (r) => {
+    const key = communityAlbumKey(r.title, r.artist);
+    let e = entries.get(key);
+    if (!e) {
+      e = { reps: new Map(), baseUsers: new Set(), relistenUsers: new Set(), yearCounts: new Map() };
+      entries.set(key, e);
+    }
+    tallyRepresentative(e.reps, r);
+    tallyYear(e.yearCounts, r.year);
+    return e;
+  };
+
+  for (const r of (data ?? [])) {
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
+    getEntry(r).baseUsers.add(r.user_id);
+  }
+  for (const r of (relistenData ?? [])) {
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
+    getEntry(r).relistenUsers.add(r.user_id);
+  }
+
+  const results = Array.from(entries.values())
+    .sort((a, b) => (b.baseUsers.size + b.relistenUsers.size) - (a.baseUsers.size + a.relistenUsers.size))
+    .slice(0, 201)
+    .map(e => ({ ...pickRepresentative(e.reps), year: mostCommonYear(e.yearCounts) }));
+
+  return results;
+}
 
 // ── GET /api/discover/community-top-rated ────────────────────────────────────
 // All-time top-rated albums from real Listend user data.
@@ -2683,85 +2700,85 @@ const MIN_RATINGS = 10;
 
 app.get('/api/discover/community-top-rated', async (req, res) => {
   const CACHE_KEY = 'discover:community-top-rated';
-
+  // Up to a day old — cron rebuilds it every 30 min (see warmChart).
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(mem);
-
-  const db = await getCached(CACHE_KEY, TTL_30M);
+  const db = await getCached(CACHE_KEY, TTL_24H);
   if (db) { cacheSet(CACHE_KEY, db, TTL_30M); return res.json(db); }
-
   try {
-    const data = await fetchAllRows((from, to) => supabase
-      .from('user_albums')
-      .select('spotify_id, user_id, title, artist, year, artwork_url, rating')
-      .not('rating', 'is', null)
-      .gt('rating', 0)
-      .range(from, to));
-
-    // Group by title (edition tags stripped) + artist rather than spotify_id
-    // — the same release often gets logged under different catalog IDs
-    // (reissues, remasters, deluxe editions), which used to split its ratings
-    // into separate buckets and list the album two or three times.
-    //
-    // One vote per person per album: someone who rated both the plain and the
-    // deluxe edition counts once, at the average of their ratings.
-    const groups = new Map();
-    for (const r of (data ?? [])) {
-      if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
-      const key = communityAlbumKey(r.title, r.artist);
-      let g = groups.get(key);
-      if (!g) {
-        g = { reps: new Map(), users: new Map(), yearCounts: new Map() };
-        groups.set(key, g);
-      }
-      tallyRepresentative(g.reps, r);
-      tallyYear(g.yearCounts, r.year);
-      const u = g.users.get(r.user_id) ?? { sum: 0, n: 0 };
-      u.sum += r.rating; u.n++;
-      g.users.set(r.user_id, u);
-    }
-    const agg = new Map();
-    for (const [key, g] of groups) {
-      let totalRating = 0;
-      for (const u of g.users.values()) totalRating += u.sum / u.n;
-      agg.set(key, { album: pickRepresentative(g.reps), totalRating, count: g.users.size, yearCounts: g.yearCounts });
-    }
-
-    const qualifying = Array.from(agg.values()).filter(e => e.count >= MIN_RATINGS);
-
-    // Rank on a confidence-weighted average rather than the raw one. A raw
-    // average lets a barely-rated album outrank a beloved one — 10 ratings all
-    // at 10 beats 80 ratings averaging 9.4, which is not what "top rated"
-    // should mean. So pull every album's average toward the site-wide mean,
-    // weighted by how much evidence it has: albums with many ratings barely
-    // move, thinly-rated ones get pulled most of the way back.
-    //
-    // Same shape as IMDb's weighted rating. PRIOR_WEIGHT is "how many ratings
-    // of the average album we pretend every album starts with" — at 10 it
-    // roughly halves the pull once an album has 10 real ratings of its own.
-    // The mean is computed from the data, not hardcoded, so it tracks as the
-    // rating pool grows.
-    const PRIOR_WEIGHT = 10;
-    const totalRatings = qualifying.reduce((sum, e) => sum + e.count, 0);
-    const globalMean = totalRatings > 0
-      ? qualifying.reduce((sum, e) => sum + e.totalRating, 0) / totalRatings
-      : 0;
-    const weighted = (e) =>
-      (e.totalRating + globalMean * PRIOR_WEIGHT) / (e.count + PRIOR_WEIGHT);
-
-    const results = qualifying
-      .sort((a, b) => weighted(b) - weighted(a))
-      .slice(0, 201)
-      .map(e => ({ ...e.album, year: mostCommonYear(e.yearCounts) }));
-
-    cacheSet(CACHE_KEY, results, TTL_30M);
-    await setCache(CACHE_KEY, results);
-    res.json(results);
+    res.json(await warmChart(CACHE_KEY, computeCommunityTopRated));
   } catch (err) {
     console.error('[/api/discover/community-top-rated]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+async function computeCommunityTopRated() {
+  const data = await fetchAllRows((from, to) => supabase
+    .from('user_albums')
+    .select('spotify_id, user_id, title, artist, year, artwork_url, rating')
+    .not('rating', 'is', null)
+    .gt('rating', 0)
+    .range(from, to));
+
+  // Group by title (edition tags stripped) + artist rather than spotify_id
+  // — the same release often gets logged under different catalog IDs
+  // (reissues, remasters, deluxe editions), which used to split its ratings
+  // into separate buckets and list the album two or three times.
+  //
+  // One vote per person per album: someone who rated both the plain and the
+  // deluxe edition counts once, at the average of their ratings.
+  const groups = new Map();
+  for (const r of (data ?? [])) {
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
+    const key = communityAlbumKey(r.title, r.artist);
+    let g = groups.get(key);
+    if (!g) {
+      g = { reps: new Map(), users: new Map(), yearCounts: new Map() };
+      groups.set(key, g);
+    }
+    tallyRepresentative(g.reps, r);
+    tallyYear(g.yearCounts, r.year);
+    const u = g.users.get(r.user_id) ?? { sum: 0, n: 0 };
+    u.sum += r.rating; u.n++;
+    g.users.set(r.user_id, u);
+  }
+  const agg = new Map();
+  for (const [key, g] of groups) {
+    let totalRating = 0;
+    for (const u of g.users.values()) totalRating += u.sum / u.n;
+    agg.set(key, { album: pickRepresentative(g.reps), totalRating, count: g.users.size, yearCounts: g.yearCounts });
+  }
+
+  const qualifying = Array.from(agg.values()).filter(e => e.count >= MIN_RATINGS);
+
+  // Rank on a confidence-weighted average rather than the raw one. A raw
+  // average lets a barely-rated album outrank a beloved one — 10 ratings all
+  // at 10 beats 80 ratings averaging 9.4, which is not what "top rated"
+  // should mean. So pull every album's average toward the site-wide mean,
+  // weighted by how much evidence it has: albums with many ratings barely
+  // move, thinly-rated ones get pulled most of the way back.
+  //
+  // Same shape as IMDb's weighted rating. PRIOR_WEIGHT is "how many ratings
+  // of the average album we pretend every album starts with" — at 10 it
+  // roughly halves the pull once an album has 10 real ratings of its own.
+  // The mean is computed from the data, not hardcoded, so it tracks as the
+  // rating pool grows.
+  const PRIOR_WEIGHT = 10;
+  const totalRatings = qualifying.reduce((sum, e) => sum + e.count, 0);
+  const globalMean = totalRatings > 0
+    ? qualifying.reduce((sum, e) => sum + e.totalRating, 0) / totalRatings
+    : 0;
+  const weighted = (e) =>
+    (e.totalRating + globalMean * PRIOR_WEIGHT) / (e.count + PRIOR_WEIGHT);
+
+  const results = qualifying
+    .sort((a, b) => weighted(b) - weighted(a))
+    .slice(0, 201)
+    .map(e => ({ ...e.album, year: mostCommonYear(e.yearCounts) }));
+
+  return results;
+}
 
 // ── GET /api/discover/community-top-artists ───────────────────────────────────
 // Discover's Top Artists: how widely an artist is heard on Listend, blended
@@ -7002,6 +7019,10 @@ cron.schedule('*/30 * * * *', () => {
 });
 cron.schedule('15 * * * *', () => {
   refreshTopArtists().catch(err => console.error('[cron:top-artists]', err.message ?? err));
+});
+cron.schedule('5,35 * * * *', () => {
+  warmChart('discover:community-popular', computeCommunityPopular).catch(err => console.error('[cron:community-popular]', err.message ?? err));
+  warmChart('discover:community-top-rated', computeCommunityTopRated).catch(err => console.error('[cron:community-top-rated]', err.message ?? err));
 });
 
 // Weekly Monday 6 am — bust coming-soon so it re-fetches fresh pre-adds for the new week.
