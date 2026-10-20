@@ -18,6 +18,8 @@ export type CatalogTrack = {
   releaseDate?: string;
   /** Present on search results (may be missing from older cached results). */
   albumTitle?: string;
+  /** Present on the song charts, which come from song logs. */
+  albumId?: string;
   durationMs?: number;
 };
 

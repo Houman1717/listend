@@ -7,7 +7,8 @@ export const discoverSections: {
   classics: CatalogAlbum[];
   topRated: CatalogAlbum[];
   topArtists: CatalogArtist[];
-  topSongs: CatalogTrack[];
+  mostListendSongs: CatalogTrack[];
+  highestRatedSongs: CatalogTrack[];
 } = {
   newReleases: [],
   popular: [],
@@ -15,5 +16,6 @@ export const discoverSections: {
   classics: [],
   topRated: [],
   topArtists: [],
-  topSongs: [],
+  mostListendSongs: [],
+  highestRatedSongs: [],
 };

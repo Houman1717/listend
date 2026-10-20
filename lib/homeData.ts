@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { handleOrName } from '@/lib/userHandle';
 import { ReviewTarget, parseReviewTargetId } from '@/lib/reviewTargets';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
+import { songKey, stripSameRecording } from '@/lib/songReviews';
 
 export type PopularReview = {
   id: string;
@@ -94,28 +95,52 @@ export async function fetchTopAlbumsThisWeek(): Promise<CatalogAlbum[]> {
     .map(e => e.album);
 }
 
+// Fallback for /api/home/this-week's songs: who logged each song in the last
+// 7 days, one per person, pooled across versions and remasters of the same
+// recording. At most 3 songs per album so one tracklist rated in a sitting
+// can't fill the row. The server's computeTopSongsThisWeek does the same.
 export async function fetchTopSongsThisWeek(): Promise<CatalogTrack[]> {
   const { data } = await supabase
-    .from('top5_changes')
-    .select('item_id, item_name, item_image_url')
-    .eq('category', 'songs')
-    .gte('changed_at', weekAgo())
-    .limit(300);
+    .from('song_reviews')
+    .select('user_id, song_id, song_key, title, artist, album_id, album_title, artwork_url, duration_ms, listened_at')
+    .gte('listened_at', weekAgo())
+    .order('listened_at', { ascending: false })
+    .limit(2000);
 
   if (!data?.length) return [];
 
-  const counts = new Map<string, { track: CatalogTrack; count: number }>();
+  const songs = new Map<string, { versions: Map<string, { row: any; users: Set<string> }>; users: Set<string>; lastAt: string }>();
   for (const r of data as any[]) {
-    if (!r.item_id) continue;
-    const e = counts.get(r.item_id);
-    if (e) e.count++;
-    else counts.set(r.item_id, {
-      track: { id: r.item_id, title: r.item_name ?? '', artist: '', artworkUrl: r.item_image_url ?? '' },
-      count: 1,
-    });
+    if (!r.song_id || !r.user_id || !r.title || !r.artist) continue;
+    const key = songKey(stripSameRecording(r.title), r.artist);
+    let e = songs.get(key);
+    if (!e) { e = { versions: new Map(), users: new Set(), lastAt: r.listened_at ?? '' }; songs.set(key, e); }
+    e.users.add(r.user_id);
+    const vKey = r.song_key ?? r.song_id;
+    let v = e.versions.get(vKey);
+    if (!v) { v = { row: r, users: new Set() }; e.versions.set(vKey, v); }
+    v.users.add(r.user_id);
+    if (!v.row.album_id && r.album_id) v.row = r;
   }
 
-  return Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 21).map(e => e.track);
+  const ranked = Array.from(songs.values())
+    .sort((a, b) => b.users.size - a.users.size || b.lastAt.localeCompare(a.lastAt));
+  const perAlbum = new Map<string, number>();
+  const out: CatalogTrack[] = [];
+  for (const e of ranked) {
+    let rep: any = null, most = -1;
+    e.versions.forEach(v => { if (v.users.size > most) { most = v.users.size; rep = v.row; } });
+    const album = `${(rep.album_title ?? rep.song_id).toLowerCase()}|${rep.artist.toLowerCase()}`;
+    const n = perAlbum.get(album) ?? 0;
+    if (n >= 3) continue;
+    perAlbum.set(album, n + 1);
+    out.push({
+      id: rep.song_id, title: rep.title, artist: rep.artist, artworkUrl: rep.artwork_url ?? '',
+      albumId: rep.album_id ?? undefined, albumTitle: rep.album_title ?? undefined, durationMs: rep.duration_ms ?? undefined,
+    });
+    if (out.length >= 21) break;
+  }
+  return out;
 }
 
 export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {

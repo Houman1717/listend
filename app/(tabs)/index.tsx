@@ -1437,7 +1437,7 @@ export default function HomeScreen() {
   }
 
   function handleSongPress(item: CatalogTrack) {
-    openSongPage(router, { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate });
+    openSongPage(router, { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate, albumId: item.albumId, albumTitle: item.albumTitle, durationMs: item.durationMs });
   }
 
   return (
@@ -1453,8 +1453,8 @@ export default function HomeScreen() {
       {/* Pro promo — hides itself for Pro users and for 30 days after dismissal */}
       <ProHomeCard colors={colors} onPress={showPaywall} />
 
-      {/* 1 — Top Listend Albums This Week */}
-      <Section title="Top Listend Albums This Week" loading={loading}>
+      {/* 1 — Most Listend Albums This Week */}
+      <Section title="Most Listend Albums This Week" loading={loading}>
         <FlatList
           horizontal
           data={albums.slice(0, 10)}
@@ -1784,8 +1784,8 @@ export default function HomeScreen() {
         />
       </Section>
 
-      {/* Top Listend Songs This Week */}
-      <Section title="Top Listend Songs This Week" loading={loading}>
+      {/* Most Listend Songs This Week */}
+      <Section title="Most Listend Songs This Week" loading={loading}>
         <FlatList
           horizontal
           data={songs.slice(0, 10)}
@@ -1819,7 +1819,7 @@ export default function HomeScreen() {
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <SafeAreaView style={{ flex: 1 }}>
             <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
-              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Top Listend Albums This Week</Text>
+              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Most Listend Albums This Week</Text>
               <Pressable onPress={() => setShowAllAlbums(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
                 <FontAwesome name="times" size={20} color={colors.subtext} />
               </Pressable>
@@ -1855,7 +1855,7 @@ export default function HomeScreen() {
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <SafeAreaView style={{ flex: 1 }}>
             <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
-              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Top Listend Songs This Week</Text>
+              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Most Listend Songs This Week</Text>
               <Pressable onPress={() => setShowAllSongs(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
                 <FontAwesome name="times" size={20} color={colors.subtext} />
               </Pressable>

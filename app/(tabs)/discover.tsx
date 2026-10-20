@@ -68,19 +68,21 @@ async function fetchSections(): Promise<void> {
   const fetchTyped = <T,>(path: string): Promise<T[]> =>
     fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
 
-  const [newReleases, popular, topRated, topArtists, topSongs] = await Promise.all([
+  const [newReleases, popular, topRated, topArtists, mostListendSongs, highestRatedSongs] = await Promise.all([
     safe(fetchJson('/discover/new-releases')),
     safe(fetchJson('/api/discover/community-popular')),
     safe(fetchJson('/api/discover/community-top-rated')),
     fetchTyped<CatalogArtist>('/api/discover/community-top-artists').catch(() => [] as CatalogArtist[]),
-    fetchTyped<CatalogTrack>('/api/discover/community-top-songs').catch(() => [] as CatalogTrack[]),
+    fetchTyped<CatalogTrack>('/api/discover/community-most-listend-songs').catch(() => [] as CatalogTrack[]),
+    fetchTyped<CatalogTrack>('/api/discover/community-highest-rated-songs').catch(() => [] as CatalogTrack[]),
   ]);
 
   discoverSections.newReleases  = newReleases;
   discoverSections.popular      = popular;
   discoverSections.topRated     = topRated;
   discoverSections.topArtists   = topArtists;
-  discoverSections.topSongs     = topSongs;
+  discoverSections.mostListendSongs  = mostListendSongs;
+  discoverSections.highestRatedSongs = highestRatedSongs;
 }
 
 // ─── Card sizes ───────────────────────────────────────────────────────────────
@@ -391,7 +393,8 @@ export default function DiscoverScreen() {
   const [popular,      setPopular]      = useState<CatalogAlbum[]>(discoverSections.popular);
   const [topRated,     setTopRated]     = useState<CatalogAlbum[]>(discoverSections.topRated);
   const [topArtists,   setTopArtists]   = useState<CatalogArtist[]>(discoverSections.topArtists);
-  const [topSongs,     setTopSongs]     = useState<CatalogTrack[]>(discoverSections.topSongs);
+  const [mostListendSongs,  setMostListendSongs]  = useState<CatalogTrack[]>(discoverSections.mostListendSongs);
+  const [highestRatedSongs, setHighestRatedSongs] = useState<CatalogTrack[]>(discoverSections.highestRatedSongs);
   const [featuredPlaylists, setFeaturedPlaylists] = useState<FeaturedPlaylist[]>([]);
   const [featuredLoading,   setFeaturedLoading]   = useState(true);
 
@@ -407,7 +410,8 @@ export default function DiscoverScreen() {
             setPopular([...discoverSections.popular]);
             setTopRated([...discoverSections.topRated]);
             setTopArtists([...discoverSections.topArtists]);
-            setTopSongs([...discoverSections.topSongs]);
+            setMostListendSongs([...discoverSections.mostListendSongs]);
+        setHighestRatedSongs([...discoverSections.highestRatedSongs]);
           })
           .catch((err) => console.error('[Discover] fetchSections failed:', err?.message ?? err))
           .finally(() => setSectionsLoading(false));
@@ -433,7 +437,8 @@ export default function DiscoverScreen() {
         setPopular([...discoverSections.popular]);
         setTopRated([...discoverSections.topRated]);
         setTopArtists([...discoverSections.topArtists]);
-        setTopSongs([...discoverSections.topSongs]);
+        setMostListendSongs([...discoverSections.mostListendSongs]);
+        setHighestRatedSongs([...discoverSections.highestRatedSongs]);
         if (featured.status === 'fulfilled') setFeaturedPlaylists(featured.value);
       })
       .finally(() => setRefreshing(false));
@@ -442,6 +447,10 @@ export default function DiscoverScreen() {
   function goToAlbum(album: CatalogAlbum) {
     router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl } } as any);
   }
+  function openSong(item: CatalogTrack) {
+    openSongPage(router, { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate, albumId: item.albumId, albumTitle: item.albumTitle, durationMs: item.durationMs });
+  }
+
 
   return (
     <>
@@ -501,8 +510,8 @@ export default function DiscoverScreen() {
         </View>
       </Section>
 
-      {/* ── Top Rated Albums ── */}
-      <Section title="Top Rated Albums">
+      {/* ── Highest Rated Albums ── */}
+      <Section title="Highest Rated Albums">
         {sectionsLoading && topRated.length === 0 ? (
           <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-top-rated' as any)} />
         ) : (
@@ -516,8 +525,8 @@ export default function DiscoverScreen() {
         )}
       </Section>
 
-      {/* ── Popular Albums ── */}
-      <Section title="Popular Albums">
+      {/* ── Most Listend Albums ── */}
+      <Section title="Most Listend Albums">
         {sectionsLoading && popular.length === 0 ? (
           <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-most-popular' as any)} />
         ) : (
@@ -586,14 +595,14 @@ export default function DiscoverScreen() {
         )}
       </View>
 
-      {/* ── Top Songs ── */}
-      <Section title="Top Songs">
-        {sectionsLoading && topSongs.length === 0 ? (
+      {/* ── Highest Rated Songs ── */}
+      <Section title="Highest Rated Songs">
+        {sectionsLoading && highestRatedSongs.length === 0 ? (
           <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
         ) : (
           <FlatList
             horizontal
-            data={topSongs.slice(0, 10)}
+            data={highestRatedSongs.slice(0, 10)}
             keyExtractor={(item) => item.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.row}
@@ -602,10 +611,35 @@ export default function DiscoverScreen() {
                 item={item}
                 index={index}
                 isDark={isDark}
-                onPress={() => openSongPage(router, { id: item.id, title: item.title, artist: item.artist, artworkUrl: item.artworkUrl, releaseDate: item.releaseDate })}
+                onPress={() => openSong(item)}
               />
             )}
-            ListFooterComponent={<SeeMoreButton onPress={() => router.push('/discover-top-songs' as any)} isDark={isDark} />}
+            ListFooterComponent={<SeeMoreButton onPress={() => router.push({ pathname: '/discover-top-songs', params: { kind: 'rated' } } as any)} isDark={isDark} />}
+            ListFooterComponentStyle={{ marginLeft: 12 }}
+          />
+        )}
+      </Section>
+
+      {/* ── Most Listend Songs ── */}
+      <Section title="Most Listend Songs">
+        {sectionsLoading && mostListendSongs.length === 0 ? (
+          <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
+        ) : (
+          <FlatList
+            horizontal
+            data={mostListendSongs.slice(0, 10)}
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.row}
+            renderItem={({ item, index }) => (
+              <SongCard
+                item={item}
+                index={index}
+                isDark={isDark}
+                onPress={() => openSong(item)}
+              />
+            )}
+            ListFooterComponent={<SeeMoreButton onPress={() => router.push({ pathname: '/discover-top-songs', params: { kind: 'listend' } } as any)} isDark={isDark} />}
             ListFooterComponentStyle={{ marginLeft: 12 }}
           />
         )}

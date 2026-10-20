@@ -299,7 +299,7 @@ export type ArtistTopSongs = {
 // "(50th Anniversary)". Mirrors stripSameContentQualifier on the server (album
 // reviews pool editions the same way), plus the dash form track titles use.
 // Remixes, live and acoustic versions stay separate songs.
-function stripSameRecording(title: string): string {
+export function stripSameRecording(title: string): string {
   return (title ?? '')
     .replace(/[([][^)\]]*\b(?:remaster(?:ed)?|anniversary|reissue|\d{4}\s+(?:stereo\s+)?(?:re)?mix(?:ed)?)\b[^)\]]*[)\]]/gi, '')
     .replace(/\s+-\s+(?:\d{4}\s+)?(?:remaster(?:ed)?|\d{4}\s+(?:stereo\s+)?(?:re)?mix)\b.*$/i, '')

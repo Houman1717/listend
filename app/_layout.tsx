@@ -354,12 +354,12 @@ function ThemedApp() {
           <Stack.Screen name="discover-results" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-new-releases" options={{ title: 'New Releases', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-coming-soon" options={{ title: 'Coming Soon', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
-          <Stack.Screen name="discover-top-rated" options={{ title: 'Top Rated Albums', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
-          <Stack.Screen name="discover-most-popular" options={{ title: 'Most Popular Albums', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-top-rated" options={{ title: 'Highest Rated Albums', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-most-popular" options={{ title: 'Most Listend Albums', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-all-time-classics" options={{ title: 'All-Time Classics', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-recommended" options={{ title: 'Based on Your Taste', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-top-artists" options={{ title: 'Top Artists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
-          <Stack.Screen name="discover-top-songs" options={{ title: 'Top Songs', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="discover-top-songs" options={{ title: 'Songs', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-genres" options={{ title: 'Genres', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-decades" options={{ title: 'By Decade', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="discover-decade-grid" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
