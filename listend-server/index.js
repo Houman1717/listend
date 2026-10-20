@@ -2782,67 +2782,82 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
 // the per-artist Discography Score. Cached 1 h in-memory, 6 h in Supabase.
 
 const ARTIST_PRIOR_WEIGHT = 10;
+// v3: the blended ranking — a new key so the old likes/Top 5 list, cached for
+// up to 6 h, wasn't served after the deploy.
+const TOP_ARTISTS_KEY = 'discover:community-top-artists-v3';
 
 app.get('/api/discover/community-top-artists', async (req, res) => {
-  // v3: the blended ranking — a new key so the old likes/Top 5 list, cached
-  // for up to 6 h, isn't served after the deploy.
-  const CACHE_KEY = 'discover:community-top-artists-v3';
+  const CACHE_KEY = TOP_ARTISTS_KEY;
 
   // Image overrides run on the cached copies too, or a day-old row keeps
   // serving Apple's blank square.
   const mem = cacheGet(CACHE_KEY);
   if (mem) return res.json(withArtistImages(mem));
 
-  const db = await getCached(CACHE_KEY, TTL_6H);
+  // Up to a day old — cron rebuilds it hourly; computing it reads every log.
+  const db = await getCached(CACHE_KEY, TTL_24H);
   if (db) { cacheSet(CACHE_KEY, db, TTL_1H); return res.json(withArtistImages(db)); }
 
   try {
-    const [albumRows, relistenRows, songRows] = await Promise.all([
-      fetchAllRows((from, to) => supabase.from('user_albums').select('user_id, spotify_id, artist, rating').not('listened_at', 'is', null).range(from, to)),
-      fetchAllRows((from, to) => supabase.from('re_listens').select('user_id, spotify_id, artist').not('listened_at', 'is', null).range(from, to)),
-      fetchAllRows((from, to) => supabase.from('song_reviews').select('user_id, album_id, artist').range(from, to)),
-    ]);
-
-    const byName = tallyArtistListeners(albumRows, relistenRows, songRows);
-    for (const r of albumRows ?? []) {
-      if (!(r.rating > 0)) continue;
-      const e = byName.get(foldDiacritics(r.artist?.trim()));
-      if (!e) continue;
-      const u = e.ratings.get(r.user_id) ?? { sum: 0, n: 0 };
-      u.sum += r.rating; u.n++;
-      e.ratings.set(r.user_id, u);
-    }
-
-    let voteSum = 0, votes = 0;
-    for (const e of byName.values()) for (const u of e.ratings.values()) { voteSum += u.sum / u.n; votes++; }
-    const mean = votes > 0 ? voteSum / votes : 0;
-    const score = e => {
-      let sum = 0;
-      for (const u of e.ratings.values()) sum += u.sum / u.n;
-      return Math.log1p(e.users.size) * ((sum + mean * ARTIST_PRIOR_WEIGHT) / (e.ratings.size + ARTIST_PRIOR_WEIGHT));
-    };
-
-    const ranked = Array.from(byName.values())
-      .map(e => ({ e, s: score(e) }))
-      .sort((a, b) => b.s - a.s)
-      .slice(0, 99)
-      .map(x => x.e);
-
-    // Apple lookups a few at a time — a cold cache is ~200 of them.
-    const results = [];
-    for (let i = 0; i < ranked.length; i += 8) {
-      results.push(...await Promise.all(ranked.slice(i, i + 8).map(resolveLoggedArtist)));
-    }
-
-    const out = withArtistImages(results);
-    cacheSet(CACHE_KEY, out, TTL_1H);
-    await setCache(CACHE_KEY, out);
-    res.json(out);
+    res.json(withArtistImages(await refreshTopArtists()));
   } catch (err) {
     console.error('[/api/discover/community-top-artists]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+let topArtistsInflight = null;
+function refreshTopArtists() {
+  if (!topArtistsInflight) {
+    topArtistsInflight = computeTopArtistsAllTime().finally(() => { topArtistsInflight = null; });
+  }
+  return topArtistsInflight;
+}
+
+async function computeTopArtistsAllTime() {
+  const CACHE_KEY = TOP_ARTISTS_KEY;
+  const [albumRows, relistenRows, songRows] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from('user_albums').select('user_id, spotify_id, artist, rating').not('listened_at', 'is', null).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('re_listens').select('user_id, spotify_id, artist').not('listened_at', 'is', null).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('song_reviews').select('user_id, album_id, artist').range(from, to)),
+  ]);
+
+  const byName = tallyArtistListeners(albumRows, relistenRows, songRows);
+  for (const r of albumRows ?? []) {
+    if (!(r.rating > 0)) continue;
+    const e = byName.get(foldDiacritics(r.artist?.trim()));
+    if (!e) continue;
+    const u = e.ratings.get(r.user_id) ?? { sum: 0, n: 0 };
+    u.sum += r.rating; u.n++;
+    e.ratings.set(r.user_id, u);
+  }
+
+  let voteSum = 0, votes = 0;
+  for (const e of byName.values()) for (const u of e.ratings.values()) { voteSum += u.sum / u.n; votes++; }
+  const mean = votes > 0 ? voteSum / votes : 0;
+  const score = e => {
+    let sum = 0;
+    for (const u of e.ratings.values()) sum += u.sum / u.n;
+    return Math.log1p(e.users.size) * ((sum + mean * ARTIST_PRIOR_WEIGHT) / (e.ratings.size + ARTIST_PRIOR_WEIGHT));
+  };
+
+  const ranked = Array.from(byName.values())
+    .map(e => ({ e, s: score(e) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 99)
+    .map(x => x.e);
+
+  // Apple lookups a few at a time — a cold cache is ~200 of them.
+  const results = [];
+  for (let i = 0; i < ranked.length; i += 8) {
+    results.push(...await Promise.all(ranked.slice(i, i + 8).map(resolveLoggedArtist)));
+  }
+
+  const out = withArtistImages(results);
+  cacheSet(CACHE_KEY, out, TTL_1H);
+  await setCache(CACHE_KEY, out);
+  return out;
+}
 
 // ── GET /api/discover/community-top-songs ─────────────────────────────────────
 // All-time top songs from real Listend user data.
@@ -2996,24 +3011,44 @@ function rankSongs(rows, by, limit) {
 
 // ── GET /api/discover/community-most-listend-songs ───────────────────────────
 // ── GET /api/discover/community-highest-rated-songs ──────────────────────────
-// All-time song charts. Cached 30 min like the album charts.
+// All-time song charts. Building them reads every song log (~30k rows, ~20 s),
+// and Discover waits for all its sections, so a cold request stalled the whole
+// tab. Both charts come from one read, refreshed by cron every 30 min; the
+// routes answer from cache (up to a day old) and only compute if there's none.
+
+const SONG_CHART_KEYS = {
+  listens: 'discover:community-most-listend-songs',
+  rating:  'discover:community-highest-rated-songs',
+};
+let songChartsInflight = null;
+
+function refreshSongCharts() {
+  if (!songChartsInflight) {
+    songChartsInflight = (async () => {
+      const rows = await fetchSongLogs(q => q.not('listened_at', 'is', null));
+      const charts = { listens: rankSongs(rows, 'listens', 75), rating: rankSongs(rows, 'rating', 75) };
+      for (const [by, key] of Object.entries(SONG_CHART_KEYS)) {
+        cacheSet(key, charts[by], TTL_1H);
+        await setCache(key, charts[by]);
+      }
+      return charts;
+    })().finally(() => { songChartsInflight = null; });
+  }
+  return songChartsInflight;
+}
 
 for (const [path, by] of [
   ['/api/discover/community-most-listend-songs', 'listens'],
   ['/api/discover/community-highest-rated-songs', 'rating'],
 ]) {
   app.get(path, async (req, res) => {
-    const CACHE_KEY = `discover:${path.split('/').pop()}`;
+    const CACHE_KEY = SONG_CHART_KEYS[by];
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
-    const db = await getCached(CACHE_KEY, TTL_30M);
+    const db = await getCached(CACHE_KEY, TTL_24H);
     if (db) { cacheSet(CACHE_KEY, db, TTL_30M); return res.json(db); }
     try {
-      const rows = await fetchSongLogs(q => q.not('listened_at', 'is', null));
-      const results = rankSongs(rows, by, 75);
-      cacheSet(CACHE_KEY, results, TTL_30M);
-      await setCache(CACHE_KEY, results);
-      res.json(results);
+      res.json((await refreshSongCharts())[by]);
     } catch (err) {
       console.error(`[${path}]`, err.message ?? err);
       res.status(500).json({ error: 'Internal server error' });
@@ -6958,6 +6993,15 @@ cron.schedule('*/10 * * * *', async () => {
   } catch (err) {
     console.error('[cron:home-this-week]', err.message ?? err);
   }
+});
+
+// Discover's all-time charts read every log, so they're rebuilt here rather
+// than by whoever opens Discover after the cache runs out.
+cron.schedule('*/30 * * * *', () => {
+  refreshSongCharts().catch(err => console.error('[cron:song-charts]', err.message ?? err));
+});
+cron.schedule('15 * * * *', () => {
+  refreshTopArtists().catch(err => console.error('[cron:top-artists]', err.message ?? err));
 });
 
 // Weekly Monday 6 am — bust coming-soon so it re-fetches fresh pre-adds for the new week.
