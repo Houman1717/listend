@@ -1007,6 +1007,11 @@ export default function AlbumDetailScreen() {
   // this viewer can't see — they still count toward the average anonymously.
   // null = RPC not loaded/failed → fall back to the visible reviews.
   const [otherRatings, setOtherRatings] = useState<number[] | null>(null);
+  // False until the pooled ratings from /api/album-reviews arrive (or, if that
+  // fails, the exact-title RPC's). The RPC usually answers first but only
+  // counts this exact title, so showing it meant a remastered album flashed a
+  // smaller count for a few seconds before the pooled one replaced it.
+  const [ratingsReady, setRatingsReady] = useState(false);
   const [reviewLikesMap, setReviewLikesMap]     = useState<Map<string, LikeState>>(new Map());
   const pendingLikeToggles = useRef<Set<string>>(new Set());
   // True once /api/album-reviews answered — it already carries every like
@@ -1179,6 +1184,18 @@ export default function AlbumDetailScreen() {
   // ── Fetch community reviews for this album ─────────────────────────────────
   useEffect(() => {
     if (!albumId) return;
+    setRatingsReady(false);
+
+    // Exact-title ratings — only used if the server request fails.
+    const rpcRatings = supabase
+      .rpc('album_community_ratings', { p_title: albumTitle, p_year: albumYear })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[album-detail] album_community_ratings error:', error.message);
+          return null;
+        }
+        return ((data ?? []) as any[]).map(Number).filter(n => n > 0);
+      });
 
     // One cached server request with profiles, likes and comment counts already
     // joined. Building it here took 3–4 round trips over every log of the album
@@ -1209,6 +1226,7 @@ export default function AlbumDetailScreen() {
         // mixes), and counting private accounts anonymously — so it replaces
         // the exact-title album_community_ratings result.
         if (Array.isArray(data.ratings)) setOtherRatings(data.ratings.map(Number).filter((n: number) => n > 0));
+        setRatingsReady(true);
         setCommunityReviews(data.reviews.map((r: any): CommunityReview => ({
           id:           r.id,
           userId:       r.userId,
@@ -1235,6 +1253,11 @@ export default function AlbumDetailScreen() {
     async function loadCommunityReviews() {
       reviewsFromServer.current = false;
       if (await loadFromServer()) return;
+
+      rpcRatings.then(r => {
+        setOtherRatings(r);
+        setRatingsReady(true);
+      });
 
       // Fallback: query by title + year so we find all reviews regardless of which AM
       // catalog ID each user happened to store (IDs diverge across accounts/time).
@@ -1303,18 +1326,6 @@ export default function AlbumDetailScreen() {
     }
 
     loadCommunityReviews();
-
-    supabase
-      .rpc('album_community_ratings', { p_title: albumTitle, p_year: albumYear })
-      .then(({ data, error }) => {
-        if (reviewsFromServer.current) return; // the server's pooled ratings win
-        if (error) {
-          console.error('[album-detail] album_community_ratings error:', error.message);
-          setOtherRatings(null);
-        } else {
-          setOtherRatings(((data ?? []) as any[]).map(Number).filter(n => n > 0));
-        }
-      });
   }, [albumTitle, albumYear, user?.id]);
 
   // ── Fetch like state + sync counts into communityReviews ──────────────────
@@ -1957,7 +1968,7 @@ export default function AlbumDetailScreen() {
           colors={colors}
           sectionBg={sectionBg}
           borderColor={borderColor}
-          ratings={communityRatings}
+          ratings={ratingsReady ? communityRatings : []}
         />
 
         {/* ── 5. Reviews ────────────────────────────────────────────────────── */}
