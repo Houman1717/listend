@@ -578,6 +578,41 @@ pinStorefront('es', [
   '256078328', '256078761', '256078954', '256079032', '256079059', '256079340',
   '256079448',
 ]);
+// Tatsuro Yamashita — ずっと一緒さ - EP (2008)
+pinStorefront('jp', [
+  '275800353',
+  '275800403', '275800411', '275800417', '275800418', '275800419',
+]);
+// Tatsuro Yamashita — Ray Of Hope (2008)
+pinStorefront('jp', [
+  '458558845',
+  '458558852', '458558867', '458558878', '458558985', '458559016', '458559023',
+  '458559050', '458559051', '458559053', '458559054', '458559055', '458559056',
+  '458559057', '458559067',
+]);
+// Tatsuro Yamashita — Christmas Eve (30th Anniversary Edition) - EP (2013)
+pinStorefront('jp', [
+  '1300669892',
+  '1300670407', '1300670408', '1300670409', '1300670410', '1300670471',
+]);
+// Tatsuro Yamashita — Reborn (2017)
+pinStorefront('jp', [
+  '1272184934',
+  '1272184936', '1272184937', '1272184938', '1272184939', '1272184940', '1272184941',
+  '1272184942',
+]);
+// Tatsuro Yamashita — SOFTLY (2022)
+pinStorefront('jp', [
+  '1641424361',
+  '1641424362', '1641424363', '1641424364', '1641424365', '1641424726', '1641424727',
+  '1641424728', '1641424729', '1641424730', '1641424731', '1641424732', '1641424733',
+  '1641424734', '1641424735', '1641424736',
+]);
+// Tatsuro Yamashita — Sync Of Summer - EP (2023)
+pinStorefront('jp', [
+  '1692931100',
+  '1692931101', '1692931103', '1692931105', '1692931107', '1692931109', '1692931110',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -979,6 +1014,30 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'subsonica::theplatinumcollection': {
     id: '1443308060', title: 'The Platinum Collection', artist: 'Subsonica', year: 2016,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/80/44/13/804413fb-b245-1f9d-2549-24737e8dbdb5/00602547902573.rgb.jpg/500x500bb.jpg',
+  },
+  'tatsuroyamashita::ep': {
+    id: '275800353', title: 'ずっと一緒さ - EP', artist: 'Tatsuro Yamashita', year: 2008,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/46/1b/f7/mzi.jntexrwt.jpg/500x500bb.jpg',
+  },
+  'tatsuroyamashita::rayofhope': {
+    id: '458558845', title: 'Ray Of Hope', artist: 'Tatsuro Yamashita', year: 2008,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/72/25/c4/mzi.zmsjmery.jpg/500x500bb.jpg',
+  },
+  'tatsuroyamashita::christmaseve30thanniversaryeditionep': {
+    id: '1300669892', title: 'Christmas Eve (30th Anniversary Edition) - EP', artist: 'Tatsuro Yamashita', year: 2013,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b9/e6/bd/b9e6bd41-c0ab-7647-f4ca-816e26aa3012/825646350612.jpg/500x500bb.jpg',
+  },
+  'tatsuroyamashita::reborn': {
+    id: '1272184934', title: 'Reborn', artist: 'Tatsuro Yamashita', year: 2017,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/85/07/a9/8507a950-19f5-ac0c-5698-25058188c172/190295750121.jpg/500x500bb.jpg',
+  },
+  'tatsuroyamashita::softly': {
+    id: '1641424361', title: 'SOFTLY', artist: 'Tatsuro Yamashita', year: 2022,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/b7/30/7e/b7307ec7-cbd3-b6df-b43c-05dc5c76e1d5/5054197322037.jpg/500x500bb.jpg',
+  },
+  'tatsuroyamashita::syncofsummerep': {
+    id: '1692931100', title: 'Sync Of Summer - EP', artist: 'Tatsuro Yamashita', year: 2023,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/b6/4e/f4/b64ef4c1-f577-d521-79ef-171868ff502c/5054197727184.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -4900,6 +4959,44 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/80/44/13/804413fb-b245-1f9d-2549-24737e8dbdb5/00602547902573.rgb.jpg/500x500bb.jpg',
       year: 2016, isSingle: false, isCompilation: true, trackCount: 48,
       url: 'https://music.apple.com/it/album/the-platinum-collection/1443308060', type: 'album',
+    },
+  ],
+  '74493141': [ // Tatsuro Yamashita — not licensed for `us`
+    {
+      id: '275800353', title: 'ずっと一緒さ - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/46/1b/f7/mzi.jntexrwt.jpg/500x500bb.jpg',
+      year: 2008, isSingle: false, isCompilation: false, trackCount: 5,
+      url: 'https://music.apple.com/jp/album/%E3%81%9A%E3%81%A3%E3%81%A8%E4%B8%80%E7%B7%92%E3%81%95-ep/275800353', type: 'album',
+    },
+    {
+      id: '458558845', title: 'Ray Of Hope',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/72/25/c4/mzi.zmsjmery.jpg/500x500bb.jpg',
+      year: 2008, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/jp/album/ray-of-hope/458558845', type: 'album',
+    },
+    {
+      id: '1300669892', title: 'Christmas Eve (30th Anniversary Edition) - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b9/e6/bd/b9e6bd41-c0ab-7647-f4ca-816e26aa3012/825646350612.jpg/500x500bb.jpg',
+      year: 2013, isSingle: false, isCompilation: false, trackCount: 5,
+      url: 'https://music.apple.com/jp/album/christmas-eve-30th-anniversary-edition-ep/1300669892', type: 'album',
+    },
+    {
+      id: '1272184934', title: 'Reborn',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/85/07/a9/8507a950-19f5-ac0c-5698-25058188c172/190295750121.jpg/500x500bb.jpg',
+      year: 2017, isSingle: false, isCompilation: false, trackCount: 7,
+      url: 'https://music.apple.com/jp/album/reborn/1272184934', type: 'album',
+    },
+    {
+      id: '1641424361', title: 'SOFTLY',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/b7/30/7e/b7307ec7-cbd3-b6df-b43c-05dc5c76e1d5/5054197322037.jpg/500x500bb.jpg',
+      year: 2022, isSingle: false, isCompilation: false, trackCount: 15,
+      url: 'https://music.apple.com/jp/album/softly/1641424361', type: 'album',
+    },
+    {
+      id: '1692931100', title: 'Sync Of Summer - EP',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/b6/4e/f4/b64ef4c1-f577-d521-79ef-171868ff502c/5054197727184.jpg/500x500bb.jpg',
+      year: 2023, isSingle: false, isCompilation: false, trackCount: 6,
+      url: 'https://music.apple.com/jp/album/sync-of-summer-ep/1692931100', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
