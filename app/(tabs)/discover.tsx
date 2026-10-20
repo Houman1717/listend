@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  AppState,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -60,27 +61,53 @@ const GENRE_DISPLAY_NAMES: Record<string, string> = {
   'Reggaeton': 'Latin',
 };
 
-async function fetchSections(): Promise<void> {
-  const safe = (p: Promise<CatalogAlbum[]>) => p.catch(() => [] as CatalogAlbum[]);
-  const fetchJson = (path: string): Promise<CatalogAlbum[]> =>
-    fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
+// Each row loads on its own. They used to share one Promise.all with no
+// timeouts, so a single stalled request — a slow server, or a connection that
+// died while the app was in the background — left every row on placeholders,
+// and the tab only re-asked once New Releases came back empty.
+type SectionKey = 'newReleases' | 'popular' | 'topRated' | 'topArtists' | 'highestRatedSongs';
+const SECTION_PATHS: Record<SectionKey, string> = {
+  newReleases:       '/discover/new-releases',
+  popular:           '/api/discover/community-popular',
+  topRated:          '/api/discover/community-top-rated',
+  topArtists:        '/api/discover/community-top-artists',
+  highestRatedSongs: '/api/discover/community-highest-rated-songs',
+};
+const SECTION_KEYS = Object.keys(SECTION_PATHS) as SectionKey[];
+const REQUEST_TIMEOUT_MS = 15000;
 
-  const fetchTyped = <T,>(path: string): Promise<T[]> =>
-    fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
+async function fetchJsonWithTimeout(path: string): Promise<any> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const r = await fetch(`${API_URL}${path}`, { signal: ctrl.signal });
+    if (!r.ok) throw new Error(`${path} → ${r.status}`);
+    return await r.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-  const [newReleases, popular, topRated, topArtists, highestRatedSongs] = await Promise.all([
-    safe(fetchJson('/discover/new-releases')),
-    safe(fetchJson('/api/discover/community-popular')),
-    safe(fetchJson('/api/discover/community-top-rated')),
-    fetchTyped<CatalogArtist>('/api/discover/community-top-artists').catch(() => [] as CatalogArtist[]),
-    fetchTyped<CatalogTrack>('/api/discover/community-highest-rated-songs').catch(() => [] as CatalogTrack[]),
-  ]);
-
-  discoverSections.newReleases  = newReleases;
-  discoverSections.popular      = popular;
-  discoverSections.topRated     = topRated;
-  discoverSections.topArtists   = topArtists;
-  discoverSections.highestRatedSongs = highestRatedSongs;
+// One request per row at a time, shared by focus loads and pull-to-refresh.
+// Two tries; true if the row now has fresh data.
+const sectionLoads = new Map<SectionKey, Promise<boolean>>();
+function loadSection(key: SectionKey): Promise<boolean> {
+  let p = sectionLoads.get(key);
+  if (!p) {
+    p = (async () => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const data = await fetchJsonWithTimeout(SECTION_PATHS[key]);
+          if (Array.isArray(data)) { (discoverSections as any)[key] = data; return true; }
+        } catch (err: any) {
+          console.warn(`[Discover] ${key} attempt ${attempt + 1} failed:`, err?.message ?? err);
+        }
+      }
+      return false;
+    })().finally(() => sectionLoads.delete(key));
+    sectionLoads.set(key, p);
+  }
+  return p;
 }
 
 // ─── Card sizes ───────────────────────────────────────────────────────────────
@@ -259,6 +286,22 @@ function PlaceholderRow({ isDark, onSeeMore }: { isDark: boolean; onSeeMore: () 
 
 // ─── Album row (real data) ────────────────────────────────────────────────────
 
+// A row whose request failed. An empty AlbumRow draws the loading
+// placeholders, so a failed row used to look like it was loading forever.
+function RetryRow({ isDark, onRetry }: { isDark: boolean; onRetry: () => void }) {
+  return (
+    <Pressable
+      onPress={onRetry}
+      style={({ pressed }) => [s.retryRow, {
+        backgroundColor: isDark ? '#2e2018' : '#EDE8E0',
+        opacity: pressed ? 0.7 : 1,
+      }]}>
+      <Text style={[s.retryText, { color: isDark ? '#a07850' : '#7a5535' }]}>Couldn't load this right now</Text>
+      <Text style={s.retryAction}>Tap to retry</Text>
+    </Pressable>
+  );
+}
+
 function AlbumRow({
   data,
   isDark,
@@ -395,49 +438,63 @@ export default function DiscoverScreen() {
   const [featuredPlaylists, setFeaturedPlaylists] = useState<FeaturedPlaylist[]>([]);
   const [featuredLoading,   setFeaturedLoading]   = useState(true);
 
-  const [sectionsLoading,  setSectionsLoading]  = useState(discoverSections.newReleases.length === 0);
+  // Rows with a request in flight — the only ones that show placeholders.
+  const [pending, setPending] = useState<Set<SectionKey>>(
+    () => new Set(SECTION_KEYS.filter(k => discoverSections[k].length === 0)));
+  // Rows whose last request failed and still have nothing to show.
+  const [failed, setFailed] = useState<Set<SectionKey>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
 
+  const loadSections = useCallback((keys: SectionKey[]) => {
+    const setters: Record<SectionKey, (v: any[]) => void> = {
+      newReleases: setNewReleases, popular: setPopular, topRated: setTopRated,
+      topArtists: setTopArtists, highestRatedSongs: setHighestRatedSongs,
+    };
+    setPending(prev => new Set([...prev, ...keys]));
+    return Promise.all(keys.map(key => loadSection(key)
+      .then(ok => {
+        if (ok) setters[key]([...discoverSections[key]]);
+        setFailed(prev => {
+          const next = new Set(prev);
+          if (ok) next.delete(key); else next.add(key);
+          return next;
+        });
+      })
+      .finally(() => setPending(prev => { const next = new Set(prev); next.delete(key); return next; }))));
+  }, []);
+
+  const loadFeatured = useCallback(() =>
+    fetchJsonWithTimeout('/api/featured-playlists')
+      .then((data: FeaturedPlaylist[]) => { if (Array.isArray(data)) setFeaturedPlaylists(data); })
+      .catch((err) => console.error('[Discover] featured-playlists failed:', err?.message ?? err))
+      .finally(() => setFeaturedLoading(false)), []);
+
+  // Every visit re-asks for any row that's still empty — not just New Releases.
   useFocusEffect(
     useCallback(() => {
-      if (discoverSections.newReleases.length === 0) {
-        fetchSections()
-          .then(() => {
-            setNewReleases([...discoverSections.newReleases]);
-            setPopular([...discoverSections.popular]);
-            setTopRated([...discoverSections.topRated]);
-            setTopArtists([...discoverSections.topArtists]);
-        setHighestRatedSongs([...discoverSections.highestRatedSongs]);
-          })
-          .catch((err) => console.error('[Discover] fetchSections failed:', err?.message ?? err))
-          .finally(() => setSectionsLoading(false));
-      }
-      if (featuredPlaylists.length === 0) {
-        fetch(`${API_URL}/api/featured-playlists`)
-          .then(r => r.json())
-          .then((data: FeaturedPlaylist[]) => setFeaturedPlaylists(data))
-          .catch((err) => console.error('[Discover] featured-playlists failed:', err?.message ?? err))
-          .finally(() => setFeaturedLoading(false));
-      }
-    }, [])
+      const missing = SECTION_KEYS.filter(k => discoverSections[k].length === 0);
+      if (missing.length > 0) loadSections(missing);
+      if (featuredPlaylists.length === 0) loadFeatured();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [featuredPlaylists.length])
   );
+
+  // Coming back to the app re-asks for any row still empty — the usual way a
+  // request dies is the phone suspending the app while it was in flight.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state !== 'active') return;
+      const missing = SECTION_KEYS.filter(k => discoverSections[k].length === 0);
+      if (missing.length > 0) loadSections(missing);
+    });
+    return () => sub.remove();
+  }, [loadSections]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    Promise.allSettled([
-      fetchSections(),
-      fetch(`${API_URL}/api/featured-playlists`).then(r => r.json()),
-    ])
-      .then(([, featured]) => {
-        setNewReleases([...discoverSections.newReleases]);
-        setPopular([...discoverSections.popular]);
-        setTopRated([...discoverSections.topRated]);
-        setTopArtists([...discoverSections.topArtists]);
-        setHighestRatedSongs([...discoverSections.highestRatedSongs]);
-        if (featured.status === 'fulfilled') setFeaturedPlaylists(featured.value);
-      })
+    Promise.allSettled([loadSections(SECTION_KEYS), loadFeatured()])
       .finally(() => setRefreshing(false));
-  }, []);
+  }, [loadSections, loadFeatured]);
 
   function goToAlbum(album: CatalogAlbum) {
     router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year), artworkUrl: album.artworkUrl } } as any);
@@ -464,8 +521,10 @@ export default function DiscoverScreen() {
 
       {/* ── New Releases ── */}
       <Section title="New Releases">
-        {sectionsLoading && newReleases.length === 0 ? (
+        {pending.has('newReleases') && newReleases.length === 0 ? (
           <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-new-releases' as any)} />
+        ) : failed.has('newReleases') && newReleases.length === 0 ? (
+          <RetryRow isDark={isDark} onRetry={() => loadSections(['newReleases'])} />
         ) : (
           <AlbumRow
             data={newReleases}
@@ -507,8 +566,10 @@ export default function DiscoverScreen() {
 
       {/* ── Highest Rated Albums ── */}
       <Section title="Highest Rated Albums">
-        {sectionsLoading && topRated.length === 0 ? (
+        {pending.has('topRated') && topRated.length === 0 ? (
           <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-top-rated' as any)} />
+        ) : failed.has('topRated') && topRated.length === 0 ? (
+          <RetryRow isDark={isDark} onRetry={() => loadSections(['topRated'])} />
         ) : (
           <AlbumRow
             data={topRated}
@@ -522,8 +583,10 @@ export default function DiscoverScreen() {
 
       {/* ── Most Listend Albums ── */}
       <Section title="Most Listend Albums">
-        {sectionsLoading && popular.length === 0 ? (
+        {pending.has('popular') && popular.length === 0 ? (
           <PlaceholderRow isDark={isDark} onSeeMore={() => router.push('/discover-most-popular' as any)} />
+        ) : failed.has('popular') && popular.length === 0 ? (
+          <RetryRow isDark={isDark} onRetry={() => loadSections(['popular'])} />
         ) : (
           <AlbumRow
             data={popular}
@@ -537,8 +600,10 @@ export default function DiscoverScreen() {
 
       {/* ── Top Artists ── */}
       <Section title="Top Artists">
-        {sectionsLoading && topArtists.length === 0 ? (
+        {pending.has('topArtists') && topArtists.length === 0 ? (
           <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
+        ) : failed.has('topArtists') && topArtists.length === 0 ? (
+          <RetryRow isDark={isDark} onRetry={() => loadSections(['topArtists'])} />
         ) : (
           <FlatList
             horizontal
@@ -592,8 +657,10 @@ export default function DiscoverScreen() {
 
       {/* ── Highest Rated Songs ── */}
       <Section title="Highest Rated Songs">
-        {sectionsLoading && highestRatedSongs.length === 0 ? (
+        {pending.has('highestRatedSongs') && highestRatedSongs.length === 0 ? (
           <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
+        ) : failed.has('highestRatedSongs') && highestRatedSongs.length === 0 ? (
+          <RetryRow isDark={isDark} onRetry={() => loadSections(['highestRatedSongs'])} />
         ) : (
           <FlatList
             horizontal
@@ -617,8 +684,8 @@ export default function DiscoverScreen() {
 
       {/* Most Listend Songs was a row here too, under Highest Rated Songs — taken
           out 2026-10-20 as too much next to Home's weekly songs row. To bring it
-          back: fetch /api/discover/community-most-listend-songs in fetchSections
-          into discoverSections.mostListendSongs, and copy the section above with
+          back: add mostListendSongs → /api/discover/community-most-listend-songs to
+          SECTION_PATHS (and its state + setter), and copy the section above with
           that list and kind 'listend' (the server route and See More screen still
           support it). */}
     </ScrollView>
@@ -633,6 +700,9 @@ const s = StyleSheet.create({
 
 
   section:      { gap: 12 },
+  retryRow:     { marginHorizontal: 16, height: 88, borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  retryText:    { fontSize: 13 },
+  retryAction:  { fontSize: 13, fontWeight: '700', color: '#D4A017' },
   sectionLabel: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3, paddingHorizontal: 16 },
   loader:       { height: CARD_SIZE, justifyContent: 'center', alignItems: 'center' },
   row:          { paddingHorizontal: 16, gap: 12 },
