@@ -2784,9 +2784,9 @@ app.get('/api/discover/community-top-rated', async (req, res) => {
 const ARTIST_PRIOR_WEIGHT = 10;
 
 app.get('/api/discover/community-top-artists', async (req, res) => {
-  // v2: the blended ranking — a new key so the old likes/Top 5 list, cached
+  // v3: the blended ranking — a new key so the old likes/Top 5 list, cached
   // for up to 6 h, isn't served after the deploy.
-  const CACHE_KEY = 'discover:community-top-artists-v2';
+  const CACHE_KEY = 'discover:community-top-artists-v3';
 
   // Image overrides run on the cached copies too, or a day-old row keeps
   // serving Apple's blank square.
@@ -3147,7 +3147,7 @@ function tallyArtistListeners(albumRows, relistenRows, songRows) {
     let e = byName.get(key);
     if (!e) { e = { name, users: new Set(), albums: new Map(), ratings: new Map() }; byName.set(key, e); }
     e.users.add(userId);
-    if (albumId && !String(albumId).startsWith('lst-')) e.albums.set(albumId, (e.albums.get(albumId) ?? 0) + 1);
+    if (albumId) e.albums.set(albumId, (e.albums.get(albumId) ?? 0) + 1);
   };
   for (const r of albumRows ?? [])    add(r.user_id, r.artist, r.spotify_id);
   for (const r of relistenRows ?? []) add(r.user_id, r.artist, r.spotify_id);
@@ -3160,7 +3160,21 @@ function tallyArtistListeners(albumRows, relistenRows, songRows) {
 // which opens whichever same-named artist ranks first. The search is only the
 // fallback for an artist with no usable album.
 async function resolveLoggedArtist(e) {
-  const albumId = [...e.albums.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  // Logged one of our own albums by an artist of the same name: that artist
+  // is in the manual catalogue because Apple doesn't carry them (Godspeed
+  // You! Black Emperor), and the Apple artist of that name has no photo.
+  const key = foldDiacritics(e.name);
+  for (const id of e.albums.keys()) {
+    const manual = String(id).startsWith('lst-') && manualAlbumById(id)?.artistId;
+    const artist = manual && manualArtistById(manual);
+    if (artist && foldDiacritics(artist.name) === key) {
+      return { id: artist.id, name: e.name, genre: artist.genre ?? '', artworkUrl: artist.artworkUrl ?? '' };
+    }
+  }
+
+  const albumId = [...e.albums.entries()]
+    .filter(([id]) => !String(id).startsWith('lst-'))
+    .sort((a, b) => b[1] - a[1])[0]?.[0];
   let info = null;
   try {
     if (albumId) {
@@ -6256,7 +6270,7 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
     const keys = ['discover:new-releases', 'discover:popular', 'discover:coming-soon',
                   'discover:classics', 'discover:top-rated', 'discover:recommended',
                   'discover:community-popular', 'discover:community-top-rated',
-                  'discover:community-top-artists-v2', 'discover:community-top-songs',
+                  'discover:community-top-artists-v3', 'discover:community-top-songs',
                   'discover:community-most-listend-songs', 'discover:community-highest-rated-songs'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
