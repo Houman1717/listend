@@ -1613,6 +1613,56 @@ const MANUAL_ALBUMS = [
       { number: 13, id: 'lst-tatsuro-sonorite-t13', title: 'WHEN YOU WISH UPON A STAR 〜星に願いを〜', durationMs: 235266 },
     ],
   },
+  {
+    id: 'lst-violon-passion',
+    title: 'Violon Passion',
+    artist: 'Various Artists',
+    artistId: 'lst-artist-various-artists',
+    year: 1993,
+    isCompilation: true,
+    // EMI Classics' 2-CD violin compilation (Kennedy, Menuhin, Mutter,
+    // Milstein, Oistrakh…), issued in France and Canada in 1993 with one
+    // tracklist; never on streaming. Tracks and timings from MusicBrainz's
+    // Canadian release (the French one on Discogs has no timings), numbered
+    // straight through both discs; covers match.
+    artworkUrl: 'https://coverartarchive.org/release/021174b0-01c1-4c32-b35d-b6842d04e70c/front-500',
+    musicbrainzReleaseId: '021174b0-01c1-4c32-b35d-b6842d04e70c',
+    trackCount: 32,
+    tracks: [
+      { number: 1, id: 'lst-violon-passion-t1', title: 'Concerto en Mi Majeur "La Printemps" (extr. des "Quatre Saisons")', durationMs: 240000 },
+      { number: 2, id: 'lst-violon-passion-t2', title: 'Concerto N° 3 en Sol Majeur, KV 216 - Rondo', durationMs: 381000 },
+      { number: 3, id: 'lst-violon-passion-t3', title: 'Romance N° 1 pour violon et orchestre en Sol Majeur, Op. 40', durationMs: 433000 },
+      { number: 4, id: 'lst-violon-passion-t4', title: 'Moto perpetuo', durationMs: 250000 },
+      { number: 5, id: 'lst-violon-passion-t5', title: 'Méditation de Thaïs', durationMs: 301000 },
+      { number: 6, id: 'lst-violon-passion-t6', title: 'Intermezzo (extr. de la "Symphonie Espagnole")', durationMs: 379000 },
+      { number: 7, id: 'lst-violon-passion-t7', title: 'Légende pour violon et orchestre, Op. 17', durationMs: 410000 },
+      { number: 8, id: 'lst-violon-passion-t8', title: 'Pas de deux (extr. du "Lac des Cygnes")', durationMs: 387000 },
+      { number: 9, id: 'lst-violon-passion-t9', title: 'Airs Bohémiens, Op. 20', durationMs: 562000 },
+      { number: 10, id: 'lst-violon-passion-t10', title: 'Introduction et rondo capriccioso, Op. 28', durationMs: 520000 },
+      { number: 11, id: 'lst-violon-passion-t11', title: 'Tzigane', durationMs: 610000 },
+      { number: 12, id: 'lst-violon-passion-t12', title: 'Partita N° 3, BWV 1006 - Préludio', durationMs: 212000 },
+      { number: 13, id: 'lst-violon-passion-t13', title: 'Salut d\'amour, Op. 12', durationMs: 177000 },
+      { number: 14, id: 'lst-violon-passion-t14', title: 'Nigun, improvisation (extr. de \'Baal Shem\')', durationMs: 353000 },
+      { number: 15, id: 'lst-violon-passion-t15', title: 'La ronde des Lutins', durationMs: 313000 },
+      { number: 16, id: 'lst-violon-passion-t16', title: 'Andante et variations pour violon et piano', durationMs: 200000 },
+      { number: 17, id: 'lst-violon-passion-t17', title: 'Caprice n° 9 en mi majeur, Op. 1', durationMs: 158000 },
+      { number: 18, id: 'lst-violon-passion-t18', title: 'Caprice n° 24 en la mineur, Op. 1', durationMs: 267000 },
+      { number: 19, id: 'lst-violon-passion-t19', title: 'Etude-Caprice en la mineur, Op. 18 n° 4', durationMs: 84000 },
+      { number: 20, id: 'lst-violon-passion-t20', title: 'Mouvement perpétuel', durationMs: 164000 },
+      { number: 21, id: 'lst-violon-passion-t21', title: 'Poupée valsante', durationMs: 155000 },
+      { number: 22, id: 'lst-violon-passion-t22', title: 'Praeludium et allegro dans le style de Pugnani', durationMs: 295000 },
+      { number: 23, id: 'lst-violon-passion-t23', title: 'Tombourin de Jean-Marie Leclair', durationMs: 143000 },
+      { number: 24, id: 'lst-violon-passion-t24', title: 'Romance andalouse, Op 22 n° 1', durationMs: 251000 },
+      { number: 25, id: 'lst-violon-passion-t25', title: 'Chansons russes', durationMs: 363000 },
+      { number: 26, id: 'lst-violon-passion-t26', title: 'Danse hongroise n° 2', durationMs: 189000 },
+      { number: 27, id: 'lst-violon-passion-t27', title: 'Berceuse, Op 16', durationMs: 205000 },
+      { number: 28, id: 'lst-violon-passion-t28', title: 'Valse-scherzo, Op. 34', durationMs: 327000 },
+      { number: 29, id: 'lst-violon-passion-t29', title: 'Perpetuum mobile (extr. de la Sonate pour violon & piano)', durationMs: 236000 },
+      { number: 30, id: 'lst-violon-passion-t30', title: 'La Fontaine D\'Aréthuse (extr. de \'Mythes\')', durationMs: 321000 },
+      { number: 31, id: 'lst-violon-passion-t31', title: 'Cortège', durationMs: 93000 },
+      { number: 32, id: 'lst-violon-passion-t32', title: 'Tea For Two (chanson de \'No No Nanette\')', durationMs: 219000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
@@ -1653,6 +1703,14 @@ const MANUAL_ARTISTS = [
     name: 'Atmosphera',
     genre: 'Rock',
     artworkUrl: 'https://coverartarchive.org/release-group/cb7f74f4-a5af-436c-b1f8-d53ba154ef79/front-500',
+  },
+  {
+    // For the multi-artist compilations carried here (Violon Passion), so the
+    // album page's artist link has somewhere to go.
+    id: 'lst-artist-various-artists',
+    name: 'Various Artists',
+    genre: 'Compilation',
+    artworkUrl: 'https://coverartarchive.org/release/021174b0-01c1-4c32-b35d-b6842d04e70c/front-500',
   },
   {
     id: 'lst-artist-in-the-panchine',

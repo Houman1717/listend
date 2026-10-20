@@ -613,6 +613,12 @@ pinStorefront('jp', [
   '1692931100',
   '1692931101', '1692931103', '1692931105', '1692931107', '1692931109', '1692931110',
 ]);
+// Lole y Manuel — Al Alba con Alegría (1992)
+pinStorefront('es', [
+  '1278656663',
+  '1278656667', '1278656668', '1278656669', '1278656670', '1278656671', '1278656672',
+  '1278656673', '1278656674',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1038,6 +1044,16 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'tatsuroyamashita::syncofsummerep': {
     id: '1692931100', title: 'Sync Of Summer - EP', artist: 'Tatsuro Yamashita', year: 2023,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/b6/4e/f4/b64ef4c1-f577-d521-79ef-171868ff502c/5054197727184.jpg/500x500bb.jpg',
+  },
+  'loleymanuel::alalbaconalegra': {
+    id: '1278656663', title: 'Al Alba con Alegría', artist: 'Lole y Manuel', year: 1992,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/9b/6b/65/9b6b65f6-fbcc-a262-2db4-2ac3f2caa4a6/5099703233421.jpg/500x500bb.jpg',
+  },
+  // "í" drops out of the key rather than folding, so the unaccented
+  // spelling needs its own entry.
+  'loleymanuel::alalbaconalegria': {
+    id: '1278656663', title: 'Al Alba con Alegría', artist: 'Lole y Manuel', year: 1992,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/9b/6b/65/9b6b65f6-fbcc-a262-2db4-2ac3f2caa4a6/5099703233421.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -4998,6 +5014,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/b6/4e/f4/b64ef4c1-f577-d521-79ef-171868ff502c/5054197727184.jpg/500x500bb.jpg',
       year: 2023, isSingle: false, isCompilation: false, trackCount: 6,
       url: 'https://music.apple.com/jp/album/sync-of-summer-ep/1692931100', type: 'album',
+    },
+  ],
+  '17393256': [ // Lole y Manuel — not licensed for `us`
+    {
+      id: '1278656663', title: 'Al Alba con Alegría',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/9b/6b/65/9b6b65f6-fbcc-a262-2db4-2ac3f2caa4a6/5099703233421.jpg/500x500bb.jpg',
+      year: 1992, isSingle: false, isCompilation: false, trackCount: 8,
+      url: 'https://music.apple.com/es/album/al-alba-con-alegr%C3%ADa/1278656663', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
