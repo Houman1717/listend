@@ -281,6 +281,7 @@ export function SortSheet({
   tint = '#D4A017',
   excludeKeys = [],
   filters = [],
+  showShuffle = true,
 }: {
   visible: boolean;
   activeKey: SortKey;
@@ -290,6 +291,7 @@ export function SortSheet({
   tint?: string;
   excludeKeys?: SortKey[];
   filters?: FilterSection[];
+  showShuffle?: boolean;
 }) {
   const bg      = isDark ? '#1c1410' : '#fff';
   const text    = isDark ? '#f5e6c8' : '#1A0F0A';
@@ -362,6 +364,7 @@ export function SortSheet({
         </ScrollView>
 
         {/* Shuffle — pinned below the list so it's never cut off at the bottom. */}
+        {showShuffle && (
         <View style={[ss.footer, { borderTopColor: border }]}>
           <Pressable
             onPress={() => handleSelect('shuffle')}
@@ -381,6 +384,7 @@ export function SortSheet({
             </Text>
           </Pressable>
         </View>
+        )}
       </View>
       </View>
     </Modal>

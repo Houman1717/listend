@@ -9,13 +9,17 @@ import {
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useLikedArtists } from '@/context/LikedArtistsContext';
 import { useAlbums } from '@/context/AlbumsContext';
 import { supabase } from '@/lib/supabase';
+import { SortSheet, applySort, sortLabel, SortKey, COMMUNITY_SORTS, DURATION_SORTS } from '@/components/SortSheet';
+import { fetchCommunityStats, communityStatsKey, CommunityStats } from '@/lib/communityStats';
+import { fetchAlbumDurations } from '@/lib/albumDurations';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -87,6 +91,10 @@ const DISC_TABS = [
   { key: 'live',          label: 'Live' },
 ] as const;
 type DiscTab = typeof DISC_TABS[number]['key'];
+
+// The discography sheet only offers sorts that mean something for one artist's
+// catalogue — no Date Added, Artist or My Rating.
+const DISC_EXCLUDED_SORTS: SortKey[] = ['date_new', 'artist_az', 'my_rating_high'];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -173,6 +181,10 @@ export default function ArtistDetailScreen() {
 
   const [bioExpanded, setBioExpanded]     = useState(false);
   const [activeDiscTab, setActiveDiscTab] = useState<DiscTab>('albums');
+  const [discSortKey, setDiscSortKey]     = useState<SortKey>('release_new');
+  const [discSortOpen, setDiscSortOpen]   = useState(false);
+  const [discStats, setDiscStats]         = useState<Map<string, CommunityStats> | null>(null);
+  const [discDurations, setDiscDurations] = useState<Record<string, number> | null>(null);
   const [toastMsg, setToastMsg]         = useState('');
   const toastOpacity                    = useRef(new Animated.Value(0)).current;
   const { isLiked, toggleLike }         = useLikedArtists();
@@ -218,6 +230,73 @@ export default function ArtistDetailScreen() {
 
   const GRID_PAD = 20;
   const CARD_SIZE = 120;
+
+  // ── Discography sort data — same sources as My Listend / Want to Listen ────
+  // Every release across all four tabs, so switching tab never re-asks.
+  const allReleases = useMemo(() => discography
+    ? [...discography.albums, ...discography.epsAndMixtapes, ...discography.collections, ...discography.live]
+    : [], [discography]);
+
+  // Community avg rating + popularity, loaded the first time one of those sorts
+  // is picked. Keyed on the discography so pushing a new artist re-asks.
+  const statsFor = useRef<CatalogDiscography | null>(null);
+  useEffect(() => {
+    if (!COMMUNITY_SORTS.has(discSortKey) || !discography || statsFor.current === discography) return;
+    if (allReleases.length === 0) return;
+    statsFor.current = discography;
+    let cancelled = false, done = false;
+    fetchCommunityStats(allReleases.map(a => ({ title: a.title, artist: artistName })))
+      .then(map => { done = true; if (!cancelled) setDiscStats(map); })
+      .catch(() => { statsFor.current = null; });
+    // Only a fetch cut off mid-flight needs to run again.
+    return () => { cancelled = true; if (!done) statsFor.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discSortKey, discography]);
+
+  const durationsFor = useRef<CatalogDiscography | null>(null);
+  useEffect(() => {
+    if (!DURATION_SORTS.has(discSortKey) || !discography || durationsFor.current === discography) return;
+    if (allReleases.length === 0) return;
+    durationsFor.current = discography;
+    let cancelled = false, done = false;
+    fetchAlbumDurations(allReleases.map(a => a.id), () => cancelled).then(found => {
+      done = true;
+      if (cancelled) return;
+      // Nothing back usually means the lookup failed — let the next pick retry.
+      if (Object.keys(found).length === 0) durationsFor.current = null;
+      setDiscDurations(found);
+    });
+    return () => { cancelled = true; if (!done) durationsFor.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discSortKey, discography]);
+
+  // A new artist starts from the default order with no stale numbers.
+  useEffect(() => {
+    setDiscStats(null);
+    setDiscDurations(null);
+    setDiscSortKey('release_new');
+  }, [artistName]);
+
+  const discSortLoading =
+    (COMMUNITY_SORTS.has(discSortKey) && discStats === null) ||
+    (DURATION_SORTS.has(discSortKey) && discDurations === null);
+
+  const sortedDiscItems = useMemo(() => {
+    const items = (discography?.[activeDiscTab] ?? []).map(a => {
+      const stats = discStats?.get(communityStatsKey(a.title, artistName));
+      return {
+        ...a,
+        artist: artistName,
+        durationMs: discDurations?.[a.id],
+        communityAvgRating: stats?.avg,
+        communityRatingCount: stats?.count,
+      };
+    });
+    // Newest first underneath, so ties (and releases with no data, which every
+    // stat sort puts last) still read in release order.
+    items.sort((a, b) => b.year - a.year);
+    return applySort(items, discSortKey);
+  }, [discography, activeDiscTab, discSortKey, discStats, discDurations, artistName]);
 
   // ── Fetch Last.fm (independent — only needs artistName) ────────────────────
   useEffect(() => {
@@ -384,10 +463,12 @@ export default function ArtistDetailScreen() {
     });
   }
 
-  function renderAlbumRow(items: CatalogAlbum[]) {
+  function renderAlbumRow(items: typeof sortedDiscItems) {
     if (!items.length) return null;
     return (
       <ScrollView
+        // Remount on a new tab or order so the row starts back at the first card.
+        key={`${activeDiscTab}:${discSortKey}`}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={sc.albumRowContent}>
@@ -526,7 +607,21 @@ export default function ArtistDetailScreen() {
 
       {/* ── 4. Discography ───────────────────────────────────────────────────── */}
       <View style={[sc.section, { backgroundColor: sectionBg, borderColor }]}>
-        <SectionHeader label="Discography" color={colors.subtext} />
+        <View style={sc.discHeader}>
+          <SectionHeader label="Discography" color={colors.subtext} />
+          {!albumsLoading && !albumsError && allReleases.length > 0 && (
+            <Pressable
+              onPress={() => setDiscSortOpen(true)}
+              hitSlop={8}
+              style={({ pressed }) => [sc.discSortBtn, { borderColor: isDark ? '#3a2818' : '#ddd', opacity: pressed ? 0.7 : 1 }]}>
+              {discSortLoading
+                ? <ActivityIndicator size="small" color="#D4A017" style={{ transform: [{ scale: 0.6 }], width: 12, height: 12 }} />
+                : <Ionicons name="funnel-outline" size={12} color="#D4A017" />}
+              <Text style={[sc.discSortText, { color: colors.text }]} numberOfLines={1}>{sortLabel(discSortKey)}</Text>
+              <Ionicons name="chevron-down" size={10} color={colors.subtext} />
+            </Pressable>
+          )}
+        </View>
         {albumsLoading ? (
           <ActivityIndicator size="small" color="#D4A017" style={{ marginVertical: 16 }} />
         ) : albumsError ? (
@@ -554,13 +649,9 @@ export default function ArtistDetailScreen() {
               })}
             </ScrollView>
             {/* Content for active tab */}
-            {(() => {
-              const items = discography?.[activeDiscTab] ?? [];
-              const sorted = [...items].sort((a, b) => b.year - a.year);
-              return sorted.length > 0
-                ? renderAlbumRow(sorted)
-                : <Text style={[sc.empty, { color: mutedText }]}>Nothing here yet</Text>;
-            })()}
+            {sortedDiscItems.length > 0
+              ? renderAlbumRow(sortedDiscItems)
+              : <Text style={[sc.empty, { color: mutedText }]}>Nothing here yet</Text>}
           </>
         )}
       </View>
@@ -593,6 +684,16 @@ export default function ArtistDetailScreen() {
       ) : null}
 
     </ScrollView>
+
+    <SortSheet
+      visible={discSortOpen}
+      activeKey={discSortKey}
+      onSelect={setDiscSortKey}
+      onClose={() => setDiscSortOpen(false)}
+      isDark={isDark}
+      excludeKeys={DISC_EXCLUDED_SORTS}
+      showShuffle={false}
+    />
 
     <Animated.View style={[sc.toast, { opacity: toastOpacity }]} pointerEvents="none">
       <Text style={sc.toastText}>{toastMsg}</Text>
@@ -680,6 +781,11 @@ const sc = StyleSheet.create({
   albumArt: { width: 120, height: 120, borderRadius: 8 },
   albumTitle: { fontSize: 12, fontWeight: '500', marginTop: 6, lineHeight: 16 },
   albumYear: { fontSize: 11, marginTop: 2 },
+
+  // Discography sort button — sits on the section label's line
+  discHeader:   { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  discSortBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, marginTop: -4 },
+  discSortText: { fontSize: 12, fontWeight: '500', maxWidth: 170 },
 
   // Bio
   bioText: { fontSize: 14, lineHeight: 22 },
