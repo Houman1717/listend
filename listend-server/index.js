@@ -3151,87 +3151,64 @@ async function computeTopSongsThisWeek(since) {
   return rankSongs(rows, 'listens', 21);
 }
 
+// Most Listend Artists This Week: how many different people logged anything
+// by the artist in the window — an album, a re-listen or a song — one per
+// person however much they logged. It used to add up artist likes, Top 5
+// additions and every album log, so one person logging a whole discography
+// counted like a dozen listeners, and song logs didn't count at all.
+//
+// Logs only store the artist's name, so each ranked artist is identified
+// through one of the albums people logged (Apple's album → artist link), not
+// a name search — a search opened whichever same-named artist ranked first.
 async function computeTopArtistsThisWeek(since) {
-  const [likedRows, top5Rows, albumRows] = await Promise.all([
-    fetchAllRows((from, to) => supabase.from('liked_artists').select('artist_id, name, artwork_url').gte('created_at', since).range(from, to)),
-    fetchAllRows((from, to) => supabase.from('top5_changes').select('item_id, item_name, item_image_url').eq('category', 'artists').gte('changed_at', since).range(from, to)),
-    fetchAllRows((from, to) => supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).gte('listened_at', since).range(from, to)),
+  const [albumRows, relistenRows, songRows] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from('user_albums').select('user_id, spotify_id, artist').gte('listened_at', since).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('re_listens').select('user_id, spotify_id, artist').gte('listened_at', since).range(from, to)),
+    fetchAllRows((from, to) => supabase.from('song_reviews').select('user_id, album_id, artist').gte('listened_at', since).range(from, to)),
   ]);
 
-  const counts = new Map();
-  for (const r of (likedRows ?? [])) {
-    if (!r.artist_id) continue;
-    const e = counts.get(r.artist_id);
-    if (e) e.count++;
-    else counts.set(r.artist_id, { artist: { id: r.artist_id, name: r.name ?? '', genre: '', artworkUrl: r.artwork_url ?? '' }, count: 1 });
-  }
-  for (const r of (top5Rows ?? [])) {
-    if (!r.item_id) continue;
-    const e = counts.get(r.item_id);
-    if (e) e.count++;
-    else counts.set(r.item_id, { artist: { id: r.item_id, name: r.item_name ?? '', genre: '', artworkUrl: r.item_image_url ?? '' }, count: 1 });
-  }
-
-  const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
   const byName = new Map();
-  for (const entry of sorted) {
-    const key = foldDiacritics(entry.artist.name);
-    if (!key) continue;
-    const existing = byName.get(key);
-    if (existing) {
-      existing.count += entry.count;
-      if (!existing.artist.artworkUrl && entry.artist.artworkUrl)
-        existing.artist = { ...existing.artist, artworkUrl: entry.artist.artworkUrl };
-    } else {
-      byName.set(key, { artist: { ...entry.artist }, count: entry.count });
-    }
-  }
-
-  for (const r of (albumRows ?? [])) {
-    const name = r.artist?.trim();
-    if (!name) continue;
+  const add = (userId, artist, albumId) => {
+    const name = artist?.trim();
     const key = foldDiacritics(name);
-    const existing = byName.get(key);
-    if (existing) existing.count++;
-    else byName.set(key, { artist: { id: `name:${key}`, name, genre: '', artworkUrl: '' }, count: 1 });
-  }
+    if (!userId || !key) return;
+    let e = byName.get(key);
+    if (!e) { e = { name, users: new Set(), albums: new Map() }; byName.set(key, e); }
+    e.users.add(userId);
+    if (albumId && !String(albumId).startsWith('lst-')) e.albums.set(albumId, (e.albums.get(albumId) ?? 0) + 1);
+  };
+  for (const r of albumRows ?? [])    add(r.user_id, r.artist, r.spotify_id);
+  for (const r of relistenRows ?? []) add(r.user_id, r.artist, r.spotify_id);
+  for (const r of songRows ?? [])     add(r.user_id, r.artist, r.album_id);
 
-  const ranked = Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 21).map(e => e.artist);
+  const ranked = Array.from(byName.values())
+    .sort((a, b) => b.users.size - a.users.size)
+    .slice(0, 21);
 
-  const missing = ranked.filter(a => !a.artworkUrl);
-  if (missing.length > 0) {
-    const resolved = await Promise.allSettled(
-      missing.map(a =>
-        fetch(`https://api.music.apple.com/v1/catalog/us/search?term=${encodeURIComponent(a.name)}&types=artists&limit=1`, {
-          headers: { Authorization: `Bearer ${generateAppleToken()}` },
-          signal: AbortSignal.timeout(5000),
-        })
-          .then(r => r.ok ? r.json() : null)
-          .then(data => {
-            const hit = data?.results?.artists?.data?.[0];
-            return { name: a.name, id: hit?.id ?? '', artworkUrl: artistImageFor(hit?.id, a.name, (hit?.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500')) };
-          })
-          .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
-      )
-    );
-    const artworkMap = {};
-    for (const r of resolved) {
-      if (r.status === 'fulfilled' && r.value.artworkUrl) {
-        artworkMap[r.value.name.toLowerCase()] = { id: r.value.id, artworkUrl: r.value.artworkUrl };
+  return Promise.all(ranked.map(async e => {
+    // The album most of them logged speaks for the artist.
+    const albumId = [...e.albums.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    let info = null;
+    try {
+      if (albumId) {
+        const credit = pickAlbumArtist(await albumArtists(albumId), e.name);
+        if (credit?.id) info = await artistInfo(credit.id);
       }
+    } catch { /* fall through to the name search */ }
+    if (!info) {
+      try {
+        const data = await amFetch(`/catalog/us/search?term=${encodeURIComponent(e.name)}&types=artists&limit=1`);
+        const hit = data?.results?.artists?.data?.[0];
+        if (hit?.id) info = { id: hit.id, name: hit.attributes?.name ?? e.name, artworkUrl: artistImageFor(hit.id, e.name, (hit.attributes?.artwork?.url ?? '').replace('{w}x{h}', '500x500')) };
+      } catch { /* keep the bare name */ }
     }
-    for (const artist of ranked) {
-      if (!artist.artworkUrl) {
-        const hit = artworkMap[artist.name.toLowerCase()];
-        if (hit) {
-          artist.artworkUrl = hit.artworkUrl;
-          if (hit.id) artist.id = hit.id;
-        }
-      }
-    }
-  }
-
-  return ranked;
+    return {
+      id: info?.id ?? `name:${foldDiacritics(e.name)}`,
+      name: e.name,
+      genre: '',
+      artworkUrl: info?.artworkUrl ?? '',
+    };
+  }));
 }
 
 // Review like/comment target_ids come in two shapes: `{userId}_{spotifyId}` for
@@ -4550,24 +4527,31 @@ app.get('/catalog/album/:id/artist', [
     return res.json({ id: manual.artistId, name: manualArtistById(manual.artistId)?.name ?? manual.artist });
   }
 
-  const CACHE_KEY = `catalog_album_artist_${id}`;
-  const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(pickAlbumArtist(mem, name));
-  const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db?.length) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(pickAlbumArtist(db, name)); }
-
   try {
-    const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/artists`);
-    const artists = (data.data ?? []).map(a => ({ id: a.id, name: a.attributes?.name ?? '' }));
+    const artists = await albumArtists(id);
     if (!artists.length) return res.status(404).json({ error: 'No artist for this album' });
-    cacheSet(CACHE_KEY, artists, TTL_6H);
-    await setCache(CACHE_KEY, artists);
     res.json(pickAlbumArtist(artists, name));
   } catch (err) {
     console.error('[/catalog/album/artist]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// An album's credited artists ({ id, name }), cached like the route above.
+async function albumArtists(id) {
+  const CACHE_KEY = `catalog_album_artist_${id}`;
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return mem;
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db?.length) { cacheSet(CACHE_KEY, db, TTL_6H); return db; }
+  const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/artists`);
+  const artists = (data.data ?? []).map(a => ({ id: a.id, name: a.attributes?.name ?? '' }));
+  if (artists.length) {
+    cacheSet(CACHE_KEY, artists, TTL_6H);
+    await setCache(CACHE_KEY, artists);
+  }
+  return artists;
+}
 
 function pickAlbumArtist(artists, name) {
   const want = normalizeKey(name);
@@ -4608,6 +4592,27 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   }
 });
 
+// An artist's { id, name, artworkUrl } by catalog id, cached; null if Apple
+// has no such artist.
+async function artistInfo(id) {
+  const CACHE_KEY = `am_artist_info_${id}`;
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return mem;
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return db; }
+  const data = await amFetch(`/catalog/us/artists/${id}`);
+  const attr = data.data?.[0]?.attributes;
+  if (!attr) return null;
+  const info = {
+    id,
+    name: attr.name ?? '',
+    artworkUrl: artistImageFor(id, attr.name, (attr.artwork?.url ?? '').replace('{w}x{h}', '500x500')) || null,
+  };
+  cacheSet(CACHE_KEY, info, TTL_6H);
+  await setCache(CACHE_KEY, info);
+  return info;
+}
+
 // ── GET /catalog/artist/:id ───────────────────────────────────────────────────
 // An artist's name and picture by catalog id. The artist page gets only an id
 // when opened from an album or song, and its own lookup for a picture ran only
@@ -4617,25 +4622,9 @@ app.get('/catalog/artist/:id', [
   param('id').trim().matches(/^\d+$/).withMessage('invalid id').isLength({ max: 50 }),
   validate,
 ], async (req, res) => {
-  const { id } = req.params;
-  const CACHE_KEY = `am_artist_info_${id}`;
-
-  const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(mem);
-  const db = await getCached(CACHE_KEY, TTL_24H);
-  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
-
   try {
-    const data = await amFetch(`/catalog/us/artists/${id}`);
-    const attr = data.data?.[0]?.attributes;
-    if (!attr) return res.status(404).json({ error: 'Artist not found' });
-    const info = {
-      id,
-      name: attr.name ?? '',
-      artworkUrl: artistImageFor(id, attr.name, (attr.artwork?.url ?? '').replace('{w}x{h}', '500x500')) || null,
-    };
-    cacheSet(CACHE_KEY, info, TTL_6H);
-    await setCache(CACHE_KEY, info);
+    const info = await artistInfo(req.params.id);
+    if (!info) return res.status(404).json({ error: 'Artist not found' });
     res.json(info);
   } catch (err) {
     console.error('[/catalog/artist]', err.message ?? err);
