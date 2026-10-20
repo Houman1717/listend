@@ -4984,6 +4984,7 @@ const ARTIST_ALBUM_OVERRIDES = {
       id: '1272184934', title: 'Reborn',
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/85/07/a9/8507a950-19f5-ac0c-5698-25058188c172/190295750121.jpg/500x500bb.jpg',
       year: 2017, isSingle: false, isCompilation: false, trackCount: 7,
+      isMixtape: true,   // a maxi-single (versions, karaoke, live B-sides) that runs 37 min
       url: 'https://music.apple.com/jp/album/reborn/1272184934', type: 'album',
     },
     {
