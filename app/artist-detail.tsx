@@ -364,6 +364,14 @@ export default function ArtistDetailScreen() {
         }
       } else {
         console.log('[artist-detail] artistId provided directly:', artistId);
+        // Opened by id (from an album or song page) with no picture passed in,
+        // so the name search above that would have found one never ran.
+        if (!paramArtworkUrl) {
+          fetch(`${API_URL}/catalog/artist/${artistId}`)
+            .then(r => (r.ok ? r.json() : null))
+            .then((a: { artworkUrl?: string | null } | null) => { if (!cancelled && a?.artworkUrl) setArtworkUrl(a.artworkUrl); })
+            .catch(() => {});
+        }
       }
 
       if (cancelled || !artistId) return;

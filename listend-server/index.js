@@ -4499,6 +4499,41 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   }
 });
 
+// ── GET /catalog/artist/:id ───────────────────────────────────────────────────
+// An artist's name and picture by catalog id. The artist page gets only an id
+// when opened from an album or song, and its own lookup for a picture ran only
+// on the name-search path, so those pages showed the initial placeholder.
+
+app.get('/catalog/artist/:id', [
+  param('id').trim().matches(/^\d+$/).withMessage('invalid id').isLength({ max: 50 }),
+  validate,
+], async (req, res) => {
+  const { id } = req.params;
+  const CACHE_KEY = `am_artist_info_${id}`;
+
+  const mem = cacheGet(CACHE_KEY);
+  if (mem) return res.json(mem);
+  const db = await getCached(CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(db); }
+
+  try {
+    const data = await amFetch(`/catalog/us/artists/${id}`);
+    const attr = data.data?.[0]?.attributes;
+    if (!attr) return res.status(404).json({ error: 'Artist not found' });
+    const info = {
+      id,
+      name: attr.name ?? '',
+      artworkUrl: artistImageFor(id, attr.name, (attr.artwork?.url ?? '').replace('{w}x{h}', '500x500')) || null,
+    };
+    cacheSet(CACHE_KEY, info, TTL_6H);
+    await setCache(CACHE_KEY, info);
+    res.json(info);
+  } catch (err) {
+    console.error('[/catalog/artist]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET /catalog/artist/:id/top-tracks ────────────────────────────────────────
 // Returns an artist's top songs via Apple Music's top-songs view.
 
