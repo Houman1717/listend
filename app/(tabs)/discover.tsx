@@ -68,12 +68,11 @@ async function fetchSections(): Promise<void> {
   const fetchTyped = <T,>(path: string): Promise<T[]> =>
     fetch(`${API_URL}${path}`).then(r => { if (!r.ok) throw new Error(`${path} → ${r.status}`); return r.json(); });
 
-  const [newReleases, popular, topRated, topArtists, mostListendSongs, highestRatedSongs] = await Promise.all([
+  const [newReleases, popular, topRated, topArtists, highestRatedSongs] = await Promise.all([
     safe(fetchJson('/discover/new-releases')),
     safe(fetchJson('/api/discover/community-popular')),
     safe(fetchJson('/api/discover/community-top-rated')),
     fetchTyped<CatalogArtist>('/api/discover/community-top-artists').catch(() => [] as CatalogArtist[]),
-    fetchTyped<CatalogTrack>('/api/discover/community-most-listend-songs').catch(() => [] as CatalogTrack[]),
     fetchTyped<CatalogTrack>('/api/discover/community-highest-rated-songs').catch(() => [] as CatalogTrack[]),
   ]);
 
@@ -81,7 +80,6 @@ async function fetchSections(): Promise<void> {
   discoverSections.popular      = popular;
   discoverSections.topRated     = topRated;
   discoverSections.topArtists   = topArtists;
-  discoverSections.mostListendSongs  = mostListendSongs;
   discoverSections.highestRatedSongs = highestRatedSongs;
 }
 
@@ -393,7 +391,6 @@ export default function DiscoverScreen() {
   const [popular,      setPopular]      = useState<CatalogAlbum[]>(discoverSections.popular);
   const [topRated,     setTopRated]     = useState<CatalogAlbum[]>(discoverSections.topRated);
   const [topArtists,   setTopArtists]   = useState<CatalogArtist[]>(discoverSections.topArtists);
-  const [mostListendSongs,  setMostListendSongs]  = useState<CatalogTrack[]>(discoverSections.mostListendSongs);
   const [highestRatedSongs, setHighestRatedSongs] = useState<CatalogTrack[]>(discoverSections.highestRatedSongs);
   const [featuredPlaylists, setFeaturedPlaylists] = useState<FeaturedPlaylist[]>([]);
   const [featuredLoading,   setFeaturedLoading]   = useState(true);
@@ -410,7 +407,6 @@ export default function DiscoverScreen() {
             setPopular([...discoverSections.popular]);
             setTopRated([...discoverSections.topRated]);
             setTopArtists([...discoverSections.topArtists]);
-            setMostListendSongs([...discoverSections.mostListendSongs]);
         setHighestRatedSongs([...discoverSections.highestRatedSongs]);
           })
           .catch((err) => console.error('[Discover] fetchSections failed:', err?.message ?? err))
@@ -437,7 +433,6 @@ export default function DiscoverScreen() {
         setPopular([...discoverSections.popular]);
         setTopRated([...discoverSections.topRated]);
         setTopArtists([...discoverSections.topArtists]);
-        setMostListendSongs([...discoverSections.mostListendSongs]);
         setHighestRatedSongs([...discoverSections.highestRatedSongs]);
         if (featured.status === 'fulfilled') setFeaturedPlaylists(featured.value);
       })
@@ -620,31 +615,12 @@ export default function DiscoverScreen() {
         )}
       </Section>
 
-      {/* ── Most Listend Songs ── */}
-      <Section title="Most Listend Songs">
-        {sectionsLoading && mostListendSongs.length === 0 ? (
-          <View style={s.loader}><ActivityIndicator color="#D4A017" /></View>
-        ) : (
-          <FlatList
-            horizontal
-            data={mostListendSongs.slice(0, 10)}
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.row}
-            renderItem={({ item, index }) => (
-              <SongCard
-                item={item}
-                index={index}
-                isDark={isDark}
-                onPress={() => openSong(item)}
-              />
-            )}
-            ListFooterComponent={<SeeMoreButton onPress={() => router.push({ pathname: '/discover-top-songs', params: { kind: 'listend' } } as any)} isDark={isDark} />}
-            ListFooterComponentStyle={{ marginLeft: 12 }}
-          />
-        )}
-      </Section>
-
+      {/* Most Listend Songs was a row here too, under Highest Rated Songs — taken
+          out 2026-10-20 as too much next to Home's weekly songs row. To bring it
+          back: fetch /api/discover/community-most-listend-songs in fetchSections
+          into discoverSections.mostListendSongs, and copy the section above with
+          that list and kind 'listend' (the server route and See More screen still
+          support it). */}
     </ScrollView>
     </>
   );

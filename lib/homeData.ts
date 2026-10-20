@@ -143,99 +143,56 @@ export async function fetchTopSongsThisWeek(): Promise<CatalogTrack[]> {
   return out;
 }
 
+// Fallback for /api/home/this-week's artists (computeTopArtistsThisWeek on the
+// server): different people who logged anything by the artist this week — an
+// album, a re-listen or a song — one per person. Each artist is identified
+// through an album people logged, not a name search, which could open a
+// different artist with the same name.
 export async function fetchTopArtistsThisWeek(): Promise<CatalogArtist[]> {
   const since = weekAgo();
-  const [{ data: likedRows }, { data: top5Rows }, { data: albumRows }] = await Promise.all([
-    supabase.from('liked_artists').select('artist_id, name, artwork_url').gte('created_at', since).limit(300),
-    supabase.from('top5_changes').select('item_id, item_name, item_image_url').eq('category', 'artists').gte('changed_at', since).limit(300),
-    supabase.from('user_albums').select('artist, artwork_url').not('listened_at', 'is', null).gte('listened_at', since).limit(500),
+  const [{ data: albumRows }, { data: relistenRows }, { data: songRows }] = await Promise.all([
+    supabase.from('user_albums').select('user_id, spotify_id, artist').gte('listened_at', since).limit(2000),
+    supabase.from('re_listens').select('user_id, spotify_id, artist').gte('listened_at', since).limit(1000),
+    supabase.from('song_reviews').select('user_id, album_id, artist').gte('listened_at', since).limit(2000),
   ]);
 
-  const counts = new Map<string, { artist: CatalogArtist; count: number }>();
+  const byName = new Map<string, { name: string; users: Set<string>; albums: Map<string, number> }>();
+  const add = (userId: string, artist: string, albumId: string | null) => {
+    const name = artist?.trim();
+    const key = fold(name ?? '');
+    if (!userId || !key) return;
+    let e = byName.get(key);
+    if (!e) { e = { name, users: new Set(), albums: new Map() }; byName.set(key, e); }
+    e.users.add(userId);
+    if (albumId && !albumId.startsWith('lst-')) e.albums.set(albumId, (e.albums.get(albumId) ?? 0) + 1);
+  };
+  for (const r of (albumRows ?? []) as any[])    add(r.user_id, r.artist, r.spotify_id);
+  for (const r of (relistenRows ?? []) as any[]) add(r.user_id, r.artist, r.spotify_id);
+  for (const r of (songRows ?? []) as any[])     add(r.user_id, r.artist, r.album_id);
 
-  for (const r of (likedRows ?? []) as any[]) {
-    if (!r.artist_id) continue;
-    const e = counts.get(r.artist_id);
-    if (e) e.count++;
-    else counts.set(r.artist_id, {
-      artist: { id: r.artist_id, name: r.name ?? '', genre: '', artworkUrl: r.artwork_url ?? '' },
-      count: 1,
-    });
-  }
+  const ranked = Array.from(byName.values()).sort((a, b) => b.users.size - a.users.size).slice(0, 21);
 
-  for (const r of (top5Rows ?? []) as any[]) {
-    if (!r.item_id) continue;
-    const e = counts.get(r.item_id);
-    if (e) e.count++;
-    else counts.set(r.item_id, {
-      artist: { id: r.item_id, name: r.item_name ?? '', genre: '', artworkUrl: r.item_image_url ?? '' },
-      count: 1,
-    });
-  }
-
-  // Secondary dedup by name — sort high→low first so the dominant entry wins,
-  // then merge lower-count duplicates in, picking the best artworkUrl from any version.
-  const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count);
-  const byName = new Map<string, { artist: CatalogArtist; count: number }>();
-  for (const entry of sorted) {
-    const key = fold(entry.artist.name);
-    if (!key) continue;
-    const existing = byName.get(key);
-    if (existing) {
-      existing.count += entry.count;
-      if (!existing.artist.artworkUrl && entry.artist.artworkUrl) {
-        existing.artist = { ...existing.artist, artworkUrl: entry.artist.artworkUrl };
-      }
-    } else {
-      byName.set(key, { artist: { ...entry.artist }, count: entry.count });
-    }
-  }
-
-  // Add album log counts — only artist name available, no artwork (r.artwork_url is album art)
-  for (const r of (albumRows ?? []) as any[]) {
-    const name = r.artist?.trim();
-    if (!name) continue;
-    const key = fold(name);
-    const existing = byName.get(key);
-    if (existing) {
-      existing.count++;
-    } else {
-      byName.set(key, { artist: { id: `name:${key}`, name, genre: '', artworkUrl: '' }, count: 1 });
-    }
-  }
-
-  const ranked = Array.from(byName.values()).sort((a, b) => b.count - a.count).slice(0, 21).map(e => e.artist);
-
-  // Resolve AM artwork for any artist that came only from album logs (no artwork yet)
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-  const missing = ranked.filter(a => !a.artworkUrl);
-  if (missing.length > 0) {
-    const resolved = await Promise.allSettled(
-      missing.map(a =>
-        fetchWithTimeout(`${API_URL}/search?q=${encodeURIComponent(a.name)}&type=artist`, 4000)
-          .then(r => r.ok ? r.json() : [])
-          .then((results: { id: string; artworkUrl: string }[]) => ({ name: a.name, id: results[0]?.id ?? '', artworkUrl: results[0]?.artworkUrl ?? '' }))
-          .catch(() => ({ name: a.name, id: '', artworkUrl: '' }))
-      )
-    );
-    const artworkMap: Record<string, { id: string; artworkUrl: string }> = {};
-    for (const r of resolved) {
-      if (r.status === 'fulfilled' && r.value.artworkUrl) {
-        artworkMap[r.value.name.toLowerCase()] = { id: r.value.id, artworkUrl: r.value.artworkUrl };
-      }
-    }
-    for (const artist of ranked) {
-      if (!artist.artworkUrl) {
-        const hit = artworkMap[artist.name.toLowerCase()];
-        if (hit) {
-          artist.artworkUrl = hit.artworkUrl;
-          if (hit.id) artist.id = hit.id;
-        }
-      }
-    }
-  }
+  const getJson = (path: string) =>
+    fetchWithTimeout(`${API_URL}${path}`, 4000).then(r => (r.ok ? r.json() : null)).catch(() => null);
 
-  return ranked;
+  return Promise.all(ranked.map(async (e): Promise<CatalogArtist> => {
+    const albumId = [...e.albums.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    let id = '', artworkUrl = '';
+    if (albumId) {
+      const credit = await getJson(`/catalog/album/${encodeURIComponent(albumId)}/artist?name=${encodeURIComponent(e.name)}`);
+      if (credit?.id) {
+        id = credit.id;
+        artworkUrl = (await getJson(`/catalog/artist/${credit.id}`))?.artworkUrl ?? '';
+      }
+    }
+    if (!id) {
+      const results = await getJson(`/search?q=${encodeURIComponent(e.name)}&type=artist`);
+      id = results?.[0]?.id ?? '';
+      artworkUrl = results?.[0]?.artworkUrl ?? '';
+    }
+    return { id: id || `name:${fold(e.name)}`, name: e.name, genre: '', artworkUrl };
+  }));
 }
 
 // Popularity is based on likes/comments *received* this week, regardless of

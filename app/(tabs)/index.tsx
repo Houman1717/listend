@@ -1756,8 +1756,8 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* 4 — Top Listend Artists This Week */}
-      <Section title="Top Listend Artists This Week" loading={loading}>
+      {/* 4 — Most Listend Artists This Week */}
+      <Section title="Most Listend Artists This Week" loading={loading}>
         <FlatList
           horizontal
           data={artists.slice(0, 10)}
@@ -1891,7 +1891,7 @@ export default function HomeScreen() {
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <SafeAreaView style={{ flex: 1 }}>
             <View style={[s.allFriendsHeader, { borderBottomColor: isDark ? '#2a1e14' : '#eee' }]}>
-              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Top Listend Artists This Week</Text>
+              <Text style={[s.allFriendsTitle, { color: colors.text }]}>Most Listend Artists This Week</Text>
               <Pressable onPress={() => setShowAllArtists(false)} hitSlop={12} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
                 <FontAwesome name="times" size={20} color={colors.subtext} />
               </Pressable>
