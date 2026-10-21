@@ -1098,6 +1098,12 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '884012274', title: 'Waves: Radio 1 Sessions 90-94', artist: 'Ride', year: 2003,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/87/77/76/87777614-13f5-764a-91eb-2fb426208016/Ride_-_Waves_packshot.jpg/500x500bb.jpg',
   },
+  // Never linked to Uomini di Mare (Fabri Fibra and Lato) on Apple, so its
+  // search didn't return it and their page was empty.
+  'uominidimare::latofabrifibra': {
+    id: '1796468607', title: 'Lato & Fabri Fibra', artist: 'Uomini Di Mare', year: 2004,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/dd/08/c1/dd08c1e6-5396-13c5-9504-11b5dd4cd73e/5021732603449.jpg/500x500bb.jpg',
+  },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
@@ -5262,6 +5268,15 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/87/77/76/87777614-13f5-764a-91eb-2fb426208016/Ride_-_Waves_packshot.jpg/500x500bb.jpg',
       year: 2003, isSingle: false, isCompilation: false, trackCount: 17,
       url: 'https://music.apple.com/gb/album/waves-radio-1-sessions-90-94/884012274', type: 'album',
+    },
+  ],
+  '727602508': [ // Uomini di Mare — Apple has this on `us` but doesn't list it under them
+    {
+      id: '1796468607', title: 'Lato & Fabri Fibra',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/dd/08/c1/dd08c1e6-5396-13c5-9504-11b5dd4cd73e/5021732603449.jpg/500x500bb.jpg',
+      year: 2004, isSingle: false, isCompilation: false, trackCount: 10,
+      isMixtape: true,   // an EP (MusicBrainz): five songs plus their instrumentals, 33 min
+      url: 'https://music.apple.com/us/album/lato-fabri-fibra/1796468607', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
