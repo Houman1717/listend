@@ -646,6 +646,12 @@ pinStorefront('gb', [
   '884012303', '884012304', '884012305', '884012306', '884012307', '884012308',
   '884012309', '884012310', '884012311', '884012312', '884012313',
 ]);
+// Little Richard & 高中正義 (Masayoshi Takanaka) — Little Richard meet Takanaka (1992)
+pinStorefront('jp', [
+  '715890826',
+  '715891353', '715891429', '715891436', '715891439', '715891457', '715891461',
+  '715891465', '715891469', '715891481', '715891512',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1103,6 +1109,16 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'uominidimare::latofabrifibra': {
     id: '1796468607', title: 'Lato & Fabri Fibra', artist: 'Uomini Di Mare', year: 2004,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/dd/08/c1/dd08c1e6-5396-13c5-9504-11b5dd4cd73e/5021732603449.jpg/500x500bb.jpg',
+  },
+  // Apple credits it to Takanaka alone (高中正義) and only on jp; keyed under
+  // Little Richard, and by the title MusicBrainz and fans use.
+  'littlerichard::littlerichardmeettakanaka': {
+    id: '715890826', title: 'Little Richard meet Takanaka', artist: 'Little Richard', year: 1992,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/4c/1b/a5/4c1ba518-cdb0-32ef-f9d6-40a9e5ccc6b1/00094631372353.jpg/500x500bb.jpg',
+  },
+  'littlerichard::littlerichardmeetsmasayoshitakanaka': {
+    id: '715890826', title: 'Little Richard meet Takanaka', artist: 'Little Richard', year: 1992,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/4c/1b/a5/4c1ba518-cdb0-32ef-f9d6-40a9e5ccc6b1/00094631372353.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -5280,6 +5296,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       url: 'https://music.apple.com/us/album/lato-fabri-fibra/1796468607', type: 'album',
     },
   ],
+  '1168275': [ // Little Richard — jp-only, and credited to Takanaka there
+    {
+      id: '715890826', title: 'Little Richard meet Takanaka',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/4c/1b/a5/4c1ba518-cdb0-32ef-f9d6-40a9e5ccc6b1/00094631372353.jpg/500x500bb.jpg',
+      year: 1992, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/jp/album/little-richard-meet-takanaka/715890826', type: 'album',
+    },
+  ],
   '469647548': [ // Cro — not licensed for `us`
     {
       id: '1579322186', title: 'trip',
@@ -5328,6 +5352,12 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/db/9f/d4/db9fd471-7d57-cb46-4007-1cdaa24c0f40/199066487341.jpg/500x500bb.jpg',
       year: 2009, isSingle: false, isCompilation: false, trackCount: 10,
       url: 'https://music.apple.com/jp/album/%E5%A4%8F%E9%81%93/1793109857', type: 'album',
+    },
+    {
+      id: '715890826', title: 'Little Richard meet Takanaka',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/4c/1b/a5/4c1ba518-cdb0-32ef-f9d6-40a9e5ccc6b1/00094631372353.jpg/500x500bb.jpg',
+      year: 1992, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/jp/album/little-richard-meet-takanaka/715890826', type: 'album',
     },
   ],
   '24329193': [ // Verdena — Italian releases Apple never licensed for `us`.
