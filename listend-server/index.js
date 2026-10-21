@@ -1918,6 +1918,7 @@ function withTrackSearchOverrides(q, results) {
 // exact searched name.
 const ARTIST_SEARCH_PINS = {
   thesound: '201473744',   // The Sound (post-punk, Adrian Borland)
+  elea: '1656811522',       // Ele A, the Italian rapper (Pixel, 26); Apple ranks a Puerto Rican act first on `us`
 };
 
 async function pinnedArtistFor(q) {
