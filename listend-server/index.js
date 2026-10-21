@@ -619,6 +619,33 @@ pinStorefront('es', [
   '1278656667', '1278656668', '1278656669', '1278656670', '1278656671', '1278656672',
   '1278656673', '1278656674',
 ]);
+// Ride — 4 EPs (1990)
+pinStorefront('gb', [
+  '1621584649',
+  '1621584653', '1621584658', '1621584940', '1621584943', '1621584946', '1621585206',
+  '1621585213', '1621585217', '1621585221', '1621585226', '1621585232', '1621585513',
+  '1621585517', '1621585521', '1621585528', '1621585529',
+]);
+// Ride — Nowhere (1990)
+pinStorefront('gb', [
+  '1621525281',
+  '1621525513', '1621525529', '1621525718', '1621525722', '1621525961', '1621526048',
+  '1621526054', '1621526063',
+]);
+// Ride — Going Blank Again (1992)
+pinStorefront('gb', [
+  '1621531296',
+  '1621531298', '1621531301', '1621531317', '1621531320', '1621531323', '1621531570',
+  '1621531574', '1621531657', '1621531665', '1621531668', '1621531670', '1621531680',
+  '1621531901', '1621531916',
+]);
+// Ride — Waves: Radio 1 Sessions 90-94 (2003)
+pinStorefront('gb', [
+  '884012274',
+  '884012296', '884012298', '884012299', '884012300', '884012301', '884012302',
+  '884012303', '884012304', '884012305', '884012306', '884012307', '884012308',
+  '884012309', '884012310', '884012311', '884012312', '884012313',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1054,6 +1081,22 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'loleymanuel::alalbaconalegria': {
     id: '1278656663', title: 'Al Alba con Alegría', artist: 'Lole y Manuel', year: 1992,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/9b/6b/65/9b6b65f6-fbcc-a262-2db4-2ac3f2caa4a6/5099703233421.jpg/500x500bb.jpg',
+  },
+  'ride::4eps': {
+    id: '1621584649', title: '4 EPs', artist: 'Ride', year: 1990,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/98/8d/17/988d17ff-5d27-5465-8aa4-54b2239e3a77/5055036255745_cover.jpg/500x500bb.jpg',
+  },
+  'ride::nowhere': {
+    id: '1621525281', title: 'Nowhere', artist: 'Ride', year: 1990,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/8a/ee/be/8aeebebb-cdc8-c004-2313-57e0403777d2/5055036255721_cover.jpg/500x500bb.jpg',
+  },
+  'ride::goingblankagain': {
+    id: '1621531296', title: 'Going Blank Again', artist: 'Ride', year: 1992,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/79/b0/b8/79b0b8f4-e81e-b743-87a8-317f35c90c72/5055036255738_cover.jpg/500x500bb.jpg',
+  },
+  'ride::wavesradio1sessions9094': {
+    id: '884012274', title: 'Waves: Radio 1 Sessions 90-94', artist: 'Ride', year: 2003,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/87/77/76/87777614-13f5-764a-91eb-2fb426208016/Ride_-_Waves_packshot.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -5193,6 +5236,32 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/9b/6b/65/9b6b65f6-fbcc-a262-2db4-2ac3f2caa4a6/5099703233421.jpg/500x500bb.jpg',
       year: 1992, isSingle: false, isCompilation: false, trackCount: 8,
       url: 'https://music.apple.com/es/album/al-alba-con-alegr%C3%ADa/1278656663', type: 'album',
+    },
+  ],
+  '496692': [ // Ride — not licensed for `us`
+    {
+      id: '1621584649', title: '4 EPs',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/98/8d/17/988d17ff-5d27-5465-8aa4-54b2239e3a77/5055036255745_cover.jpg/500x500bb.jpg',
+      year: 1990, isSingle: false, isCompilation: true, trackCount: 16,
+      url: 'https://music.apple.com/gb/album/4-eps/1621584649', type: 'album',
+    },
+    {
+      id: '1621525281', title: 'Nowhere',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/8a/ee/be/8aeebebb-cdc8-c004-2313-57e0403777d2/5055036255721_cover.jpg/500x500bb.jpg',
+      year: 1990, isSingle: false, isCompilation: false, trackCount: 8,
+      url: 'https://music.apple.com/gb/album/nowhere/1621525281', type: 'album',
+    },
+    {
+      id: '1621531296', title: 'Going Blank Again',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/79/b0/b8/79b0b8f4-e81e-b743-87a8-317f35c90c72/5055036255738_cover.jpg/500x500bb.jpg',
+      year: 1992, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/gb/album/going-blank-again/1621531296', type: 'album',
+    },
+    {
+      id: '884012274', title: 'Waves: Radio 1 Sessions 90-94',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/87/77/76/87777614-13f5-764a-91eb-2fb426208016/Ride_-_Waves_packshot.jpg/500x500bb.jpg',
+      year: 2003, isSingle: false, isCompilation: false, trackCount: 17,
+      url: 'https://music.apple.com/gb/album/waves-radio-1-sessions-90-94/884012274', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
