@@ -2,7 +2,7 @@
   "expo": {
     "name": "Listend",
     "slug": "Listend",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "listend",
@@ -11,9 +11,7 @@
     "updates": {
       "url": "https://u.expo.dev/a2196642-8c1a-430d-b72c-33980cceb721"
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.3",
     "splash": {
       "image": "./assets/images/splash-logo.png",
       "resizeMode": "contain",
