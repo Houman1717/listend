@@ -1253,6 +1253,33 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '6792960696', title: 'I think I spoke too soon', artist: 'Rachel Chinouriri', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/be/f0/af/bef0afae-6902-b97b-084a-1222eff76df7/1200214614201.jpg/500x500bb.jpg',
   },
+  // Released 2026-10-23. Yeat, girl in red and LISA weren't in Apple's search
+  // index yet; the other three were, but are pinned anyway so search can't
+  // pick a variant (e.g. Heavy Is The Crown's Video Bundle) over the album.
+  'yeat::luhleakyzvol1': {
+    id: '6825987374', title: 'Luh Leakyz Vol. 1', artist: 'Yeat & Lyfestyle Corporation', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/76/a8/aa/76a8aa34-3e82-73e5-fdd7-1844f35d31b6/26UM1IM37849.rgb.jpg/500x500bb.jpg',
+  },
+  'johnlegend::muse': {
+    id: '6808409890', title: 'Muse', artist: 'John Legend', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/e0/d8/e2/e0d8e283-e48d-2245-0107-08da6aa60d68/26UM1IM12676.rgb.jpg/500x500bb.jpg',
+  },
+  'girlinred::blueep': {
+    id: '6822855701', title: 'BLUE - EP', artist: 'girl in red', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/67/aa/47/67aa47f5-d394-8269-9571-5b464a367481/196874792438.jpg/500x500bb.jpg',
+  },
+  'andersonpaakcordae::heavyisthecrown': {
+    id: '6812869309', title: 'Heavy Is The Crown', artist: 'Anderson .Paak & Cordae', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/18/03/52/1803527d-769c-a4ec-1db3-14aeb9bc9fc6/199316778021_cover.jpg/500x500bb.jpg',
+  },
+  'lisa::pressplay': {
+    id: '6804002989', title: 'PRESS PLAY', artist: 'LISA', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/1d/de/67/1dde6726-f217-b447-46cd-94d5f9621797/196874712696.jpg/500x500bb.jpg',
+  },
+  'michaelkiwanuka::fudge': {
+    id: '1828246469', title: 'FUDGE', artist: 'Michael Kiwanuka', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8a/87/68/8a8768b3-d686-dac5-25da-fca1ea373114/25UMGIM95889.rgb.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],

@@ -3,6 +3,12 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Yeat',                   title: 'Luh Leakyz Vol. 1' },
+  { artist: 'John Legend',            title: 'Muse' },
+  { artist: 'girl in red',            title: 'BLUE - EP' },
+  { artist: 'Anderson .Paak & Cordae', title: 'Heavy Is The Crown' },
+  { artist: 'LISA',                   title: 'PRESS PLAY' },
+  { artist: 'Michael Kiwanuka',       title: 'FUDGE' },
   { artist: 'Fontaines D.C.',         title: 'Dopamine Chamber' },
   { artist: 'Ashe',                   title: 'The Girl Of Your Dreams' },
   { artist: 'The Avalanches',         title: 'No Bad Memories' },
