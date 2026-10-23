@@ -5284,6 +5284,7 @@ const ARTIST_ALBUM_OVERRIDES = {
       id: '884012274', title: 'Waves: Radio 1 Sessions 90-94',
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music4/v4/87/77/76/87777614-13f5-764a-91eb-2fb426208016/Ride_-_Waves_packshot.jpg/500x500bb.jpg',
       year: 2003, isSingle: false, isCompilation: false, trackCount: 17,
+      isLive: true,   // BBC Radio 1 sessions; LIVE_RE matches "session", not "Sessions"
       url: 'https://music.apple.com/gb/album/waves-radio-1-sessions-90-94/884012274', type: 'album',
     },
   ],
