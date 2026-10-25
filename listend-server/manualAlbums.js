@@ -1778,6 +1778,39 @@ const MANUAL_ALBUMS = [
       { number: 10, id: 'lst-little-richard-southern-child-t10', title: 'Puppy Dog Song', durationMs: 515000 },
     ],
   },
+  {
+    id: 'lst-entranas',
+    title: 'Entrañas',
+    artist: 'Arca',
+    artistId: '948498542',
+    year: 2016,
+    isMixtape: true,
+    // Her 2016 mixtape, a free SoundCloud release (one continuous 25:02 file)
+    // with a 14-track download; never on streaming. Tracklist and features
+    // from Arca's own SoundCloud description, matching MusicBrainz.
+    // Only the total (25:02) and Sin Rumbo (3:34, MusicBrainz) are known;
+    // the other timings are a fan YouTube split, scaled to fill the rest, so
+    // they're approximate while the album length is exact.
+    artworkUrl: 'https://coverartarchive.org/release/25bda7b5-27d5-4471-b3e6-2ae2e5a25f9a/front-500',
+    musicbrainzReleaseId: '25bda7b5-27d5-4471-b3e6-2ae2e5a25f9a',
+    trackCount: 14,
+    tracks: [
+      { number: 1, id: 'lst-entranas-t1', title: 'Pérdida', durationMs: 55255 },
+      { number: 2, id: 'lst-entranas-t2', title: 'Torero', durationMs: 81041 },
+      { number: 3, id: 'lst-entranas-t3', title: 'Culebra', durationMs: 83804 },
+      { number: 4, id: 'lst-entranas-t4', title: 'Vicar', durationMs: 84725 },
+      { number: 5, id: 'lst-entranas-t5', title: 'Cement Garden interlude', durationMs: 110511 },
+      { number: 6, id: 'lst-entranas-t6', title: 'Baby Doll (feat. Mica Levi)', durationMs: 139060 },
+      { number: 7, id: 'lst-entranas-t7', title: 'Lulled', durationMs: 102223 },
+      { number: 8, id: 'lst-entranas-t8', title: 'Think of (feat. Mica Levi & Massacooramaan)', durationMs: 145506 },
+      { number: 9, id: 'lst-entranas-t9', title: 'Clocked', durationMs: 37758 },
+      { number: 10, id: 'lst-entranas-t10', title: 'Pargo', durationMs: 89330 },
+      { number: 11, id: 'lst-entranas-t11', title: 'Turnt (feat. Total Freedom)', durationMs: 87488 },
+      { number: 12, id: 'lst-entranas-t12', title: 'Girasol', durationMs: 134455 },
+      { number: 13, id: 'lst-entranas-t13', title: 'Fount', durationMs: 137218 },
+      { number: 14, id: 'lst-entranas-t14', title: 'Sin Rumbo', durationMs: 214000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
