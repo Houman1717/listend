@@ -1419,6 +1419,20 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1625213430', title: 'Exodus (2013 Remaster)', artist: 'Bob Marley & The Wailers', year: 1977,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/23/fa/f8/23faf820-c4fa-2bf1-d672-846971f5cf5c/06UMGIM31355.rgb.jpg/500x500bb.jpg',
   },
+  'bobmarleythewailers::rastamanvibration': {
+    id: '1440858988', title: 'Rastaman Vibration (2013 Remaster)', artist: 'Bob Marley & The Wailers', year: 1976,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/eb/62/b5/eb62b5e3-2c34-bd7f-dc88-c509c3914068/06UMGIM07210.rgb.jpg/500x500bb.jpg',
+  },
+  // The 1970s decade list credits plain "Bob Marley" — Exodus landed on
+  // Exodus 40 and Rastaman Vibration on the One Love film soundtrack.
+  'bobmarley::exodus': {
+    id: '1625213430', title: 'Exodus (2013 Remaster)', artist: 'Bob Marley & The Wailers', year: 1977,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/23/fa/f8/23faf820-c4fa-2bf1-d672-846971f5cf5c/06UMGIM31355.rgb.jpg/500x500bb.jpg',
+  },
+  'bobmarley::rastamanvibration': {
+    id: '1440858988', title: 'Rastaman Vibration (2013 Remaster)', artist: 'Bob Marley & The Wailers', year: 1976,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/eb/62/b5/eb62b5e3-2c34-bd7f-dc88-c509c3914068/06UMGIM07210.rgb.jpg/500x500bb.jpg',
+  },
   'bobmarleythewailers::uprising': {
     id: '1740845714', title: 'Uprising', artist: 'Bob Marley & The Wailers', year: 1980,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/80/61/a5/8061a5cc-3372-7679-7396-e42e86041d21/15UMGIM05274.rgb.jpg/500x500bb.jpg',
@@ -7030,6 +7044,58 @@ app.get('/api/admin/fix-genre-album', requireAdmin, async (req, res) => {
     res.json({ ok: true, resolved });
   } catch (err) {
     console.error('[/api/admin/fix-genre-album]', err.message ?? err);
+    res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
+  }
+});
+
+// ── GET /api/admin/fix-decade-album ───────────────────────────────────────────
+// fix-genre-album for decade_albums: deletes the wrong row, clears the
+// poisoned canonical_albums entry and inserts the freshly-resolved album.
+// Usage: ?decade=1970s&badTitle=One%20Love%20(Original%20Motion%20Picture%20Soundtrack)&badArtist=Bob%20Marley%20%26%20The%20Wailers&artist=Bob%20Marley&title=Rastaman%20Vibration
+
+app.get('/api/admin/fix-decade-album', requireAdmin, async (req, res) => {
+  const { decade, badTitle, badArtist, artist, title } = req.query;
+  if (!decade || !badTitle || !badArtist || !artist || !title) {
+    return res.status(400).json({ error: 'decade, badTitle, badArtist, artist, title are all required' });
+  }
+
+  try {
+    const { error: delDecadeErr } = await supabase
+      .from('decade_albums')
+      .delete()
+      .eq('decade_label', decade)
+      .ilike('title', badTitle)
+      .ilike('artist', badArtist);
+    if (delDecadeErr) throw delDecadeErr;
+
+    const normalizedKey = `${normalizeKey(artist)}::${normalizeKey(title)}`;
+    const { error: delCanonicalErr } = await supabase
+      .from('canonical_albums')
+      .delete()
+      .eq('normalized_key', normalizedKey);
+    if (delCanonicalErr) throw delCanonicalErr;
+
+    const resolved = await resolveCanonicalAlbum({ title, artist });
+    if (!resolved?.id) {
+      return res.status(404).json({ error: 'Could not resolve the correct album in the AM catalog' });
+    }
+
+    const { error: insertErr } = await supabase.from('decade_albums').upsert({
+      decade_label: decade,
+      spotify_id:   resolved.id,
+      title:        resolved.title,
+      artist:       resolved.artist,
+      artwork_url:  resolved.artworkUrl,
+      year:         resolved.year,
+    }, { onConflict: 'decade_label,spotify_id', ignoreDuplicates: true });
+    if (insertErr) throw insertErr;
+
+    cacheClear('decades');
+    await deleteCache('decades');
+
+    res.json({ ok: true, resolved });
+  } catch (err) {
+    console.error('[/api/admin/fix-decade-album]', err.message ?? err);
     res.status(500).json({ ok: false, error: err.message ?? 'Failed' });
   }
 });
