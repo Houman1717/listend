@@ -91,6 +91,36 @@ function ReListenedAlbumRow({
   );
 }
 
+// ─── Expandable review ────────────────────────────────────────────────────────
+
+const REVIEW_COLLAPSED_LINES = 3;
+
+// A long review was cut at three lines with nothing to tap. Tapping the text
+// or "Read more" now shows all of it. An invisible uncapped copy measures the
+// real line count, so the toggle only appears when something is actually cut.
+function ExpandableReview({ review, color, toggleColor }: { review: string; color: string; toggleColor: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [truncated, setTruncated] = useState(false);
+  const text = `"${review}"`;
+
+  return (
+    <Pressable onPress={() => truncated && setExpanded(v => !v)} disabled={!truncated}>
+      <Text
+        style={[hm.entryReview, hm.entryReviewMeasure]}
+        onTextLayout={e => setTruncated(e.nativeEvent.lines.length > REVIEW_COLLAPSED_LINES)}
+        aria-hidden>
+        {text}
+      </Text>
+      <Text style={[hm.entryReview, { color }]} numberOfLines={expanded ? undefined : REVIEW_COLLAPSED_LINES}>
+        {text}
+      </Text>
+      {truncated && (
+        <Text style={[hm.entryReviewToggle, { color: toggleColor }]}>{expanded ? 'Show less' : 'Read more'}</Text>
+      )}
+    </Pressable>
+  );
+}
+
 // ─── History Modal ─────────────────────────────────────────────────────────────
 
 function HistoryModal({
@@ -169,9 +199,11 @@ function HistoryModal({
                     {formatDate(entry.listenedAt)}
                   </Text>
                   {entry.review ? (
-                    <Text style={[hm.entryReview, { color: isDark ? '#a07850' : '#7a5535' }]} numberOfLines={3}>
-                      "{entry.review}"
-                    </Text>
+                    <ExpandableReview
+                      review={entry.review}
+                      color={isDark ? '#a07850' : '#7a5535'}
+                      toggleColor={colors.tint}
+                    />
                   ) : null}
                 </View>
                 {entry.rating > 0 && (
@@ -213,6 +245,8 @@ const hm = StyleSheet.create({
   entryLabel: { fontSize: 14, fontWeight: '600' },
   entryDate: { fontSize: 12 },
   entryReview: { fontSize: 13, fontStyle: 'italic', marginTop: 4, lineHeight: 18 },
+  entryReviewMeasure: { position: 'absolute', left: 0, right: 0, opacity: 0 },
+  entryReviewToggle: { fontSize: 13, fontWeight: '500', marginTop: 4 },
   entryRating: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, alignSelf: 'flex-start', marginTop: 2 },
   entryRatingText: { color: '#D4A017', fontSize: 12, fontWeight: '700' },
   trashBtn: { padding: 4, alignSelf: 'flex-start', marginTop: 4 },
