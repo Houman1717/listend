@@ -863,7 +863,8 @@ export default function AlbumDetailScreen() {
   // song's, so Revenge (2017) opened as 2016 and hid everyone's logs. The
   // reviews endpoint answers with the year this album id was logged under.
   const [yearFromLogs, setYearFromLogs] = useState<number | null>(null);
-  const albumYear     = yearFromLogs ?? (params.year ? parseInt(params.year, 10) : (loggedAlbum?.year ?? 0));
+  const openedYear    = params.year ? parseInt(params.year, 10) : (loggedAlbum?.year ?? 0);
+  const albumYear     = yearFromLogs ?? openedYear;
   const albumArtwork  = params.artworkUrl ?? loggedAlbum?.artworkUrl ?? '';
   const albumCoverColor = loggedAlbum?.coverColor ?? '#2e2018';
 
@@ -1007,11 +1008,14 @@ export default function AlbumDetailScreen() {
   // this viewer can't see — they still count toward the average anonymously.
   // null = RPC not loaded/failed → fall back to the visible reviews.
   const [otherRatings, setOtherRatings] = useState<number[] | null>(null);
-  // False until the pooled ratings from /api/album-reviews arrive (or, if that
-  // fails, the exact-title RPC's). The RPC usually answers first but only
-  // counts this exact title, so showing it meant a remastered album flashed a
-  // smaller count for a few seconds before the pooled one replaced it.
+  // False until the pooled ratings from /api/album-ratings or -reviews arrive
+  // (or, if both fail, the exact-title RPC's). The RPC only counts this exact
+  // title, so showing it meant a remastered album flashed a smaller count
+  // before the pooled one replaced it.
   const [ratingsReady, setRatingsReady] = useState(false);
+  // False while the review list loads, so the empty state doesn't claim
+  // "No reviews yet" on an album that has hundreds.
+  const [reviewsLoaded, setReviewsLoaded] = useState(false);
   const [reviewLikesMap, setReviewLikesMap]     = useState<Map<string, LikeState>>(new Map());
   const pendingLikeToggles = useRef<Set<string>>(new Set());
   // True once /api/album-reviews answered — it already carries every like
@@ -1184,43 +1188,68 @@ export default function AlbumDetailScreen() {
   // ── Fetch community reviews for this album ─────────────────────────────────
   useEffect(() => {
     if (!albumId) return;
+    let cancelled = false;
     setRatingsReady(false);
+    setReviewsLoaded(false);
+    reviewsFromServer.current = false;
 
-    // Exact-title ratings — only used if the server request fails.
-    const rpcRatings = supabase
-      .rpc('album_community_ratings', { p_title: albumTitle, p_year: albumYear })
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('[album-detail] album_community_ratings error:', error.message);
-          return null;
-        }
-        return ((data ?? []) as any[]).map(Number).filter(n => n > 0);
+    const qs = new URLSearchParams({ title: albumTitle, year: String(openedYear) });
+    if (albumId) qs.set('albumId', albumId);
+    if (user?.id) {
+      qs.set('userId', user.id);
+      qs.set('ownTarget', `${user.id}_${myAlbumId}`);
+    }
+
+    async function getJson(path: string): Promise<any> {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const res = await fetch(`${API_URL}${path}?${qs}`, { signal: ctrl.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function applyServerYear(year: unknown) {
+      if (typeof year === 'number' && year > 0 && year !== openedYear) setYearFromLogs(year);
+    }
+
+    // The pooled ratings on their own, alongside the review list. They're a
+    // single query on the server, while the list waits on profile, comment
+    // and like joins — so the Ratings section no longer sits hidden for the
+    // seconds a cold list takes to build. Resolves false if it failed.
+    const ratingsLoad = getJson('/api/album-ratings')
+      .then(data => {
+        if (!Array.isArray(data?.ratings)) throw new Error('bad payload');
+        // Landing after the list, whose own ratings already went in.
+        if (cancelled || reviewsFromServer.current) return true;
+        applyServerYear(data.albumYear);
+        setOtherRatings(data.ratings.map(Number).filter((n: number) => n > 0));
+        setRatingsReady(true);
+        return true;
+      })
+      .catch(err => {
+        console.warn('[album-detail] album-ratings endpoint failed:', (err as Error).message);
+        return false;
       });
 
     // One cached server request with profiles, likes and comment counts already
     // joined. Building it here took 3–4 round trips over every log of the album
     // (Graduation: 738) before a single review could show.
     async function loadFromServer(): Promise<boolean> {
-      const qs = new URLSearchParams({ title: albumTitle, year: String(albumYear) });
-      if (albumId) qs.set('albumId', albumId);
-      if (user?.id) {
-        qs.set('userId', user.id);
-        qs.set('ownTarget', `${user.id}_${myAlbumId}`);
-      }
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
       try {
-        const res = await fetch(`${API_URL}/api/album-reviews?${qs}`, { signal: ctrl.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await getJson('/api/album-reviews');
         if (!Array.isArray(data?.reviews)) throw new Error('bad payload');
+        if (cancelled) return true;
 
         const likes = new Map<string, LikeState>();
         for (const r of data.reviews) likes.set(r.id, { liked: !!r.liked, count: r.likeCount ?? 0 });
         if (data.own?.id) likes.set(data.own.id, { liked: !!data.own.liked, count: data.own.likeCount ?? 0 });
 
         reviewsFromServer.current = true;
-        if (data.albumYear > 0 && data.albumYear !== albumYear) setYearFromLogs(data.albumYear);
+        applyServerYear(data.albumYear);
         setReviewLikesMap(likes);
         // Pooled across editions of the same recording (remasters, dated
         // mixes), and counting private accounts anonymously — so it replaces
@@ -1245,17 +1274,21 @@ export default function AlbumDetailScreen() {
       } catch (err) {
         console.warn('[album-detail] album-reviews endpoint failed, loading directly:', (err as Error).message);
         return false;
-      } finally {
-        clearTimeout(timer);
       }
     }
 
     async function loadCommunityReviews() {
-      reviewsFromServer.current = false;
       if (await loadFromServer()) return;
+      if (cancelled) return;
 
-      rpcRatings.then(r => {
-        setOtherRatings(r);
+      // Exact-title ratings, only if the pooled ones never came.
+      ratingsLoad.then(async ok => {
+        if (ok) return;
+        const { data, error } = await supabase
+          .rpc('album_community_ratings', { p_title: albumTitle, p_year: openedYear });
+        if (cancelled) return;
+        if (error) console.error('[album-detail] album_community_ratings error:', error.message);
+        setOtherRatings(error ? null : ((data ?? []) as any[]).map(Number).filter(n => n > 0));
         setRatingsReady(true);
       });
 
@@ -1270,11 +1303,11 @@ export default function AlbumDetailScreen() {
           .not('listened_at', 'is', null);
         // Accept exact year match OR entries where year wasn't stored (0/null) to
         // handle old logged albums that predate reliable year population.
-        if (albumYear > 0) q = q.or(`year.eq.${albumYear},year.is.null,year.eq.0`);
+        if (openedYear > 0) q = q.or(`year.eq.${openedYear},year.is.null,year.eq.0`);
         if (user?.id)      q = q.neq('user_id', user.id);
         return q.order('listened_at', { ascending: false }).range(from, to);
       }, 10);
-      if (!titleRows) return; // failed — keep what's shown
+      if (cancelled || !titleRows) return; // failed — keep what's shown
 
       // Deduplicate by user_id keeping most recent, then cross-check artist
       // to avoid false positives from albums with the same title.
@@ -1299,6 +1332,7 @@ export default function AlbumDetailScreen() {
           .range(from, to), 1),
         countReviewComments(targetIds),
       ]);
+      if (cancelled) return;
 
       const profileMap = new Map<string, { username: string; displayName: string | null; avatarUrl: string | null; isPro: boolean }>();
       for (const p of profiles ?? []) {
@@ -1325,8 +1359,12 @@ export default function AlbumDetailScreen() {
       }));
     }
 
-    loadCommunityReviews();
-  }, [albumTitle, albumYear, user?.id]);
+    loadCommunityReviews().finally(() => { if (!cancelled) setReviewsLoaded(true); });
+    return () => { cancelled = true; };
+    // openedYear, not albumYear: the server's year correction comes with lists
+    // already pooled under it, and re-running on it hid the ratings again
+    // while a second cold build ran under the corrected year.
+  }, [albumTitle, openedYear, user?.id]);
 
   // ── Fetch like state + sync counts into communityReviews ──────────────────
   useEffect(() => {
@@ -1981,11 +2019,13 @@ export default function AlbumDetailScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={[s.reviewsScroll, { alignItems: 'stretch' }]}
             style={s.reviewsScrollView}
-            ListEmptyComponent={
+            ListEmptyComponent={reviewsLoaded ? (
               <Text style={[s.emptyText, { color: mutedText, textAlign: 'left', paddingVertical: 8 }]}>
                 No reviews yet. Be the first!
               </Text>
-            }
+            ) : (
+              <ActivityIndicator size="small" color="#D4A017" style={{ paddingVertical: 8 }} />
+            )}
             renderItem={({ item }) => (
               <AlbumReviewCard
                 review={item}

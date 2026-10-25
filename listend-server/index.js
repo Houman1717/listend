@@ -1687,12 +1687,16 @@ async function fetchAllRows(buildQuery, pageSize = 1000, maxPages = 200) {
 // gateway rejects the request outright — Node surfaces that as a bare
 // "TypeError: fetch failed" (UND_ERR_HEADERS_OVERFLOW). 325 review target_ids
 // in one week was enough to 500 /api/home/this-week on every request. Chunks
-// run sequentially so a big list doesn't fan out into a burst of queries.
-async function fetchAllRowsIn(ids, buildQuery, chunkSize = 100) {
+// run sequentially so a big list doesn't fan out into a burst of queries —
+// or `concurrency` at a time, where someone is waiting on the answer.
+async function fetchAllRowsIn(ids, buildQuery, chunkSize = 100, concurrency = 1) {
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
   let rows = [];
-  for (let i = 0; i < ids.length; i += chunkSize) {
-    const chunk = ids.slice(i, i + chunkSize);
-    rows = rows.concat(await fetchAllRows((from, to) => buildQuery(chunk, from, to)));
+  for (let i = 0; i < chunks.length; i += concurrency) {
+    const batch = await Promise.all(chunks.slice(i, i + concurrency)
+      .map(chunk => fetchAllRows((from, to) => buildQuery(chunk, from, to))));
+    rows = rows.concat(...batch);
   }
   return rows;
 }
@@ -3699,34 +3703,58 @@ const ALBUM_REVIEWS_MAX_ENTRIES = 300;   // Graduation's list is ~250 KB
 // 150 review ids ≈ 8.5 KB of URL — well under the ~16 KB gateway limit, and
 // half the sequential round trips of the default 100.
 const ALBUM_REVIEWS_CHUNK = 150;
-const albumReviewsCache = new Map();     // key → { data, at }, oldest first
-const albumReviewsInflight = new Map();
+// Chunks in flight at once per lookup — Graduation's 784 reviewers were six
+// sequential round trips each for profiles, comments and likes.
+const ALBUM_REVIEWS_CONCURRENCY = 3;
+
+// key → data, fresh for a minute; up to half an hour old it's served at once
+// while a rebuild runs in the background. allowStale: false waits for fresh.
+function createAlbumCache(label) {
+  const entries = new Map();   // key → { data, at }, oldest first
+  const inflight = new Map();
+  return (key, compute, { allowStale = true } = {}) => {
+    const entry = entries.get(key);
+    const age = entry ? Date.now() - entry.at : Infinity;
+    if (age < ALBUM_REVIEWS_FRESH_MS) return Promise.resolve(entry.data);
+
+    let build = inflight.get(key);
+    if (!build) {
+      build = compute()
+        .then(data => {
+          entries.delete(key);
+          entries.set(key, { data, at: Date.now() });
+          while (entries.size > ALBUM_REVIEWS_MAX_ENTRIES) entries.delete(entries.keys().next().value);
+          return data;
+        })
+        .finally(() => inflight.delete(key));
+      inflight.set(key, build);
+    }
+    if (allowStale && age < ALBUM_REVIEWS_STALE_MS) {
+      build.catch(err => console.error(`[${label}] refresh failed:`, err.message ?? err));
+      return Promise.resolve(entry.data);
+    }
+    return build;
+  };
+}
+
+// Two stages, cached separately. The logs — one per person, with their
+// rating — are a single query and all the Ratings section needs, so
+// /api/album-ratings answers from them alone. The page's ratings used to wait
+// on the whole review list, whose profile / comment / like joins and the
+// caller's own likes more than doubled the time before any rating showed.
+// The review list is built on the same logs, shared while in flight.
+const albumLogsCache    = createAlbumCache('/api/album-ratings');
+const albumReviewsCache = createAlbumCache('/api/album-reviews');
+const albumCacheKey = (title, year, albumId) => `${sameRecordKey(title)}::${year}::${albumId}`;
+
+function loadAlbumLogs(title, year, albumId, opts) {
+  return albumLogsCache(albumCacheKey(title, year, albumId), () => computeAlbumLogs(title, year, albumId), opts);
+}
 
 function loadAlbumReviews(title, year, albumId) {
-  const key = `${sameRecordKey(title)}::${year}::${albumId}`;
-  const entry = albumReviewsCache.get(key);
-  const age = entry ? Date.now() - entry.at : Infinity;
-  if (age < ALBUM_REVIEWS_FRESH_MS) return Promise.resolve(entry.data);
-
-  let build = albumReviewsInflight.get(key);
-  if (!build) {
-    build = computeAlbumReviews(title, year, albumId)
-      .then(data => {
-        albumReviewsCache.delete(key);
-        albumReviewsCache.set(key, { data, at: Date.now() });
-        while (albumReviewsCache.size > ALBUM_REVIEWS_MAX_ENTRIES) {
-          albumReviewsCache.delete(albumReviewsCache.keys().next().value);
-        }
-        return data;
-      })
-      .finally(() => albumReviewsInflight.delete(key));
-    albumReviewsInflight.set(key, build);
-  }
-  if (age < ALBUM_REVIEWS_STALE_MS) {
-    build.catch(err => console.error('[/api/album-reviews] refresh failed:', err.message ?? err));
-    return Promise.resolve(entry.data);
-  }
-  return build;
+  return albumReviewsCache(albumCacheKey(title, year, albumId), async () =>
+    // Fresh logs — a list rebuilt from stale ones would lag a whole cycle.
+    buildAlbumReviews(await loadAlbumLogs(title, year, albumId, { allowStale: false })));
 }
 
 const sameRecordKey = title => foldDiacritics(stripContentTag(stripSameContentQualifier(title)));
@@ -3736,34 +3764,50 @@ const sameRecordKey = title => foldDiacritics(stripContentTag(stripSameContentQu
 // the year before), so Revenge opened as 2016 and hid all eleven 2017 logs.
 // Whatever year people logged this exact catalog id under counts too, and is
 // returned as `albumYear` so the page can correct itself.
-async function computeAlbumReviews(title, year, albumId) {
+async function computeAlbumLogs(title, year, albumId) {
   const core = stripContentTag(stripSameContentQualifier(title)) || title;
   const coreKey = sameRecordKey(core);
   // The plain title plus anything suffixed "(…" or "[…"; the exact match on
   // the stripped title below decides what really belongs.
-  // Years this exact album was logged under (by catalog id), most common first.
-  const idYearCounts = new Map();
-  if (albumId) {
-    const idRows = await fetchAllRows((from, to) => supabase
-      .from('user_albums').select('year').eq('spotify_id', albumId).not('listened_at', 'is', null).range(from, to));
-    for (const r of idRows) if (r.year > 0) idYearCounts.set(r.year, (idYearCounts.get(r.year) ?? 0) + 1);
-  }
-  const albumYear = mostCommonYear(idYearCounts) || year;
-  // Old logs without a year (0/null) always count, as they always have.
-  const years = year > 0 ? [...new Set([year, ...idYearCounts.keys()])] : null;
-
   const patterns = [core, `${core} (%`, `${core} [%`];
-  const batches = await Promise.all(patterns.map(pattern => fetchAllRows((from, to) => {
+  const titleRows = yearFilter => Promise.all(patterns.map(pattern => fetchAllRows((from, to) => {
     let q = supabase
       .from('user_albums')
-      .select('user_id, title, rating, review, listened_at, spotify_id')
+      .select('user_id, title, rating, review, listened_at, spotify_id, year')
       .ilike('title', pattern)
       .not('listened_at', 'is', null);
-    if (years) q = q.or(`year.in.(${years.join(',')}),year.is.null,year.eq.0`);
+    if (yearFilter) q = q.or(yearFilter);
     return q.order('listened_at', { ascending: false }).range(from, to);
-  })));
+  }))).then(batches => batches.flat());
+
+  // Years this exact album was logged under (by catalog id), looked up
+  // alongside the title query rather than before it — only a year the opened
+  // one didn't cover needs a second query. Old logs without a year (0/null)
+  // always count, as they always have.
+  const [idRows, openedYearRows] = await Promise.all([
+    albumId
+      ? fetchAllRows((from, to) => supabase
+          .from('user_albums').select('year').eq('spotify_id', albumId).not('listened_at', 'is', null).range(from, to))
+      : [],
+    titleRows(year > 0 ? `year.eq.${year},year.is.null,year.eq.0` : null),
+  ]);
+  const idYearCounts = new Map();
+  for (const r of idRows) if (r.year > 0) idYearCounts.set(r.year, (idYearCounts.get(r.year) ?? 0) + 1);
+  const albumYear = mostCommonYear(idYearCounts) || year;
+  // An opened year nobody logged this id under is the caller's guess (the
+  // song's year), so it's dropped — the same list the page used to get by
+  // re-requesting with the corrected year, which cost a second cold build.
+  const openedYearWrong = idYearCounts.size > 0 && !idYearCounts.has(year);
+  const years = new Set(idYearCounts.keys());
+  if (!openedYearWrong) years.add(year);
+  const extraYears = year > 0 ? [...years].filter(y => y !== year) : [];
+  const allRows = (extraYears.length
+    ? openedYearRows.concat(await titleRows(`year.in.(${extraYears.join(',')})`))
+    : openedYearRows
+  ).filter(r => year <= 0 || !(r.year > 0) || years.has(r.year));
+
   const byRow = new Map();
-  for (const r of batches.flat()) {
+  for (const r of allRows) {
     if (sameRecordKey(r.title) !== coreKey) continue;
     byRow.set(`${r.user_id}_${r.spotify_id}_${r.listened_at}`, r);
   }
@@ -3776,17 +3820,24 @@ async function computeAlbumReviews(title, year, albumId) {
     seen.add(r.user_id);
     rows.push(r);
   }
+  return { rows, albumYear };
+}
+
+async function buildAlbumReviews({ rows, albumYear }) {
   if (rows.length === 0) return { reviews: [], likers: {}, albumYear };
 
   const userIds   = rows.map(r => r.user_id);
   const targetIds = rows.map(r => `${r.user_id}_${r.spotify_id}`);
   const [profiles, comments, likes] = await Promise.all([
     fetchAllRowsIn(userIds, (chunk, from, to) => supabase
-      .from('profiles').select('id, username, display_name, avatar_url, is_pro, is_private').in('id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
+      .from('profiles').select('id, username, display_name, avatar_url, is_pro, is_private').in('id', chunk).range(from, to),
+      ALBUM_REVIEWS_CHUNK, ALBUM_REVIEWS_CONCURRENCY),
     fetchAllRowsIn(targetIds, (chunk, from, to) => supabase
-      .from('review_comments').select('review_id').in('review_id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
+      .from('review_comments').select('review_id').in('review_id', chunk).range(from, to),
+      ALBUM_REVIEWS_CHUNK, ALBUM_REVIEWS_CONCURRENCY),
     fetchAllRowsIn(targetIds, (chunk, from, to) => supabase
-      .from('likes').select('target_id, user_id').eq('target_type', 'review').in('target_id', chunk).range(from, to), ALBUM_REVIEWS_CHUNK),
+      .from('likes').select('target_id, user_id').eq('target_type', 'review').in('target_id', chunk).range(from, to),
+      ALBUM_REVIEWS_CHUNK, ALBUM_REVIEWS_CONCURRENCY),
   ]);
 
   const profileById = new Map(profiles.map(p => [p.id, p]));
@@ -3816,12 +3867,35 @@ async function computeAlbumReviews(title, year, albumId) {
   return { reviews, likers, albumYear };
 }
 
-app.get('/api/album-reviews', async (req, res) => {
+function albumQuery(req) {
   const title = typeof req.query.title === 'string' ? req.query.title.trim() : '';
   const year = Number.parseInt(req.query.year, 10) || 0;
   const albumId = typeof req.query.albumId === 'string' && /^[\w.-]{1,64}$/.test(req.query.albumId) ? req.query.albumId : '';
   const rawUserId = typeof req.query.userId === 'string' ? req.query.userId : '';
   const userId = /^[0-9a-f-]{36}$/i.test(rawUserId) ? rawUserId : null;
+  return { title, year, albumId, userId };
+}
+
+// ── GET /api/album-ratings ────────────────────────────────────────────────────
+// Just the pooled `ratings` and `albumYear` of /api/album-reviews (same
+// matching, caller left out), from the logs alone — the page shows its Ratings
+// section from this while the full review list is still being joined.
+app.get('/api/album-ratings', async (req, res) => {
+  const { title, year, albumId, userId } = albumQuery(req);
+  if (!title || title.length > 300) return res.status(400).json({ error: 'title required' });
+
+  try {
+    const { rows, albumYear } = await loadAlbumLogs(title, year, albumId);
+    const ratings = rows.filter(r => r.user_id !== userId && r.rating > 0).map(r => r.rating);
+    res.json({ ratings, albumYear: albumYear || null });
+  } catch (err) {
+    console.error('[/api/album-ratings]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/album-reviews', async (req, res) => {
+  const { title, year, albumId, userId } = albumQuery(req);
   // The caller's own review id (`{userId}_{albumId}`) — its like count is
   // returned separately, since the caller is left out of `reviews`.
   const ownTarget = userId && typeof req.query.ownTarget === 'string' && req.query.ownTarget.startsWith(`${userId}_`)
@@ -3830,29 +3904,30 @@ app.get('/api/album-reviews', async (req, res) => {
   if (!title || title.length > 300) return res.status(400).json({ error: 'title required' });
 
   try {
-    const base = await loadAlbumReviews(title, year, albumId);
-
-    // The caller's liked reviews, read fresh — a like they just made must not
-    // flip back for a minute because the shared list is cached.
-    const myLikes = new Set();
-    if (userId) {
-      const mine = await fetchAllRows((from, to) => supabase
-        .from('likes').select('target_id').eq('user_id', userId).eq('target_type', 'review').range(from, to));
-      for (const l of mine) myLikes.add(l.target_id);
-    }
+    // The caller's own reads run alongside the shared list rather than after
+    // it — in sequence they added half a second even to a cached album.
+    const [base, myLikes, following] = await Promise.all([
+      loadAlbumReviews(title, year, albumId),
+      // The caller's liked reviews, read fresh — a like they just made must
+      // not flip back for a minute because the shared list is cached.
+      userId
+        ? fetchAllRows((from, to) => supabase
+            .from('likes').select('target_id').eq('user_id', userId).eq('target_type', 'review').range(from, to))
+            .then(rows => new Set(rows.map(l => l.target_id)))
+        : new Set(),
+      // Whom the caller follows (accepted only — `follows` never holds
+      // pending), for private reviewers' reviews.
+      userId
+        ? fetchAllRows((from, to) => supabase
+            .from('follows').select('following_id').eq('follower_id', userId).range(from, to))
+            .then(rows => new Set(rows.map(f => f.following_id)))
+        : new Set(),
+    ]);
     const likeState = id => {
       const others = (base.likers[id] ?? []).filter(u => u !== userId).length;
       const liked = myLikes.has(id);
       return { likeCount: others + (liked ? 1 : 0), liked };
     };
-
-    // Whom the caller follows (accepted only — `follows` never holds pending).
-    const following = new Set();
-    if (userId && base.reviews.some(r => r.isPrivate)) {
-      const rows = await fetchAllRows((from, to) => supabase
-        .from('follows').select('following_id').eq('follower_id', userId).range(from, to));
-      for (const f of rows) following.add(f.following_id);
-    }
 
     const others = base.reviews.filter(r => r.userId !== userId);
     const reviews = others
