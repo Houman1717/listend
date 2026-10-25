@@ -1413,6 +1413,34 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1443215360', title: 'Russisch Roulette (Deluxe)', artist: 'Haftbefehl', year: 2014,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/eb/95/15/eb9515b2-1535-4e74-ea52-b5b4f12b3009/00602547098498.rgb.jpg/500x500bb.jpg',
   },
+  // Reggae genre list (2026-10-25). Apple's search ranks Legend above the
+  // studio albums, so plain Exodus and Uprising both resolved to it.
+  'bobmarleythewailers::exodus': {
+    id: '1625213430', title: 'Exodus (2013 Remaster)', artist: 'Bob Marley & The Wailers', year: 1977,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/23/fa/f8/23faf820-c4fa-2bf1-d672-846971f5cf5c/06UMGIM31355.rgb.jpg/500x500bb.jpg',
+  },
+  'bobmarleythewailers::uprising': {
+    id: '1740845714', title: 'Uprising', artist: 'Bob Marley & The Wailers', year: 1980,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/80/61/a5/8061a5cc-3372-7679-7396-e42e86041d21/15UMGIM05274.rgb.jpg/500x500bb.jpg',
+  },
+  // The album, not the 2022 Prince Jammy 12" mix single.
+  'wailingsouls::firehouserock': {
+    id: '383417721', title: 'Fire House Rock', artist: 'Wailing Souls', year: 1980,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/15/f7/91/15f791ad-8c25-d4f6-2fa5-e8155791bc9e/601811002162.jpg/500x500bb.jpg',
+  },
+  // Original-year editions, not a 1995 reissue / 2026 remaster / 30th anniversary.
+  'scientist::scientificdub': {
+    id: '327625871', title: 'Scientific Dub', artist: 'Scientist', year: 1981,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/05/c2/da/05c2dae0-3619-bbe1-85a1-38aeecb70446/mzi.qmbqxzyx.jpg/500x500bb.jpg',
+  },
+  'mightydiamonds::righttime': {
+    id: '1595645083', title: 'Right Time', artist: 'Mighty Diamonds', year: 1976,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/95/0c/37/950c37ac-89d2-2d17-5b6f-1c64090992bc/cover.jpg/500x500bb.jpg',
+  },
+  'culture::twosevensclash': {
+    id: '1565501418', title: 'Two Sevens Clash', artist: 'Culture', year: 1977,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/bc/f5/28/bcf528af-51bd-b61c-d940-e7a54ddca0fc/00016351440129_Cover.jpg/500x500bb.jpg',
+  },
 };
 
 // Albums Listend carries itself (manualAlbums.js) pin exactly like the
