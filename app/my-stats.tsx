@@ -2712,7 +2712,7 @@ export default function MyStatsScreen() {
 const GENRE_LABELS = [
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Reggaeton', 'Afrobeats',
   'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
-  'Country', 'Jazz', 'Classical', 'Blues', 'Folk / Singer-Songwriter',
+  'Country', 'Jazz', 'Classical', 'Blues', 'Folk / Singer-Songwriter', 'Reggae',
 ];
 
 const DECADE_LABELS = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];

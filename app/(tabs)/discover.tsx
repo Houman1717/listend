@@ -54,7 +54,7 @@ const DECADES = ['2020s', '2010s', '2000s', '1990s', '1980s', '1970s', '1960s', 
 const GENRES = [
   'Pop', 'Hip-Hop / Rap', 'R&B / Soul', 'Rock', 'Electronic',
   'Reggaeton', 'Indie / Alternative', 'Country', 'Metal',
-  'Afrobeats', 'Jazz', 'Folk / Singer-Songwriter', 'Classical', 'Blues',
+  'Afrobeats', 'Reggae', 'Jazz', 'Folk / Singer-Songwriter', 'Classical', 'Blues',
 ];
 
 const GENRE_DISPLAY_NAMES: Record<string, string> = {

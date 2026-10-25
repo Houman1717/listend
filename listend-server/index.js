@@ -1871,19 +1871,17 @@ app.get('/genres', async (req, res) => {
             const batch = albums.slice(i, i + 4);
             await Promise.all(batch.map(async ({ artist, title }) => {
               try {
-                const q    = encodeURIComponent(`${artist} ${title}`);
-                const data = await amFetch(`/catalog/us/search?term=${q}&types=albums&limit=1`);
-                const item = data.results?.albums?.data?.[0];
-                if (!item) return;
-                const artworkUrl = amArtwork(item.attributes?.artwork);
-                const year       = parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10);
+                // Same resolver as /api/admin/populate-genres — the top raw
+                // search hit is often a single or remix sharing the title.
+                const resolved = await resolveCanonicalAlbum({ title, artist });
+                if (!resolved?.id) return;
                 await supabase.from('genre_albums').upsert({
                   genre_label: genre,
-                  spotify_id:  item.id,
-                  title:       item.attributes?.name    ?? title,
-                  artist:      item.attributes?.artistName ?? artist,
-                  artwork_url: artworkUrl,
-                  year,
+                  spotify_id:  resolved.id,
+                  title:       resolved.title,
+                  artist:      resolved.artist,
+                  artwork_url: resolved.artworkUrl,
+                  year:        resolved.year,
                 }, { onConflict: 'genre_label,spotify_id', ignoreDuplicates: true });
               } catch (e) {
                 console.error(`[/genres] auto-seed error ${genre} — ${artist} ${title}:`, e.message);

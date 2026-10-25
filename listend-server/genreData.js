@@ -1,4 +1,4 @@
-// Hardcoded genre album lists — 12 genres × 48 albums each.
+// Hardcoded genre album lists — 48 albums per genre.
 // Used by /api/admin/populate-genres to seed the genre_albums table via AM search.
 
 const GENRE_ALBUMS = {
@@ -714,6 +714,60 @@ const GENRE_ALBUMS = {
     { artist: 'Angus & Julia Stone',  title: 'Down the Way' },
     { artist: 'First Aid Kit',        title: 'Stay Gold' },
     { artist: 'Iron & Wine',          title: 'The Creek Drank the Cradle' },
+  ],
+
+  // Artist/title strings follow Apple Music's own spelling where it differs
+  // from the common one (e.g. "King Tubbys", "Police & Thieves"), so the
+  // canonical resolver lands on the right record.
+  'Reggae': [
+    { artist: 'The Skatalites',             title: 'Ska Authentic, Vol. 1' },
+    { artist: 'The Wailers',                title: 'The Wailing Wailers' },
+    { artist: 'The Maytals',                title: 'The Sensational Maytals' },
+    { artist: 'The Paragons',               title: 'On the Beach with The Paragons' },
+    { artist: 'U-Roy',                      title: 'Version Galore' },
+    { artist: 'Jimmy Cliff',                title: 'The Harder They Come (Original Motion Picture Soundtrack)' },
+    { artist: 'Bob Marley & The Wailers',   title: 'Catch a Fire' },
+    { artist: 'Toots & The Maytals',        title: 'Funky Kingston' },
+    { artist: 'Big Youth',                  title: 'Screaming Target' },
+    { artist: 'The Upsetters',              title: 'Blackboard Jungle Dub' },
+    { artist: 'Bob Marley & The Wailers',   title: 'Natty Dread' },
+    { artist: 'Burning Spear',              title: 'Marcus Garvey' },
+    { artist: 'Peter Tosh',                 title: 'Legalize It' },
+    { artist: 'Bunny Wailer',               title: 'Blackheart Man' },
+    { artist: 'Mighty Diamonds',            title: 'Right Time' },
+    { artist: 'Augustus Pablo',             title: 'King Tubbys Meets Rockers Uptown' },
+    { artist: 'The Upsetters',              title: 'Super Ape' },
+    { artist: 'Max Romeo & The Upsetters',  title: 'War Ina Babylon' },
+    { artist: 'The Abyssinians',            title: 'Satta Massagana' },
+    { artist: 'The Heptones',               title: 'Party Time' },
+    { artist: 'Dennis Brown',               title: 'Visions of Dennis Brown' },
+    { artist: 'Horace Andy',                title: 'In the Light' },
+    { artist: 'The Congos',                 title: 'Heart of the Congos' },
+    { artist: 'Junior Murvin',              title: 'Police & Thieves' },
+    { artist: 'Culture',                    title: 'Two Sevens Clash' },
+    { artist: 'Bob Marley & The Wailers',   title: 'Exodus' },
+    { artist: 'Peter Tosh',                 title: 'Equal Rights' },
+    { artist: 'Steel Pulse',                title: 'Handsworth Revolution' },
+    { artist: 'Barrington Levy',            title: 'Englishman' },
+    { artist: 'Black Uhuru',                title: 'Sinsemilla' },
+    { artist: 'Wailing Souls',              title: 'Fire House Rock' },
+    { artist: 'Bob Marley & The Wailers',   title: 'Uprising' },
+    { artist: 'Black Uhuru',                title: 'Red' },
+    { artist: 'Scientist',                  title: 'Scientific Dub' },
+    { artist: 'Gregory Isaacs',             title: 'Night Nurse' },
+    { artist: 'Sister Nancy',               title: 'One Two' },
+    { artist: 'Yellowman',                  title: 'Mister Yellowman' },
+    { artist: 'Mad Professor',              title: 'Beyond the Realms of Dub' },
+    { artist: 'UB40',                       title: 'Labour of Love' },
+    { artist: 'Shabba Ranks',               title: 'As Raw as Ever' },
+    { artist: 'Buju Banton',                title: '\'Til Shiloh' },
+    { artist: 'Bounty Killer',              title: 'My Xperience' },
+    { artist: 'Beenie Man',                 title: 'Many Moods of Moses' },
+    { artist: 'Sean Paul',                  title: 'Dutty Rock (20th Anniversary)' },
+    { artist: 'Damian "Jr. Gong" Marley',   title: 'Welcome to Jamrock' },
+    { artist: 'Protoje',                    title: 'Ancient Future' },
+    { artist: 'Chronixx',                   title: 'Chronology' },
+    { artist: 'Mortimer',                   title: 'From Within' },
   ],
 };
 
