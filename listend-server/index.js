@@ -652,6 +652,24 @@ pinStorefront('jp', [
   '715891353', '715891429', '715891436', '715891439', '715891457', '715891461',
   '715891465', '715891469', '715891481', '715891512',
 ]);
+// The Opposites — Begin 20 (2007)
+pinStorefront('nl', [
+  '1442498983',
+  '1442498989', '1442498999', '1442499001', '1442499006', '1442499009', '1442499074',
+  '1442499079', '1442499082', '1442499085', '1442499088', '1442499092', '1442499096',
+  '1442499099', '1442499193', '1442499195', '1442499198', '1442499200', '1442499202',
+  '1442499204', '1442499208',
+]);
+// The Opposites — Succes / Ik Ben Twan (2010)
+pinStorefront('nl', [
+  '1443322400',
+  '1443322405', '1443322409', '1443322412', '1443322417', '1443322571', '1443322575',
+  '1443322579', '1443322581', '1443322584', '1443322587', '1443322588', '1443322591',
+  '1443322595', '1443322598', '1443322782', '1443322786', '1443322789', '1443322793',
+  '1443322799', '1443322805', '1443322871', '1443322877', '1443322882', '1443322886',
+  '1443322892', '1443322897', '1443322899', '1443322994', '1443322999', '1443323001',
+  '1443323006', '1443323009', '1443323013',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1119,6 +1137,21 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'littlerichard::littlerichardmeetsmasayoshitakanaka': {
     id: '715890826', title: 'Little Richard meet Takanaka', artist: 'Little Richard', year: 1992,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/4c/1b/a5/4c1ba518-cdb0-32ef-f9d6-40a9e5ccc6b1/00094631372353.jpg/500x500bb.jpg',
+  },
+  'theopposites::begin20': {
+    id: '1442498983', title: 'Begin 20', artist: 'The Opposites', year: 2007,
+    aliases: ['Begin Twintig'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/e5/ea/06/e5ea06e7-24ec-6a8a-dfb8-e01d9e6ec55e/00602517769250.rgb.jpg/500x500bb.jpg',
+  },
+  // Often written out as "Begin Twintig".
+  'theopposites::begintwintig': {
+    id: '1442498983', title: 'Begin 20', artist: 'The Opposites', year: 2007,
+    aliases: ['Begin Twintig'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/e5/ea/06/e5ea06e7-24ec-6a8a-dfb8-e01d9e6ec55e/00602517769250.rgb.jpg/500x500bb.jpg',
+  },
+  'theopposites::succesikbentwan': {
+    id: '1443322400', title: 'Succes / Ik Ben Twan', artist: 'The Opposites', year: 2010,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/20/d1/12/20d11244-0d36-f5db-fb22-ea266f79acbd/00602527365855.rgb.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -5330,6 +5363,20 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/4c/1b/a5/4c1ba518-cdb0-32ef-f9d6-40a9e5ccc6b1/00094631372353.jpg/500x500bb.jpg',
       year: 1992, isSingle: false, isCompilation: false, trackCount: 10,
       url: 'https://music.apple.com/jp/album/little-richard-meet-takanaka/715890826', type: 'album',
+    },
+  ],
+  '79237992': [ // The Opposites — not licensed for `us`
+    {
+      id: '1442498983', title: 'Begin 20',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/e5/ea/06/e5ea06e7-24ec-6a8a-dfb8-e01d9e6ec55e/00602517769250.rgb.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 20,
+      url: 'https://music.apple.com/nl/album/begin-20/1442498983', type: 'album',
+    },
+    {
+      id: '1443322400', title: 'Succes / Ik Ben Twan',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/20/d1/12/20d11244-0d36-f5db-fb22-ea266f79acbd/00602527365855.rgb.jpg/500x500bb.jpg',
+      year: 2010, isSingle: false, isCompilation: false, trackCount: 33,
+      url: 'https://music.apple.com/nl/album/succes-ik-ben-twan/1443322400', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
