@@ -1811,6 +1811,36 @@ const MANUAL_ALBUMS = [
       { number: 14, id: 'lst-entranas-t14', title: 'Sin Rumbo', durationMs: 214000 },
     ],
   },
+  {
+    id: 'lst-regional-at-best',
+    title: 'Regional at Best',
+    artist: 'twenty one pilots',
+    artistId: '349736311',
+    year: 2011,
+    // Self-released in 2011 and withdrawn when they signed to Fueled by Ramen
+    // (several songs were re-recorded for Vessel); not on Apple anywhere.
+    // The 14-track digital release: MusicBrainz and Deezer agree on every
+    // timing to the second.
+    artworkUrl: 'https://coverartarchive.org/release/f27accee-bacb-498c-8495-a6c498e2fbbb/front-500',
+    musicbrainzReleaseId: 'f27accee-bacb-498c-8495-a6c498e2fbbb',
+    trackCount: 14,
+    tracks: [
+      { number: 1, id: 'lst-regional-at-best-t1', title: 'Guns for Hands', durationMs: 277000 },
+      { number: 2, id: 'lst-regional-at-best-t2', title: 'Holding On to You', durationMs: 266000 },
+      { number: 3, id: 'lst-regional-at-best-t3', title: 'Ode to Sleep', durationMs: 313000 },
+      { number: 4, id: 'lst-regional-at-best-t4', title: 'Slowtown', durationMs: 297000 },
+      { number: 5, id: 'lst-regional-at-best-t5', title: 'Car Radio', durationMs: 289000 },
+      { number: 6, id: 'lst-regional-at-best-t6', title: 'Forest', durationMs: 251000 },
+      { number: 7, id: 'lst-regional-at-best-t7', title: 'Glowing Eyes', durationMs: 266000 },
+      { number: 8, id: 'lst-regional-at-best-t8', title: 'Kitchen Sink', durationMs: 334000 },
+      { number: 9, id: 'lst-regional-at-best-t9', title: 'Anathema', durationMs: 239000 },
+      { number: 10, id: 'lst-regional-at-best-t10', title: 'Lovely', durationMs: 260000 },
+      { number: 11, id: 'lst-regional-at-best-t11', title: 'Ruby', durationMs: 270000 },
+      { number: 12, id: 'lst-regional-at-best-t12', title: 'Trees', durationMs: 260000 },
+      { number: 13, id: 'lst-regional-at-best-t13', title: 'Be Concerned', durationMs: 248000 },
+      { number: 14, id: 'lst-regional-at-best-t14', title: 'Clear', durationMs: 218000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
