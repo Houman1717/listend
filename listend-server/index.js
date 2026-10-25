@@ -670,6 +670,16 @@ pinStorefront('nl', [
   '1443322892', '1443322897', '1443322899', '1443322994', '1443322999', '1443323001',
   '1443323006', '1443323009', '1443323013',
 ]);
+// Courteeners — Concrete Love (Deluxe Version) (2014)
+pinStorefront('gb', [
+  '890940637',
+  '890940687', '890940709', '890940720', '890940799', '890940800', '890940801',
+  '890940802', '890940808', '890940809', '890940811', '890940877', '890940879',
+  '890940881', '890940882', '890940894', '890940896', '890940897', '890940900',
+  '890940910', '890940928', '890940929', '890940933', '890940934', '890940966',
+  '890940971', '890940974', '890940978', '890940980', '890940987', '890941111',
+  '890941153', '890941155', '890941163', '890941181',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1152,6 +1162,15 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'theopposites::succesikbentwan': {
     id: '1443322400', title: 'Succes / Ik Ben Twan', artist: 'The Opposites', year: 2010,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/20/d1/12/20d11244-0d36-f5db-fb22-ea266f79acbd/00602527365855.rgb.jpg/500x500bb.jpg',
+  },
+  'courteeners::concretelovedeluxeversion': {
+    id: '890940637', title: 'Concrete Love (Deluxe Version)', artist: 'Courteeners', year: 2014,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/d5/b9/bc/d5b9bc0f-c024-03b9-9ae3-0243f1f1d67e/cover.jpg/500x500bb.jpg',
+  },
+  // Asked for by this name; Apple calls it the Deluxe Version.
+  'courteeners::concretelovedeluxeedition': {
+    id: '890940637', title: 'Concrete Love (Deluxe Version)', artist: 'Courteeners', year: 2014,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/d5/b9/bc/d5b9bc0f-c024-03b9-9ae3-0243f1f1d67e/cover.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -5377,6 +5396,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/20/d1/12/20d11244-0d36-f5db-fb22-ea266f79acbd/00602527365855.rgb.jpg/500x500bb.jpg',
       year: 2010, isSingle: false, isCompilation: false, trackCount: 33,
       url: 'https://music.apple.com/nl/album/succes-ik-ben-twan/1443322400', type: 'album',
+    },
+  ],
+  '582639038': [ // Courteeners — not licensed for `us`
+    {
+      id: '890940637', title: 'Concrete Love (Deluxe Version)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/d5/b9/bc/d5b9bc0f-c024-03b9-9ae3-0243f1f1d67e/cover.jpg/500x500bb.jpg',
+      year: 2014, isSingle: false, isCompilation: false, trackCount: 34,
+      url: 'https://music.apple.com/gb/album/concrete-love-deluxe-version/890940637', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
