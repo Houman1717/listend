@@ -1633,6 +1633,9 @@ for (const v of REQUIRED_VARS) {
   if (!process.env[v]) console.warn(`[startup] WARNING: env var ${v} is not set`);
   else console.log(`[startup] ${v}: set ✓`);
 }
+// Only the key's type, never its value: sb_secret = rotated key, eyJ = legacy JWT.
+console.log('[startup] SUPABASE_SERVICE_KEY type:',
+  process.env.SUPABASE_SERVICE_KEY?.startsWith('sb_secret_') ? 'sb_secret (new)' : 'legacy JWT (old)');
 
 // ── In-memory response cache ───────────────────────────────────────────────────
 

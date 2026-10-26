@@ -1,7 +1,9 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
-const privateKey = Buffer.from(process.env.APPLE_MUSIC_PRIVATE_KEY_B64, 'base64').toString('utf8');
+// APPLE_MUSIC_KEY_B64 is the rotated key (Oct 2026). The old name is only a
+// fallback: Railway kept serving a stale value under it after rotation.
+const privateKey = Buffer.from(process.env.APPLE_MUSIC_KEY_B64 || process.env.APPLE_MUSIC_PRIVATE_KEY_B64, 'base64').toString('utf8');
 const teamId = process.env.APPLE_TEAM_ID;
 const keyId = process.env.APPLE_KEY_ID;
 
