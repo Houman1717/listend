@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
 const privateKey = Buffer.from(process.env.APPLE_MUSIC_PRIVATE_KEY_B64, 'base64').toString('utf8');
@@ -11,10 +12,10 @@ let tokenExpiry = null;
 cachedToken = null;
 tokenExpiry = null;
 
+// A short hash identifies which .p8 is loaded without revealing it.
+console.log('[appleToken] key fingerprint:', crypto.createHash('sha256').update(privateKey).digest('hex').slice(0, 12), 'kid:', keyId, 'team:', teamId);
+
 function generateAppleToken() {
-  console.log('[appleToken] privateKey length:', privateKey.length);
-  console.log('[appleToken] privateKey first 20 chars:', privateKey.slice(0, 20));
-  console.log('[appleToken] privateKey last 20 chars:', privateKey.slice(-20));
   if (cachedToken && tokenExpiry > Date.now()) return cachedToken;
   cachedToken = jwt.sign({}, privateKey, {
     algorithm: 'ES256',
