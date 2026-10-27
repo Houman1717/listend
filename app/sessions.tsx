@@ -450,7 +450,7 @@ export default function SessionsScreen() {
                 )}
                 <Text style={[s.monthCardTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
                 <Text style={[s.monthCardArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
-                {((album.lastRating ?? album.rating) > 0 || album.isRelistened) && (
+                {((album.lastRating ?? album.rating) > 0 || !!(album.lastReview ?? album.review) || album.isRelistened) && (
                   <View style={{ marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                     {(album.lastRating ?? album.rating) > 0 && <VolumeBadge rating={album.lastRating ?? album.rating} isDark={colors.isDark} tint={colors.tint} />}
                     {!!(album.lastReview ?? album.review) && <FontAwesome name="quote-left" size={8} color={colors.tint} />}
