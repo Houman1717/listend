@@ -6,7 +6,7 @@ import type { BellPrefs } from '@/lib/friendActivity';
 const OPTIONS: { key: keyof BellPrefs; icon: React.ComponentProps<typeof FontAwesome>['name']; label: string; sub: string }[] = [
   { key: 'reviews', icon: 'pencil',     label: 'Reviews',      sub: 'When they write a review' },
   { key: 'ratings', icon: 'volume-up',  label: 'Ratings',      sub: 'When they rate an album' },
-  { key: 'listens', icon: 'headphones', label: 'Every listen', sub: 'Any album they log, rated or not' },
+  { key: 'listens', icon: 'headphones', label: 'Every listen', sub: 'Every album they log' },
 ];
 
 /**
