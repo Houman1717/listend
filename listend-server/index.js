@@ -7985,6 +7985,9 @@ app.post('/api/webhook/notification', async (req, res) => {
 
     const { user_id, type, actor_id, target_id, comment_id } = row;
     if (!user_id || !type || !actor_id) return res.json({ ok: true });
+    // /api/friend-activity sends its own push (with the album in it) right
+    // after writing these rows — pushing here too would double it.
+    if (type === 'friend_activity') return res.json({ ok: true });
 
     // Look up actor's display name
     const { data: actor } = await supabase
@@ -8094,15 +8097,30 @@ app.post('/api/friend-activity', [
       ? `${albumLabel}${score}\n“${review.length > 120 ? `${review.slice(0, 117).trimEnd()}…` : review}”`
       : `${albumLabel}${score}`;
 
-    const now  = Date.now();
-    const sendTo = recipients
+    const targetId  = `${actorId}_${spotify_id}`;
+    const recipientIds = recipients
       .map(r => (typeof r === 'string' ? r : r.friend_activity_recipients))
-      .filter(id => id && underFriendActivityCap(id, now));
+      .filter(Boolean);
+
+    // In the Notifications list for everyone, even past the hourly push cap.
+    // Before add-friend-activity-in-app.sql runs this insert fails on the type
+    // check — log it and still send the pushes.
+    const { error: rowsErr } = await supabase.from('notifications').insert(recipientIds.map(id => ({
+      user_id:   id,
+      type:      'friend_activity',
+      actor_id:  actorId,
+      target_id: targetId,
+      detail:    `${verb} ${album.title}${score}`,
+    })));
+    if (rowsErr) console.error('[friend-activity] notifications insert:', rowsErr.message);
+
+    const now  = Date.now();
+    const sendTo = recipientIds.filter(id => underFriendActivityCap(id, now));
 
     await Promise.allSettled(sendTo.map(id => sendPush(id, `${name} ${verb}`, pushBody, {
       type:     'friend_activity',
       actorId,
-      targetId: `${actorId}_${spotify_id}`,
+      targetId,
     })));
 
     res.json({ sent: sendTo.length });

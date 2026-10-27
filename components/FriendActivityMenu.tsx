@@ -56,7 +56,10 @@ export function FriendActivityMenu({
               value={prefs[o.key]}
               onValueChange={v => onToggle(o.key, v)}
               disabled={saving}
-              trackColor={{ false: colors.elevated, true: colors.tint }}
+              // `elevated` all but vanished on light cards — a 40% wash of the
+              // theme's subtext reads as "off" on every theme, light or dark.
+              trackColor={{ false: `${colors.subtext}66`, true: colors.tint }}
+              ios_backgroundColor={`${colors.subtext}66`}
               thumbColor="#fff"
             />
           </View>

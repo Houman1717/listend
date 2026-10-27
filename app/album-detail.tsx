@@ -1064,8 +1064,51 @@ export default function AlbumDetailScreen() {
     if (communityMatch) {
       autoOpenedRef.current = true;
       openReview(communityMatch, params.openComments === '1');
+      return;
     }
-  }, [params.reviewId, params.openComments, ownReview?.id, communityReviews, myProfileLoaded]);
+    // The shared review list is cached server-side (stale for up to half an
+    // hour), so a review written seconds before a friend-activity push isn't
+    // in it yet. Once the list has loaded without it, fetch that one review
+    // directly — RLS still hides it if the viewer isn't allowed to see it.
+    if (!reviewsLoaded) return;
+    const target = parseReviewTargetId(params.reviewId);
+    if (!target) return;
+    autoOpenedRef.current = true;
+    (async () => {
+      const [{ data: row }, { data: relisten }, { data: prof }] = await Promise.all([
+        supabase.from('user_albums')
+          .select('rating, review, listened_at')
+          .eq('user_id', target.userId).eq('spotify_id', target.spotifyId)
+          .maybeSingle(),
+        supabase.from('re_listens')
+          .select('rating, review, listened_at')
+          .eq('user_id', target.userId).eq('spotify_id', target.spotifyId)
+          .order('listened_at', { ascending: false }).limit(1)
+          .maybeSingle(),
+        supabase.from('profiles')
+          .select('username, display_name, avatar_url, is_pro')
+          .eq('id', target.userId)
+          .maybeSingle(),
+      ]);
+      // A re-listen's rating/review supersede the original, as everywhere else.
+      const latest = relisten ?? row;
+      if (!latest || (!latest.review && !(latest.rating > 0))) return;
+      openReview({
+        id:           params.reviewId!,
+        userId:       target.userId,
+        username:     prof?.username ?? target.userId,
+        displayName:  prof?.display_name ?? null,
+        avatarUrl:    prof?.avatar_url ?? null,
+        isPro:        !!prof?.is_pro,
+        rating:       latest.rating ?? 0,
+        text:         latest.review ?? undefined,
+        dateStr:      latest.listened_at ? formatLoggedDate(latest.listened_at) : undefined,
+        listenedAt:   latest.listened_at ?? undefined,
+        likeCount:    reviewLikesMap.get(params.reviewId!)?.count ?? 0,
+        commentCount: 0,
+      }, params.openComments === '1');
+    })();
+  }, [params.reviewId, params.openComments, ownReview?.id, communityReviews, myProfileLoaded, reviewsLoaded]);
 
   // All reviews including own — used for ratings average and preview.
   // Memoised along with the sorted lists below: a popular album has 700+

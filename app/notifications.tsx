@@ -26,7 +26,7 @@ import { DM_NOTIFICATION_TYPES_FILTER } from '@/lib/directMessages';
 
 type NotificationItem = {
   id: string;
-  type: 'follow' | 'follow_request' | 'follow_accepted' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'like_reply' | 'like_message' | 'comment' | 'comment_reply';
+  type: 'follow' | 'follow_request' | 'follow_accepted' | 'message' | 'like_review' | 'like_playlist' | 'like_comment' | 'like_reply' | 'like_message' | 'comment' | 'comment_reply' | 'friend_activity';
   read: boolean;
   createdAt: string;
   actorId: string;
@@ -35,6 +35,8 @@ type NotificationItem = {
   actorAvatarUrl: string | null;
   targetId: string | null;
   commentId: string | null;
+  /** Server-written line after the name, e.g. "reviewed Blonde · 9/10" (friend_activity). */
+  detail: string | null;
 };
 
 // ─── Row ──────────────────────────────────────────────────────────────────────
@@ -51,6 +53,7 @@ const NOTIF_META: Record<NotificationItem['type'], { body: string; iconName: str
   like_message:  { body: 'liked your message',       iconName: 'heart',     iconColor: '#D4A017' },
   comment:       { body: 'commented on your review', iconName: 'comment',  iconColor: '#D4A017' },
   comment_reply: { body: 'replied to your comment',  iconName: 'comment',  iconColor: '#D4A017' },
+  friend_activity: { body: 'logged an album',          iconName: 'music',    iconColor: '#D4A017' },
 };
 
 function NotifRow({
@@ -101,7 +104,7 @@ function NotifRow({
       <View style={n.info}>
         <Text style={[n.body, { color: colors.text }]} numberOfLines={2}>
           <Text style={n.actor}>{item.actorName}</Text>
-          {' '}{meta.body}
+          {' '}{item.detail ?? meta.body}
         </Text>
         <Text style={[n.date, { color: colors.subtext }]}>{date}</Text>
       </View>
@@ -169,13 +172,19 @@ export default function NotificationsScreen() {
     if (!user) return;
     setLoading(true);
 
-    const { data: rows, error } = await supabase
+    const fetchRows = (columns: string) => supabase
       .from('notifications')
-      .select('id, type, read, created_at, actor_id, target_id, comment_id')
+      .select(columns)
       .eq('user_id', user.id)
       .not('type', 'in', DM_NOTIFICATION_TYPES_FILTER)
       .order('created_at', { ascending: false })
       .limit(50);
+    let { data: rows, error } = await fetchRows('id, type, read, created_at, actor_id, target_id, comment_id, detail');
+    // 42703 = no `detail` column yet (add-friend-activity-in-app.sql not run) —
+    // never let that take the whole list down.
+    if (error?.code === '42703') {
+      ({ data: rows, error } = await fetchRows('id, type, read, created_at, actor_id, target_id, comment_id'));
+    }
 
     if (error) {
       console.error('[Notifications] fetch error:', error.message);
@@ -210,6 +219,7 @@ export default function NotificationsScreen() {
           actorAvatarUrl: prof?.avatar_url                     ?? null,
           targetId:       row.target_id                        ?? null,
           commentId:      row.comment_id                        ?? null,
+          detail:         row.detail                            ?? null,
         };
       }),
     );
@@ -262,6 +272,8 @@ export default function NotificationsScreen() {
             onPress={() => {
               if (item.type === 'message' || item.type === 'like_message') {
                 router.push({ pathname: '/dm-conversation', params: { userId: item.actorId } });
+              } else if (item.type === 'friend_activity' && item.targetId) {
+                navigateToReviewNotification(router, item.targetId, false);
               } else if ((item.type === 'like_review' || item.type === 'like_comment' || item.type === 'like_reply' || item.type === 'comment' || item.type === 'comment_reply') && item.targetId) {
                 navigateToReviewNotification(router, item.targetId, item.type !== 'like_review', item.commentId ?? undefined);
               } else if (item.type === 'like_playlist' && item.targetId) {
