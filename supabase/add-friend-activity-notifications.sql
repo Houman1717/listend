@@ -1,12 +1,9 @@
 -- ─── Friend activity notifications ──────────────────────────────────────────
 --
--- Push a follower when a friend logs, rates or reviews an album. Opt-in on
--- two levels, both off by default:
---
--- 1. profiles.notify_friend_activity — the master switch (Settings → Notifications).
--- 2. friend_activity_subscriptions — the bell on a friend's profile. Only
---    accepted followers can ring it, and unfollowing (or blocking, which
---    deletes the follows rows) removes it.
+-- Push a follower when a friend logs, rates or reviews an album. Opt-in per
+-- friend with the bell on their profile (friend_activity_subscriptions), off
+-- by default. Only accepted followers can ring it, and unfollowing (or
+-- blocking, which deletes the follows rows) removes it.
 --
 -- The Express server sends the pushes with the service role. It calls
 -- friend_activity_recipients() to get who to notify and
@@ -16,10 +13,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
-
--- ── Master switch ───────────────────────────────────────────────────────────
-ALTER TABLE profiles
-  ADD COLUMN IF NOT EXISTS notify_friend_activity boolean NOT NULL DEFAULT false;
 
 -- ── Bells ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS friend_activity_subscriptions (
@@ -112,7 +105,7 @@ AS $$
 $$;
 
 -- ── Who to notify ───────────────────────────────────────────────────────────
--- Bell rung + master switch on + still an accepted follower + no block either way.
+-- Bell rung + still an accepted follower + no block either way.
 CREATE OR REPLACE FUNCTION public.friend_activity_recipients(p_actor uuid)
 RETURNS SETOF uuid
 LANGUAGE sql
@@ -121,7 +114,6 @@ SET search_path = public
 AS $$
   SELECT s.subscriber_id
   FROM friend_activity_subscriptions s
-  JOIN profiles p ON p.id = s.subscriber_id AND p.notify_friend_activity
   WHERE s.target_id = p_actor
     AND EXISTS (
       SELECT 1 FROM follows f

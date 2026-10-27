@@ -36,7 +36,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import TopSongsCredits from '@/components/TopSongsCredits';
 import { LoggedAlbum } from '@/context/AlbumsContext';
-import { fetchFriendActivityBell, fetchFriendActivityEnabled, setFriendActivityBell, setFriendActivityEnabled } from '@/lib/friendActivity';
+import { fetchFriendActivityBell, setFriendActivityBell } from '@/lib/friendActivity';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -784,37 +784,11 @@ export default function UserProfileScreen() {
     const next = !bellOn;
     setBellLoading(true);
     setBellOn(next);
-    const ok = await setFriendActivityBell(currentUserId, viewedUserId, next);
-    if (!ok) {
+    if (!(await setFriendActivityBell(currentUserId, viewedUserId, next))) {
       setBellOn(!next);
-      setBellLoading(false);
       Alert.alert('Error', 'Could not update notifications. Please try again.');
-      return;
     }
     setBellLoading(false);
-    if (!next) return;
-
-    // The bell does nothing while the master switch is off — offer to flip it
-    // here instead of sending them hunting through Settings.
-    const enabled = await fetchFriendActivityEnabled(currentUserId);
-    if (enabled === false) {
-      const name = nameOrHandle(profile?.display_name, profile?.username, viewedUserId, 'this friend');
-      Alert.alert(
-        'Turn on friend activity?',
-        `You'll get a notification when ${name} logs, rates or reviews an album. Friend activity notifications are currently off in Settings.`,
-        [
-          { text: 'Not now', style: 'cancel' },
-          {
-            text: 'Turn On',
-            onPress: async () => {
-              if (!(await setFriendActivityEnabled(currentUserId, true))) {
-                Alert.alert('Error', 'Could not save setting. Please try again.');
-              }
-            },
-          },
-        ],
-      );
-    }
   }
 
   // ── Block / Unblock ──────────────────────────────────────────────────────────

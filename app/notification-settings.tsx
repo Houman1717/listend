@@ -2,7 +2,6 @@ import {
   StyleSheet,
   View,
   Text,
-  Switch,
   Pressable,
   ActivityIndicator,
   ScrollView,
@@ -19,7 +18,7 @@ import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { nameOrHandle } from '@/lib/userHandle';
-import { fetchFriendActivityEnabled, setFriendActivityBell, setFriendActivityEnabled } from '@/lib/friendActivity';
+import { setFriendActivityBell } from '@/lib/friendActivity';
 
 const ACCENT  = '#D4A017';
 
@@ -39,10 +38,8 @@ export default function NotificationSettingsScreen() {
   const { isPro, proTheme } = usePro();
   const proColors = (isPro && proTheme !== 'default') ? themeToColors(getProTheme(proTheme)) : null;
 
-  const [enabled,  setEnabled]  = useState(false);
   const [friends,  setFriends]  = useState<BelledFriend[]>([]);
   const [loading,  setLoading]  = useState(true);
-  const [saving,   setSaving]   = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
 
   const sepColor  = proColors ? proColors.border     : isDark ? '#2a1e14' : '#e8e8e8';
@@ -57,15 +54,11 @@ export default function NotificationSettingsScreen() {
     if (!user?.id) return;
     const uid = user.id;
     (async () => {
-      const [on, { data: subs, error: subsErr }] = await Promise.all([
-        fetchFriendActivityEnabled(uid),
-        supabase
-          .from('friend_activity_subscriptions')
-          .select('target_id')
-          .eq('subscriber_id', uid)
-          .order('created_at', { ascending: false }),
-      ]);
-      if (on != null) setEnabled(on);
+      const { data: subs, error: subsErr } = await supabase
+        .from('friend_activity_subscriptions')
+        .select('target_id')
+        .eq('subscriber_id', uid)
+        .order('created_at', { ascending: false });
       if (subsErr) {
         console.error('[NotificationSettings] bells load error:', subsErr.message);
       } else {
@@ -87,17 +80,6 @@ export default function NotificationSettingsScreen() {
       setLoading(false);
     })();
   }, [user?.id]));
-
-  async function toggleEnabled(value: boolean) {
-    if (!user?.id || saving) return;
-    setEnabled(value);
-    setSaving(true);
-    if (!(await setFriendActivityEnabled(user.id, value))) {
-      setEnabled(!value);
-      Alert.alert('Error', 'Could not save setting. Please try again.');
-    }
-    setSaving(false);
-  }
 
   async function removeBell(friend: BelledFriend) {
     if (!user?.id || removing) return;
@@ -127,34 +109,15 @@ export default function NotificationSettingsScreen() {
     }} />
     <ScrollView style={[s.container, { backgroundColor: sectionBg }]} contentContainerStyle={s.content}>
 
-      <Text style={[s.sectionLabel, { color: subColor }]}>FRIENDS</Text>
+      <Text style={[s.sectionLabel, { color: subColor }]}>FRIEND ACTIVITY</Text>
+      <Text style={[s.intro, { color: subColor }]}>
+        Tap the bell on a friend's profile to get notified when they log, rate or review an album.
+      </Text>
       <View style={[s.card, { backgroundColor: rowBg, borderColor: sepColor }]}>
-        <View style={s.row}>
-          <View style={s.rowLeft}>
-            <FontAwesome name="bell-o" size={16} color={accent} style={s.icon} />
-            <View style={s.rowText}>
-              <Text style={[s.rowTitle, { color: textColor }]}>Friend Activity</Text>
-              <Text style={[s.rowSub, { color: subColor }]}>
-                Get notified when friends you choose log, rate or review an album. Tap the bell on a friend's profile to add them.
-              </Text>
-            </View>
-          </View>
-          <Switch
-            value={enabled}
-            onValueChange={toggleEnabled}
-            disabled={saving}
-            trackColor={{ false: isDark ? '#3a2818' : '#d0d0d0', true: accent }}
-            thumbColor="#fff"
-          />
-        </View>
-      </View>
-
-      <Text style={[s.sectionLabel, { color: subColor }]}>NOTIFYING YOU ABOUT</Text>
-      <View style={[s.card, { backgroundColor: rowBg, borderColor: sepColor }, !enabled && { opacity: 0.5 }]}>
         {friends.length === 0 ? (
           <View style={s.row}>
             <Text style={[s.rowSub, { color: subColor, marginTop: 0 }]}>
-              No one yet. Open a friend's profile and tap the bell next to Following.
+              You're not getting friend activity from anyone yet.
             </Text>
           </View>
         ) : friends.map((f, i) => {
@@ -202,6 +165,7 @@ const s = StyleSheet.create({
     fontSize: 11, fontWeight: '700', textTransform: 'uppercase',
     letterSpacing: 1.2, marginBottom: 8, marginLeft: 4,
   },
+  intro: { fontSize: 13, lineHeight: 18, marginBottom: 12, marginLeft: 4, marginRight: 4 },
 
   card: {
     borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
@@ -213,9 +177,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     gap: 12,
   },
-  rowLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  icon: { width: 20, textAlign: 'center' },
-  rowText: { flex: 1 },
   rowTitle: { fontSize: 15, fontWeight: '500' },
   rowSub:   { fontSize: 12, marginTop: 2, lineHeight: 17 },
 

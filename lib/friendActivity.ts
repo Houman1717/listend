@@ -47,23 +47,3 @@ export async function setFriendActivityBell(userId: string, friendId: string, on
   if (error) console.error('[friendActivity] bell update error:', error.message);
   return !error;
 }
-
-/** The master switch in Settings → Notifications. null = couldn't tell. */
-export async function fetchFriendActivityEnabled(userId: string): Promise<boolean | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('notify_friend_activity')
-    .eq('id', userId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return !!data.notify_friend_activity;
-}
-
-export async function setFriendActivityEnabled(userId: string, on: boolean): Promise<boolean> {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ notify_friend_activity: on })
-    .eq('id', userId);
-  if (error) console.error('[friendActivity] master switch update error:', error.message);
-  return !error;
-}

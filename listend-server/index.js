@@ -8007,9 +8007,8 @@ app.post('/api/webhook/notification', async (req, res) => {
 
 // ── Friend activity pushes ────────────────────────────────────────────────────
 // The app calls this after a log, re-listen, or a first rating/review on an
-// already-logged album. Followers who rang the bell on the actor's profile and
-// turned on Settings → Notifications → Friend Activity get one push per album
-// (see supabase/add-friend-activity-notifications.sql).
+// already-logged album. Followers who rang the bell on the actor's profile get
+// one push per album (see supabase/add-friend-activity-notifications.sql).
 
 // Re-listening is a new listen, so it may push again after a day; anything
 // else on the same album stays quiet for a month.
