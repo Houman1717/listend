@@ -920,6 +920,19 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
 
           <View style={[ss.separator, { backgroundColor: sepColor }]} />
 
+          {/* Notifications */}
+          <Pressable
+            style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => { onClose(); router.push('/notification-settings'); }}>
+            <View style={ss.iconWrap}>
+              <FontAwesome name="bell-o" size={16} color={accentColor} />
+            </View>
+            <Text style={[ss.rowLabel, { color: labelColor }]}>Notifications</Text>
+            <FontAwesome name="chevron-right" size={13} color={segTextColor} />
+          </Pressable>
+
+          <View style={[ss.separator, { backgroundColor: sepColor }]} />
+
           {/* Listend Pro / Subscription */}
           <Pressable
             style={({ pressed }) => [ss.row, { opacity: pressed ? 0.6 : 1 }]}

@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/supabaseQuery';
+import { notifyFriendActivity } from '@/lib/friendActivity';
 import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { resolveCanonicalAlbum } from '@/lib/resolveCanonicalAlbum';
 
@@ -649,6 +650,8 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           setWantToListen(prevWantToListen);
           return false;
         }
+
+        notifyFriendActivity(resolved.id, 'relisten');
       }
 
       setPendingAlbum(null);
@@ -704,6 +707,8 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => {});
 
+      logWrite.then(saved => { if (saved) notifyFriendActivity(newAlbum.id, 'log'); });
+
       supabase
         .from('want_to_listen')
         .delete()
@@ -738,6 +743,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   // whatever's really in the DB with zero indication anything went wrong.
   async function updateReview(id: string, rating: number, review: string): Promise<boolean> {
     const prevAlbums = loggedAlbums;
+    const before = loggedAlbums.find(a => a.id === id);
     setLoggedAlbums((prev) =>
       prev.map((a) =>
         a.id === id ? { ...a, rating, review: review.trim() || undefined } : a
@@ -756,6 +762,10 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       setLoggedAlbums(prevAlbums);
       return false;
     }
+    // Only a first rating or first review is news to friends — not typo fixes.
+    const firstRating = !(before?.rating) && rating > 0;
+    const firstReview = !before?.review && !!review.trim();
+    if (firstRating || firstReview) notifyFriendActivity(id, 'update');
     return true;
   }
 

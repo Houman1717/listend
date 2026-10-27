@@ -8005,6 +8005,107 @@ app.post('/api/webhook/notification', async (req, res) => {
   }
 });
 
+// ── Friend activity pushes ────────────────────────────────────────────────────
+// The app calls this after a log, re-listen, or a first rating/review on an
+// already-logged album. Followers who rang the bell on the actor's profile and
+// turned on Settings → Notifications → Friend Activity get one push per album
+// (see supabase/add-friend-activity-notifications.sql).
+
+// Re-listening is a new listen, so it may push again after a day; anything
+// else on the same album stays quiet for a month.
+const FRIEND_ACTIVITY_REPEAT_AFTER = { log: '30 days', update: '30 days', relisten: '1 day' };
+const FRIEND_ACTIVITY_MAX_PER_HOUR = 10;   // per recipient, across all friends
+const friendActivitySent = new Map();      // recipientId → send timestamps (ms)
+
+function underFriendActivityCap(recipientId, now) {
+  const recent = (friendActivitySent.get(recipientId) ?? []).filter(t => now - t < 60 * 60 * 1000);
+  if (recent.length >= FRIEND_ACTIVITY_MAX_PER_HOUR) {
+    friendActivitySent.set(recipientId, recent);
+    return false;
+  }
+  recent.push(now);
+  friendActivitySent.set(recipientId, recent);
+  return true;
+}
+
+app.post('/api/friend-activity', [
+  requireAuth,
+  body('spotify_id').trim().notEmpty().isLength({ max: 100 }),
+  body('event').isIn(['log', 'update', 'relisten']),
+  validate,
+], async (req, res) => {
+  const actorId = req.user.id;
+  const { spotify_id, event } = req.body;
+
+  try {
+    // Read the saved row rather than trusting the client for what to announce.
+    const { data: album } = await supabase
+      .from('user_albums')
+      .select('title, artist, rating, review')
+      .eq('user_id', actorId)
+      .eq('spotify_id', spotify_id)
+      .maybeSingle();
+    if (!album?.title) return res.json({ sent: 0 });
+
+    let { rating, review } = album;
+    if (event === 'relisten') {
+      const { data: latest } = await supabase
+        .from('re_listens')
+        .select('rating, review')
+        .eq('user_id', actorId)
+        .eq('spotify_id', spotify_id)
+        .order('listened_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!latest) return res.json({ sent: 0 });
+      ({ rating, review } = latest);
+    }
+
+    const { data: recipients, error: recErr } = await supabase
+      .rpc('friend_activity_recipients', { p_actor: actorId });
+    if (recErr) throw recErr;
+    if (!recipients?.length) return res.json({ sent: 0 });
+
+    const { data: claimed, error: claimErr } = await supabase.rpc('claim_friend_activity_push', {
+      p_actor:        actorId,
+      p_spotify_id:   spotify_id,
+      p_repeat_after: FRIEND_ACTIVITY_REPEAT_AFTER[event],
+    });
+    if (claimErr) throw claimErr;
+    if (!claimed) return res.json({ sent: 0 });
+
+    const { data: actor } = await supabase
+      .from('profiles')
+      .select('display_name, username')
+      .eq('id', actorId)
+      .single();
+    const name = actor?.display_name || actor?.username || 'A friend';
+
+    const albumLabel = `${album.title} by ${album.artist}`;
+    const score      = rating > 0 ? ` · ${rating}/10` : '';
+    const verb       = review ? 'reviewed' : rating > 0 ? 'rated' : event === 'relisten' ? 're-listened to' : 'listened to';
+    const pushBody   = review
+      ? `${albumLabel}${score}\n“${review.length > 120 ? `${review.slice(0, 117).trimEnd()}…` : review}”`
+      : `${albumLabel}${score}`;
+
+    const now  = Date.now();
+    const sendTo = recipients
+      .map(r => (typeof r === 'string' ? r : r.friend_activity_recipients))
+      .filter(id => id && underFriendActivityCap(id, now));
+
+    await Promise.allSettled(sendTo.map(id => sendPush(id, `${name} ${verb}`, pushBody, {
+      type:     'friend_activity',
+      actorId,
+      targetId: `${actorId}_${spotify_id}`,
+    })));
+
+    res.json({ sent: sendTo.length });
+  } catch (err) {
+    console.error('[friend-activity]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

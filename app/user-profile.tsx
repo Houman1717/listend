@@ -36,6 +36,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import TopSongsCredits from '@/components/TopSongsCredits';
 import { LoggedAlbum } from '@/context/AlbumsContext';
+import { fetchFriendActivityBell, fetchFriendActivityEnabled, setFriendActivityBell, setFriendActivityEnabled } from '@/lib/friendActivity';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -494,6 +495,9 @@ export default function UserProfileScreen() {
   const [isRequested,    setIsRequested]    = useState(false);
   const [isMutual,       setIsMutual]       = useState(false);
   const [followLoading,  setFollowLoading]  = useState(false);
+  // Bell = push me when they log/rate/review. null = unknown, button hidden.
+  const [bellOn,         setBellOn]         = useState<boolean | null>(null);
+  const [bellLoading,    setBellLoading]    = useState(false);
   // null = unknown (never loaded / load failed) → rendered as "—", never as 0.
   const [followersCount, setFollowersCount] = useState<number | null>(null);
   const [followingCount, setFollowingCount] = useState<number | null>(null);
@@ -579,6 +583,9 @@ export default function UserProfileScreen() {
             .single();
           const currentFollowsViewed = !!outgoing && !outErr;
           setIsFollowing(currentFollowsViewed);
+          setBellOn(null);
+          // Not awaited — the bell is a small extra, it shouldn't hold up the profile.
+          if (currentFollowsViewed) fetchFriendActivityBell(currentUserId, viewedUserId).then(setBellOn);
 
           if (currentFollowsViewed) {
             setIsRequested(false);
@@ -739,6 +746,7 @@ export default function UserProfileScreen() {
       if (!error) {
         setIsFollowing(false);
         setIsMutual(false);
+        setBellOn(null);   // the unfollow trigger removes the bell row too
         // n === null means the count never loaded — leave it unknown rather
         // than inventing a number from this one action.
         setFollowersCount(n => (n == null ? null : Math.max(0, n - 1)));
@@ -755,6 +763,7 @@ export default function UserProfileScreen() {
         setIsRequested(true);
       } else {
         setIsFollowing(true);
+        setBellOn(false);
         setFollowersCount(n => (n == null ? null : n + 1));
         const { data: incoming } = await supabase
           .from('follows')
@@ -766,6 +775,46 @@ export default function UserProfileScreen() {
     }
 
     setFollowLoading(false);
+  }
+
+  // ── Friend activity bell ─────────────────────────────────────────────────────
+  async function toggleBell() {
+    const currentUserId = user?.id;
+    if (!currentUserId || !viewedUserId || bellOn == null || bellLoading) return;
+    const next = !bellOn;
+    setBellLoading(true);
+    setBellOn(next);
+    const ok = await setFriendActivityBell(currentUserId, viewedUserId, next);
+    if (!ok) {
+      setBellOn(!next);
+      setBellLoading(false);
+      Alert.alert('Error', 'Could not update notifications. Please try again.');
+      return;
+    }
+    setBellLoading(false);
+    if (!next) return;
+
+    // The bell does nothing while the master switch is off — offer to flip it
+    // here instead of sending them hunting through Settings.
+    const enabled = await fetchFriendActivityEnabled(currentUserId);
+    if (enabled === false) {
+      const name = nameOrHandle(profile?.display_name, profile?.username, viewedUserId, 'this friend');
+      Alert.alert(
+        'Turn on friend activity?',
+        `You'll get a notification when ${name} logs, rates or reviews an album. Friend activity notifications are currently off in Settings.`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Turn On',
+            onPress: async () => {
+              if (!(await setFriendActivityEnabled(currentUserId, true))) {
+                Alert.alert('Error', 'Could not save setting. Please try again.');
+              }
+            },
+          },
+        ],
+      );
+    }
   }
 
   // ── Block / Unblock ──────────────────────────────────────────────────────────
@@ -817,6 +866,7 @@ export default function UserProfileScreen() {
     if (!error) {
       setIsBlockedByMe(true);
       setIsFollowing(false);
+      setBellOn(null);
       setIsRequested(false);
       setIsMutual(false);
     } else {
@@ -1037,6 +1087,18 @@ export default function UserProfileScreen() {
               {isFollowing ? 'Following' : isRequested ? 'Requested' : 'Follow'}
             </Text>
           </Pressable>
+
+          {isFollowing && bellOn != null && (
+            <Pressable
+              style={({ pressed }) => [s.bellBtn, { borderColor: profileAccent, opacity: pressed || bellLoading ? 0.7 : 1 }, bellOn && { backgroundColor: profileAccent }]}
+              onPress={toggleBell}
+              disabled={bellLoading}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={bellOn ? 'Turn off activity notifications' : 'Turn on activity notifications'}>
+              <FontAwesome name={bellOn ? 'bell' : 'bell-o'} size={15} color={bellOn ? '#fff' : profileAccent} />
+            </Pressable>
+          )}
 
           {isMutual && profile.allow_dms && (
             <Pressable
@@ -1408,6 +1470,17 @@ const s = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   messageBtnText: { fontSize: 14, fontWeight: '700' },
+
+  // Friend activity bell — same height as the Follow/Message pills
+  bellBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
 
   // Stats
   statsRow: {

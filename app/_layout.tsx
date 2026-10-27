@@ -244,6 +244,8 @@ function AuthGate() {
         router.push('/notifications');
       } else if ((data.type === 'like_review' || data.type === 'like_comment' || data.type === 'like_reply' || data.type === 'comment' || data.type === 'comment_reply') && data.targetId) {
         navigateToReviewNotification(router, data.targetId, data.type !== 'like_review', data.commentId ?? undefined);
+      } else if (data.type === 'friend_activity' && data.targetId) {
+        navigateToReviewNotification(router, data.targetId, false);
       } else if (data.type === 'like_playlist' && data.targetId) {
         if ((data.targetId as string).startsWith('featured:')) {
           router.push({ pathname: '/discover-featured-playlist', params: { id: (data.targetId as string).replace('featured:', '') } } as any);
@@ -395,6 +397,7 @@ function ThemedApp() {
           <Stack.Screen name="discover-featured-playlist" options={{ headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="liked-featured-playlists" options={{ title: 'Liked Playlists', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="privacy-settings" options={{ title: 'Privacy', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="notification-settings" options={{ title: 'Notifications', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="blocked-users" options={{ title: 'Blocked Users', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="pro-settings" options={{ title: 'Listend Pro', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="profile-theme" options={{ title: 'Profile Theme', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
