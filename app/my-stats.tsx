@@ -24,6 +24,7 @@ import { libraryMatcher } from '@/lib/albumMatch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MAIN_GENRES } from '@/lib/genres';
 import { StatsMilestones } from '@/components/StatsMilestones';
+import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 
 // Album titles per `.in('title', …)` request for community averages — keeps URLs short.
 const COMMUNITY_TITLE_CHUNK = 80;
@@ -227,23 +228,50 @@ const rm = StyleSheet.create({
 
 type RankedItem = { key: string; label: string; value: string; imageUrl?: string; onPress: () => void };
 
-function RankedListModal({ title, items, showImages, onClose, themeColors }: {
+// Lowercased, accents stripped, so "beyonce" finds Beyoncé.
+function foldForSearch(s: string) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function RankedListModal({ title, items, showImages, searchPlaceholder, onClose, themeColors }: {
   title: string | null;
   items: RankedItem[];
   showImages: boolean;
+  /** Shows a search field that filters the list by label. */
+  searchPlaceholder?: string;
   onClose: () => void;
   themeColors?: ModalColors;
 }) {
   const insets = useSafeAreaInsets();
+  const androidKeyboard = useAndroidKeyboardHeight();
   const bg     = themeColors?.background ?? '#161616';
   const txt    = themeColors?.text       ?? TEXT;
   const sub    = themeColors?.subtext    ?? SUBTEXT;
   const border = themeColors?.border     ?? BORDER;
+  const surface = themeColors?.surface   ?? border;
+
+  const [query, setQuery] = useState('');
+  // A new list (or reopening the sheet) starts unfiltered.
+  useEffect(() => { setQuery(''); }, [title]);
+
+  // Rows keep their rank in the full list, so a match still says where that
+  // artist stands overall.
+  const ranked = useMemo(() => items.map((item, i) => ({ item, rank: i + 1 })), [items]);
+  const needle = foldForSearch(query.trim());
+  const visible = needle ? ranked.filter(r => foldForSearch(r.item.label).includes(needle)) : ranked;
+
+  // Android never resizes the window for the keyboard (edge-to-edge), so lift
+  // the sheet by the keyboard plus the nav bar it's measured from.
+  const bottomPad = androidKeyboard > 0
+    ? androidKeyboard + insets.bottom + 8
+    : Math.max(insets.bottom + 16, 32);
+
   return (
     <Modal visible={title !== null} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={rm.overlay}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={rm.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[rm.sheet, { backgroundColor: bg, borderTopColor: border, paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
+        {/* A fixed height when searchable, so the sheet doesn't jump as matches narrow. */}
+        <View style={[rm.sheet, searchPlaceholder ? { height: '85%' } : null, { backgroundColor: bg, borderTopColor: border, paddingBottom: bottomPad }]}>
           <View style={[rm.handle, { backgroundColor: border }]} />
           <View style={rm.header}>
             <Text style={[rm.title, { color: txt, flex: 1, marginRight: 12 }]}>{title}</Text>
@@ -251,15 +279,40 @@ function RankedListModal({ title, items, showImages, onClose, themeColors }: {
               <FontAwesome name="times" size={16} color={sub} />
             </Pressable>
           </View>
+          {searchPlaceholder ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 8, backgroundColor: surface, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: border, paddingHorizontal: 12 }}>
+              <FontAwesome name="search" size={14} color={sub} />
+              <TextInput
+                style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 10, color: txt, fontSize: 15 }}
+                placeholder={searchPlaceholder}
+                placeholderTextColor={sub}
+                value={query}
+                onChangeText={setQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {query.length > 0 && (
+                <Pressable onPress={() => setQuery('')} hitSlop={10} style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+                  <FontAwesome name="times-circle" size={16} color={sub} />
+                </Pressable>
+              )}
+            </View>
+          ) : null}
           <FlatList
-            data={items}
-            keyExtractor={item => item.key}
+            data={visible}
+            keyExtractor={r => r.item.key}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
             ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}
-            renderItem={({ item, index }) => (
-              <Pressable onPress={item.onPress} style={({ pressed }) => [rk.row, { opacity: pressed ? 0.6 : 1 }]}>
-                <Text style={[rk.rank, { color: sub }]}>{index + 1}</Text>
+            ListEmptyComponent={needle ? (
+              <Text style={{ color: sub, fontSize: 14, textAlign: 'center', paddingVertical: 24 }}>No artists match “{query.trim()}”</Text>
+            ) : null}
+            renderItem={({ item: { item, rank } }) => (
+              <Pressable onPress={() => { Keyboard.dismiss(); item.onPress(); }} style={({ pressed }) => [rk.row, { opacity: pressed ? 0.6 : 1 }]}>
+                <Text style={[rk.rank, { color: sub }]}>{rank}</Text>
                 {showImages && (item.imageUrl ? (
                   <ExpoImage source={{ uri: item.imageUrl }} style={rk.avatar} contentFit="cover" cachePolicy="disk" />
                 ) : (
@@ -274,7 +327,7 @@ function RankedListModal({ title, items, showImages, onClose, themeColors }: {
             )}
           />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1910,6 +1963,7 @@ export default function MyStatsScreen() {
             : null}
         items={rankedModal === 'artists' ? rankedArtistItems : rankedModal === 'genres' ? rankedGenreItems : []}
         showImages={rankedModal === 'artists'}
+        searchPlaceholder={rankedModal === 'artists' ? 'Search artists' : undefined}
         onClose={() => setRankedModal(null)}
         themeColors={colors}
       />
