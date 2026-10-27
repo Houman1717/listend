@@ -36,7 +36,9 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import TopSongsCredits from '@/components/TopSongsCredits';
 import { LoggedAlbum } from '@/context/AlbumsContext';
-import { fetchFriendActivityBell, setFriendActivityBell } from '@/lib/friendActivity';
+import { fetchFriendActivityBell, setFriendActivityBell, bellIsOn, BELL_OFF, type BellPrefs } from '@/lib/friendActivity';
+import { FriendActivityMenu } from '@/components/FriendActivityMenu';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -448,6 +450,7 @@ export default function UserProfileScreen() {
   const { user }       = useAuth();
   const navigation     = useNavigation();
   const router         = useRouter();
+  const headerHeight   = useHeaderHeight();
 
   const isOwnProfile = !!user?.id && user.id === viewedUserId;
 
@@ -495,9 +498,11 @@ export default function UserProfileScreen() {
   const [isRequested,    setIsRequested]    = useState(false);
   const [isMutual,       setIsMutual]       = useState(false);
   const [followLoading,  setFollowLoading]  = useState(false);
-  // Bell = push me when they log/rate/review. null = unknown, button hidden.
-  const [bellOn,         setBellOn]         = useState<boolean | null>(null);
-  const [bellLoading,    setBellLoading]    = useState(false);
+  // Bell = push me when they log/rate/review, per the menu's options.
+  // null = unknown (not following / load failed), bell hidden.
+  const [bellPrefs,      setBellPrefs]      = useState<BellPrefs | null>(null);
+  const [bellSaving,     setBellSaving]     = useState(false);
+  const [bellMenuOpen,   setBellMenuOpen]   = useState(false);
   // null = unknown (never loaded / load failed) → rendered as "—", never as 0.
   const [followersCount, setFollowersCount] = useState<number | null>(null);
   const [followingCount, setFollowingCount] = useState<number | null>(null);
@@ -583,9 +588,9 @@ export default function UserProfileScreen() {
             .single();
           const currentFollowsViewed = !!outgoing && !outErr;
           setIsFollowing(currentFollowsViewed);
-          setBellOn(null);
+          setBellPrefs(null);
           // Not awaited — the bell is a small extra, it shouldn't hold up the profile.
-          if (currentFollowsViewed) fetchFriendActivityBell(currentUserId, viewedUserId).then(setBellOn);
+          if (currentFollowsViewed) fetchFriendActivityBell(currentUserId, viewedUserId).then(setBellPrefs);
 
           if (currentFollowsViewed) {
             setIsRequested(false);
@@ -702,12 +707,24 @@ export default function UserProfileScreen() {
     if (isOwnProfile || !profile) return;
     navigation.setOptions({
       headerRight: () => (
-        <Pressable onPress={handleOptionsMenu} hitSlop={12} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
-          <FontAwesome name="ellipsis-v" size={18} color={colors.text} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {isFollowing && bellPrefs && (
+            <Pressable
+              onPress={() => setBellMenuOpen(true)}
+              hitSlop={8}
+              style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+              accessibilityRole="button"
+              accessibilityLabel="Activity notifications">
+              <FontAwesome name={bellIsOn(bellPrefs) ? 'bell' : 'bell-o'} size={18} color={bellIsOn(bellPrefs) ? profileAccent : colors.text} />
+            </Pressable>
+          )}
+          <Pressable onPress={handleOptionsMenu} hitSlop={12} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+            <FontAwesome name="ellipsis-v" size={18} color={colors.text} />
+          </Pressable>
+        </View>
       ),
     });
-  }, [isOwnProfile, profile, isBlockedByMe, colors.text]);
+  }, [isOwnProfile, profile, isBlockedByMe, colors.text, isFollowing, bellPrefs, profileAccent]);
 
   // ── Follow / Unfollow ────────────────────────────────────────────────────────
   function handleFollow() {
@@ -746,7 +763,7 @@ export default function UserProfileScreen() {
       if (!error) {
         setIsFollowing(false);
         setIsMutual(false);
-        setBellOn(null);   // the unfollow trigger removes the bell row too
+        setBellPrefs(null);   // the unfollow trigger removes the bell row too
         // n === null means the count never loaded — leave it unknown rather
         // than inventing a number from this one action.
         setFollowersCount(n => (n == null ? null : Math.max(0, n - 1)));
@@ -763,7 +780,7 @@ export default function UserProfileScreen() {
         setIsRequested(true);
       } else {
         setIsFollowing(true);
-        setBellOn(false);
+        setBellPrefs(BELL_OFF);
         setFollowersCount(n => (n == null ? null : n + 1));
         const { data: incoming } = await supabase
           .from('follows')
@@ -778,17 +795,18 @@ export default function UserProfileScreen() {
   }
 
   // ── Friend activity bell ─────────────────────────────────────────────────────
-  async function toggleBell() {
+  async function updateBell(key: keyof BellPrefs, value: boolean) {
     const currentUserId = user?.id;
-    if (!currentUserId || !viewedUserId || bellOn == null || bellLoading) return;
-    const next = !bellOn;
-    setBellLoading(true);
-    setBellOn(next);
+    if (!currentUserId || !viewedUserId || !bellPrefs || bellSaving) return;
+    const prev = bellPrefs;
+    const next = { ...prev, [key]: value };
+    setBellPrefs(next);
+    setBellSaving(true);
     if (!(await setFriendActivityBell(currentUserId, viewedUserId, next))) {
-      setBellOn(!next);
+      setBellPrefs(prev);
       Alert.alert('Error', 'Could not update notifications. Please try again.');
     }
-    setBellLoading(false);
+    setBellSaving(false);
   }
 
   // ── Block / Unblock ──────────────────────────────────────────────────────────
@@ -840,7 +858,7 @@ export default function UserProfileScreen() {
     if (!error) {
       setIsBlockedByMe(true);
       setIsFollowing(false);
-      setBellOn(null);
+      setBellPrefs(null);
       setIsRequested(false);
       setIsMutual(false);
     } else {
@@ -1061,18 +1079,6 @@ export default function UserProfileScreen() {
               {isFollowing ? 'Following' : isRequested ? 'Requested' : 'Follow'}
             </Text>
           </Pressable>
-
-          {isFollowing && bellOn != null && (
-            <Pressable
-              style={({ pressed }) => [s.bellBtn, { borderColor: profileAccent, opacity: pressed || bellLoading ? 0.7 : 1 }, bellOn && { backgroundColor: profileAccent }]}
-              onPress={toggleBell}
-              disabled={bellLoading}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={bellOn ? 'Turn off activity notifications' : 'Turn on activity notifications'}>
-              <FontAwesome name={bellOn ? 'bell' : 'bell-o'} size={15} color={bellOn ? '#fff' : profileAccent} />
-            </Pressable>
-          )}
 
           {isMutual && profile.allow_dms && (
             <Pressable
@@ -1342,6 +1348,22 @@ export default function UserProfileScreen() {
       />
     )}
 
+    {bellPrefs && (
+      <FriendActivityMenu
+        visible={bellMenuOpen}
+        onClose={() => setBellMenuOpen(false)}
+        name={nameOrHandle(profile?.display_name, profile?.username, viewedUserId, 'this friend')}
+        prefs={bellPrefs}
+        saving={bellSaving}
+        onToggle={updateBell}
+        onManage={() => {
+          setBellMenuOpen(false);
+          router.push('/notification-settings');
+        }}
+        top={headerHeight + 4}
+        colors={colors}
+      />
+    )}
     <ProAttributionSheet
       visible={proSheetVisible}
       onClose={() => setProSheetVisible(false)}
@@ -1444,17 +1466,6 @@ const s = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   messageBtnText: { fontSize: 14, fontWeight: '700' },
-
-  // Friend activity bell — same height as the Follow/Message pills
-  bellBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
 
   // Stats
   statsRow: {

@@ -24,22 +24,32 @@ export function notifyFriendActivity(spotifyId: string, event: FriendActivityEve
     .catch(() => {});
 }
 
-/** Whether the user rang the bell on this friend's profile. null = couldn't tell. */
-export async function fetchFriendActivityBell(userId: string, friendId: string): Promise<boolean | null> {
+/** What a bell on a friend's profile pushes for. All false = no bell. */
+export type BellPrefs = { reviews: boolean; ratings: boolean; listens: boolean };
+
+export const BELL_OFF: BellPrefs = { reviews: false, ratings: false, listens: false };
+
+export function bellIsOn(p: BellPrefs | null | undefined): boolean {
+  return !!p && (p.reviews || p.ratings || p.listens);
+}
+
+/** The bell's options for this friend (BELL_OFF if none). null = couldn't tell. */
+export async function fetchFriendActivityBell(userId: string, friendId: string): Promise<BellPrefs | null> {
   const { data, error } = await supabase
     .from('friend_activity_subscriptions')
-    .select('target_id')
+    .select('reviews, ratings, listens')
     .match({ subscriber_id: userId, target_id: friendId })
     .maybeSingle();
   if (error) return null;
-  return !!data;
+  return data ? { reviews: !!data.reviews, ratings: !!data.ratings, listens: !!data.listens } : BELL_OFF;
 }
 
-export async function setFriendActivityBell(userId: string, friendId: string, on: boolean): Promise<boolean> {
-  const { error } = on
+/** Saves the bell's options; all off removes the bell row. */
+export async function setFriendActivityBell(userId: string, friendId: string, prefs: BellPrefs): Promise<boolean> {
+  const { error } = bellIsOn(prefs)
     ? await supabase
         .from('friend_activity_subscriptions')
-        .upsert({ subscriber_id: userId, target_id: friendId }, { onConflict: 'subscriber_id,target_id', ignoreDuplicates: true })
+        .upsert({ subscriber_id: userId, target_id: friendId, ...prefs }, { onConflict: 'subscriber_id,target_id' })
     : await supabase
         .from('friend_activity_subscriptions')
         .delete()

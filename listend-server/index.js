@@ -8008,7 +8008,8 @@ app.post('/api/webhook/notification', async (req, res) => {
 // ── Friend activity pushes ────────────────────────────────────────────────────
 // The app calls this after a log, re-listen, or a first rating/review on an
 // already-logged album. Followers who rang the bell on the actor's profile get
-// one push per album (see supabase/add-friend-activity-notifications.sql).
+// a push if it matches the bell's options (reviews / ratings / every listen) —
+// see supabase/add-friend-activity-notifications.sql + add-friend-activity-bell-options.sql.
 
 // Re-listening is a new listen, so it may push again after a day; anything
 // else on the same album stays quiet for a month.
@@ -8060,14 +8061,20 @@ app.post('/api/friend-activity', [
       ({ rating, review } = latest);
     }
 
+    const rated    = rating > 0;
+    const reviewed = !!review;
     const { data: recipients, error: recErr } = await supabase
-      .rpc('friend_activity_recipients', { p_actor: actorId });
+      .rpc('friend_activity_recipients', { p_actor: actorId, p_rated: rated, p_reviewed: reviewed });
     if (recErr) throw recErr;
     if (!recipients?.length) return res.json({ sent: 0 });
 
+    // Dedupe per album *and* level reached, so a bare log that only "every
+    // listen" bells heard about doesn't swallow the push ratings/review bells
+    // want when the rating or review lands later.
+    const level = reviewed ? 'review' : rated ? 'rating' : 'listen';
     const { data: claimed, error: claimErr } = await supabase.rpc('claim_friend_activity_push', {
       p_actor:        actorId,
-      p_spotify_id:   spotify_id,
+      p_spotify_id:   `${spotify_id}:${level}`,
       p_repeat_after: FRIEND_ACTIVITY_REPEAT_AFTER[event],
     });
     if (claimErr) throw claimErr;
@@ -8081,8 +8088,8 @@ app.post('/api/friend-activity', [
     const name = actor?.display_name || actor?.username || 'A friend';
 
     const albumLabel = `${album.title} by ${album.artist}`;
-    const score      = rating > 0 ? ` · ${rating}/10` : '';
-    const verb       = review ? 'reviewed' : rating > 0 ? 'rated' : event === 'relisten' ? 're-listened to' : 'listened to';
+    const score      = rated ? ` · ${rating}/10` : '';
+    const verb       = reviewed ? 'reviewed' : rated ? 'rated' : event === 'relisten' ? 're-listened to' : 'listened to';
     const pushBody   = review
       ? `${albumLabel}${score}\n“${review.length > 120 ? `${review.slice(0, 117).trimEnd()}…` : review}”`
       : `${albumLabel}${score}`;

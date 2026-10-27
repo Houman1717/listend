@@ -18,7 +18,7 @@ import Colors from '@/constants/Colors';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { nameOrHandle } from '@/lib/userHandle';
-import { setFriendActivityBell } from '@/lib/friendActivity';
+import { setFriendActivityBell, BELL_OFF, type BellPrefs } from '@/lib/friendActivity';
 
 const ACCENT  = '#D4A017';
 
@@ -27,7 +27,14 @@ type BelledFriend = {
   display_name: string | null;
   username: string | null;
   avatar_url: string | null;
+  prefs: BellPrefs;
 };
+
+/** "Every listen" covers the other two, so it's the whole summary when on. */
+function prefsSummary(p: BellPrefs): string {
+  if (p.listens) return 'Every listen';
+  return [p.reviews && 'Reviews', p.ratings && 'Ratings'].filter(Boolean).join(' · ');
+}
 
 export default function NotificationSettingsScreen() {
   const colorScheme = useColorScheme();
@@ -56,13 +63,17 @@ export default function NotificationSettingsScreen() {
     (async () => {
       const { data: subs, error: subsErr } = await supabase
         .from('friend_activity_subscriptions')
-        .select('target_id')
+        .select('target_id, reviews, ratings, listens')
         .eq('subscriber_id', uid)
         .order('created_at', { ascending: false });
       if (subsErr) {
         console.error('[NotificationSettings] bells load error:', subsErr.message);
       } else {
-        const ids = (subs ?? []).map((r: any) => r.target_id as string);
+        const prefsById = new Map<string, BellPrefs>((subs ?? []).map((r: any) => [
+          r.target_id as string,
+          { reviews: !!r.reviews, ratings: !!r.ratings, listens: !!r.listens },
+        ]));
+        const ids = [...prefsById.keys()];
         if (ids.length === 0) {
           setFriends([]);
         } else {
@@ -72,8 +83,10 @@ export default function NotificationSettingsScreen() {
             .in('id', ids);
           if (error) console.error('[NotificationSettings] profiles load error:', error.message);
           else {
-            const byId = new Map((profiles ?? []).map((p: any) => [p.id, p as BelledFriend]));
-            setFriends(ids.map(id => byId.get(id)).filter(Boolean) as BelledFriend[]);
+            const byId = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+            setFriends(ids
+              .filter(id => byId.has(id))
+              .map(id => ({ ...byId.get(id), prefs: prefsById.get(id)! }) as BelledFriend));
           }
         }
       }
@@ -84,7 +97,7 @@ export default function NotificationSettingsScreen() {
   async function removeBell(friend: BelledFriend) {
     if (!user?.id || removing) return;
     setRemoving(friend.id);
-    if (await setFriendActivityBell(user.id, friend.id, false)) {
+    if (await setFriendActivityBell(user.id, friend.id, BELL_OFF)) {
       setFriends(prev => prev.filter(f => f.id !== friend.id));
     } else {
       Alert.alert('Error', 'Could not update notifications. Please try again.');
@@ -111,7 +124,7 @@ export default function NotificationSettingsScreen() {
 
       <Text style={[s.sectionLabel, { color: subColor }]}>FRIEND ACTIVITY</Text>
       <Text style={[s.intro, { color: subColor }]}>
-        Tap the bell on a friend's profile to get notified when they log, rate or review an album.
+        Tap the bell on a friend's profile to choose what you hear about: reviews, ratings or every album they log. Tap a bell here to turn it off.
       </Text>
       <View style={[s.card, { backgroundColor: rowBg, borderColor: sepColor }]}>
         {friends.length === 0 ? (
@@ -135,7 +148,10 @@ export default function NotificationSettingsScreen() {
                     <Text style={[s.avatarLetter, { color: textColor }]}>{name.charAt(0).toUpperCase()}</Text>
                   )}
                 </View>
-                <Text style={[s.rowTitle, { color: textColor, flex: 1 }]} numberOfLines={1}>{name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rowTitle, { color: textColor }]} numberOfLines={1}>{name}</Text>
+                  <Text style={[s.rowSub, { color: subColor }]} numberOfLines={1}>{prefsSummary(f.prefs)}</Text>
+                </View>
                 <Pressable
                   onPress={() => removeBell(f)}
                   disabled={removing === f.id}
