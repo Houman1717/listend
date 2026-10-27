@@ -32,6 +32,7 @@ import { countOrNull } from '@/lib/supabaseQuery';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import PlaylistFormModal from '@/components/PlaylistFormModal';
+import { handleOrName } from '@/lib/userHandle';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -229,16 +230,21 @@ export default function PlaylistDetailScreen() {
 
   const viewingOther = paramUserId || null;
 
-  // Someone else's playlist wears its owner's theme, like their profile does.
+  // Someone else's playlist wears its owner's theme, like their profile does,
+  // and says whose it is.
   const [ownerTheme, setOwnerTheme] = useState<string | null>(null);
+  const [ownerHandle, setOwnerHandle] = useState<string | null>(null);
   useEffect(() => {
     if (!viewingOther || viewingOther === user?.id) return;
     supabase
       .from('profiles')
-      .select('is_pro, pro_theme')
+      .select('username, display_name, is_pro, pro_theme')
       .eq('id', viewingOther)
       .maybeSingle()
-      .then(({ data }) => setOwnerTheme(data?.is_pro ? (data.pro_theme ?? null) : null));
+      .then(({ data }) => {
+        setOwnerTheme(data?.is_pro ? (data.pro_theme ?? null) : null);
+        if (data) setOwnerHandle(handleOrName(data.username, data.display_name, viewingOther));
+      });
   }, [viewingOther, user?.id]);
 
   const themeKey = (!viewingOther || viewingOther === user?.id)
@@ -603,6 +609,16 @@ export default function PlaylistDetailScreen() {
         <View style={s.header}>
           <View style={s.headerText}>
             <Text style={[s.playlistName, { color: colors.text }]}>{playlistName}</Text>
+            {canLike && ownerHandle ? (
+              <Pressable
+                onPress={() => router.push({ pathname: '/user-profile', params: { userId: viewingOther! } })}
+                hitSlop={6}
+                style={{ alignSelf: 'flex-start' }}>
+                <Text style={[s.byline, { color: colors.subtext }]}>
+                  by <Text style={{ color: colors.tint, fontWeight: '700' }}>{ownerHandle}</Text>
+                </Text>
+              </Pressable>
+            ) : null}
             <Text style={[s.albumCount, { color: colors.subtext }]}>
               {albums.length === 1 ? '1 album' : `${albums.length} albums`}
             </Text>
@@ -747,6 +763,7 @@ const s = StyleSheet.create({
   heartCount:    { fontSize: 11, fontWeight: '700' },
   playlistName: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
   albumCount:   { fontSize: 13 },
+  byline:       { fontSize: 14 },
   description:  { fontSize: 14, lineHeight: 20, marginTop: 2 },
   deleteBtn:    { padding: 6 },
 
