@@ -698,6 +698,12 @@ pinStorefront('it', [
   '1443915407', '1443915416', '1443915419', '1443915422', '1443915428', '1443915618',
   '1443915626', '1443915639', '1443915794', '1443915801',
 ]);
+// Pixies — Demos (1987)
+pinStorefront('it', [
+  '1852632212',
+  '1852632213', '1852632214', '1852632215', '1852632216', '1852632231', '1852632233',
+  '1852632234', '1852632235', '1852632236',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1202,6 +1208,10 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'thecure::concertthecurelive': {
     id: '1443914840', title: 'Concert - The Cure Live', artist: 'The Cure', year: 1984,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/34/8c/18/348c18c5-cf80-478f-262c-2d2690054be5/00042282368225.rgb.jpg/500x500bb.jpg',
+  },
+  'pixies::demos': {
+    id: '1852632212', title: 'Demos', artist: 'Pixies', year: 1987,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/47/1e/56/471e5675-4a6d-fb85-17ea-3fc1666afa26/118787.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -5596,6 +5606,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/34/8c/18/348c18c5-cf80-478f-262c-2d2690054be5/00042282368225.rgb.jpg/500x500bb.jpg',
       year: 1984, isSingle: false, isCompilation: false, trackCount: 10,
       url: 'https://music.apple.com/it/album/concert-the-cure-live/1443914840', type: 'album',
+    },
+  ],
+  '2730151': [ // Pixies — not licensed for `us`
+    {
+      id: '1852632212', title: 'Demos',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/47/1e/56/471e5675-4a6d-fb85-17ea-3fc1666afa26/118787.jpg/500x500bb.jpg',
+      year: 1987, isSingle: false, isCompilation: false, trackCount: 9,
+      url: 'https://music.apple.com/it/album/demos/1852632212', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
