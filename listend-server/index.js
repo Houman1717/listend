@@ -686,6 +686,46 @@ pinStorefront('gb', [
   '699708694', '699708745', '699708788', '699708789', '699708790', '699708796',
   '699708854', '699708857', '699708859',
 ]);
+// The Cure — Boys Don't Cry (1980)
+pinStorefront('it', [
+  '1444133380',
+  '1444133817', '1444133819', '1444133822', '1444133828', '1444134294', '1444134299',
+  '1444134305', '1444134434', '1444134443', '1444134451', '1444134458', '1444134761',
+]);
+// The Cure — Concert - The Cure Live (1984)
+pinStorefront('it', [
+  '1443914840',
+  '1443915407', '1443915416', '1443915419', '1443915422', '1443915428', '1443915618',
+  '1443915626', '1443915639', '1443915794', '1443915801',
+]);
+// The Cure — The Cure: Greatest Hits (2001)
+pinStorefront('jp', [
+  '1440929246',
+  '1440929247', '1440929249', '1440929250', '1440929251', '1440929252', '1440929254',
+  '1440929255', '1440929258', '1440929621', '1440929623', '1440929624', '1440929629',
+  '1440929635', '1440929637', '1440929639', '1440929640', '1440929642', '1440929644',
+]);
+// The Cure — Join the Dots: B-Sides & Rarities (2004)
+pinStorefront('it', [
+  '1444021448',
+  '1444021450', '1444021962', '1444021963', '1444021964', '1444021965', '1444021966',
+  '1444021968', '1444021969', '1444021970', '1444021971', '1444021972', '1444021974',
+  '1444021976', '1444021977', '1444021980', '1444021981', '1444021983', '1444021984',
+  '1444021985', '1444021986', '1444021988', '1444021989', '1444021990', '1444022171',
+  '1444022173', '1444022176', '1444022177', '1444022179', '1444022181', '1444022182',
+  '1444022184', '1444022186', '1444022189', '1444022191', '1444022196', '1444022198',
+  '1444022382', '1444022386', '1444022388', '1444022390', '1444022397', '1444022399',
+  '1444022403', '1444022407', '1444022622', '1444022625', '1444022630', '1444022634',
+  '1444022638', '1444022643', '1444022644', '1444022645', '1444022646', '1444022648',
+  '1444022861', '1444022862', '1444022864', '1444022867', '1444022870', '1444022876',
+  '1444022880', '1444022883', '1444022886', '1444022890', '1444023075', '1444023081',
+  '1444023087', '1444023093', '1444023100', '1444023256',
+]);
+// The Cure — Hypnagogic States (2008)
+pinStorefront('au', [
+  '1443076663',
+  '1443076668', '1443076671', '1443076675', '1443076677', '1443076678',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1182,6 +1222,26 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'duranduran::duranduran': {
     id: '699707771', title: 'Duran Duran', artist: 'Duran Duran', year: 1981,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/86/e7/e3/86e7e307-a6f0-b8ef-2fd4-f61386d4b7ea/5099950030354.jpg/500x500bb.jpg',
+  },
+  'thecure::boysdontcry': {
+    id: '1444133380', title: 'Boys Don\'t Cry', artist: 'The Cure', year: 1980,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/33/20/75/3320757e-c24d-3d35-f22e-961f244beeb6/00042281501128.rgb.jpg/500x500bb.jpg',
+  },
+  'thecure::concertthecurelive': {
+    id: '1443914840', title: 'Concert - The Cure Live', artist: 'The Cure', year: 1984,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/34/8c/18/348c18c5-cf80-478f-262c-2d2690054be5/00042282368225.rgb.jpg/500x500bb.jpg',
+  },
+  'thecure::thecuregreatesthits': {
+    id: '1440929246', title: 'The Cure: Greatest Hits', artist: 'The Cure', year: 2001,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/b1/65/37/b1653776-8866-87ab-fef8-1d36afc05a7d/06UMGIM69203.rgb.jpg/500x500bb.jpg',
+  },
+  'thecure::jointhedotsbsidesrarities': {
+    id: '1444021448', title: 'Join the Dots: B-Sides & Rarities', artist: 'The Cure', year: 2004,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/79/dd/e1/79dde1fb-1cdc-4c84-439a-b642b1ef5516/00600753027967.rgb.jpg/500x500bb.jpg',
+  },
+  'thecure::hypnagogicstates': {
+    id: '1443076663', title: 'Hypnagogic States', artist: 'The Cure', year: 2008,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/c4/06/5f/c4065f0f-42bf-bb84-d43c-255cdc049ca5/00602517826885.rgb.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -5562,6 +5622,38 @@ const ARTIST_ALBUM_OVERRIDES = {
       year: 1981, isSingle: false, isCompilation: false, trackCount: 9,
       url: 'https://music.apple.com/gb/album/duran-duran/699707771', type: 'album',
       replaces: ['697655289'],
+    },
+  ],
+  '566519': [ // The Cure — not licensed for `us`
+    {
+      id: '1444133380', title: 'Boys Don\'t Cry',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/33/20/75/3320757e-c24d-3d35-f22e-961f244beeb6/00042281501128.rgb.jpg/500x500bb.jpg',
+      year: 1980, isSingle: false, isCompilation: false, trackCount: 12,
+      url: 'https://music.apple.com/it/album/boys-dont-cry/1444133380', type: 'album',
+    },
+    {
+      id: '1443914840', title: 'Concert - The Cure Live',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/34/8c/18/348c18c5-cf80-478f-262c-2d2690054be5/00042282368225.rgb.jpg/500x500bb.jpg',
+      year: 1984, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/it/album/concert-the-cure-live/1443914840', type: 'album',
+    },
+    {
+      id: '1440929246', title: 'The Cure: Greatest Hits',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/b1/65/37/b1653776-8866-87ab-fef8-1d36afc05a7d/06UMGIM69203.rgb.jpg/500x500bb.jpg',
+      year: 2001, isSingle: false, isCompilation: true, trackCount: 18,
+      url: 'https://music.apple.com/jp/album/the-cure-greatest-hits/1440929246', type: 'album',
+    },
+    {
+      id: '1444021448', title: 'Join the Dots: B-Sides & Rarities',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/79/dd/e1/79dde1fb-1cdc-4c84-439a-b642b1ef5516/00600753027967.rgb.jpg/500x500bb.jpg',
+      year: 2004, isSingle: false, isCompilation: true, trackCount: 70,
+      url: 'https://music.apple.com/it/album/join-the-dots-b-sides-rarities/1444021448', type: 'album',
+    },
+    {
+      id: '1443076663', title: 'Hypnagogic States',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/c4/06/5f/c4065f0f-42bf-bb84-d43c-255cdc049ca5/00602517826885.rgb.jpg/500x500bb.jpg',
+      year: 2008, isSingle: false, isCompilation: false, trackCount: 5,
+      url: 'https://music.apple.com/au/album/hypnagogic-states/1443076663', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
