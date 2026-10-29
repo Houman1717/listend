@@ -680,6 +680,12 @@ pinStorefront('gb', [
   '890940971', '890940974', '890940978', '890940980', '890940987', '890941111',
   '890941153', '890941155', '890941163', '890941181',
 ]);
+// Duran Duran — Duran Duran (1981), the original UK tracklist
+pinStorefront('gb', [
+  '699707771',
+  '699708694', '699708745', '699708788', '699708789', '699708790', '699708796',
+  '699708854', '699708857', '699708859',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1171,6 +1177,11 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'courteeners::concretelovedeluxeedition': {
     id: '890940637', title: 'Concrete Love (Deluxe Version)', artist: 'Courteeners', year: 2014,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/d5/b9/bc/d5b9bc0f-c024-03b9-9ae3-0243f1f1d67e/cover.jpg/500x500bb.jpg',
+  },
+  // The original UK tracklist rather than the US reissue `us` carries.
+  'duranduran::duranduran': {
+    id: '699707771', title: 'Duran Duran', artist: 'Duran Duran', year: 1981,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/86/e7/e3/86e7e307-a6f0-b8ef-2fd4-f61386d4b7ea/5099950030354.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -2010,6 +2021,7 @@ const foldForMatch = s => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,
 const searchKey = s => foldForMatch(s).replace(/[^\p{L}\p{N}]/gu, '');
 
 function withAlbumSearchOverrides(q, results) {
+  results = results.filter(r => !REPLACED_ALBUM_IDS.has(r.id));
   const words = foldForMatch(q).split(/\s+/).map(searchKey).filter(Boolean);
   if (words.join('').length < 3) return results; // a stray letter shouldn't match every override
   // Every entry here is an album deliberately pinned because Apple's own
@@ -5524,6 +5536,17 @@ const ARTIST_ALBUM_OVERRIDES = {
       url: 'https://music.apple.com/gb/album/concrete-love-deluxe-version/890940637', type: 'album',
     },
   ],
+  '487384': [ // Duran Duran — the debut as first released
+    {
+      // `us` carries only the 1983 US reissue (697655289), which swapped To
+      // the Shore for Is There Something I Should Know?; gb has the original.
+      id: '699707771', title: 'Duran Duran',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/86/e7/e3/86e7e307-a6f0-b8ef-2fd4-f61386d4b7ea/5099950030354.jpg/500x500bb.jpg',
+      year: 1981, isSingle: false, isCompilation: false, trackCount: 9,
+      url: 'https://music.apple.com/gb/album/duran-duran/699707771', type: 'album',
+      replaces: ['697655289'],
+    },
+  ],
   '469647548': [ // Cro — not licensed for `us`
     {
       id: '1579322186', title: 'trip',
@@ -5667,6 +5690,14 @@ const ARTIST_ALBUM_OVERRIDES = {
     },
   ],
 };
+
+// Apple releases an ARTIST_ALBUM_OVERRIDES entry stands in for (`replaces`):
+// left in, the same record would show twice on the artist page and in search,
+// and logging could land on the wrong edition. Duran Duran's debut is the
+// case — `us` has only the US reissue, the original comes from gb.
+const REPLACED_ALBUM_IDS = new Set(
+  Object.values(ARTIST_ALBUM_OVERRIDES).flat().flatMap(o => o.replaces ?? []),
+);
 
 // Track count below which a release might be an EP — but only might. Anything
 // this thin gets its run time checked before being called one.
@@ -5906,6 +5937,7 @@ async function buildArtistDiscography(id, bust = false) {
     page++;
   }
 
+  allItems = allItems.filter(a => !REPLACED_ALBUM_IDS.has(a.id));
   const overrides = [
     ...(ARTIST_ALBUM_OVERRIDES[id] ?? []),
     ...manualAlbumsByArtist(id).map(manualAlbumAsArtistItem),
