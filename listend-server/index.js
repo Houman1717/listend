@@ -4818,8 +4818,25 @@ async function cacheAlbumTracks(key, tracks) {
 const TRACKLIST_CAPS = {
   '6818209777': 15,
 };
-const capTracklist = (id, tracks) =>
-  TRACKLIST_CAPS[id] && Array.isArray(tracks) ? tracks.slice(0, TRACKLIST_CAPS[id]) : tracks;
+
+// Tracks Apple lists the album as having but won't serve. Genesis's Duke
+// (2007 Remaster) counts 12 tracks yet returns only 2–12 in every storefront,
+// so Behind the Lines couldn't be rated; the same recording is on Apple as
+// track 20 of Platinum Collection, and song ratings key on title + artist, so
+// that id stands in. Skipped if Apple ever restores the track number.
+const TRACKLIST_ADDITIONS = {
+  '393789536': [
+    { number: 1, id: '309747975', title: 'Behind the Lines', durationMs: 343200, featuredArtists: [] },
+  ],
+};
+
+const fixTracklist = (id, tracks) => {
+  if (!Array.isArray(tracks)) return tracks;
+  let out = TRACKLIST_CAPS[id] ? tracks.slice(0, TRACKLIST_CAPS[id]) : tracks;
+  const extra = (TRACKLIST_ADDITIONS[id] ?? []).filter(a => !out.some(t => t.number === a.number));
+  if (extra.length) out = [...out, ...extra].sort((a, b) => a.number - b.number);
+  return out;
+};
 
 // ── GET /catalog/album/:id/artist ─────────────────────────────────────────────
 // The album's own artist, by catalog id. Tapping the artist on an album page
@@ -4883,10 +4900,10 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
   const CACHE_KEY = `catalog_album_tracks_${id}`;
 
   const mem = cacheGet(CACHE_KEY);
-  if (mem) return res.json(capTracklist(id, mem));
+  if (mem) return res.json(fixTracklist(id, mem));
 
   const db = await getCached(CACHE_KEY, TTL_24H);
-  if (tracksComplete(db)) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(capTracklist(id, db)); }
+  if (tracksComplete(db)) { cacheSet(CACHE_KEY, db, TTL_6H); return res.json(fixTracklist(id, db)); }
 
   try {
     const data = await amFetch(`/catalog/${storefrontFor(id)}/albums/${id}/tracks`);
@@ -4898,7 +4915,7 @@ app.get(['/catalog/album/:id/tracks', '/spotify/album/:id/tracks'], [
       featuredArtists: [],
     }));
     await cacheAlbumTracks(CACHE_KEY, tracks);
-    res.json(capTracklist(id, tracks));
+    res.json(fixTracklist(id, tracks));
   } catch (err) {
     console.error('[/catalog/album/tracks]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
@@ -6390,7 +6407,7 @@ async function resolveAlbumDurationMs(id) {
       return null;
     }
   }
-  const totalMs = (capTracklist(id, tracks) ?? []).reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
+  const totalMs = (fixTracklist(id, tracks) ?? []).reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
   return totalMs > 0 ? totalMs : null;
 }
 
