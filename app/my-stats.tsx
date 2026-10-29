@@ -24,6 +24,8 @@ import { libraryMatcher } from '@/lib/albumMatch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MAIN_GENRES } from '@/lib/genres';
 import { StatsMilestones } from '@/components/StatsMilestones';
+import { SongStatsCard } from '@/components/SongStatsCard';
+import { openSongPage } from '@/lib/openSong';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 
 // Album titles per `.in('title', …)` request for community averages — keeps URLs short.
@@ -2699,6 +2701,14 @@ export default function MyStatsScreen() {
             )}
           </View>
         )}
+
+        {/* ── Songs (hidden under 10 song logs) ──────────────────────────── */}
+        <SongStatsCard
+          userId={viewedUserId}
+          albums={loggedAlbums}
+          colors={colors}
+          onSongPress={song => openSongPage(router, { id: song.songId, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, albumId: song.albumId, albumTitle: song.albumTitle, durationMs: song.durationMs })}
+        />
 
         {/* ── Playlist Progress ──────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
