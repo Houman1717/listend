@@ -3,6 +3,11 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Dominic Fike',           title: 'HOW TO QUIT SMOKING' },
+  { artist: 'Queens of the Stone Age', title: 'Perfecth' },
+  { artist: 'BigXthaPlug',            title: 'BETTER OVER TIME' },
+  { artist: 'Nines',                  title: 'Young Nina' },
+  { artist: 'DIIV',                   title: 'ZIRP!' },
   { artist: 'Yeat',                   title: 'Luh Leakyz Vol. 1' },
   { artist: 'John Legend',            title: 'Muse' },
   { artist: 'girl in red',            title: 'BLUE - EP' },

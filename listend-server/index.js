@@ -1373,6 +1373,29 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1828246469', title: 'FUDGE', artist: 'Michael Kiwanuka', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8a/87/68/8a8768b3-d686-dac5-25da-fca1ea373114/25UMGIM95889.rgb.jpg/500x500bb.jpg',
   },
+  // Released 2026-10-30. Dominic Fike, Queens of the Stone Age and Nines
+  // weren't in Apple's search index yet, and search only returns the clean
+  // edition of BETTER OVER TIME, so all five are pinned to the explicit album.
+  'dominicfike::howtoquitsmoking': {
+    id: '6805707169', title: 'HOW TO QUIT SMOKING', artist: 'Dominic Fike', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/81/24/65/812465c4-b20f-af62-4303-59a120c4199f/196874725467.jpg/500x500bb.jpg',
+  },
+  'queensofthestoneage::perfecth': {
+    id: '6797444451', title: 'Perfecth', artist: 'Queens of the Stone Age', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/89/4a/62/894a62a0-230a-cff6-e25a-a7de7e95fb40/191401225373.png/500x500bb.jpg',
+  },
+  'bigxthaplug::betterovertime': {
+    id: '6815463121', title: 'BETTER OVER TIME', artist: 'BigXthaPlug', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/82/07/30/820730a7-6ce6-d559-d9f5-9760071d7034/888193763601.png/500x500bb.jpg',
+  },
+  'nines::youngnina': {
+    id: '6824979873', title: 'Young Nina', artist: 'Nines', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/41/28/ad/4128ada5-f019-73f0-9104-c947c61932c7/26SYMIM36691.rgb.jpg/500x500bb.jpg',
+  },
+  'diiv::zirp': {
+    id: '6790597250', title: 'ZIRP!', artist: 'DIIV', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/54/31/87/54318724-e4d1-7254-a7d4-d2e671dff8ea/26CRGIM55137.rgb.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],
