@@ -38,7 +38,7 @@ export function AlbumReviewModal({
   onClose,
   onAlbumPress,
   onUsernamePress,
-  isDark,
+  isDark: isDarkProp,
   colors,
   isOwner = false,
   onUndoReListen,
@@ -65,6 +65,9 @@ export function AlbumReviewModal({
   onEdit?: () => void;
   onReport?: () => void;
 }) {
+  // The theme knows whether it's dark. Some callers pass the phone's light/dark
+  // setting instead, which put near-black text on a dark pro theme.
+  const isDark: boolean = colors?.isDark ?? isDarkProp;
   const { user } = useAuth();
   const targetId = `${reviewUserId}_${album.id}`;
   // Accounts that signed in with Apple/Google never picked a username, so show

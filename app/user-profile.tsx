@@ -1336,7 +1336,7 @@ export default function UserProfileScreen() {
           setSelectedTopAlbum(null);
           navigateToAlbum(router, a);
         }}
-        isDark={colorScheme === 'dark'}
+        isDark={colors.isDark}
         colors={colors}
         isOwner={false}
         onReport={() => reportContent({
