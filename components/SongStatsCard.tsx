@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, LayoutAnimation } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { LoggedAlbum } from '@/context/AlbumsContext';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { fetchUserSongReviews, type SongReview } from '@/lib/songReviews';
+import { StatTile } from '@/components/StatTile';
+import VolumeBars from '@/components/VolumeBars';
 
-// Songs are the secondary log, so the card stays out of the way: hidden until
-// there's enough to say anything, and collapsed to a summary strip by default.
+// Songs are the secondary log: the card stays hidden until there's enough to
+// say anything. Same pieces as the rest of the stats screens (tiles, a column
+// chart with a cover on its peak, artist photos) so it doesn't read as an
+// afterthought.
 const MIN_SONG_LOGS = 10;
 const TOP_ARTISTS   = 5;
 const STANDOUTS     = 5;
@@ -19,6 +22,7 @@ const FAVOURITES    = 20;
 const STANDOUT_MIN_GAP = 2;
 
 const GROW_CLR = '#a8c44a';
+const GROW_BG  = 'rgba(168,196,74,0.16)';
 const FADE_CLR = '#B85040';
 
 type CardColors = { text: string; subtext: string; textMuted: string; tint: string; border: string; surface: string };
@@ -48,7 +52,6 @@ export function SongStatsCard({
 }) {
   const { songReviews } = useSongReviews();
   const [otherSongs, setOtherSongs] = useState<SongReview[] | null>(null);
-  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -121,162 +124,199 @@ export function SongStatsCard({
     };
   }, [songs, albums]);
 
+  // Column width, so the cover on the peak bar can fill it.
+  const [chartW, setChartW] = useState(0);
+
+  // Artist photos for Top Artists: one search each, only for the ones shown.
+  const [artistImages, setArtistImages] = useState<Record<string, string>>({});
+  const requestedArtists = useRef(new Set<string>());
+  useEffect(() => {
+    const names = stats.topArtists.map(a => a.artist).filter(n => !requestedArtists.current.has(n));
+    if (names.length === 0) return;
+    names.forEach(n => requestedArtists.current.add(n));
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+    Promise.allSettled(
+      names.map(name =>
+        fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
+          .then(r => (r.ok ? r.json() : []))
+          .then((results: { artworkUrl: string }[]) => ({ name, url: results[0]?.artworkUrl ?? '' })),
+      ),
+    ).then(results => {
+      const images: Record<string, string> = {};
+      for (const r of results) if (r.status === 'fulfilled' && r.value.url) images[r.value.name] = r.value.url;
+      if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
+    });
+  }, [stats.topArtists]);
+
   if (songs.length < minSongs) return null;
 
-  const theirs = userId ? 'Their' : 'Your';
-  const maxCount = Math.max(...stats.distribution, 1);
+  const theirs = userId ? 'their' : 'your';
+  const Theirs = userId ? 'Their' : 'Your';
+  const tileProps = { tint: colors.tint, textColor: colors.text, subtextColor: colors.subtext, bg: colors.surface, border: colors.border };
+  const vsColor = stats.vsAlbums === null ? colors.text : stats.vsAlbums >= 0.5 ? GROW_CLR : stats.vsAlbums <= -0.5 ? FADE_CLR : colors.text;
 
-  function toggle() {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpanded(v => !v);
-  }
+  // The rating most songs get; a tie goes to the higher rating.
+  const maxCount = Math.max(...stats.distribution, 1);
+  const peak = stats.distribution.reduce((best, n, i) => (n >= stats.distribution[best] ? i : best), 0) + 1;
+  const peakCount = stats.distribution[peak - 1];
+  // On the peak bar: a favourite with that rating if there is one, else the latest.
+  const peakSongs = songs.filter(s => s.rating === peak);
+  const peakSong = peakSongs.find(s => s.isFavorite && s.artworkUrl) ?? peakSongs.find(s => s.artworkUrl);
+  const cover = chartW > 0 ? Math.floor((chartW - 9 * BAR_GAP) / 10) - 6 : 0;
+  const ratingHeadline = stats.ratedCount < 5
+    ? `${Theirs} song ratings`
+    : `Most of ${theirs} songs land on ${peak === 8 ? 'an' : 'a'} ${peak}`;
 
   return (
     <View style={[st.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Pressable onPress={toggle} hitSlop={8} style={({ pressed }) => [st.titleRow, { opacity: pressed ? 0.7 : 1 }]}>
+      <View style={st.titleRow}>
         <Text style={[st.title, { color: colors.textMuted }]}>SONGS</Text>
-        <View style={st.titleRight}>
-          <Text style={[st.titleValue, { color: colors.text }]}>{songs.length} logged</Text>
-          <FontAwesome name={expanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.subtext} />
-        </View>
-      </Pressable>
+        <Text style={[st.titleValue, { color: colors.text }]}>{songs.length} logged</Text>
+      </View>
 
-      {/* Summary strip — always visible */}
-      <View style={[st.strip, { borderColor: colors.border }]}>
-        <View style={st.cell}>
-          <Text style={[st.val, { color: colors.text }]}>{stats.ratedCount}</Text>
-          <Text style={[st.lbl, { color: colors.subtext }]}>Rated</Text>
+      <View style={{ gap: 8 }}>
+        <View style={st.tileRow}>
+          <StatTile icon="star" value={stats.ratedCount || '—'} label="Rated" {...tileProps} />
+          <StatTile icon="volume-up" value={stats.ratedCount > 0 ? stats.avg.toFixed(1) : '—'} unit=" /10" label="Avg rating"
+            extra={stats.ratedCount > 0 ? (
+              <VolumeBars rating={Math.round(stats.avg)} activeColor={colors.tint} inactiveColor={colors.border} />
+            ) : undefined}
+            {...tileProps} />
         </View>
-        <View style={[st.divider, { backgroundColor: colors.border }]} />
-        <View style={st.cell}>
-          <Text style={[st.val, { color: colors.text }]}>{stats.ratedCount > 0 ? stats.avg.toFixed(1) : '—'}</Text>
-          <Text style={[st.lbl, { color: colors.subtext }]}>Avg Rating</Text>
-        </View>
-        <View style={[st.divider, { backgroundColor: colors.border }]} />
-        <View style={st.cell}>
-          <Text style={[st.val, { color: colors.text }]}>{stats.written}</Text>
-          <Text style={[st.lbl, { color: colors.subtext }]}>Reviews</Text>
-        </View>
-        <View style={[st.divider, { backgroundColor: colors.border }]} />
-        <View style={st.cell}>
-          <Text style={[st.val, { color: stats.vsAlbums === null ? colors.text : stats.vsAlbums >= 0.5 ? GROW_CLR : stats.vsAlbums <= -0.5 ? FADE_CLR : colors.text }]}>
-            {stats.vsAlbums === null ? '—' : fmtDelta(stats.vsAlbums)}
-          </Text>
-          <Text style={[st.lbl, { color: colors.subtext }]}>Vs Albums</Text>
+        <View style={st.tileRow}>
+          <StatTile icon="pencil" value={stats.written || '—'} label="Reviews" {...tileProps} />
+          <StatTile
+            icon={stats.vsAlbums !== null && stats.vsAlbums < 0 ? 'arrow-down' : 'arrow-up'}
+            value={stats.vsAlbums === null ? '—' : fmtDelta(stats.vsAlbums)}
+            label="Vs albums"
+            {...tileProps}
+            tint={stats.vsAlbums === null ? colors.tint : vsColor === colors.text ? colors.tint : vsColor}
+            textColor={vsColor} />
         </View>
       </View>
 
-      {!expanded && (
-        <Pressable onPress={toggle} style={({ pressed }) => [st.more, { opacity: pressed ? 0.6 : 1 }]}>
-          <Text style={[st.moreText, { color: colors.tint }]}>See song stats</Text>
-        </Pressable>
-      )}
-
-      {expanded && (
-        <>
-          {/* Rating breakdown */}
-          {stats.ratedCount > 0 && (
-            <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: colors.text }]}>Rating Breakdown</Text>
-              <View style={{ gap: 8 }}>
-                {[...stats.distribution].map((count, i) => ({ rating: i + 1, count })).reverse().map(({ rating, count }) => {
-                  const filled = count > 0 ? Math.max(count / maxCount, 0.02) : 0;
-                  return (
-                    <View key={rating} style={st.barRow}>
-                      <Text style={[st.barLabel, { color: colors.subtext }]}>{rating}</Text>
-                      <View style={[st.track, { backgroundColor: colors.border }]}>
-                        <View style={[st.fill, { flex: filled, opacity: 0.4 + (count / maxCount) * 0.6, backgroundColor: colors.tint }]} />
-                        {filled < 1 && <View style={{ flex: 1 - filled }} />}
-                      </View>
-                      <Text style={[st.barCount, { color: colors.text }]}>{count}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          )}
-
-          {/* Tracks vs their albums */}
-          <View style={st.section}>
-            <Text style={[st.sectionTitle, { color: colors.text }]}>Tracks vs Their Albums</Text>
-            {stats.vsAlbums === null ? (
-              <Text style={[st.empty, { color: colors.subtext }]}>
-                Rate a few tracks from albums {userId ? 'they' : 'you'}'ve rated to see how they compare.
+      {/* Rating breakdown: one column per rating, the most common one gold with a cover */}
+      {stats.ratedCount > 0 && (
+        <View style={st.section}>
+          <View>
+            <Text style={[st.sectionTitle, { color: colors.text }]}>{ratingHeadline}</Text>
+            {stats.ratedCount >= 5 && (
+              <Text style={[st.sub, { color: colors.subtext, marginTop: 2 }]}>
+                {peakCount} of {stats.ratedCount} rated song{stats.ratedCount !== 1 ? 's' : ''}
               </Text>
-            ) : (
-              <Text style={[st.body, { color: colors.subtext }]}>
-                {theirs} tracks average{' '}
-                <Text style={{ color: colors.text, fontWeight: '700' }}>
-                  {Math.abs(stats.vsAlbums) < 0.05 ? 'the same as' : `${Math.abs(stats.vsAlbums).toFixed(1)} ${stats.vsAlbums > 0 ? 'higher' : 'lower'} than`}
-                </Text>
-                {' '}the albums they're on, across {stats.vsAlbumsCount} album{stats.vsAlbumsCount !== 1 ? 's' : ''}.
-              </Text>
-            )}
-            {stats.standouts.length > 0 && (
-              <View style={{ gap: 10, marginTop: 4 }}>
-                <Text style={[st.sub, { color: colors.subtext }]}>Standout tracks — rated well above their album</Text>
-                {stats.standouts.map(({ song, albumRating, gap }) => (
-                  <Pressable key={song.songId} onPress={() => onSongPress(song)} style={({ pressed }) => [st.songRow, { opacity: pressed ? 0.7 : 1 }]}>
-                    <SongThumb uri={song.artworkUrl} bg={colors.border} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[st.songTitle, { color: colors.text }]} numberOfLines={1}>{song.title}</Text>
-                      <Text style={[st.songSub, { color: colors.subtext }]} numberOfLines={1}>
-                        {song.rating} · album {albumRating}{song.albumTitle ? ` · ${song.albumTitle}` : ''}
-                      </Text>
-                    </View>
-                    <Text style={[st.gap, { color: GROW_CLR }]}>+{gap}</Text>
-                  </Pressable>
-                ))}
-              </View>
             )}
           </View>
+          <View style={st.chart} onLayout={e => setChartW(e.nativeEvent.layout.width)}>
+            {stats.distribution.map((count, i) => {
+              const rating = i + 1;
+              const isPeak = rating === peak && count > 0;
+              const h = count > 0 ? Math.max((count / maxCount) * CHART_H, 4) : 0;
+              return (
+                <View key={rating} style={st.col}>
+                  {count > 0 && (
+                    <Text style={[st.colCount, { color: isPeak ? colors.text : colors.subtext }]} numberOfLines={1}>{count}</Text>
+                  )}
+                  {count > 0 ? (
+                    <Pressable
+                      disabled={!isPeak || !peakSong}
+                      onPress={() => peakSong && onSongPress(peakSong)}
+                      style={[st.bar, { height: h, backgroundColor: colors.tint, opacity: isPeak ? 1 : 0.32 }]}>
+                      {isPeak && peakSong?.artworkUrl && cover >= 16 && h >= cover + 6 && (
+                        <ExpoImage source={{ uri: peakSong.artworkUrl }} style={{ width: cover, height: cover, borderRadius: 3 }} contentFit="cover" cachePolicy="disk" />
+                      )}
+                    </Pressable>
+                  ) : (
+                    <View style={[st.dot, { backgroundColor: colors.border }]} />
+                  )}
+                </View>
+              );
+            })}
+          </View>
+          <View style={st.axis}>
+            {stats.distribution.map((_, i) => (
+              <Text key={i} style={[st.axisLabel, { color: i + 1 === peak && peakCount > 0 ? colors.tint : colors.subtext }]}>{i + 1}</Text>
+            ))}
+          </View>
+        </View>
+      )}
 
-          {/* Favourite tracks */}
-          {stats.favourites.length > 0 && (
-            <View style={st.section}>
-              <View style={st.sectionHeader}>
-                <Ionicons name="trophy" size={13} color={colors.tint} />
-                <Text style={[st.sectionTitle, { color: colors.text }]}>Favourite Tracks</Text>
-                <Text style={[st.sub, { color: colors.subtext }]}>{stats.favourites.length}</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.carousel}>
-                {stats.latestFavourites.map(song => (
-                  <Pressable key={song.songId} onPress={() => onSongPress(song)} style={({ pressed }) => [st.favCard, { opacity: pressed ? 0.75 : 1 }]}>
-                    {song.artworkUrl ? (
-                      <ExpoImage source={{ uri: song.artworkUrl }} style={st.favArt} contentFit="cover" cachePolicy="disk" />
-                    ) : (
-                      <View style={[st.favArt, { backgroundColor: colors.border }]} />
-                    )}
-                    <Text style={[st.favTitle, { color: colors.text }]} numberOfLines={2}>{song.title}</Text>
-                    <Text style={[st.favArtist, { color: colors.subtext }]} numberOfLines={1}>{song.artist}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+      {/* Tracks vs their albums */}
+      <View style={st.section}>
+        <View>
+          <Text style={[st.sectionTitle, { color: colors.text }]}>Tracks vs Their Albums</Text>
+          <Text style={[st.sub, { color: colors.subtext, marginTop: 2 }]}>
+            {stats.vsAlbums === null
+              ? `Rate a few tracks from albums ${userId ? 'they' : 'you'}'ve rated to see how they compare.`
+              : `${Theirs} tracks average ${Math.abs(stats.vsAlbums) < 0.05 ? 'the same as' : `${Math.abs(stats.vsAlbums).toFixed(1)} ${stats.vsAlbums > 0 ? 'higher' : 'lower'} than`} their albums, across ${stats.vsAlbumsCount} album${stats.vsAlbumsCount !== 1 ? 's' : ''}.`}
+          </Text>
+        </View>
+        {stats.standouts.map(({ song, albumRating }) => (
+          <Pressable key={song.songId} onPress={() => onSongPress(song)} style={({ pressed }) => [st.songRow, { opacity: pressed ? 0.7 : 1 }]}>
+            <SongThumb uri={song.artworkUrl} bg={colors.border} />
+            <View style={{ flex: 1 }}>
+              <Text style={[st.songTitle, { color: colors.text }]} numberOfLines={1}>{song.title}</Text>
+              <Text style={[st.songSub, { color: colors.subtext }]} numberOfLines={1}>{song.albumTitle || song.artist}</Text>
             </View>
-          )}
-
-          {/* Most logged artists, by songs */}
-          {stats.topArtists.length > 0 && (
-            <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: colors.text }]}>Most Listend Artists by Songs</Text>
-              <View style={{ gap: 10 }}>
-                {stats.topArtists.map((a, i) => (
-                  <View key={a.artist} style={st.artistRow}>
-                    <Text style={[st.rank, { color: colors.subtext }]}>{i + 1}</Text>
-                    <Text style={[st.artistName, { color: colors.text }]} numberOfLines={1}>{a.artist}</Text>
-                    <Text style={[st.artistSub, { color: colors.subtext }]}>
-                      {a.count} song{a.count !== 1 ? 's' : ''}{a.rated > 0 ? ` · ${(a.sum / a.rated).toFixed(1)} avg` : ''}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+            <View style={[st.chip, { backgroundColor: GROW_BG }]}>
+              <Text style={[st.chipText, { color: GROW_CLR }]}>{song.rating}</Text>
             </View>
-          )}
-
-          <Pressable onPress={toggle} style={({ pressed }) => [st.more, { opacity: pressed ? 0.6 : 1 }]}>
-            <Text style={[st.moreText, { color: colors.tint }]}>Show less</Text>
+            <Text style={[st.vs, { color: colors.subtext }]}>vs</Text>
+            <View style={[st.chip, { backgroundColor: colors.border }]}>
+              <Text style={[st.chipText, { color: colors.subtext }]}>{albumRating % 1 === 0 ? albumRating : albumRating.toFixed(1)}</Text>
+            </View>
           </Pressable>
-        </>
+        ))}
+      </View>
+
+      {/* Favourite tracks */}
+      {stats.favourites.length > 0 && (
+        <View style={st.section}>
+          <View style={st.sectionHeader}>
+            <Ionicons name="trophy" size={13} color={colors.tint} />
+            <Text style={[st.sectionTitle, { color: colors.text }]}>Favourite Tracks</Text>
+            <Text style={[st.sub, { color: colors.subtext }]}>{stats.favourites.length}</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.carousel}>
+            {stats.latestFavourites.map(song => (
+              <Pressable key={song.songId} onPress={() => onSongPress(song)} style={({ pressed }) => [st.favCard, { opacity: pressed ? 0.75 : 1 }]}>
+                {song.artworkUrl ? (
+                  <ExpoImage source={{ uri: song.artworkUrl }} style={st.favArt} contentFit="cover" cachePolicy="disk" />
+                ) : (
+                  <View style={[st.favArt, { backgroundColor: colors.border }]} />
+                )}
+                <Text style={[st.favTitle, { color: colors.text }]} numberOfLines={2}>{song.title}</Text>
+                <Text style={[st.favArtist, { color: colors.subtext }]} numberOfLines={1}>{song.artist}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Most logged artists, by songs */}
+      {stats.topArtists.length > 0 && (
+        <View style={st.section}>
+          <Text style={[st.sectionTitle, { color: colors.text }]}>Most Listend Artists by Songs</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.carousel}>
+            {stats.topArtists.map(a => {
+              const img = artistImages[a.artist];
+              return (
+                <View key={a.artist} style={st.artistCard}>
+                  {img ? (
+                    <ExpoImage source={{ uri: img }} style={st.artistPhoto} contentFit="cover" cachePolicy="disk" />
+                  ) : (
+                    <View style={[st.artistPhoto, { backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={[st.artistInitial, { color: colors.subtext }]}>{a.artist.charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <Text style={[st.artistName, { color: colors.text }]} numberOfLines={1}>{a.artist}</Text>
+                  <Text style={[st.artistSub, { color: colors.subtext }]} numberOfLines={1}>
+                    {a.count} song{a.count !== 1 ? 's' : ''}{a.rated > 0 ? ` · ${(a.sum / a.rated).toFixed(1)}` : ''}
+                  </Text>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
       )}
     </View>
   );
@@ -288,42 +328,41 @@ function SongThumb({ uri, bg }: { uri?: string; bg: string }) {
     : <View style={[st.thumb, { backgroundColor: bg }]} />;
 }
 
+const CHART_H = 110;
+const BAR_GAP = 4;
+
 const st = StyleSheet.create({
   card:         { borderRadius: 14, padding: 18, borderWidth: StyleSheet.hairlineWidth },
-  titleRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  titleRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   title:        { fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
-  titleRight:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
   titleValue:   { fontSize: 15, fontWeight: '700' },
-  strip:        { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  cell:         { flex: 1, alignItems: 'center', paddingVertical: 12, gap: 3 },
-  divider:      { width: StyleSheet.hairlineWidth, height: 32 },
-  val:          { fontSize: 17, fontWeight: '700' },
-  lbl:          { fontSize: 10, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.6, textAlign: 'center' },
-  more:         { alignItems: 'center', paddingTop: 14 },
-  moreText:     { fontSize: 14, fontWeight: '600' },
-  section:      { paddingTop: 20, gap: 10 },
+  tileRow:      { flexDirection: 'row', gap: 8 },
+  section:      { paddingTop: 22, gap: 10 },
   sectionHeader:{ flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionTitle: { fontSize: 14, fontWeight: '700' },
-  sub:          { fontSize: 12, fontWeight: '500' },
-  body:         { fontSize: 13, lineHeight: 19 },
-  empty:        { fontSize: 13, lineHeight: 19 },
-  barRow:       { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  barLabel:     { fontSize: 13, fontWeight: '600', width: 18, textAlign: 'right' },
-  track:        { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden', flexDirection: 'row' },
-  fill:         { height: 6, borderRadius: 3 },
-  barCount:     { fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
+  sectionTitle: { fontSize: 15, fontWeight: '700' },
+  sub:          { fontSize: 12, fontWeight: '500', lineHeight: 17 },
+  chart:        { flexDirection: 'row', alignItems: 'flex-end', gap: BAR_GAP, height: CHART_H + 16 },
+  col:          { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
+  colCount:     { fontSize: 10, fontWeight: '700' },
+  bar:          { alignSelf: 'stretch', borderRadius: 4, alignItems: 'center', paddingTop: 3, overflow: 'hidden' },
+  dot:          { width: 4, height: 4, borderRadius: 2 },
+  axis:         { flexDirection: 'row', gap: BAR_GAP, marginTop: -4 },
+  axisLabel:    { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700' },
   songRow:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  thumb:        { width: 40, height: 40, borderRadius: 4 },
+  thumb:        { width: 42, height: 42, borderRadius: 4 },
   songTitle:    { fontSize: 14, fontWeight: '600' },
   songSub:      { fontSize: 12, marginTop: 2 },
-  gap:          { fontSize: 14, fontWeight: '700' },
+  chip:         { minWidth: 30, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, alignItems: 'center' },
+  chipText:     { fontSize: 13, fontWeight: '800' },
+  vs:           { fontSize: 11, fontWeight: '600' },
   carousel:     { gap: 12, paddingBottom: 4 },
   favCard:      { width: 96, gap: 5 },
   favArt:       { width: 96, height: 96, borderRadius: 6 },
   favTitle:     { fontSize: 12, fontWeight: '600' },
   favArtist:    { fontSize: 11 },
-  artistRow:    { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rank:         { fontSize: 13, fontWeight: '700', width: 16, textAlign: 'right' },
-  artistName:   { flex: 1, fontSize: 14, fontWeight: '600' },
-  artistSub:    { fontSize: 12 },
+  artistCard:   { width: 84, alignItems: 'center', gap: 3 },
+  artistPhoto:  { width: 68, height: 68, borderRadius: 34, marginBottom: 3 },
+  artistInitial:{ fontSize: 22, fontWeight: '700' },
+  artistName:   { fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  artistSub:    { fontSize: 11, textAlign: 'center' },
 });
