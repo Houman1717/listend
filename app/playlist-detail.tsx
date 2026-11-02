@@ -33,6 +33,7 @@ import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import PlaylistFormModal from '@/components/PlaylistFormModal';
 import { handleOrName } from '@/lib/userHandle';
+import { libraryMatcher } from '@/lib/albumMatch';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -497,6 +498,14 @@ export default function PlaylistDetailScreen() {
     [ownPlaylist?.albumIds, loggedById, extraAlbums]
   );
 
+  // How many of the playlist's albums *you* have listened to, on your own
+  // playlists and on anyone else's. By id, or by title+artist so a different
+  // edition of the same album still counts.
+  const isListened = useMemo(() => {
+    const matchesLibrary = libraryMatcher(loggedAlbums);
+    return (a: LoggedAlbum) => loggedById.has(a.id) || matchesLibrary(a);
+  }, [loggedAlbums, loggedById]);
+
   useEffect(() => {
     if (!viewingOther && !ownPlaylist) {
       router.back();
@@ -510,6 +519,7 @@ export default function PlaylistDetailScreen() {
   const playlistName = viewingOther ? otherPlaylistName : (ownPlaylist?.name ?? '');
   const playlistDesc = viewingOther ? otherPlaylistDesc : (ownPlaylist?.description ?? null);
   const albums       = viewingOther ? otherAlbums       : ownAlbums;
+  const listenedCount = albums.filter(isListened).length;
 
   function confirmRemoveAlbum(album: LoggedAlbum) {
     Alert.alert(
@@ -622,6 +632,15 @@ export default function PlaylistDetailScreen() {
             <Text style={[s.albumCount, { color: colors.subtext }]}>
               {albums.length === 1 ? '1 album' : `${albums.length} albums`}
             </Text>
+            {albums.length > 0 && (
+              <View style={s.listenedRow}>
+                <FontAwesome name="headphones" size={13} color={colors.tint} />
+                <Text style={[s.listenedText, { color: colors.tint }]}>
+                  {listenedCount}/{albums.length}
+                  <Text style={{ fontWeight: '400', color: colors.subtext }}> listend</Text>
+                </Text>
+              </View>
+            )}
             {playlistDesc ? (
               <Text style={[s.description, { color: colors.subtext }]}>{playlistDesc}</Text>
             ) : null}
@@ -763,6 +782,8 @@ const s = StyleSheet.create({
   heartCount:    { fontSize: 11, fontWeight: '700' },
   playlistName: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
   albumCount:   { fontSize: 13 },
+  listenedRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  listenedText: { fontSize: 14, fontWeight: '700' },
   byline:       { fontSize: 14 },
   description:  { fontSize: 14, lineHeight: 20, marginTop: 2 },
   deleteBtn:    { padding: 6 },
