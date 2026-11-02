@@ -63,21 +63,48 @@ function buildBody({ albums, hours }: RecapStats): string {
  *
  * Pass null when nothing was logged this month — no recap worth promising.
  */
-export async function scheduleMonthlyRecapNotification(stats: RecapStats | null) {
+export function scheduleMonthlyRecapNotification(stats: RecapStats | null): Promise<void> {
+  return enqueue(() => schedule(stats));
+}
+
+export function cancelMonthlyRecapNotification(): Promise<void> {
+  return enqueue(cancelAll);
+}
+
+// One recap at a time. The scheduler fires on every loggedAlbums change, which
+// happens many times at launch (cache, sync, durations, genre tags). Run in
+// parallel, each call cancelled the same stored id and booked its own
+// notification, but only the last id was saved. The rest were orphaned and
+// piled up all month: one user got 17 October recaps, each with different counts.
+let queue: Promise<void> = Promise.resolve();
+function enqueue(task: () => Promise<void>): Promise<void> {
+  queue = queue.then(task, task);
+  return queue;
+}
+
+// A fixed identifier, so booking again replaces the recap rather than adding one.
+const RECAP_ID = 'monthly-recap';
+
+async function schedule(stats: RecapStats | null) {
   if (!stats || stats.albums === 0) {
-    await cancelMonthlyRecapNotification();
+    await cancelAll();
     return;
   }
+
+  // Strays from before the fixed identifier would otherwise all still fire.
+  const booked = await cancelStrays();
 
   const { fireAt, year, month } = recapTarget();
   const signature = `${fireAt.toISOString()}|${stats.albums}|${stats.hours}`;
 
+  // The signature alone isn't enough: one saved by the old code can match
+  // while its notification was just cancelled above as a stray.
   const existing = await AsyncStorage.getItem(SIGNATURE_KEY);
-  if (existing === signature) return;
+  if (existing === signature && booked) return;
 
-  await cancelMonthlyRecapNotification();
-
-  const id = await Notifications.scheduleNotificationAsync({
+  await Notifications.cancelScheduledNotificationAsync(RECAP_ID).catch(() => {});
+  await Notifications.scheduleNotificationAsync({
+    identifier: RECAP_ID,
     content: {
       title: `Your ${MONTH_NAMES[month]} is ready`,
       body: buildBody(stats),
@@ -89,13 +116,24 @@ export async function scheduleMonthlyRecapNotification(stats: RecapStats | null)
     },
   });
 
-  await AsyncStorage.multiSet([[NOTIF_ID_KEY, id], [SIGNATURE_KEY, signature]]);
+  await AsyncStorage.setItem(SIGNATURE_KEY, signature);
 }
 
-export async function cancelMonthlyRecapNotification() {
-  const id = await AsyncStorage.getItem(NOTIF_ID_KEY);
-  if (id) {
-    await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
-  }
-  await AsyncStorage.multiRemove([NOTIF_ID_KEY, SIGNATURE_KEY]);
+/**
+ * Cancels every scheduled recap that isn't the current fixed-id one, and
+ * reports whether the fixed-id one is booked.
+ */
+async function cancelStrays(): Promise<boolean> {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
+  await Promise.all(scheduled
+    .filter(n => n.content.data?.type === 'month_in_review' && n.identifier !== RECAP_ID)
+    .map(n => Notifications.cancelScheduledNotificationAsync(n.identifier).catch(() => {})));
+  await AsyncStorage.removeItem(NOTIF_ID_KEY);
+  return scheduled.some(n => n.identifier === RECAP_ID);
+}
+
+async function cancelAll() {
+  await cancelStrays();
+  await Notifications.cancelScheduledNotificationAsync(RECAP_ID).catch(() => {});
+  await AsyncStorage.removeItem(SIGNATURE_KEY);
 }
