@@ -30,6 +30,7 @@ import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
 import { GenresCard } from '@/components/GenresCard';
 import { RatingChart } from '@/components/RatingChart';
+import { CompareHero, HeadToHead, InCommon, RatingCompare, GenreCompare, Top5Overlap } from '@/components/CompareCards';
 import { UnlockCard } from '@/components/ProLockedSection';
 import { openSongPage } from '@/lib/openSong';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
@@ -1544,6 +1545,55 @@ export default function MyStatsScreen() {
   }
   const taste = tasteLabel(compatibility);
 
+  // Shared albums best-first (your rating + theirs), shared artists in their
+  // display case, most-logged between you first.
+  const friendRatingById = new Map(friendAlbums.map(a => [a.id, effectiveRating(a)]));
+  const myRatingById     = new Map(ownAlbums.map(a => [a.id, effectiveRating(a)]));
+  const sharedAlbumRatings = new Map(sharedAlbumList.map(a => [a.id, { mine: myRatingById.get(a.id) ?? 0, theirs: friendRatingById.get(a.id) ?? 0 }]));
+  const sharedAlbumsBest = [...sharedAlbumList].sort((a, b) => {
+    const ra = sharedAlbumRatings.get(a.id)!, rb = sharedAlbumRatings.get(b.id)!;
+    return (rb.mine + rb.theirs) - (ra.mine + ra.theirs);
+  });
+  const artistDisplay = new Map(ownAlbums.map(a => [a.artist.toLowerCase().trim(), a.artist]));
+  const artistLogCount = new Map<string, number>();
+  for (const a of [...ownAlbums, ...friendAlbums]) {
+    const k = a.artist.toLowerCase().trim();
+    artistLogCount.set(k, (artistLogCount.get(k) ?? 0) + 1);
+  }
+  const sharedArtistNames = [...sharedArtistList]
+    .sort((a, b) => (artistLogCount.get(b) ?? 0) - (artistLogCount.get(a) ?? 0))
+    .map(k => artistDisplay.get(k) ?? k);
+
+  // Photos for the shared artists on screen.
+  const sharedArtistPhotoKey = sharedArtistNames.slice(0, 12).join('|');
+  useEffect(() => {
+    const names = sharedArtistPhotoKey ? sharedArtistPhotoKey.split('|').filter(n => !artistImages[n]) : [];
+    if (names.length === 0) return;
+    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+    Promise.allSettled(names.map(name =>
+      fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
+        .then(r => r.ok ? r.json() : [])
+        .then((results: { artworkUrl: string }[]) => ({ name, url: results[0]?.artworkUrl ?? '' }))
+    )).then(results => {
+      const images: Record<string, string> = {};
+      for (const r of results) if (r.status === 'fulfilled' && r.value.url) images[r.value.name] = r.value.url;
+      if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedArtistPhotoKey]);
+
+  // Your own avatar and name for the Compare hero.
+  const [me, setMe] = useState<{ name: string; avatarUrl: string | null }>({ name: 'You', avatarUrl: null });
+  useEffect(() => {
+    if (mainTab !== 'compare' || viewedUserId || me.avatarUrl) return;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user) return;
+      const { data } = await supabase.from('profiles').select('display_name, avatar_url').eq('id', session.user.id).maybeSingle();
+      if (data) setMe({ name: data.display_name || 'You', avatarUrl: data.avatar_url ?? null });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainTab]);
+
 
   function handleAlbumPress(album: LoggedAlbum) {
     router.push({
@@ -1920,173 +1970,64 @@ export default function MyStatsScreen() {
             {/* Friend found and is Pro */}
             {compareFriend?.isPro && (
               <>
-                {/* Friend profile card */}
-                <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', gap: 6 }]}>
-                  {compareFriend.avatarUrl
-                    ? <ExpoImage source={{ uri: compareFriend.avatarUrl }} style={{ width: 64, height: 64, borderRadius: 32 }} contentFit="cover" />
-                    : <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' }}><FontAwesome name="user" size={28} color={SUBTEXT} /></View>}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{compareFriend.displayName}</Text>
-                    <ProBadge />
-                  </View>
-                  {handleText(compareFriend.username, compareFriend.id)
-                    ? <Text style={{ color: colors.subtext, fontSize: 13 }}>{handleText(compareFriend.username, compareFriend.id)}</Text>
-                    : null}
-                </View>
-
                 {friendLoading
                   ? <ActivityIndicator color={colors.tint} style={{ marginTop: 20 }} />
-                  : (
-                  <>
-                    {/* Compatibility score */}
-                    <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', gap: 6 }]}>
-                      <Text style={[s.cardTitle, { color: colors.textMuted }]}>COMPATIBILITY</Text>
-                      <Text style={{ color: colors.tint, fontSize: 56, fontWeight: '800', letterSpacing: -2 }}>{compatibility}%</Text>
-                      <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{taste.label}</Text>
-                      <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center', marginTop: 2 }}>
-                        {sharedArtistList.length} shared artists · {sharedAlbumList.length} shared albums
-                      </Text>
-                    </View>
+                  : (() => {
+                    const them = { name: compareFriend.displayName, avatarUrl: compareFriend.avatarUrl };
+                    const cc = { text: colors.text, subtext: colors.subtext, muted: colors.textMuted, tint: colors.tint, cardBg: colors.surface, cardBorder: colors.border, background: colors.background };
+                    const num = (v: unknown) => (typeof v === 'number' ? v : null);
+                    return (
+                      <>
+                        <CompareHero
+                          me={me} them={them}
+                          compatibility={compatibility}
+                          label={taste.label}
+                          sharedAlbums={sharedAlbumList}
+                          sharedArtists={sharedArtistList.length}
+                          fallbackAlbums={[...ownAlbums, ...friendAlbums]}
+                          colors={cc}
+                        />
 
-                    {/* Side-by-side stats */}
-                    <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: 'hidden' }]}>
-                      <Text style={[s.cardTitle, { color: colors.textMuted, paddingHorizontal: 18, paddingTop: 18, marginBottom: 0 }]}>STATS COMPARISON</Text>
-                      {/* Header row */}
-                      <View style={{ flexDirection: 'row', paddingHorizontal: 18, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-                        <Text style={{ flex: 1, color: colors.subtext, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>STAT</Text>
-                        <Text style={{ width: 64, color: ACCENT, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>YOU</Text>
-                        <Text style={{ width: 64, color: colors.subtext, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>THEM</Text>
-                      </View>
-                      {[
-                        { label: 'Albums Logged',   mine: ownAlbums.length,    theirs: friendAlbums.length },
-                        { label: 'Avg Rating',      mine: avgRating,           theirs: friendAvgRating },
-                        { label: 'Listening Hours', mine: totalHours,          theirs: friendHoursVal },
-                        { label: 'Unique Artists',  mine: uniqueArtists,       theirs: friendArtistCount },
-                        { label: 'Reviews Written', mine: myReviewCount,       theirs: friendReviewCount },
-                        { label: 'Re-listen Rate',  mine: `${myRelistenRate}%`,   theirs: `${friendRelistenRate}%` },
-                        { label: 'Avg Era',         mine: myAvgEra ?? '—',    theirs: friendAvgEra ?? '—' },
-                        { label: 'Peak Month',      mine: myActiveMonth,       theirs: friendActiveMonth },
-                      ].map((row, i, arr) => (
-                        <View key={row.label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: i < arr.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }}>
-                          <Text style={{ flex: 1, color: colors.text, fontSize: 14, fontWeight: '600' }}>{row.label}</Text>
-                          <Text style={{ width: 64, color: ACCENT, fontSize: 15, fontWeight: '800', textAlign: 'center' }}>{row.mine}</Text>
-                          <Text style={{ width: 64, color: colors.subtext, fontSize: 15, fontWeight: '700', textAlign: 'center' }}>{row.theirs}</Text>
-                        </View>
-                      ))}
-                    </View>
+                        <HeadToHead me={me} them={them} colors={cc} rows={[
+                          { icon: 'music',      label: 'Albums',         mine: String(ownAlbums.length), theirs: String(friendAlbums.length), mineN: ownAlbums.length, theirsN: friendAlbums.length },
+                          { icon: 'headphones', label: 'Listening hrs',  mine: String(totalHours), theirs: String(friendHoursVal), mineN: num(totalHours), theirsN: num(friendHoursVal) },
+                          { icon: 'users',      label: 'Artists',        mine: String(uniqueArtists), theirs: String(friendArtistCount), mineN: uniqueArtists, theirsN: friendArtistCount },
+                          { icon: 'volume-up',  label: 'Avg rating',     mine: String(avgRating), theirs: String(friendAvgRating), mineN: num(Number(avgRating)), theirsN: num(Number(friendAvgRating)), rating: true },
+                          { icon: 'pencil',     label: 'Reviews',        mine: String(myReviewCount), theirs: String(friendReviewCount), mineN: myReviewCount, theirsN: friendReviewCount },
+                          { icon: 'repeat',     label: 'Re-listen rate', mine: `${myRelistenRate}%`, theirs: `${friendRelistenRate}%`, mineN: myRelistenRate, theirsN: friendRelistenRate },
+                          { icon: 'calendar',   label: 'Avg era',        mine: String(myAvgEra ?? '—'), theirs: String(friendAvgEra ?? '—') },
+                          { icon: 'fire',       label: 'Peak month',     mine: myActiveMonth, theirs: friendActiveMonth },
+                        ]} />
 
-                    {/* Shared albums row */}
-                    <Pressable
-                      onPress={() => setSharedModal('albums')}
-                      style={({ pressed }) => [s.card, { backgroundColor: colors.surface, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
-                      <FontAwesome name="music" size={16} color={colors.tint} style={{ marginRight: 12 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{sharedAlbumList.length} Albums in Common</Text>
-                        <Text style={{ color: colors.subtext, fontSize: 12, marginTop: 2 }}>Tap to see them with ratings</Text>
-                      </View>
-                      <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
-                    </Pressable>
+                        <InCommon
+                          albums={sharedAlbumsBest}
+                          albumRatings={sharedAlbumRatings}
+                          artists={sharedArtistNames}
+                          artistImages={artistImages}
+                          likedArtists={sharedLikedArtists.map(a => a.name)}
+                          onAlbumPress={handleAlbumPress}
+                          onSeeAlbums={() => setSharedModal('albums')}
+                          onSeeArtists={() => setSharedModal('artists')}
+                          colors={cc}
+                        />
 
-                    {/* Shared artists row */}
-                    <Pressable
-                      onPress={() => setSharedModal('artists')}
-                      style={({ pressed }) => [s.card, { backgroundColor: colors.surface, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', opacity: pressed ? 0.7 : 1 }]}>
-                      <FontAwesome name="headphones" size={16} color={colors.tint} style={{ marginRight: 12 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{sharedArtistList.length} Artists in Common</Text>
-                        <Text style={{ color: colors.subtext, fontSize: 12, marginTop: 2 }}>Tap to see your overlap</Text>
-                      </View>
-                      <FontAwesome name="chevron-right" size={13} color={colors.subtext} />
-                    </Pressable>
+                        <RatingCompare mine={ownAlbums} theirs={friendAlbums} theirName={them.name} colors={cc} />
 
-                    {/* Liked artists in common */}
-                    {(myLikedArtists.length > 0 || friendLikedArtists.length > 0) && (
-                      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <Text style={[s.cardTitle, { color: colors.textMuted }]}>LIKED ARTISTS IN COMMON</Text>
-                        {sharedLikedArtists.length === 0 ? (
-                          <Text style={{ color: colors.subtext, fontSize: 14, textAlign: 'center' }}>No shared liked artists yet</Text>
-                        ) : (
-                          <>
-                            <Text style={{ color: colors.tint, fontSize: 28, fontWeight: '800', textAlign: 'center' }}>{sharedLikedArtists.length}</Text>
-                            <Text style={{ color: colors.subtext, fontSize: 13, textAlign: 'center', marginTop: 2 }}>
-                              {sharedLikedArtists.slice(0, 5).map(a => a.name).join(', ')}{sharedLikedArtists.length > 5 ? ` +${sharedLikedArtists.length - 5} more` : ''}
-                            </Text>
-                          </>
+                        <GenreCompare mine={ownAlbums} theirs={friendAlbums} theirName={them.name} colors={cc} />
+
+                        {(friendTop5Albums.length > 0 || friendTop5Artists.length > 0) && (
+                          <Top5Overlap
+                            theirName={them.name}
+                            albums={friendTop5Albums}
+                            artists={friendTop5Artists}
+                            sharedAlbumIds={new Set(sharedTop5Albums.map(a => a.id))}
+                            sharedArtistIds={new Set(sharedTop5Artists.map(a => a.id))}
+                            colors={cc}
+                          />
                         )}
-                      </View>
-                    )}
-
-                    {/* Top 5 overlap */}
-                    {(friendTop5Albums.length > 0 || friendTop5Artists.length > 0) && (
-                      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <Text style={[s.cardTitle, { color: colors.textMuted }]}>TOP 5 OVERLAP</Text>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                          <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-                            <Text style={{ color: colors.tint, fontSize: 28, fontWeight: '800' }}>{sharedTop5Albums.length}</Text>
-                            <Text style={{ color: colors.subtext, fontSize: 12, textAlign: 'center' }}>Albums in both{'\n'}Top 5s</Text>
-                          </View>
-                          <View style={{ width: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
-                          <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-                            <Text style={{ color: colors.tint, fontSize: 28, fontWeight: '800' }}>{sharedTop5Artists.length}</Text>
-                            <Text style={{ color: colors.subtext, fontSize: 12, textAlign: 'center' }}>Artists in both{'\n'}Top 5s</Text>
-                          </View>
-                        </View>
-                        {sharedTop5Albums.length > 0 && (
-                          <View style={{ marginTop: 12, gap: 4 }}>
-                            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>SHARED ALBUMS</Text>
-                            {sharedTop5Albums.map(a => (
-                              <Text key={a.id} style={{ color: colors.text, fontSize: 13 }}>• {a.title}</Text>
-                            ))}
-                          </View>
-                        )}
-                        {sharedTop5Artists.length > 0 && (
-                          <View style={{ marginTop: 10, gap: 4 }}>
-                            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>SHARED ARTISTS</Text>
-                            {sharedTop5Artists.map(a => (
-                              <Text key={a.id} style={{ color: colors.text, fontSize: 13 }}>• {a.name}</Text>
-                            ))}
-                          </View>
-                        )}
-                      </View>
-                    )}
-
-                    {/* Genre comparison */}
-                    {(topGenres.length > 0 || friendTopGenres.length > 0) && (
-                      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <Text style={[s.cardTitle, { color: colors.textMuted }]}>TOP GENRES</Text>
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginBottom: 12 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                            <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.tint }} />
-                            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '600' }}>YOU</Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                            <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.subtext }} />
-                            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '600' }}>THEM</Text>
-                          </View>
-                        </View>
-                        {(() => {
-                          const allGenres = [...new Set([...topGenres.map(([g]) => g), ...friendTopGenres.map(([g]) => g)])].slice(0, 8);
-                          const myMap = new Map(topGenres);
-                          const theirMap = new Map(friendTopGenres);
-                          const maxVal = Math.max(...allGenres.map(g => Math.max(myMap.get(g) ?? 0, theirMap.get(g) ?? 0)), 1);
-                          return allGenres.map(genre => (
-                            <View key={genre} style={{ marginBottom: 10 }}>
-                              <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>{genre}</Text>
-                              <View style={{ gap: 3 }}>
-                                <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden' }}>
-                                  <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.tint, width: `${((myMap.get(genre) ?? 0) / maxVal) * 100}%` }} />
-                                </View>
-                                <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden' }}>
-                                  <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.subtext, width: `${((theirMap.get(genre) ?? 0) / maxVal) * 100}%` }} />
-                                </View>
-                              </View>
-                            </View>
-                          ));
-                        })()}
-                      </View>
-                    )}
-                  </>
-                )}
+                      </>
+                    );
+                  })()}
               </>
             )}
           </ScrollView>
