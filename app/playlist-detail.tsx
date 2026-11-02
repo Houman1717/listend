@@ -629,17 +629,22 @@ export default function PlaylistDetailScreen() {
                 </Text>
               </Pressable>
             ) : null}
-            <Text style={[s.albumCount, { color: colors.subtext }]}>
-              {albums.length === 1 ? '1 album' : `${albums.length} albums`}
-            </Text>
-            {albums.length > 0 && (
-              <View style={s.listenedRow}>
-                <FontAwesome name="headphones" size={13} color={colors.tint} />
-                <Text style={[s.listenedText, { color: colors.tint }]}>
-                  {listenedCount}/{albums.length}
-                  <Text style={{ fontWeight: '400', color: colors.subtext }}> listend</Text>
+            {albums.length > 0 ? (
+              // Same as the featured playlists' header: a percentage, then the
+              // count (which also gives the album total).
+              <View style={s.listenedWrap}>
+                <View style={s.listenedRow}>
+                  <FontAwesome name="headphones" size={13} color={colors.tint} />
+                  <Text style={[s.listenedPct, { color: colors.tint }]}>
+                    {Math.round(listenedCount / albums.length * 100)}%
+                  </Text>
+                </View>
+                <Text style={[s.albumCount, { color: colors.subtext }]}>
+                  {listenedCount} of {albums.length === 1 ? '1 album' : `${albums.length} albums`} listend
                 </Text>
               </View>
+            ) : (
+              <Text style={[s.albumCount, { color: colors.subtext }]}>0 albums</Text>
             )}
             {playlistDesc ? (
               <Text style={[s.description, { color: colors.subtext }]}>{playlistDesc}</Text>
@@ -782,8 +787,9 @@ const s = StyleSheet.create({
   heartCount:    { fontSize: 11, fontWeight: '700' },
   playlistName: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
   albumCount:   { fontSize: 13 },
-  listenedRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  listenedText: { fontSize: 14, fontWeight: '700' },
+  listenedWrap: { gap: 4, marginTop: 2 },
+  listenedRow:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  listenedPct:  { fontSize: 15, fontWeight: '700' },
   byline:       { fontSize: 14 },
   description:  { fontSize: 14, lineHeight: 20, marginTop: 2 },
   deleteBtn:    { padding: 6 },
