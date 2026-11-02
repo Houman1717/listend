@@ -462,12 +462,20 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 3c. Want to Listen
-      const { data: wantData, error: wantErr } = await supabase
-        .from('want_to_listen')
-        .select('spotify_id, title, artist, year, artwork_url, created_at')
-        .eq('user_id', uid)
-        .order('created_at', { ascending: false });
+      // 3c. Want to Listen. Paged like logged albums: a single select stops at
+      // PostgREST's 1000-row cap, and the result is written over the cache, so
+      // a list past 1000 silently lost its oldest entries on every launch.
+      const wantData = await fetchAllRows<any>(
+        (from, to) => supabase
+          .from('want_to_listen')
+          .select('spotify_id, title, artist, year, artwork_url, created_at')
+          .eq('user_id', uid)
+          .order('created_at', { ascending: false })
+          .order('spotify_id')
+          .range(from, to),
+        20,
+      );
+      const wantErr = wantData === null ? { message: 'paged want_to_listen fetch failed' } : null;
 
       if (!cancelled) {
         if (wantErr) {
