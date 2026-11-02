@@ -22,6 +22,7 @@ import { ProLockedSection } from '@/components/ProLockedSection';
 import { ReleaseYearChart } from '@/components/ReleaseYearChart';
 import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
+import { ActivityChart, bestCover, peakIndexes, type ActivityBucket } from '@/components/ActivityChart';
 import { SongStatsCard } from '@/components/SongStatsCard';
 import { openSongPage } from '@/lib/openSong';
 
@@ -67,12 +68,10 @@ function computeYearStats(albums: LoggedAlbum[]) {
 
   // Monthly counts
   const monthlyCounts: number[] = Array(12).fill(0);
-  const dowCounts: number[] = Array(7).fill(0); // Mon=0 … Sun=6
   for (const a of albums) {
     const d = new Date(a.dateLogged);
     monthlyCounts[d.getMonth()]++;
     // JS: 0=Sun … 6=Sat → remap to Mon=0 … Sun=6
-    dowCounts[(d.getDay() + 6) % 7]++;
   }
 
   // Milestones
@@ -145,7 +144,7 @@ function computeYearStats(albums: LoggedAlbum[]) {
     .map(([genre, count]) => ({ genre, count }));
 
   return {
-    avgRating, hours, reviewCount, monthlyCounts, dowCounts,
+    avgRating, hours, reviewCount, monthlyCounts,
     firstAlbum, lastAlbum, album10, album25, album50, album100,
     highestRated, relistens, firstListens, mostRelistened,
     ratingDist, topArtistsByCount, topArtistsByRating, topGenres,
@@ -629,11 +628,9 @@ export default function YearInReviewScreen() {
   const highestRatedThisYear = buildHighestRated(loggedAlbums.filter(a => a.year === selectedYear));
   const highestRatedPrevious = buildHighestRated(loggedAlbums.filter(a => a.year < selectedYear));
 
-  const maxMonthly = Math.max(...stats.monthlyCounts, 1);
   const avgPerMonth = yearAlbums.length > 0
     ? (yearAlbums.length / stats.monthlyCounts.filter(c => c > 0).length).toFixed(1)
     : '0';
-  const maxDow = Math.max(...stats.dowCounts, 1);
 
   return (
     <>
@@ -743,59 +740,39 @@ export default function YearInReviewScreen() {
                 <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                   <Text style={[st.label, { color: muted }]}>MONTHLY ACTIVITY</Text>
 
-                  {/* Vertical bar chart — all 12 months */}
                   {(() => {
-                    const BAR_AREA_H = 140;
+                    const now = new Date();
+                    const buckets: ActivityBucket[] = MONTH_NAMES.map((name, i) => ({
+                      label: name[0],
+                      albums: yearAlbums.filter(a => new Date(a.dateLogged).getMonth() === i),
+                      future: selectedYear === now.getFullYear() && i > now.getMonth(),
+                    }));
+                    const peaks = peakIndexes(buckets);
+                    const peakCount = peaks.length > 0 ? buckets[peaks[0]].albums.length : 0;
+                    const pct = yearAlbums.length > 0 ? Math.round(peakCount / yearAlbums.length * 100) : 0;
+                    const headline = peaks.length === 1 ? `${MONTH_NAMES[peaks[0]]} was the biggest month`
+                      : peaks.length === 2 ? `${MONTH_NAMES[peaks[0]]} and ${MONTH_NAMES[peaks[1]]} tied for biggest month`
+                      : `${peaks.length} months tied for biggest`;
+                    const subline = peaks.length === 1
+                      ? `${peakCount} album${peakCount === 1 ? '' : 's'} · ${pct}% of the year`
+                      : `${peakCount} album${peakCount === 1 ? '' : 's'} each`;
                     return (
-                      <View style={{ marginTop: 16, gap: 4 }}>
-                        {/* Count labels row — fixed height so bars never clip them */}
-                        <View style={{ flexDirection: 'row', gap: 5, height: 14 }}>
-                          {stats.monthlyCounts.map((count, i) => {
-                            const isTop = count === maxMonthly && maxMonthly > 0;
-                            return (
-                              <Text
-                                key={i}
-                                style={{ flex: 1, color: count > 0 ? (isTop ? tint : sub) : 'transparent', fontSize: 10, fontWeight: '700', textAlign: 'center' }}>
-                                {count}
-                              </Text>
-                            );
-                          })}
-                        </View>
-
-                        {/* Bars row */}
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 5, height: BAR_AREA_H }}>
-                          {stats.monthlyCounts.map((count, i) => {
-                            const barH = maxMonthly > 0 ? Math.max((count / maxMonthly) * BAR_AREA_H, count > 0 ? 8 : 0) : 0;
-                            const isTop = count === maxMonthly && maxMonthly > 0;
-                            return (
-                              <Pressable
-                                key={i}
-                                onPress={() => count > 0 && router.push({ pathname: '/month-in-review', params: { year: selectedYear, month: i, ...(viewedUserId ? { userId: viewedUserId, displayName: params.displayName ?? '', proTheme: params.proTheme ?? '' } : {}) } } as any)}
-                                disabled={count === 0}
-                                style={({ pressed }) => ({ flex: 1, height: BAR_AREA_H, justifyContent: 'flex-end', opacity: pressed ? 0.7 : 1 })}>
-                                <View style={{ height: barH, width: '100%', borderRadius: 4, backgroundColor: isTop ? tint : mutedFill }} />
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-
-                        {/* Month label row */}
-                        <View style={{ flexDirection: 'row', gap: 5 }}>
-                          {stats.monthlyCounts.map((count, i) => {
-                            const isTop = count === maxMonthly && maxMonthly > 0;
-                            return (
-                              <Text key={i} style={{ flex: 1, color: isTop ? tint : sub, fontSize: 10, fontWeight: isTop ? '700' : '500', textAlign: 'center' }}>
-                                {MONTH_NAMES[i][0]}
-                              </Text>
-                            );
-                          })}
-                        </View>
-                      </View>
+                      <ActivityChart
+                        buckets={buckets}
+                        headline={headline}
+                        subline={subline}
+                        headlineCover={bestCover(peaks.flatMap(i => buckets[i].albums))?.artworkUrl}
+                        onBarPress={i => router.push({ pathname: '/month-in-review', params: { year: selectedYear, month: i, ...(viewedUserId ? { userId: viewedUserId, displayName: params.displayName ?? '', proTheme: params.proTheme ?? '' } : {}) } } as any)}
+                        tint={tint}
+                        textColor={txt}
+                        subtextColor={sub}
+                        faintColor={mutedFill}
+                      />
                     );
                   })()}
 
                   {/* Avg per month */}
-                  <Text style={{ color: sub, fontSize: 13, marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: cardBorder }}>
+                  <Text style={{ color: sub, fontSize: 13, marginTop: 6, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: cardBorder }}>
                     Avg <Text style={{ color: tint, fontWeight: '700' }}>{avgPerMonth}</Text> albums/month
                   </Text>
                 </View>
@@ -862,7 +839,7 @@ export default function YearInReviewScreen() {
                     <ReleaseYearChart
                       albums={yearAlbums}
                       onShowAlbums={(title, albums) => setModal({ title, albums })}
-                      livesIn={`Your ${selectedYear} lived`}
+                      livesIn={`${viewedUserId ? 'Their' : 'Your'} ${selectedYear} lived`}
                       tint={tint}
                       textColor={txt}
                       subtextColor={sub}

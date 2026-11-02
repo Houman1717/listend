@@ -21,6 +21,7 @@ import { ProLockedSection } from '@/components/ProLockedSection';
 import { ReleaseYearChart } from '@/components/ReleaseYearChart';
 import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
+import { ActivityChart, peakIndexes, type ActivityBucket } from '@/components/ActivityChart';
 import { SongStatsCard } from '@/components/SongStatsCard';
 import { openSongPage } from '@/lib/openSong';
 import { MAIN_GENRES } from '@/lib/genres';
@@ -42,6 +43,7 @@ const MONTH_NAMES = [
 ];
 
 const DOW_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const DOW_FULL   = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
 
 // ─── Stats computation ────────────────────────────────────────────────────────
@@ -94,12 +96,6 @@ function computeMonthStats(albums: LoggedAlbum[], selectedYear: number) {
   const firstAlbum = sorted[0] ?? null;
   const lastAlbum  = sorted.length > 1 ? sorted[sorted.length - 1] : null;
 
-  // Day of week counts (Mon=0 … Sun=6)
-  const dowCounts: number[] = Array(7).fill(0);
-  for (const a of albums) {
-    const d = new Date(a.dateLogged);
-    dowCounts[(d.getDay() + 6) % 7]++;
-  }
 
   // Highest rated — split by release year
   const buildTop = (list: LoggedAlbum[]) => {
@@ -117,7 +113,7 @@ function computeMonthStats(albums: LoggedAlbum[], selectedYear: number) {
 
   return {
     avgRating, hours, artistCount: artistSet.size, reviewCount,
-    topArtists, topArtistsByRating, topGenres, firstAlbum, lastAlbum, dowCounts,
+    topArtists, topArtistsByRating, topGenres, firstAlbum, lastAlbum,
     highestRatedThisYear, highestRatedPrevious,
   };
 }
@@ -405,7 +401,6 @@ export default function MonthInReviewScreen() {
   });
 
   const stats = computeMonthStats(monthAlbums, selectedYear);
-  const maxDow = Math.max(...stats.dowCounts, 1);
 
   // Fetch artist images
   useEffect(() => {
@@ -566,22 +561,35 @@ export default function MonthInReviewScreen() {
 
                 {/* ── Day of Week ── */}
                 <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                  <Text style={[st.label, { color: muted, marginBottom: 14 }]}>MOST ACTIVE DAY</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
-                    {DOW_LABELS.map((lbl, i) => {
-                      const h = maxDow > 0 ? Math.max((stats.dowCounts[i] / maxDow) * 60, stats.dowCounts[i] > 0 ? 4 : 0) : 0;
-                      const isTop = stats.dowCounts[i] === maxDow && maxDow > 0;
-                      return (
-                        <View key={i} style={{ flex: 1, alignItems: 'center', gap: 5 }}>
-                          {stats.dowCounts[i] > 0 && (
-                            <Text style={{ color: isTop ? tint : sub, fontSize: 10, fontWeight: '700' }}>{stats.dowCounts[i]}</Text>
-                          )}
-                          <View style={{ height: Math.max(h, 4), width: '100%', borderRadius: 3, backgroundColor: isTop ? tint : mutedFill }} />
-                          <Text style={{ color: isTop ? tint : sub, fontSize: 10, fontWeight: isTop ? '700' : '500' }}>{lbl}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
+                  <Text style={[st.label, { color: muted }]}>MOST ACTIVE DAY</Text>
+                  {(() => {
+                    const buckets: ActivityBucket[] = DOW_LABELS.map((label, i) => ({
+                      label,
+                      albums: monthAlbums.filter(a => (new Date(a.dateLogged).getDay() + 6) % 7 === i),
+                    }));
+                    const peaks = peakIndexes(buckets);
+                    const peakCount = peaks.length > 0 ? buckets[peaks[0]].albums.length : 0;
+                    const weekend = peaks.length === 2 && peaks[0] === 5 && peaks[1] === 6;
+                    const names = peaks.map(i => DOW_LABELS[i]);
+                    const headline = weekend ? 'Weekends are for listening'
+                      : peaks.length === 1 ? `${DOW_FULL[peaks[0]]}s are ${viewedUserId ? 'their' : 'your'} listening day`
+                      : `Most listening on ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+                    const subline = peaks.length === 1
+                      ? `${peakCount} of ${monthAlbums.length} albums`
+                      : `${peakCount} album${peakCount === 1 ? '' : 's'} each`;
+                    return (
+                      <ActivityChart
+                        buckets={buckets}
+                        headline={headline}
+                        subline={subline}
+                        onBarPress={i => setModal({ title: `${DOW_FULL[i]}s in ${MONTH_NAMES[selectedMonth]}`, albums: buckets[i].albums })}
+                        tint={tint}
+                        textColor={txt}
+                        subtextColor={sub}
+                        faintColor={mutedFill}
+                      />
+                    );
+                  })()}
                 </View>
 
                 {/* ── Highest Rated ── */}
@@ -640,7 +648,7 @@ export default function MonthInReviewScreen() {
                     <ReleaseYearChart
                       albums={monthAlbums}
                       onShowAlbums={(title, albums) => setModal({ title, albums })}
-                      livesIn={`Your ${MONTH_NAMES[selectedMonth]} lived`}
+                      livesIn={`${viewedUserId ? 'Their' : 'Your'} ${MONTH_NAMES[selectedMonth]} lived`}
                       tint={tint}
                       textColor={txt}
                       subtextColor={sub}
