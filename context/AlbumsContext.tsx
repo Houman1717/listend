@@ -675,11 +675,14 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     };
 
     setLoggedAlbums((prev) => [newAlbum, ...prev]);
-    setWantToListen((prev) => prev.filter((a) => a.id !== newAlbum.id));
-    setPendingAlbum(null);
 
     if (user) {
-      const logWrite = supabase
+      // Awaited, like the re-listen path above. This used to be fire-and-forget
+      // and always returned true, so a failed write (expired session, network
+      // blip) looked logged, but the row never reached the DB. The sync merge
+      // then kept it alive as "local-only" on that device only. A new phone or
+      // a reinstall showed the real DB library, and those albums were gone.
+      const { error: upsertError } = await supabase
         .from('user_albums')
         .upsert({
           user_id:     user.id,
@@ -691,23 +694,33 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
           rating:      newAlbum.rating,
           review:      newAlbum.review ?? null,
           listened_at: dateLogged,
-        }, { onConflict: 'user_id,spotify_id' })
-        .then(({ error }) => {
-          if (error) console.error('[AlbumsContext] logAlbum upsert error:', error.message);
-          return !error;
-        });
+        }, { onConflict: 'user_id,spotify_id' });
 
+      if (upsertError) {
+        console.error('[AlbumsContext] logAlbum upsert error:', upsertError.message);
+        // By identity, not by id: a sync may have landed meanwhile, and an
+        // already-logged album must keep its own entry.
+        setLoggedAlbums(prev => prev.filter(a => a !== newAlbum));
+        return false;
+      }
+    }
+
+    // Only now that the log is saved: clearing these earlier closed the log
+    // screen and dropped the album from Want to Listen even when the save failed.
+    setWantToListen((prev) => prev.filter((a) => a.id !== newAlbum.id));
+    setPendingAlbum(null);
+
+    if (user) {
       // Save the runtime now — otherwise duration_ms stays null until the
-      // album page is opened, and Listening Hours undercount. Waits for the
-      // upsert so the UPDATE has a row to land on.
-      Promise.all([logWrite, fetchAlbumDurations([newAlbum.id])])
-        .then(([saved, found]) => {
+      // album page is opened, and Listening Hours undercount.
+      fetchAlbumDurations([newAlbum.id])
+        .then(found => {
           const ms = found[newAlbum.id];
-          if (saved && ms) updateDuration(newAlbum.id, ms);
+          if (ms) updateDuration(newAlbum.id, ms);
         })
         .catch(() => {});
 
-      logWrite.then(saved => { if (saved) notifyFriendActivity(newAlbum.id, 'log'); });
+      notifyFriendActivity(newAlbum.id, 'log');
 
       supabase
         .from('want_to_listen')
