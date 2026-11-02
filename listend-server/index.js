@@ -4380,7 +4380,7 @@ app.get('/lastfm/album', [
 const MAIN_GENRES = [
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
   'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
-  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues',
+  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues', 'Reggae',
 ];
 
 // Maps lowercased keyword substrings → main genre (order matters: more specific first)
@@ -4440,7 +4440,8 @@ const TAG_MAP = [
   ['soft rock',           'Rock'],
   ['grunge',              'Rock'],
   ['rock',                'Rock'],
-  // Electronic
+  // Electronic. Dancehall first: it contains 'dance'.
+  ['dancehall',           'Reggae'],
   ['drum and bass',       'Electronic'],
   ['electropop',          'Pop'],
   ['synth-pop',           'Pop'],
@@ -4487,10 +4488,8 @@ const TAG_MAP = [
   ['baroque',             'Classical'],
   ['opera',               'Classical'],
   ['classical',           'Classical'],
-  // Latin
+  // Latin. Reggaeton must stay ahead of 'reggae', which it contains.
   ['reggaeton',           'Latin'],
-  ['dancehall',           'Latin'],
-  ['reggae',              'Latin'],
   ['latin pop',           'Latin'],
   ['bossa nova',          'Latin'],
   ['salsa',               'Latin'],
@@ -4509,6 +4508,9 @@ const TAG_MAP = [
   ['afropop',             'Afrobeats'],
   ['afro pop',            'Afrobeats'],
   ['highlife',            'Afrobeats'],
+  // Reggae. Was filed under Latin, so Bob Marley showed as Latin.
+  // (Dancehall sits above the Electronic group.)
+  ['reggae',              'Reggae'],
 ];
 
 function normalizeGenreTags(rawTags) {

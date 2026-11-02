@@ -33,7 +33,7 @@ const INITIAL_COLORS = ['#7a5018', '#5c3a10', '#6B4422', '#4a3218', '#8B6914', '
 const MAIN_GENRES = new Set([
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
   'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
-  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues',
+  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues', 'Reggae',
 ]);
 
 const MONTH_NAMES = [

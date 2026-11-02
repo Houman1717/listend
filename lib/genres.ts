@@ -4,7 +4,7 @@
 export const MAIN_GENRES = new Set([
   'Hip-Hop / Rap', 'Pop', 'Rock', 'Latin', 'Afrobeats',
   'R&B / Soul', 'Electronic', 'Indie / Alternative', 'Metal',
-  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues',
+  'Country', 'Jazz', 'Classical', 'Folk / Singer-Songwriter', 'Blues', 'Reggae',
 ]);
 
 // An album's genre is its first main tag. Tags list Apple's own primary genre
