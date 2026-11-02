@@ -463,6 +463,17 @@ const rl2 = StyleSheet.create({
   sub:   { fontSize: 13 },
 });
 
+// ─── "vs community" loading row ───────────────────────────────────────────────
+
+function CommunityLoading({ tint, color }: { tint: string; color: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18 }}>
+      <ActivityIndicator size="small" color={tint} />
+      <Text style={{ color, fontSize: 13 }}>Comparing with the community…</Text>
+    </View>
+  );
+}
+
 // ─── Rating distribution ──────────────────────────────────────────────────────
 
 function RatingDistribution({
@@ -843,6 +854,9 @@ export default function MyStatsScreen() {
     return latestRated ? { ...a, lastRating: latestRated.rating } : a;
   }), [loggedAlbumsRaw, allReLists]);
   const [communityAvgs,  setCommunityAvgs]    = useState<Record<string, { avg: number; count: number }>>({});
+  // Until the first answer, the "vs community" cards say so rather than
+  // showing their "not enough listeners yet" message, which read as broken.
+  const [communityLoaded, setCommunityLoaded] = useState(false);
   const [playlistAlbums, setPlaylistAlbums]   = useState<Record<string, { title: string; artist: string }[]>>({});
   const [genreAlbums,    setGenreAlbums]      = useState<Record<string, { title: string; artist: string }[]>>({});
   const [decadeAlbums,   setDecadeAlbums]     = useState<Record<string, { title: string; artist: string }[]>>({});
@@ -1035,12 +1049,22 @@ export default function MyStatsScreen() {
   useEffect(() => {
     if (!isLoaded) return;
     const ratedAlbums = loggedAlbums.filter(a => effectiveRating(a) > 0);
-    if (ratedAlbums.length === 0) return;
-    const run = async (excludeUid: string) => {
-      // Match by title+year (not spotify_id) — different users may have different AM IDs for same album.
-      // Only fetch ratings for the titles this user rated, in chunks, every page:
-      // an unfiltered select is capped at 1000 rows by PostgREST, which sampled
-      // ~2% of all ratings and left almost every album under MIN_COMMUNITY.
+    if (ratedAlbums.length === 0) { setCommunityLoaded(true); return; }
+    // Match by title+year (not spotify_id) — different users may have
+    // different AM IDs for the same album. Keyed title_lower::year.
+    const fetchCommunity = async (excludeUid: string): Promise<Map<string, { avg: number; count: number }> | null> => {
+      // Fast path: the database averages in one request (~0.3s, one row per
+      // album). supabase/add-community-album-avgs.sql; until it's applied,
+      // or if it fails, fall through to the old download below.
+      const { data: rows, error } = await supabase.rpc('community_album_avgs', { p_user: excludeUid });
+      if (!error && Array.isArray(rows)) {
+        return new Map((rows as { title_key: string; year: number; avg_rating: number | string; rating_count: number }[])
+          .map(r => [`${r.title_key}::${r.year}`, { avg: Number(r.avg_rating), count: r.rating_count }]));
+      }
+
+      // Slow path: download every rating of every album sharing one of these
+      // titles (30k rows for a 370-album library) and average here. Chunked
+      // and paged — an unfiltered select stops at PostgREST's 1000 rows.
       const titles = [...new Set(ratedAlbums.map(a => a.title).filter(Boolean))];
       const chunks: string[][] = [];
       for (let i = 0; i < titles.length; i += COMMUNITY_TITLE_CHUNK) chunks.push(titles.slice(i, i + COMMUNITY_TITLE_CHUNK));
@@ -1055,23 +1079,27 @@ export default function MyStatsScreen() {
         20,
       )));
       // A failed chunk would undercount — keep whatever we showed before.
-      if (pages.some(p => p === null)) return;
-      const data = pages.flatMap(p => p ?? []);
-      // Build community map keyed by title_lower::year
-      const communityMap: Record<string, number[]> = {};
-      for (const row of data) {
+      if (pages.some(p => p === null)) return null;
+      const sums = new Map<string, { sum: number; count: number }>();
+      for (const row of pages.flatMap(p => p ?? [])) {
         const key = `${(row.title ?? '').toLowerCase()}::${row.year ?? 0}`;
-        if (!communityMap[key]) communityMap[key] = [];
-        communityMap[key].push(row.rating);
+        const e = sums.get(key) ?? { sum: 0, count: 0 };
+        e.sum += row.rating; e.count += 1;
+        sums.set(key, e);
       }
-      const avgs: Record<string, { avg: number; count: number }> = {};
-      for (const album of ratedAlbums) {
-        const key = `${album.title.toLowerCase()}::${album.year ?? 0}`;
-        const ratings = communityMap[key];
-        if (!ratings || ratings.length === 0) continue;
-        avgs[album.id] = { avg: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length };
+      return new Map([...sums].map(([k, e]) => [k, { avg: e.sum / e.count, count: e.count }]));
+    };
+    const run = async (excludeUid: string) => {
+      const community = await fetchCommunity(excludeUid);
+      if (community) {
+        const avgs: Record<string, { avg: number; count: number }> = {};
+        for (const album of ratedAlbums) {
+          const c = community.get(`${album.title.toLowerCase()}::${album.year ?? 0}`);
+          if (c && c.count > 0) avgs[album.id] = c;
+        }
+        setCommunityAvgs(avgs);
       }
-      setCommunityAvgs(avgs);
+      setCommunityLoaded(true);
     };
     if (viewedUserId) {
       run(viewedUserId);
@@ -2268,6 +2296,7 @@ export default function MyStatsScreen() {
         {ratedAlbums.length > 0 && (
           <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <Text style={[s.cardTitle, { color: colors.textMuted }]}>RATED VS COMMUNITY</Text>
+            {!communityLoaded ? <CommunityLoading tint={colors.tint} color={colors.subtext} /> : <>
             {!hasComparison && (
               <EmptyState text={`${viewedUserId ? 'Their' : 'Your'} ratings will be compared to the community once enough listeners have rated the same albums.`} />
             )}
@@ -2311,6 +2340,7 @@ export default function MyStatsScreen() {
                 <EmptyState text="Ratings are revealed once more listeners have rated this album." />
               )}
             </View>
+            </>}
           </View>
         )}
 
@@ -2372,7 +2402,7 @@ export default function MyStatsScreen() {
         {ratedAlbums.length > 0 && (
           <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <Text style={[s.cardTitle, { color: colors.textMuted }]}>ARTISTS VS COMMUNITY</Text>
-            {artistHigher.length === 0 && artistLower.length === 0 ? (
+            {!communityLoaded ? <CommunityLoading tint={colors.tint} color={colors.subtext} /> : artistHigher.length === 0 && artistLower.length === 0 ? (
               <EmptyState text={`${viewedUserId ? 'Their' : 'Your'} artist ratings will be compared to the community once enough listeners have rated 2+ of the same artist's albums.`} />
             ) : (
               ([
