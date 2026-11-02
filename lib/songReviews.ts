@@ -173,13 +173,17 @@ export async function fetchCommunitySongReviews(song: SongRef, viewerId?: string
 
 /** Another user's song reviews (for their profile / My Songs view). Null on failure. */
 export async function fetchUserSongReviews(userId: string): Promise<SongReview[] | null> {
-  const rows = rowsOrNull(
-    await supabase
+  // Paged like the signed-in user's own list: heavy song loggers are past
+  // PostgREST's 1000-row cap, and their stats stopped at exactly 1000.
+  const rows = await fetchAllRows<any>(
+    (from, to) => supabase
       .from('song_reviews')
       .select(SONG_REVIEW_COLUMNS)
       .eq('user_id', userId)
       .order('listened_at', { ascending: false })
-      .limit(1000),
+      .order('song_id')
+      .range(from, to),
+    20,
   );
   return rows ? rows.map(rowToSongReview) : null;
 }
