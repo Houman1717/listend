@@ -25,6 +25,7 @@ import { StatTile } from '@/components/StatTile';
 import { ActivityChart, bestCover, peakIndexes, type ActivityBucket } from '@/components/ActivityChart';
 import { SongStatsCard } from '@/components/SongStatsCard';
 import { GenresCard } from '@/components/GenresCard';
+import { RatingChart } from '@/components/RatingChart';
 import { openSongPage } from '@/lib/openSong';
 
 // ─── Style constants (match my-stats.tsx) ─────────────────────────────────────
@@ -150,42 +151,6 @@ function computeYearStats(albums: LoggedAlbum[]) {
     highestRated, relistens, firstListens, mostRelistened,
     ratingDist, topArtistsByCount, topArtistsByRating, topGenres,
   };
-}
-
-// ─── RatingDistribution ───────────────────────────────────────────────────────
-
-function RatingDistribution({ albums, onRatingPress, tint = ACCENT, textColor = TEXT, subtextColor = SUBTEXT, trackColor = BORDER }: {
-  albums: LoggedAlbum[];
-  onRatingPress: (rating: number, list: LoggedAlbum[]) => void;
-  tint?: string; textColor?: string; subtextColor?: string; trackColor?: string;
-}) {
-  const dist = Array.from({ length: 10 }, (_, i) => ({
-    rating: i + 1,
-    count: albums.filter(a => effectiveRating(a) === i + 1).length,
-  }));
-  const maxCount = Math.max(...dist.map(d => d.count), 1);
-  return (
-    <View style={{ gap: 8 }}>
-      {[...dist].reverse().map(({ rating, count }) => {
-        const filled = count > 0 ? Math.max(count / maxCount, 0.02) : 0;
-        return (
-          <Pressable
-            key={rating}
-            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 10 }, count > 0 && { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => { if (count > 0) onRatingPress(rating, albums.filter(a => effectiveRating(a) === rating)); }}
-            disabled={count === 0}>
-            <Text style={{ color: subtextColor, fontSize: 13, fontWeight: '600', width: 18, textAlign: 'right' }}>{rating}</Text>
-            <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: trackColor, overflow: 'hidden', flexDirection: 'row' }}>
-              <View style={{ flex: filled, height: 6, borderRadius: 3, backgroundColor: tint, opacity: 0.4 + (count / maxCount) * 0.6 }} />
-              {filled < 1 && <View style={{ flex: 1 - filled }} />}
-            </View>
-            <Text style={{ color: textColor, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' }}>{count}</Text>
-          </Pressable>
-        );
-      })}
-      <Text style={{ color: subtextColor, fontSize: 12, marginTop: 6 }}>Tap a bar to see albums</Text>
-    </View>
-  );
 }
 
 // ─── ArtistGridCard ───────────────────────────────────────────────────────────
@@ -987,22 +952,27 @@ export default function YearInReviewScreen() {
                   </View>
                 )}
 
-                {/* ── Rating Distribution ── */}
-                {yearAlbums.filter(a => effectiveRating(a) > 0).length > 0 && (
-                  <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                    <Text style={[st.label, { color: muted }]}>RATING DISTRIBUTION</Text>
-                    <View style={{ marginTop: 14 }}>
-                      <RatingDistribution
-                        albums={yearAlbums}
-                        onRatingPress={(rating, list) => setModal({ title: `Rated ${rating}`, albums: list })}
-                        tint={tint}
-                        textColor={txt}
-                        subtextColor={sub}
-                        trackColor={cardBorder}
+                {/* ── Rating Breakdown ── */}
+                {(() => {
+                  const rated = yearAlbums.filter(a => effectiveRating(a) > 0);
+                  if (rated.length === 0) return null;
+                  const avg = rated.reduce((n, a) => n + effectiveRating(a), 0) / rated.length;
+                  return (
+                    <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <Text style={[st.label, { color: muted }]}>RATING BREAKDOWN</Text>
+                        <Text style={{ color: txt, fontSize: 15, fontWeight: '700' }}>{avg.toFixed(1)} avg</Text>
+                      </View>
+                      <RatingChart
+                        albums={rated.map(a => ({ id: a.id, title: a.title, artist: a.artist, artworkUrl: a.artworkUrl, year: a.year, rating: effectiveRating(a), listenedAt: a.dateLogged, album: a }))}
+                        whose={viewedUserId ? 'their' : 'your'}
+                        period={String(selectedYear)}
+                        onAlbumPress={r => goToAlbum(r.album)}
+                        colors={{ text: txt, subtext: sub, tint, border: cardBorder }}
                       />
                     </View>
-                  </View>
-                )}
+                  );
+                })()}
 
                 {/* ── Top Artists ── */}
                 {stats.topArtistsByCount.length > 0 && (

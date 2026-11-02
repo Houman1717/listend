@@ -27,6 +27,7 @@ import { openSongPage } from '@/lib/openSong';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { type ColorsShape } from '@/constants/Colors';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
+import { RatingBreakdownSheet, type RatedAlbum } from '@/components/RatingBreakdownSheet';
 import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
@@ -106,67 +107,6 @@ function normaliseTopArtists(raw: any): FavArtist[] {
     name:       String(item.name ?? item.title ?? ''),
     artworkUrl: item.artworkUrl || item.artwork_url || '',
   }));
-}
-
-type RatingDist = { rating: number; count: number };
-
-// ─── Rating modal ─────────────────────────────────────────────────────────────
-
-function RatingModal({
-  visible,
-  onClose,
-  avgRating,
-  distribution,
-  colors,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  avgRating: string;
-  distribution: RatingDist[];
-  colors: ColorsShape;
-}) {
-  const maxCount = Math.max(...distribution.map(d => d.count), 1);
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={rm.container}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <SafeAreaView style={[rm.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <View style={[rm.handle, { backgroundColor: colors.border }]} />
-          <View style={rm.header}>
-            <Text style={[rm.headerTitle, { color: colors.text }]}>Rating Breakdown</Text>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="times" size={16} color={colors.subtext} />
-            </Pressable>
-          </View>
-          <View style={[rm.avgBlock, { borderBottomColor: colors.border }]}>
-            <Text style={[rm.avgValue, { color: colors.tint }]}>{avgRating}</Text>
-            <Text style={[rm.avgLabel, { color: colors.subtext }]}>average rating</Text>
-          </View>
-          <View style={rm.distBlock}>
-            {[...distribution].reverse().map(({ rating, count }) => {
-              const filled = count > 0 ? Math.max(count / maxCount, 0.02) : 0;
-              const empty  = 1 - filled;
-              return (
-                <View key={rating} style={rm.distRow}>
-                  <Text style={[rm.distRating, { color: colors.subtext }]}>{rating}</Text>
-                  <View style={[rm.barTrack, { backgroundColor: colors.border }]}>
-                    <View style={[rm.barFilled, {
-                      flex: filled,
-                      backgroundColor: colors.tint,
-                      opacity: 0.4 + (count / maxCount) * 0.6,
-                    }]} />
-                    {empty > 0 && <View style={{ flex: empty }} />}
-                  </View>
-                  <Text style={[rm.distCount, { color: colors.text }]}>{count}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </SafeAreaView>
-      </View>
-    </Modal>
-  );
 }
 
 // ─── Read-only fav slot ───────────────────────────────────────────────────────
@@ -514,7 +454,7 @@ export default function UserProfileScreen() {
   const [albumCount,    setAlbumCount]    = useState(0);
   const [thisYearCount, setThisYearCount] = useState(0);
   const [avgRating,     setAvgRating]     = useState('—');
-  const [ratingDist,    setRatingDist]    = useState<RatingDist[]>([]);
+  const [ratedAlbums,   setRatedAlbums]   = useState<RatedAlbum[]>([]);
   const [relistenLatest, setRelistenLatest] = useState<Map<string, { rating?: number; review?: string }>>(new Map());
   const [reviewCount,   setReviewCount]   = useState(0);
   const [wantCount,     setWantCount]     = useState<number | null>(null);
@@ -661,11 +601,10 @@ export default function UserProfileScreen() {
           if (withRating.length > 0) {
             const sum = withRating.reduce((acc: number, a: any) => acc + ratingOf(a), 0);
             setAvgRating((sum / withRating.length).toFixed(1));
-            const dist: RatingDist[] = Array.from({ length: 10 }, (_, i) => ({
-              rating: i + 1,
-              count: withRating.filter((a: any) => ratingOf(a) === i + 1).length,
-            }));
-            setRatingDist(dist);
+            setRatedAlbums(withRating.map((a: any) => ({
+              id: a.spotify_id, title: a.title, artist: a.artist, artworkUrl: a.artwork_url ?? undefined,
+              year: a.year ?? undefined, rating: ratingOf(a), listenedAt: a.listened_at ?? undefined,
+            })));
           }
         }
 
@@ -1130,11 +1069,16 @@ export default function UserProfileScreen() {
 
       </View>
 
-      <RatingModal
+      <RatingBreakdownSheet
         visible={ratingModalVisible}
         onClose={() => setRatingModalVisible(false)}
         avgRating={avgRating}
-        distribution={ratingDist}
+        albums={ratedAlbums}
+        whose="their"
+        onAlbumPress={a => {
+          setRatingModalVisible(false);
+          navigateToAlbum(router, { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl });
+        }}
         colors={colors}
       />
 
@@ -1551,45 +1495,6 @@ const s = StyleSheet.create({
 });
 
 // ─── Rating modal styles ──────────────────────────────────────────────────────
-
-const rm = StyleSheet.create({
-  container: {
-    flex: 1, width: '100%',
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    overflow: 'hidden',
-  },
-  sheet: {
-    width: '100%', alignSelf: 'stretch',
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingHorizontal: 16, paddingBottom: 32,
-    overflow: 'hidden',
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  handle: {
-    width: 36, height: 4, borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10, marginBottom: 4,
-  },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingVertical: 16,
-  },
-  headerTitle: {
-    position: 'absolute', left: 0, right: 0,
-    fontSize: 17, fontWeight: '700', letterSpacing: -0.2,
-    textAlign: 'center',
-  },
-  avgBlock: { alignItems: 'center', paddingVertical: 20, borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 20 },
-  avgValue: { fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
-  avgLabel: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
-  distBlock: { gap: 10, paddingBottom: 8 },
-  distRow:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
-  distRating:{ fontSize: 13, fontWeight: '600', width: 24, textAlign: 'right' },
-  barTrack:  { flex: 1, flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', marginHorizontal: 8 },
-  barFilled: { height: 6, borderRadius: 3 },
-  distCount: { fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
-});
 
 // ─── Slot picker modal styles ─────────────────────────────────────────────────
 

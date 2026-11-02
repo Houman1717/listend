@@ -36,6 +36,7 @@ import { SongReviewCard } from '@/components/SongReviewCard';
 import type { SongReview } from '@/lib/songReviews';
 import { openSongPage } from '@/lib/openSong';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
+import { RatingBreakdownSheet } from '@/components/RatingBreakdownSheet';
 import { LoggedAlbum } from '@/context/AlbumsContext';
 
 // Cached copy of the user's own profile row, so an outage shows their real name
@@ -57,64 +58,6 @@ const ACCENT    = '#D4A017';
 
 // COVER_H removed — cover now uses aspectRatio: 16/9
 const AVATAR_SIZE = 80;
-
-// ─── Rating distribution modal ────────────────────────────────────────────────
-
-function RatingModal({
-  visible,
-  onClose,
-  avgRating,
-  distribution,
-  colors,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  avgRating: string;
-  distribution: { rating: number; count: number }[];
-  colors: ReturnType<typeof themeToColors>;
-}) {
-  const maxCount = Math.max(...distribution.map(d => d.count), 1);
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={rm.container}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <SafeAreaView style={[rm.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <View style={[rm.handle, { backgroundColor: colors.border }]} />
-          <View style={rm.header}>
-            <Text style={[rm.headerTitle, { color: colors.text }]}>Rating Breakdown</Text>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <FontAwesome name="times" size={16} color={colors.subtext} />
-            </Pressable>
-          </View>
-          <View style={[rm.avgBlock, { borderBottomColor: colors.border }]}>
-            <Text style={[rm.avgValue, { color: colors.tint }]}>{avgRating}</Text>
-            <Text style={[rm.avgLabel, { color: colors.subtext }]}>average rating</Text>
-          </View>
-          <View style={rm.distBlock}>
-            {[...distribution].reverse().map(({ rating, count }) => {
-              const filled = count > 0 ? Math.max(count / maxCount, 0.02) : 0;
-              const empty  = 1 - filled;
-              return (
-                <View key={rating} style={rm.distRow}>
-                  <Text style={[rm.distRating, { color: colors.subtext }]}>{rating}</Text>
-                  <View style={[rm.barTrack, { backgroundColor: colors.border }]}>
-                    <View style={[rm.barFilled, {
-                      flex: filled,
-                      opacity: 0.4 + (count / maxCount) * 0.6,
-                      backgroundColor: colors.tint,
-                    }]} />
-                    {empty > 0 && <View style={{ flex: empty }} />}
-                  </View>
-                  <Text style={[rm.distCount, { color: colors.text }]}>{count}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </SafeAreaView>
-      </View>
-    </Modal>
-  );
-}
 
 // ─── Profile header ───────────────────────────────────────────────────────────
 
@@ -1325,10 +1268,6 @@ export default function ListendScreen() {
   const avgRating = ratedAlbums.length > 0
     ? (ratedAlbums.reduce((sum, a) => sum + effectiveRating(a), 0) / ratedAlbums.length).toFixed(1)
     : '—';
-  const ratingDistribution = Array.from({ length: 10 }, (_, i) => ({
-    rating: i + 1,
-    count: loggedAlbums.filter(a => effectiveRating(a) === i + 1).length,
-  }));
 
   return (
     <>
@@ -1361,11 +1300,19 @@ export default function ListendScreen() {
         refreshKey={refreshKey}
       />
 
-      <RatingModal
+      <RatingBreakdownSheet
         visible={ratingModalVisible}
         onClose={() => setRatingModalVisible(false)}
         avgRating={avgRating}
-        distribution={ratingDistribution}
+        albums={ratedAlbums.map(a => ({
+          id: a.id, title: a.title, artist: a.artist, artworkUrl: a.artworkUrl, year: a.year,
+          rating: effectiveRating(a), listenedAt: a.dateLogged,
+        }))}
+        whose="your"
+        onAlbumPress={a => {
+          setRatingModalVisible(false);
+          navigateToAlbum(router, { id: a.id, title: a.title, artist: a.artist, year: a.year, artworkUrl: a.artworkUrl });
+        }}
         colors={colors}
       />
 
@@ -1634,78 +1581,3 @@ const s = StyleSheet.create({
 
 // ─── Rating modal styles ──────────────────────────────────────────────────────
 
-const rm = StyleSheet.create({
-  // Modal root: flex:1 fills the overlay, justifyContent:'flex-end' pins the
-  // sheet to the bottom. width:'100%' + overflow:'hidden' hard-clips any bleed.
-  container: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    overflow: 'hidden',
-  },
-  // Sheet: outermost content container — paddingHorizontal:16 here (not on
-  // any inner view) is the single source of horizontal inset for all content.
-  sheet: {
-    width: '100%',
-    alignSelf: 'stretch',
-    backgroundColor: '#161616',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-    overflow: 'hidden',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
-  },
-  handle: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: '#4a3020',
-    alignSelf: 'center',
-    marginTop: 10, marginBottom: 4,
-  },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingVertical: 16,
-  },
-  headerTitle: {
-    position: 'absolute', left: 0, right: 0,
-    color: TEXT, fontSize: 17, fontWeight: '700', letterSpacing: -0.2,
-    textAlign: 'center',
-  },
-  avgBlock: {
-    alignItems: 'center', paddingVertical: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
-    marginBottom: 20,
-  },
-  avgValue: { color: '#D4A017', fontSize: 56, fontWeight: '700', letterSpacing: -2, lineHeight: 62 },
-  avgLabel: { color: SUBTEXT, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
-  distBlock: { gap: 10 },
-  distRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  distRating: {
-    color: SUBTEXT, fontSize: 13, fontWeight: '600',
-    width: 24, textAlign: 'right',
-  },
-  barTrack: {
-    flex: 1,
-    flexDirection: 'row',
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#2a1e14',
-    overflow: 'hidden',
-    marginHorizontal: 8,
-  },
-  barFilled: {
-    height: 6,
-    backgroundColor: '#D4A017',
-    borderRadius: 3,
-  },
-  distCount: {
-    color: TEXT, fontSize: 13, fontWeight: '600',
-    width: 28, textAlign: 'right',
-  },
-});

@@ -29,6 +29,7 @@ import { ReleaseYearChart } from '@/components/ReleaseYearChart';
 import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
 import { GenresCard } from '@/components/GenresCard';
+import { RatingChart } from '@/components/RatingChart';
 import { UnlockCard } from '@/components/ProLockedSection';
 import { openSongPage } from '@/lib/openSong';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
@@ -476,68 +477,6 @@ function CommunityLoading({ tint, color }: { tint: string; color: string }) {
   );
 }
 
-// ─── Rating distribution ──────────────────────────────────────────────────────
-
-function RatingDistribution({
-  loggedAlbums,
-  onRatingPress,
-  tint = ACCENT,
-  trackColor = BORDER,
-  textColor = TEXT,
-  subtextColor = SUBTEXT,
-}: {
-  loggedAlbums: LoggedAlbum[];
-  onRatingPress: (rating: number, albums: LoggedAlbum[]) => void;
-  tint?: string;
-  trackColor?: string;
-  textColor?: string;
-  subtextColor?: string;
-}) {
-  const distribution = Array.from({ length: 10 }, (_, i) => ({
-    rating: i + 1,
-    count: loggedAlbums.filter(a => effectiveRating(a) === i + 1).length,
-  }));
-  const maxCount = Math.max(...distribution.map(d => d.count), 1);
-
-  return (
-    <View style={rd.wrap}>
-      {[...distribution].reverse().map(({ rating, count }) => {
-        const filled = count > 0 ? Math.max(count / maxCount, 0.02) : 0;
-        const albums = loggedAlbums.filter(a => effectiveRating(a) === rating);
-        return (
-          <Pressable
-            key={rating}
-            style={({ pressed }) => [rd.row, count > 0 && { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => { if (count > 0) onRatingPress(rating, albums); }}
-            disabled={count === 0}>
-            <Text style={[rd.ratingLabel, { color: subtextColor }]}>{rating}</Text>
-            <View style={[rd.track, { backgroundColor: trackColor }]}>
-              <View style={[rd.fill, {
-                flex: filled,
-                opacity: 0.4 + (count / maxCount) * 0.6,
-                backgroundColor: tint,
-              }]} />
-              {filled < 1 && <View style={{ flex: 1 - filled }} />}
-            </View>
-            <Text style={[rd.countLabel, { color: textColor }]}>{count}</Text>
-          </Pressable>
-        );
-      })}
-      <Text style={[rd.hint, { color: subtextColor }]}>Tap a bar to see albums</Text>
-    </View>
-  );
-}
-
-const rd = StyleSheet.create({
-  wrap:        { gap: 8 },
-  row:         { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  ratingLabel: { color: SUBTEXT, fontSize: 13, fontWeight: '600', width: 18, textAlign: 'right' },
-  track:       { flex: 1, height: 6, borderRadius: 3, backgroundColor: BORDER, overflow: 'hidden', flexDirection: 'row' },
-  fill:        { height: 6, borderRadius: 3, backgroundColor: ACCENT },
-  countLabel:  { color: TEXT, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
-  hint:        { color: SUBTEXT, fontSize: 12, marginTop: 6 },
-});
-
 // ─── Artist grid card ─────────────────────────────────────────────────────────
 
 const INITIAL_COLORS = ['#7a5018', '#5c3a10', '#6B4422', '#4a3218', '#8B6914', '#3d2a0e'];
@@ -753,8 +692,6 @@ export default function MyStatsScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, viewedUserId]);
 
-  const [selectedRating, setSelectedRating]   = useState<number | null>(null);
-  const [selectedAlbums, setSelectedAlbums]   = useState<LoggedAlbum[]>([]);
   const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
   const [rankedModal,    setRankedModal]      = useState<'artists' | 'genres' | null>(null);
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
@@ -1607,10 +1544,6 @@ export default function MyStatsScreen() {
   }
   const taste = tasteLabel(compatibility);
 
-  function handleRatingPress(rating: number, albums: LoggedAlbum[]) {
-    setSelectedAlbums(albums);
-    setSelectedRating(rating);
-  }
 
   function handleAlbumPress(album: LoggedAlbum) {
     router.push({
@@ -1804,13 +1737,6 @@ export default function MyStatsScreen() {
         headerTintColor: colors.text,
         headerShadowVisible: false,
       }} />
-      <AlbumListModal
-        title={selectedRating !== null ? `Rated ${selectedRating}` : null}
-        albums={selectedAlbums}
-        onClose={() => setSelectedRating(null)}
-        onAlbumPress={handleAlbumPress}
-        themeColors={colors}
-      />
       <RankedListModal
         title={rankedModal === 'artists'
           ? (artistView === 'listend' ? 'Most Listend Artists' : 'Highest Rated Artists')
@@ -2255,14 +2181,19 @@ export default function MyStatsScreen() {
           <YearChart loggedAlbums={loggedAlbums} onAlbumPress={handleAlbumPress} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} themeColors={colors} ownerName={viewedUserId ? (params.displayName || undefined) : undefined} />
         </View>
 
-        {/* ── Rating Distribution ────────────────────────────────────────── */}
+        {/* ── Rating Breakdown ───────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={s.cardTitleRow}>
             <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>RATING BREAKDOWN</Text>
             {ratedAlbums.length > 0 && <Text style={[s.cardTitleValue, { color: colors.text }]}>{avgRating} avg</Text>}
           </View>
           {ratedAlbums.length > 0 ? (
-            <RatingDistribution loggedAlbums={loggedAlbums} onRatingPress={handleRatingPress} tint={colors.tint} trackColor={cardBorder} textColor={colors.text} subtextColor={colors.subtext} />
+            <RatingChart
+              albums={ratedAlbums.map(a => ({ id: a.id, title: a.title, artist: a.artist, artworkUrl: a.artworkUrl, year: a.year, rating: effectiveRating(a), listenedAt: a.dateLogged, album: a }))}
+              whose={viewedUserId ? 'their' : 'your'}
+              onAlbumPress={r => handleAlbumPress(r.album)}
+              colors={{ text: colors.text, subtext: colors.subtext, tint: colors.tint, border: cardBorder }}
+            />
           ) : (
             <EmptyState text="Rate some albums to see your breakdown." />
           )}
