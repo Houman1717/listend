@@ -85,7 +85,9 @@ export function ActivityChart({
               style={({ pressed }) => [s.col, { width: barW, opacity: pressed ? 0.6 : 1 }]}>
               <View style={{ width: barW, height: CHART_H, justifyContent: 'flex-end', alignItems: 'center' }}>
                 {count > 0 ? (
-                  <Text style={[s.count, { color: isPeak ? textColor : subtextColor }, isPeak && s.countPeak]}>{count}</Text>
+                  // Wider than the column so a 4-digit count stays on one line
+                  // (the label overhangs a little; its neighbours sit lower).
+                  <Text style={[s.count, { width: barW + 24, color: isPeak ? textColor : subtextColor }, isPeak && s.countPeak]} numberOfLines={1}>{count}</Text>
                 ) : null}
                 {cover ? (
                   <ExpoImage
@@ -122,7 +124,7 @@ const s = StyleSheet.create({
   subline:   { fontSize: 13 },
   chart:     { flexDirection: 'row', alignItems: 'flex-end' },
   col:       { alignItems: 'center', gap: 4 },
-  count:     { fontSize: 10, fontWeight: '600', marginBottom: 3 },
+  count:     { fontSize: 10, fontWeight: '600', marginBottom: 3, textAlign: 'center' },
   countPeak: { fontWeight: '800' },
   bar:       { borderRadius: 4 },
   dot:       { width: 6, height: 6, borderRadius: 3 },

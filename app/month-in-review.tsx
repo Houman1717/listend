@@ -23,6 +23,7 @@ import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
 import { ActivityChart, peakIndexes, type ActivityBucket } from '@/components/ActivityChart';
 import { SongStatsCard } from '@/components/SongStatsCard';
+import { GenresCard } from '@/components/GenresCard';
 import { openSongPage } from '@/lib/openSong';
 import { MAIN_GENRES } from '@/lib/genres';
 
@@ -437,7 +438,6 @@ export default function MonthInReviewScreen() {
       if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
     });
   }, [selectedYear, selectedMonth, loggedAlbums.length, artistsShown]);
-  const maxGenre = stats.topGenres[0]?.[1] ?? 1;
   const maxArtist = stats.topArtists[0]?.count ?? 1;
 
   useEffect(() => {
@@ -760,25 +760,13 @@ export default function MonthInReviewScreen() {
                   </View>
                 )}
 
-                {/* ── Top Genres ── */}
+                {/* ── Genres ── */}
                 {stats.topGenres.length > 0 && (
-                  <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                    <Text style={[st.label, { color: muted, marginBottom: 14 }]}>TOP GENRES</Text>
-                    {stats.topGenres.map(([genre, count]) => (
-                      <Pressable
-                        key={genre}
-                        onPress={() => setModal({ title: genre, albums: monthAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre) })}
-                        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, opacity: pressed ? 0.7 : 1 })}>
-                        <Text style={{ color: txt, fontSize: 13, fontWeight: '500', width: 110 }} numberOfLines={1}>{genre}</Text>
-                        <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: cardBorder, overflow: 'hidden', flexDirection: 'row' }}>
-                          <View style={{ flex: Math.max(count / maxGenre, 0.02), height: 6, borderRadius: 3, backgroundColor: tint, opacity: 0.45 + (count / maxGenre) * 0.55 }} />
-                          <View style={{ flex: 1 - Math.max(count / maxGenre, 0.02) }} />
-                        </View>
-                        <Text style={{ color: sub, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' }}>{count}</Text>
-                      </Pressable>
-                    ))}
-                    <Text style={{ color: sub, fontSize: 12, marginTop: 4 }}>Tap a genre to see albums</Text>
-                  </View>
+                  <GenresCard
+                    albums={monthAlbums}
+                    onShowAlbums={(title, albums) => setModal({ title, albums })}
+                    colors={{ tint, text: txt, subtext: sub, muted, cardBg, cardBorder, toggleBg: cardBorder }}
+                  />
                 )}
 
                 {/* ── Songs logged in this period ── */}

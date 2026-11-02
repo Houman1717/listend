@@ -28,7 +28,7 @@ import { SongStatsCard } from '@/components/SongStatsCard';
 import { ReleaseYearChart } from '@/components/ReleaseYearChart';
 import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
-import { GenreDonut } from '@/components/GenreDonut';
+import { GenresCard } from '@/components/GenresCard';
 import { UnlockCard } from '@/components/ProLockedSection';
 import { openSongPage } from '@/lib/openSong';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
@@ -2420,74 +2420,12 @@ export default function MyStatsScreen() {
         )}
 
         {/* ── Genres: a donut for the mix, volume meters for ratings ───────── */}
-        <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <View style={s.cardTitleRow}>
-            <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>GENRES</Text>
-            <View style={[yc.toggle, { backgroundColor: colors.border }]}>
-              {(['listend', 'rated'] as const).map(v => (
-                <Pressable key={v} onPress={() => setGenreView(v)} style={[yc.toggleBtn, genreView === v && { backgroundColor: colors.tint }]}>
-                  <Text style={[yc.toggleText, { color: colors.subtext }, genreView === v && yc.toggleTextActive]}>
-                    {v === 'listend' ? 'Most Listend' : 'Highest Rated'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-          {genreView === 'listend' ? (
-            topGenres.length > 0 ? (
-              <>
-                <GenreDonut
-                  genres={allGenres}
-                  onGenrePress={genre => setListModal({
-                    title: genre,
-                    albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre),
-                  })}
-                  onOtherPress={() => setRankedModal('genres')}
-                  tint={colors.tint}
-                  textColor={colors.text}
-                  subtextColor={colors.subtext}
-                  cardBg={cardBg}
-                  otherColor={colors.border}
-                />
-                {allGenres.length > topGenres.length && (
-                  <SeeAllButton label={`See all ${allGenres.length} genres`} tint={colors.tint} onPress={() => setRankedModal('genres')} />
-                )}
-                <Text style={s.footnote}>Based on {totalTagged} of {loggedAlbums.length} logged albums</Text>
-              </>
-            ) : (
-              <EmptyState text="Log more albums to see your top genres here." />
-            )
-          ) : (
-            topRatedGenres.length > 0 ? (
-              <>
-                <View style={{ gap: 12, marginTop: 4 }}>
-                  {topRatedGenres.map(([genre, avg]) => (
-                    <Pressable
-                      key={genre}
-                      onPress={() => setListModal({
-                        title: genre,
-                        albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre && effectiveRating(a) > 0),
-                      })}
-                      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.6 : 1 })}>
-                      <Text style={{ flex: 1, color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{genre}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <FontAwesome name="volume-up" size={11} color={colors.tint} />
-                        <VolumeBars rating={Math.round(avg)} activeColor={colors.tint} inactiveColor={cardBorder} />
-                      </View>
-                      <Text style={{ minWidth: 36, textAlign: 'right', color: colors.text, fontSize: 14, fontWeight: '800' }} numberOfLines={1}>{avg >= 9.95 ? '10' : avg.toFixed(1)}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {allRatedGenres.length > topRatedGenres.length && (
-                  <SeeAllButton label={`See all ${allRatedGenres.length} genres`} tint={colors.tint} onPress={() => setRankedModal('genres')} />
-                )}
-                <Text style={s.footnote}>Based on rated albums only</Text>
-              </>
-            ) : (
-              <EmptyState text="Rate some albums to see your highest rated genres." />
-            )
-          )}
-        </View>
+        <GenresCard
+          albums={loggedAlbums}
+          onShowAlbums={(title, albums) => setListModal({ title, albums })}
+          onSeeAll={v => { setGenreView(v); setRankedModal('genres'); }}
+          colors={{ tint: colors.tint, text: colors.text, subtext: colors.subtext, muted: colors.textMuted, cardBg, cardBorder, toggleBg: colors.border }}
+        />
 
         {/* ── Re-Listend ─────────────────────────────────────────────────── */}
         {reListenedAlbums.length > 0 && (

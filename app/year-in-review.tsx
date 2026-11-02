@@ -24,6 +24,7 @@ import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
 import { ActivityChart, bestCover, peakIndexes, type ActivityBucket } from '@/components/ActivityChart';
 import { SongStatsCard } from '@/components/SongStatsCard';
+import { GenresCard } from '@/components/GenresCard';
 import { openSongPage } from '@/lib/openSong';
 
 // ─── Style constants (match my-stats.tsx) ─────────────────────────────────────
@@ -184,29 +185,6 @@ function RatingDistribution({ albums, onRatingPress, tint = ACCENT, textColor = 
       })}
       <Text style={{ color: subtextColor, fontSize: 12, marginTop: 6 }}>Tap a bar to see albums</Text>
     </View>
-  );
-}
-
-// ─── BarRow ───────────────────────────────────────────────────────────────────
-
-function BarRow({ label, count, maxCount, tint = ACCENT, textColor = TEXT, subtextColor = SUBTEXT, trackColor = BORDER, onPress }: {
-  label: string; count: number; maxCount: number;
-  tint?: string; textColor?: string; subtextColor?: string; trackColor?: string;
-  onPress?: () => void;
-}) {
-  const pct = maxCount > 0 ? Math.max(count / maxCount, 0.02) : 0;
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, opacity: pressed ? 0.7 : 1 })}>
-      <Text style={{ color: textColor, fontSize: 13, fontWeight: '500', width: 110 }} numberOfLines={1}>{label}</Text>
-      <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: trackColor, overflow: 'hidden', flexDirection: 'row' }}>
-        <View style={{ flex: pct, height: 6, borderRadius: 3, backgroundColor: tint, opacity: 0.45 + pct * 0.55 }} />
-        <View style={{ flex: 1 - pct }} />
-      </View>
-      <Text style={{ color: subtextColor, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' }}>{count}</Text>
-    </Pressable>
   );
 }
 
@@ -1109,28 +1087,13 @@ export default function YearInReviewScreen() {
                   </View>
                 )}
 
-                {/* ── Top Genres ── */}
+                {/* ── Genres ── */}
                 {stats.topGenres.length > 0 && (
-                  <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                    <Text style={[st.label, { color: muted, marginBottom: 14 }]}>TOP GENRES</Text>
-                    {stats.topGenres.map(({ genre, count }) => (
-                      <BarRow
-                        key={genre}
-                        label={genre}
-                        count={count}
-                        maxCount={stats.topGenres[0].count}
-                        tint={tint}
-                        textColor={txt}
-                        subtextColor={sub}
-                        trackColor={cardBorder}
-                        onPress={() => setModal({
-                          title: genre,
-                          albums: yearAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre),
-                        })}
-                      />
-                    ))}
-                    <Text style={{ color: sub, fontSize: 12, marginTop: 4 }}>Tap a genre to see albums</Text>
-                  </View>
+                  <GenresCard
+                    albums={yearAlbums}
+                    onShowAlbums={(title, albums) => setModal({ title, albums })}
+                    colors={{ tint, text: txt, subtext: sub, muted, cardBg, cardBorder, toggleBg: cardBorder }}
+                  />
                 )}
 
                 {/* ── Songs logged in this period ── */}
