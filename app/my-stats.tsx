@@ -28,6 +28,7 @@ import { SongStatsCard } from '@/components/SongStatsCard';
 import { ReleaseYearChart } from '@/components/ReleaseYearChart';
 import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
+import { GenreDonut } from '@/components/GenreDonut';
 import { UnlockCard } from '@/components/ProLockedSection';
 import { openSongPage } from '@/lib/openSong';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
@@ -535,65 +536,6 @@ const rd = StyleSheet.create({
   fill:        { height: 6, borderRadius: 3, backgroundColor: ACCENT },
   countLabel:  { color: TEXT, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
   hint:        { color: SUBTEXT, fontSize: 12, marginTop: 6 },
-});
-
-// ─── Shared bar row ───────────────────────────────────────────────────────────
-
-function BarRow({
-  label,
-  count,
-  maxCount,
-  colorIdx,
-  pill = false,
-  onPress,
-  tint = ACCENT,
-  trackColor = BORDER,
-  textColor = TEXT,
-  subtextColor = SUBTEXT,
-  pillBgColor,
-}: {
-  label: string;
-  count: number;
-  maxCount: number;
-  colorIdx: number;
-  pill?: boolean;
-  onPress?: () => void;
-  tint?: string;
-  trackColor?: string;
-  textColor?: string;
-  subtextColor?: string;
-  pillBgColor?: string;
-}) {
-  const pct = maxCount > 0 ? Math.max(count / maxCount, 0.02) : 0;
-  return (
-    <Pressable
-      style={({ pressed }) => [br.row, onPress && { opacity: pressed ? 0.6 : 1 }]}
-      onPress={onPress}
-      disabled={!onPress}>
-      {pill ? (
-        <View style={[br.pill, pillBgColor ? { backgroundColor: pillBgColor } : undefined]}>
-          <Text style={[br.pillText, { color: textColor }]} numberOfLines={1}>{label}</Text>
-        </View>
-      ) : (
-        <Text style={[br.label, { color: textColor }]} numberOfLines={1}>{label}</Text>
-      )}
-      <View style={[br.track, { backgroundColor: trackColor }]}>
-        <View style={[br.fill, { flex: pct, opacity: 0.45 + pct * 0.55, backgroundColor: tint }]} />
-        <View style={{ flex: 1 - pct }} />
-      </View>
-      <Text style={[br.count, { color: subtextColor }]}>{count}</Text>
-    </Pressable>
-  );
-}
-
-const br = StyleSheet.create({
-  row:      { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, width: '100%' },
-  pill:     { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, minWidth: 110, alignItems: 'center', backgroundColor: '#3a2818' },
-  pillText: { color: TEXT, fontSize: 13, fontWeight: '600' },
-  label:    { color: TEXT, fontSize: 13, fontWeight: '500', width: 110 },
-  track:    { flex: 1, height: 6, borderRadius: 3, backgroundColor: BORDER, overflow: 'hidden', flexDirection: 'row' },
-  fill:     { height: 6, borderRadius: 3, backgroundColor: ACCENT },
-  count:    { color: SUBTEXT, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' },
 });
 
 // ─── Artist grid card ─────────────────────────────────────────────────────────
@@ -2477,10 +2419,10 @@ export default function MyStatsScreen() {
           </View>
         )}
 
-        {/* ── Most Listend Genres ────────────────────────────────────────── */}
+        {/* ── Genres: a donut for the mix, volume meters for ratings ───────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <View style={s.cardTitleRow}>
-            <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>MOST LISTEND GENRES</Text>
+            <Text style={[s.cardTitle, { color: colors.textMuted, marginBottom: 0 }]}>GENRES</Text>
             <View style={[yc.toggle, { backgroundColor: colors.border }]}>
               {(['listend', 'rated'] as const).map(v => (
                 <Pressable key={v} onPress={() => setGenreView(v)} style={[yc.toggleBtn, genreView === v && { backgroundColor: colors.tint }]}>
@@ -2494,25 +2436,19 @@ export default function MyStatsScreen() {
           {genreView === 'listend' ? (
             topGenres.length > 0 ? (
               <>
-                {topGenres.map(([genre, count], i) => (
-                  <BarRow
-                    key={genre}
-                    label={genre}
-                    count={count}
-                    maxCount={maxGenreCount}
-                    colorIdx={i}
-                    pill
-                    tint={colors.tint}
-                    trackColor={cardBorder}
-                    textColor={colors.text}
-                    subtextColor={colors.subtext}
-                    pillBgColor={colors.elevated}
-                    onPress={() => setListModal({
-                      title: genre,
-                      albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre),
-                    })}
-                  />
-                ))}
+                <GenreDonut
+                  genres={allGenres}
+                  onGenrePress={genre => setListModal({
+                    title: genre,
+                    albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre),
+                  })}
+                  onOtherPress={() => setRankedModal('genres')}
+                  tint={colors.tint}
+                  textColor={colors.text}
+                  subtextColor={colors.subtext}
+                  cardBg={cardBg}
+                  otherColor={colors.border}
+                />
                 {allGenres.length > topGenres.length && (
                   <SeeAllButton label={`See all ${allGenres.length} genres`} tint={colors.tint} onPress={() => setRankedModal('genres')} />
                 )}
@@ -2524,25 +2460,24 @@ export default function MyStatsScreen() {
           ) : (
             topRatedGenres.length > 0 ? (
               <>
-                {topRatedGenres.map(([genre, avg], i) => (
-                  <BarRow
-                    key={genre}
-                    label={genre}
-                    count={parseFloat(avg.toFixed(1))}
-                    maxCount={10}
-                    colorIdx={i}
-                    pill
-                    tint={colors.tint}
-                    trackColor={cardBorder}
-                    textColor={colors.text}
-                    subtextColor={colors.subtext}
-                    pillBgColor={colors.elevated}
-                    onPress={() => setListModal({
-                      title: genre,
-                      albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre && effectiveRating(a) > 0),
-                    })}
-                  />
-                ))}
+                <View style={{ gap: 12, marginTop: 4 }}>
+                  {topRatedGenres.map(([genre, avg]) => (
+                    <Pressable
+                      key={genre}
+                      onPress={() => setListModal({
+                        title: genre,
+                        albums: loggedAlbums.filter(a => (a.genreTags ?? []).find(t => MAIN_GENRES.has(t)) === genre && effectiveRating(a) > 0),
+                      })}
+                      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.6 : 1 })}>
+                      <Text style={{ flex: 1, color: colors.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{genre}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <FontAwesome name="volume-up" size={11} color={colors.tint} />
+                        <VolumeBars rating={Math.round(avg)} activeColor={colors.tint} inactiveColor={cardBorder} />
+                      </View>
+                      <Text style={{ minWidth: 36, textAlign: 'right', color: colors.text, fontSize: 14, fontWeight: '800' }} numberOfLines={1}>{avg >= 9.95 ? '10' : avg.toFixed(1)}</Text>
+                    </Pressable>
+                  ))}
+                </View>
                 {allRatedGenres.length > topRatedGenres.length && (
                   <SeeAllButton label={`See all ${allRatedGenres.length} genres`} tint={colors.tint} onPress={() => setRankedModal('genres')} />
                 )}
