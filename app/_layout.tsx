@@ -235,7 +235,9 @@ function AuthGate() {
       } else if (data.type === 'month_in_review') {
         router.push({
           pathname: '/month-in-review',
-          params: { year: String(data.year), month: String(data.month) },
+          // `at` is unique per tap, so an already-open Monthly Stats still
+          // jumps to this month (see the params effect in month-in-review).
+          params: { year: String(data.year), month: String(data.month), at: String(Date.now()) },
         } as any);
       } else if (data.type === 'message' || data.type === 'like_message') {
         router.push({ pathname: '/dm-conversation', params: { userId: data.actorId } });

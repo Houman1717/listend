@@ -1,30 +1,19 @@
-import { StyleSheet, View, Text, Pressable, PixelRatio } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
-import { useState } from 'react';
+import { StyleSheet, View, Text, Pressable } from 'react-native';
 import type { LoggedAlbum } from '@/context/AlbumsContext';
-import { effectiveRating } from '@/lib/effectiveRating';
+import { CoverMosaic, mosaicCovers, MIN_MOSAIC_COVERS } from '@/components/CoverMosaic';
 
-// The opening card of Month and Year in Review (and My Stats): the period's own covers as a
-// dimmed mosaic behind the album count, plus how it compares with the period
-// before. Falls back to a plain themed card when there are too few covers.
+// The opening card of Month and Year in Review (and My Stats, including the
+// free tease): the period's own covers as a dimmed mosaic behind the big
+// number, plus how it compares with the period before. Falls back to a plain
+// themed card when there are too few covers.
 
 const HERO_H = 200;
-const COLS   = 4;
-const MIN_COVERS = 4;
-
-// Stored covers are 500px, but a mosaic tile is ~620 real pixels on a 3x
-// phone, so they came out soft. Ask for the size the tile actually needs:
-// Apple's CDN renders any {n}x{n}bb; Cover Art Archive offers 1200.
-function coverAt(url: string, px: number): string {
-  const n = Math.min(Math.ceil(px / 100) * 100, 1200);
-  return url
-    .replace(/\/\d+x\d+bb\.(jpg|png|webp)$/i, `/${n}x${n}bb.$1`)
-    .replace(/\/front-(250|500)$/, '/front-1200');
-}
 
 export function ReviewHero({
   label,
   albums,
+  value,
+  caption,
   previousCount,
   previousLabel = '',
   note,
@@ -38,6 +27,10 @@ export function ReviewHero({
   /** "2026" or "October 2026". */
   label: string;
   albums: LoggedAlbum[];
+  /** The big number; defaults to the album count. */
+  value?: string | number;
+  /** Under the number; defaults to "albums logged". */
+  caption?: string;
   /** Albums logged in the period before; omitted when there was none. */
   previousCount?: number;
   /** "2025" or "September". */
@@ -51,25 +44,8 @@ export function ReviewHero({
   subtextColor: string;
   mutedColor: string;
 }) {
-  const [width, setWidth] = useState(0);
-
-  // Best-rated first, one tile per album.
-  const covers = [...new Map(
-    [...albums]
-      .filter(a => a.artworkUrl)
-      .sort((a, b) => effectiveRating(b) - effectiveRating(a))
-      .map(a => [a.id, a.artworkUrl!] as const),
-  ).values()];
-  const mosaic = covers.length >= MIN_COVERS;
-
-  // Whole pixels, rounded up; the card clips the spare pixel or two. Fractional
-  // widths made the fourth tile wrap and left an empty strip on the right.
-  const tile  = width > 0 ? Math.ceil(width / COLS) : 0;
-  const rows  = tile > 0 ? Math.ceil(HERO_H / tile) : 0;
-  // Repeat covers to fill the grid when the period has only a few.
-  const tiles = mosaic && tile > 0
-    ? Array.from({ length: rows * COLS }, (_, i) => covers[i % covers.length])
-    : [];
+  const covers = mosaicCovers(albums);
+  const mosaic = covers.length >= MIN_MOSAIC_COVERS;
 
   const count = albums.length;
   let comparison = note ?? '';
@@ -88,32 +64,15 @@ export function ReviewHero({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      onLayout={e => setWidth(e.nativeEvent.layout.width)}
       style={({ pressed }) => [
         s.card,
         { backgroundColor: cardBg, borderColor: cardBorder, opacity: pressed ? 0.85 : 1 },
       ]}>
-      {mosaic && (
-        <>
-          <View style={[s.mosaic, { width: tile * COLS }]}>
-            {tiles.map((uri, i) => (
-              <ExpoImage
-                key={i}
-                source={{ uri: coverAt(uri, PixelRatio.getPixelSizeForLayoutSize(tile)) }}
-                placeholder={{ uri }}
-                style={{ width: tile, height: tile }}
-                contentFit="cover"
-                cachePolicy="disk"
-              />
-            ))}
-          </View>
-          <View style={s.dim} />
-        </>
-      )}
+      {mosaic && <CoverMosaic covers={covers} />}
 
       <Text style={[s.label, { color: fgLabel }]}>{label}</Text>
-      <Text style={[s.count, { color: fg }]}>{count}</Text>
-      <Text style={[s.sub, { color: fgSub }]}>{count === 1 ? 'album logged' : 'albums logged'}</Text>
+      <Text style={[s.count, { color: fg }]}>{value ?? count}</Text>
+      <Text style={[s.sub, { color: fgSub }]}>{caption ?? (count === 1 ? 'album logged' : 'albums logged')}</Text>
       {comparison ? (
         <View style={[s.chip, { backgroundColor: mosaic ? 'rgba(255,255,255,0.18)' : cardBorder }]}>
           <Text style={[s.chipText, { color: mosaic ? '#FFFFFF' : subtextColor }]}>{comparison}</Text>
@@ -132,8 +91,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mosaic:   { position: 'absolute', top: 0, left: 0, flexDirection: 'row', flexWrap: 'wrap' },
-  dim:      { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(8,10,16,0.7)' },
   label:    { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 },
   count:    { fontSize: 76, fontWeight: '800', letterSpacing: -3, lineHeight: 84 },
   sub:      { fontSize: 14, fontWeight: '500' },

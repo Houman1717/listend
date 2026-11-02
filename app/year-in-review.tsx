@@ -733,6 +733,7 @@ export default function YearInReviewScreen() {
                 <ProLockedSection
                   locked={recapLocked}
                   colors={{ background: colors.background, text: txt, subtext: sub }}
+                  albums={yearAlbums}
                   title="Your full year is inside"
                   sub="Monthly activity, highest rated, decades, milestones, top artists, top genres and songs.">
 

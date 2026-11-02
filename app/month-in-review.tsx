@@ -245,7 +245,7 @@ function mixHex(a: string, b: string, t: number): string {
 export default function MonthInReviewScreen() {
   const colorScheme = useColorScheme();
   const { isPro, proLoaded, proTheme: ownProTheme } = usePro();
-  const params = useLocalSearchParams<{ year?: string; month?: string; userId?: string; displayName?: string; proTheme?: string }>();
+  const params = useLocalSearchParams<{ year?: string; month?: string; at?: string; userId?: string; displayName?: string; proTheme?: string }>();
   const viewedUserId = params.userId ?? null;
   // Only gate your own recap. Another user's is already their content to share,
   // and proLoaded keeps the lock off a subscriber while Pro status resolves.
@@ -380,6 +380,18 @@ export default function MonthInReviewScreen() {
 
   const [selectedYear,  setSelectedYear]  = useState(initYear);
   const [selectedMonth, setSelectedMonth] = useState(initMonth);
+  // useState only reads the params once. When this screen is already open and
+  // gets pushed again (the recap notification tapped while Monthly Stats sits
+  // on another month), follow the new params, or "Your October is ready"
+  // opened on whatever month was left showing. `at` changes on every
+  // notification tap, so even a repeat of the same month re-applies.
+  const pageRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (params.year) setSelectedYear(parseInt(params.year));
+    if (params.month !== undefined) setSelectedMonth(parseInt(params.month));
+    // A reused screen keeps its scroll; open the month at its hero.
+    pageRef.current?.scrollTo({ y: 0, animated: false });
+  }, [params.year, params.month, params.at]);
   const [highestRatedView, setHighestRatedView] = useState<'thisYear' | 'previous'>('thisYear');
   const [artistView, setArtistView] = useState<'listend' | 'rated'>('listend');
   // Top Artists starts at two rows; each "See more" adds three. Resets on a new month.
@@ -477,6 +489,7 @@ export default function MonthInReviewScreen() {
       )}
 
       <ScrollView
+        ref={pageRef}
         style={{ flex: 1, backgroundColor: colors.background }}
         contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 48, gap: 16 }}
         showsVerticalScrollIndicator={false}>
@@ -556,6 +569,7 @@ export default function MonthInReviewScreen() {
                 <ProLockedSection
                   locked={recapLocked}
                   colors={{ background: colors.background, text: txt, subtext: sub }}
+                  albums={monthAlbums}
                   title="7 more sections inside"
                   sub="Your most active day, highest rated, decades, top artists, top genres, songs and how you rated everything.">
 

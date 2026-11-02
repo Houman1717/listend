@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -28,6 +28,7 @@ import { SongStatsCard } from '@/components/SongStatsCard';
 import { ReleaseYearChart } from '@/components/ReleaseYearChart';
 import { ReviewHero } from '@/components/ReviewHero';
 import { StatTile } from '@/components/StatTile';
+import { UnlockCard } from '@/components/ProLockedSection';
 import { openSongPage } from '@/lib/openSong';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 
@@ -857,6 +858,20 @@ export default function MyStatsScreen() {
   // Until the first answer, the "vs community" cards say so rather than
   // showing their "not enough listeners yet" message, which read as broken.
   const [communityLoaded, setCommunityLoaded] = useState(false);
+  // Free view: the cover-backed unlock card sits a screen down, so a slim
+  // pinned button covers the way there and fades out once the card shows.
+  const [teaseCardY, setTeaseCardY] = useState<number | null>(null);
+  const [pinnedUnlockShown, setPinnedUnlockShown] = useState(true);
+  const teaseViewportH = useRef(0);
+  const teaseScrollY = useRef(0);
+  const pinnedUnlockOpacity = useRef(new Animated.Value(1)).current;
+  const updatePinnedUnlock = (cardY: number | null = teaseCardY) => {
+    if (cardY == null || teaseViewportH.current === 0) return;
+    const show = teaseScrollY.current + teaseViewportH.current < cardY + 120;
+    if (show === pinnedUnlockShown) return;
+    setPinnedUnlockShown(show);
+    Animated.timing(pinnedUnlockOpacity, { toValue: show ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+  };
   const [playlistAlbums, setPlaylistAlbums]   = useState<Record<string, { title: string; artist: string }[]>>({});
   const [genreAlbums,    setGenreAlbums]      = useState<Record<string, { title: string; artist: string }[]>>({});
   const [decadeAlbums,   setDecadeAlbums]     = useState<Record<string, { title: string; artist: string }[]>>({});
@@ -1715,11 +1730,13 @@ export default function MyStatsScreen() {
     // Everything below the hero stays locked. Labels are real so the preview is
     // honest about what's inside; the values are masked.
     const hasHours = hoursPending || (typeof totalHours === 'number' && totalHours > 0);
-    const lockedTiles = [
-      { label: hasHours ? 'Albums Logged' : 'Listening Hours', value: hasHours ? String(loggedAlbums.length) : '•••' },
-      { label: 'Unique Artists', value: '••' },
-      { label: 'Avg Rating',     value: '•••' },
-      { label: 'Best Streak',    value: '••' },
+    const lockedTiles: { icon: 'music' | 'headphones' | 'users' | 'volume-up' | 'fire'; label: string; value: string }[] = [
+      hasHours
+        ? { icon: 'music',      label: 'Albums logged', value: String(loggedAlbums.length) }
+        : { icon: 'headphones', label: 'Listening',     value: '•••' },
+      { icon: 'users',     label: 'Artists',               value: '••' },
+      { icon: 'volume-up', label: 'Avg rating',            value: '•••' },
+      { icon: 'fire',      label: 'Best listening streak', value: '••' },
     ];
     const lockedSections = [
       { icon: 'pie-chart',  label: 'Genre Breakdown',      sub: 'What you actually listen to, ranked' },
@@ -1739,37 +1756,42 @@ export default function MyStatsScreen() {
           headerShadowVisible: false,
         }} />
         <View style={{ flex: 1, backgroundColor: c.background }}>
-          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 140 }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onLayout={e => { teaseViewportH.current = e.nativeEvent.layout.height; updatePinnedUnlock(); }}
+            onScroll={e => { teaseScrollY.current = e.nativeEvent.contentOffset.y; updatePinnedUnlock(); }}>
 
-            {/* Hero — one real number, given away for free. Durations aren't always
-                cached, so fall back to the album count rather than showing a dash. */}
-            <View style={{ backgroundColor: c.card, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, padding: 24, alignItems: 'center' }}>
-              <Text style={{ color: c.subtext, fontSize: 12, fontWeight: '700', letterSpacing: 1.1 }}>
-                {hasHours ? "YOU'VE LISTENED FOR" : "YOU'VE LOGGED"}
-              </Text>
-              <Text style={{ color: ACCENT, fontSize: 56, fontWeight: '800', letterSpacing: -1.5, marginTop: 6 }}>
-                {hasHours ? totalHours : loggedAlbums.length}
-              </Text>
-              <Text style={{ color: c.text, fontSize: 15, fontWeight: '600', marginTop: -2 }}>
-                {hasHours
-                  ? (totalHours === 1 ? 'hour' : 'hours')
-                  : (loggedAlbums.length === 1 ? 'album' : 'albums')}
-              </Text>
-              <Text style={{ color: c.subtext, fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 14 }}>
-                That's one of {lockedSections.length + lockedTiles.length + 1} things My Stats knows about your listening. Here's the rest.
-              </Text>
-            </View>
+            {/* Hero — one real number, given away for free, over the listener's
+                own covers like the Pro screen. Durations aren't always cached,
+                so fall back to the album count rather than showing a dash. */}
+            <ReviewHero
+              label={hasHours ? "You've listened for" : "You've logged"}
+              albums={loggedAlbums}
+              value={hasHours ? totalHours : loggedAlbums.length}
+              caption={hasHours
+                ? (totalHours === 1 ? 'hour' : 'hours')
+                : (loggedAlbums.length === 1 ? 'album' : 'albums')}
+              note={firstLogged ? `Since ${firstLogged}` : undefined}
+              cardBg={c.card}
+              cardBorder={c.border}
+              tint={ACCENT}
+              subtextColor={c.subtext}
+              mutedColor={c.subtext}
+            />
+            <Text style={{ color: c.subtext, fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 12, paddingHorizontal: 12 }}>
+              That's one of {lockedSections.length + lockedTiles.length + 1} things My Stats knows about your listening. Here's the rest.
+            </Text>
 
             {/* Locked tiles + sections, faded behind a scrim */}
             <View style={{ marginTop: 14 }}>
               <View style={{ opacity: 0.4 }} pointerEvents="none">
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                   {lockedTiles.map(t => (
-                    <View
-                      key={t.label}
-                      style={{ flexGrow: 1, flexBasis: '47%', backgroundColor: c.card, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, paddingVertical: 18, alignItems: 'center' }}>
-                      <Text style={{ color: ACCENT, fontSize: 24, fontWeight: '800' }}>{t.value}</Text>
-                      <Text style={{ color: c.subtext, fontSize: 11, fontWeight: '600', marginTop: 4 }}>{t.label}</Text>
+                    <View key={t.label} style={{ flexBasis: '47%', flexGrow: 1, flexDirection: 'row' }}>
+                      <StatTile icon={t.icon} value={t.value} label={t.label}
+                        tint={ACCENT} textColor={c.text} subtextColor={c.subtext} bg={c.card} border={c.border} />
                     </View>
                   ))}
                 </View>
@@ -1798,23 +1820,35 @@ export default function MyStatsScreen() {
                 pointerEvents="none"
               />
             </View>
+
+            {/* The same pitch as the recaps: on the listener's own covers */}
+            <View
+              style={{ marginTop: 4 }}
+              onLayout={e => { setTeaseCardY(e.nativeEvent.layout.y); updatePinnedUnlock(e.nativeEvent.layout.y); }}>
+              <UnlockCard
+                title="Unlock My Stats"
+                sub={`Genres, decades, you vs the community and more, all from your ${loggedAlbums.length} album${loggedAlbums.length === 1 ? '' : 's'}.`}
+                albums={loggedAlbums}
+                colors={c}
+              />
+            </View>
           </ScrollView>
 
-          {/* Pinned unlock bar */}
-          <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom + 12, backgroundColor: c.background, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
+          {/* Pinned until the card above scrolls into view */}
+          <Animated.View
+            pointerEvents={pinnedUnlockShown ? 'auto' : 'none'}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, opacity: pinnedUnlockOpacity, paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom + 12, backgroundColor: c.background, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
             <Pressable
               onPress={showPaywall}
-              style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, borderRadius: 14, overflow: 'hidden' })}>
-              <View style={{ backgroundColor: ACCENT, borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}>
+              style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+              <View style={{ backgroundColor: ACCENT, borderRadius: 14, paddingVertical: 15, alignItems: 'center' }}>
                 <Text style={{ color: '#0F0A07', fontSize: 16, fontWeight: '800', letterSpacing: 0.2 }}>
                   Unlock My Stats
                 </Text>
               </View>
             </Pressable>
-            <Text style={{ color: c.subtext, fontSize: 11, textAlign: 'center', marginTop: 8 }}>
-              Included with Listend Pro
-            </Text>
-          </View>
+          </Animated.View>
+
         </View>
       </>
     );
