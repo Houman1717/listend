@@ -6981,6 +6981,25 @@ app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, re
   }
 });
 
+// ── GET /api/admin/purge-album-tags-cache ─────────────────────────────────────
+// Run after changing TAG_MAP. Album tags are cached in memory (6h) and in
+// api_cache (7d); clearing only the DB rows left a memory copy that kept
+// serving Latin for reggae albums.
+
+app.get('/api/admin/purge-album-tags-cache', requireAdmin, async (req, res) => {
+  try {
+    for (const key of memCache.keys()) {
+      if (key.startsWith('album_tags_') || key.startsWith('album_genres_')) memCache.delete(key);
+    }
+    await deleteCachePrefix('album_tags_');
+    console.log('[/api/admin/purge-album-tags-cache] done.');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[/api/admin/purge-album-tags-cache]', err.message ?? err);
+    res.status(500).json({ success: false, error: err.message ?? 'Purge failed' });
+  }
+});
+
 // ── GET /api/admin/purge-lastfm-cache ─────────────────────────────────────────
 
 app.get('/api/admin/purge-lastfm-cache', requireAdmin, async (req, res) => {
