@@ -34,6 +34,7 @@ import { getProTheme, themeToColors } from '@/lib/proThemes';
 import PlaylistFormModal from '@/components/PlaylistFormModal';
 import { handleOrName } from '@/lib/userHandle';
 import { libraryMatcher } from '@/lib/albumMatch';
+import { ListendMark } from '@/components/AlbumGridCard';
 
 const PADDING = 16;
 const GAP     = 12;
@@ -76,6 +77,7 @@ function AlbumCard({
   cardWidth,
   readOnly,
   colors,
+  listened,
   onPress,
   onRemove,
 }: {
@@ -84,6 +86,7 @@ function AlbumCard({
   cardWidth: number;
   readOnly: boolean;
   colors: any;
+  listened: boolean;
   onPress: () => void;
   onRemove: () => void;
 }) {
@@ -108,7 +111,7 @@ function AlbumCard({
         )}
         <Text style={[s.cardTitle, { color: colors.text }]} numberOfLines={1}>
           <Text style={[s.cardRank, { color: colors.tint }]}>{rank}  </Text>
-          {album.title}
+          {listened && <ListendMark />}{album.title}
         </Text>
         <Text style={[s.cardArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}</Text>
       </Pressable>
@@ -746,6 +749,7 @@ export default function PlaylistDetailScreen() {
                 cardWidth={cardWidth}
                 readOnly={!!viewingOther}
                 colors={colors}
+                listened={isListened(album)}
                 onPress={() => router.push({ pathname: '/album-detail', params: { id: album.id, title: album.title, artist: album.artist, year: String(album.year ?? ''), artworkUrl: album.artworkUrl ?? '' } })}
                 onRemove={() => confirmRemoveAlbum(album)}
               />
