@@ -23,6 +23,7 @@ import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { fetchArtistTopSongs, ArtistTopSongs } from '@/lib/songReviews';
 import { openSongPage } from '@/lib/openSong';
 import { CompactRating } from '@/components/CompactRating';
+import { ListendMark } from '@/components/AlbumGridCard';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -531,10 +532,9 @@ export default function ArtistDetailScreen() {
                 <FontAwesome name="music" size={24} color="#4a3020" />
               </View>
             )}
-            {loggedMatch(album) && (
-              <Ionicons name="headset" size={14} color="#D4A017" style={sc.loggedBadge} />
-            )}
-            <Text style={[sc.albumTitle, { color: colors.text }]} numberOfLines={2}>{album.title}</Text>
+            <Text style={[sc.albumTitle, { color: colors.text }]} numberOfLines={2}>
+              {loggedMatch(album) && <ListendMark size={12} />}{album.title}
+            </Text>
             <Text style={[sc.albumYear, { color: colors.subtext }]}>{album.year > 0 ? album.year : ''}</Text>
           </Pressable>
         ))}
@@ -879,7 +879,6 @@ const sc = StyleSheet.create({
   albumCard: { width: 120, marginRight: 12 },
   albumArt: { width: 120, height: 120, borderRadius: 8 },
   // Same headset mark as the Listend badge on every other album grid.
-  loggedBadge: { position: 'absolute', top: 120 - 18, right: 4 },
   albumTitle: { fontSize: 12, fontWeight: '500', marginTop: 6, lineHeight: 16 },
   albumYear: { fontSize: 11, marginTop: 2 },
 

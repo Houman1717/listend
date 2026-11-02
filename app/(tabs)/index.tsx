@@ -17,7 +17,6 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
@@ -44,6 +43,7 @@ import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
 import { ProHomeCard } from '@/components/ProHomeCard';
 import { usePro } from '@/context/ProContext';
+import { ListendMark } from '@/components/AlbumGridCard';
 
 // ─── Placeholder friends ──────────────────────────────────────────────────────
 
@@ -193,11 +193,10 @@ function AlbumCard({ item, isDark, isLogged, onPress }: { item: CatalogAlbum; is
         ) : (
           <ArtFallback size={ALBUM_CARD} radius={6} label={item.title} />
         )}
-        {isLogged && (
-          <Ionicons name="headset" size={12} color="#D4A017" style={s.loggedBadge} />
-        )}
       </View>
-      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
+        {isLogged && <ListendMark />}{item.title}
+      </Text>
       <Text style={[s.cardSub,   { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
   );
@@ -1960,8 +1959,6 @@ const s = StyleSheet.create({
 
   cardTitle: { fontSize: 12, fontWeight: '600' },
   cardSub:   { fontSize: 11 },
-
-  loggedBadge: { position: 'absolute', bottom: 3, right: 3 },
 
   rankBadge: {
     position: 'absolute',

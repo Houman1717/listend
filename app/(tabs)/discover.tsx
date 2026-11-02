@@ -13,7 +13,6 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { CatalogAlbum, CatalogTrack, CatalogArtist } from '@/context/CatalogService';
@@ -21,6 +20,7 @@ import { discoverSections } from '@/context/discoverSections';
 import { openSongPage } from '@/lib/openSong';
 import { useAlbums } from '@/context/AlbumsContext';
 import { FLIP_POOL } from '@/constants/FlipPool';
+import { ListendMark } from '@/components/AlbumGridCard';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
 
@@ -200,11 +200,10 @@ function AlbumCard({ item, isDark, isLogged, onPress }: { item: CatalogAlbum; is
         ) : (
           <ArtFallback size={CARD_SIZE} radius={6} label={item.title} />
         )}
-        {isLogged && (
-          <Ionicons name="headset" size={12} color="#D4A017" style={s.loggedBadge} />
-        )}
       </View>
-      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>{item.title}</Text>
+      <Text style={[s.cardTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]} numberOfLines={1}>
+        {isLogged && <ListendMark />}{item.title}
+      </Text>
       <Text style={[s.cardSub,   { color: isDark ? '#A08060' : '#6B4C35' }]} numberOfLines={1}>{item.artist}</Text>
     </Pressable>
   );
@@ -717,7 +716,6 @@ const s = StyleSheet.create({
 
   rankBadge: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
   rankText:  { color: '#fff', fontSize: 10, fontWeight: '700' },
-  loggedBadge: { position: 'absolute', bottom: 3, right: 3 },
 
   placeholderCard:   { width: CARD_SIZE, height: CARD_SIZE, borderRadius: 6 },
   artistPlaceholder: { width: ARTIST_SIZE, height: ARTIST_SIZE, borderRadius: ARTIST_SIZE / 2 },

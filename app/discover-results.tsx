@@ -10,7 +10,6 @@ import { Image as ExpoImage } from 'expo-image';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { CatalogAlbum } from '@/context/CatalogService';
@@ -137,9 +136,6 @@ export default function DiscoverResultsScreen() {
                   ) : (
                     <View style={[s.artwork, { backgroundColor: isDark ? '#2a1e14' : '#e0e0e0' }]} />
                   )}
-                  {isLogged && (
-                    <Ionicons name="headset" size={12} color="#D4A017" style={s.loggedBadge} />
-                  )}
                 </View>
                 <View style={s.info}>
                   <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
@@ -174,7 +170,6 @@ const s = StyleSheet.create({
   },
   rank: { width: 22, fontSize: 13, fontWeight: '700', textAlign: 'right' },
   artwork: { width: 52, height: 52, borderRadius: 4, flexShrink: 0 },
-  loggedBadge: { position: 'absolute', bottom: 3, right: 3 },
   loggedLabel: { fontSize: 11, fontWeight: '600', color: '#D4A017' },
   info: { flex: 1, gap: 2 },
   title: { fontSize: 15, fontWeight: '600' },

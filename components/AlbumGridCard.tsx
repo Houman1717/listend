@@ -55,11 +55,10 @@ export function AlbumGridCard({
             <FontAwesome name="music" size={width * 0.28} color={isDark ? '#7a5535' : '#a07850'} />
           </View>
         )}
-        {isLogged && (
-          <Ionicons name="headset" size={12} color="#D4A017" style={s.loggedBadge} />
-        )}
       </View>
-      <Text style={[s.title, { color: textColor }]} numberOfLines={1}>{album.title}</Text>
+      <Text style={[s.title, { color: textColor }]} numberOfLines={1}>
+        {isLogged && <ListendMark />}{album.title}
+      </Text>
       <Text style={[s.artist, { color: subColor }]} numberOfLines={1}>{album.artist}</Text>
     </Pressable>
   );
@@ -87,5 +86,17 @@ const s = StyleSheet.create({
   title:         { fontSize: 12, fontWeight: '600', marginTop: 2 },
   artist:        { fontSize: 11 },
   placeholderText: { height: 10, borderRadius: 4, marginTop: 2 },
-  loggedBadge: { position: 'absolute', bottom: 3, right: 3 },
 });
+
+/**
+ * The "you've listend to this" mark: gold headphones before an album title,
+ * inside the title's <Text> so it truncates with it. Off the cover so it never
+ * hides the art or blends into a warm one.
+ */
+export function ListendMark({ size = 11 }: { size?: number }) {
+  return (
+    <Text>
+      <Ionicons name="headset" size={size} color="#D4A017" />{' '}
+    </Text>
+  );
+}
