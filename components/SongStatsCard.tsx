@@ -32,6 +32,8 @@ export function SongStatsCard({
   albums,
   colors,
   onSongPress,
+  within,
+  minSongs = MIN_SONG_LOGS,
 }: {
   /** Whose songs: null for your own (from context), else fetched once. */
   userId: string | null;
@@ -39,6 +41,10 @@ export function SongStatsCard({
   albums: LoggedAlbum[];
   colors: CardColors;
   onSongPress: (song: SongReview) => void;
+  /** Month / Year in Review: keep only songs logged in that period. */
+  within?: (listenedAt: Date) => boolean;
+  /** Hide the card below this many songs; a month has far fewer than a library. */
+  minSongs?: number;
 }) {
   const { songReviews } = useSongReviews();
   const [otherSongs, setOtherSongs] = useState<SongReview[] | null>(null);
@@ -51,7 +57,11 @@ export function SongStatsCard({
     return () => { cancelled = true; };
   }, [userId]);
 
-  const songs = userId ? (otherSongs ?? []) : songReviews;
+  const allSongs = userId ? (otherSongs ?? []) : songReviews;
+  const songs = useMemo(
+    () => (within ? allSongs.filter(s => within(new Date(s.listenedAt))) : allSongs),
+    [allSongs, within],
+  );
 
   const stats = useMemo(() => {
     const rated = songs.filter(s => s.rating > 0);
@@ -111,7 +121,7 @@ export function SongStatsCard({
     };
   }, [songs, albums]);
 
-  if (songs.length < MIN_SONG_LOGS) return null;
+  if (songs.length < minSongs) return null;
 
   const theirs = userId ? 'Their' : 'Your';
   const maxCount = Math.max(...stats.distribution, 1);

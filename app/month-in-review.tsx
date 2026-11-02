@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, Pressable, FlatList, Modal, useWindowDimensions,
 } from 'react-native';
@@ -18,12 +18,20 @@ import { supabase } from '@/lib/supabase';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { ProLockedSection } from '@/components/ProLockedSection';
+import { ReleaseYearChart } from '@/components/ReleaseYearChart';
+import { ReviewHero } from '@/components/ReviewHero';
+import { StatTile } from '@/components/StatTile';
+import { SongStatsCard } from '@/components/SongStatsCard';
+import { openSongPage } from '@/lib/openSong';
 import { MAIN_GENRES } from '@/lib/genres';
 
 const CARD_BG = '#2E2018';
 const BORDER  = '#2a1e14';
 const TEXT    = '#f5e6c8';
 const SUBTEXT = '#A08060';
+// Top Artists: two rows of three, then three more rows per "See more".
+const ARTISTS_SHOWN = 6;
+const ARTISTS_MORE  = 9;
 const ACCENT  = '#D4A017';
 
 const INITIAL_COLORS = ['#7a5018', '#5c3a10', '#6B4422', '#4a3218', '#8B6914', '#3d2a0e'];
@@ -58,7 +66,6 @@ function computeMonthStats(albums: LoggedAlbum[], selectedYear: number) {
   }
   const topArtists = [...artistCountMap.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 12)
     .map(([artist, count]) => {
       const ratings = artistRatingsMap.get(artist) ?? [];
       const avg = ratings.length > 0 ? ratings.reduce((s, r) => s + r, 0) / ratings.length : null;
@@ -72,8 +79,7 @@ function computeMonthStats(albums: LoggedAlbum[], selectedYear: number) {
       count: artistCountMap.get(artist) ?? 0,
       avg: ratings.reduce((s, r) => s + r, 0) / ratings.length,
     }))
-    .sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0))
-    .slice(0, 12);
+    .sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0));
 
   // Top genres
   const genreCountMap = new Map<string, number>();
@@ -114,30 +120,6 @@ function computeMonthStats(albums: LoggedAlbum[], selectedYear: number) {
     topArtists, topArtistsByRating, topGenres, firstAlbum, lastAlbum, dowCounts,
     highestRatedThisYear, highestRatedPrevious,
   };
-}
-
-// ─── StatRow ─────────────────────────────────────────────────────────────────
-
-function StatRow({ stats, textColor = TEXT, subtextColor = SUBTEXT, borderColor = BORDER }: {
-  stats: { label: string; value: string | number; onPress?: () => void }[];
-  textColor?: string; subtextColor?: string; borderColor?: string;
-}) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8 }}>
-      {stats.map((stat, i) => (
-        <Fragment key={stat.label}>
-          <Pressable
-            style={({ pressed }) => ({ flex: 1, alignItems: 'center', gap: 3, opacity: stat.onPress && pressed ? 0.6 : 1 })}
-            onPress={stat.onPress}
-            disabled={!stat.onPress}>
-            <Text style={{ color: textColor, fontSize: 20, fontWeight: '700' }}>{stat.value}</Text>
-            <Text style={{ color: subtextColor, fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.8, textAlign: 'center' }}>{stat.label}</Text>
-          </Pressable>
-          {i < stats.length - 1 && <View style={{ width: StyleSheet.hairlineWidth, height: 32, backgroundColor: borderColor }} />}
-        </Fragment>
-      ))}
-    </View>
-  );
 }
 
 // ─── RatingDistribution ───────────────────────────────────────────────────────
@@ -404,6 +386,11 @@ export default function MonthInReviewScreen() {
   const [selectedMonth, setSelectedMonth] = useState(initMonth);
   const [highestRatedView, setHighestRatedView] = useState<'thisYear' | 'previous'>('thisYear');
   const [artistView, setArtistView] = useState<'listend' | 'rated'>('listend');
+  // Top Artists starts at two rows; each "See more" adds three. Resets on a new month.
+  const [artistsShown, setArtistsShown] = useState(ARTISTS_SHOWN);
+  useEffect(() => { setArtistsShown(ARTISTS_SHOWN); }, [selectedYear, selectedMonth]);
+  // Artist photos are one lookup each, so only fetch the ones on screen.
+  const requestedArtists = useRef(new Set<string>());
   const [modal, setModal] = useState<{ title: string; albums: LoggedAlbum[] } | null>(null);
   const [reviewAlbum, setReviewAlbum] = useState<LoggedAlbum | null>(null);
   const [ownUserId, setOwnUserId] = useState<string | null>(null);
@@ -422,11 +409,12 @@ export default function MonthInReviewScreen() {
 
   // Fetch artist images
   useEffect(() => {
-    const allArtists = [...stats.topArtists, ...stats.topArtistsByRating];
-    if (allArtists.length === 0) return;
+    const limit = artistsShown;
+    const allArtists = [...stats.topArtists.slice(0, limit), ...stats.topArtistsByRating.slice(0, limit)];
     const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-    const uniqueNames = [...new Set(allArtists.map(a => a.artist))];
-    const names = uniqueNames;
+    const names = [...new Set(allArtists.map(a => a.artist))].filter(n => !requestedArtists.current.has(n));
+    if (names.length === 0) return;
+    names.forEach(n => requestedArtists.current.add(n));
     Promise.allSettled(
       names.map(name =>
         fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
@@ -441,7 +429,7 @@ export default function MonthInReviewScreen() {
       }
       if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
     });
-  }, [selectedYear, selectedMonth, loggedAlbums.length]);
+  }, [selectedYear, selectedMonth, loggedAlbums.length, artistsShown]);
   const maxGenre = stats.topGenres[0]?.[1] ?? 1;
   const maxArtist = stats.topArtists[0]?.count ?? 1;
 
@@ -539,24 +527,32 @@ export default function MonthInReviewScreen() {
             ) : (
               <>
                 {/* ── Hero ── */}
-                <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder, alignItems: 'center', gap: 6 }]}>
-                  <Text style={{ color: muted, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-                    {MONTH_NAMES[selectedMonth]} {selectedYear}
-                  </Text>
-                  <Text style={{ color: tint, fontSize: 64, fontWeight: '800', letterSpacing: -3 }}>{monthAlbums.length}</Text>
-                  <Text style={{ color: sub, fontSize: 14 }}>albums logged</Text>
-                </View>
+                <ReviewHero
+                  label={`${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
+                  albums={monthAlbums}
+                  previousCount={loggedAlbums.filter(a => {
+                    const d = new Date(a.dateLogged);
+                    const prev = new Date(selectedYear, selectedMonth - 1, 1);
+                    return d.getFullYear() === prev.getFullYear() && d.getMonth() === prev.getMonth();
+                  }).length}
+                  previousLabel={MONTH_NAMES[(selectedMonth + 11) % 12]}
+                  onPress={monthAlbums.length > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Albums`, albums: monthAlbums }) : undefined}
+                  cardBg={cardBg}
+                  cardBorder={cardBorder}
+                  tint={tint}
+                  subtextColor={sub}
+                  mutedColor={muted}
+                />
 
-                {/* ── Stats strip ── */}
-                <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
-                  <StatRow
-                    stats={[
-                      { label: 'Albums', value: monthAlbums.length, onPress: monthAlbums.length > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Albums`, albums: monthAlbums }) : undefined },
-                      { label: 'Reviews', value: stats.reviewCount || '—', onPress: stats.reviewCount > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Reviews`, albums: monthAlbums.filter(a => a.review && a.review.trim().length > 0) }) : undefined },
-                      { label: 'Hours', value: hoursPending ? '…' : (stats.hours || '—') },
-                    ]}
-                    textColor={txt} subtextColor={sub} borderColor={cardBorder}
-                  />
+                {/* ── Headline stats as tiles (the hero has the album count) ── */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <StatTile icon="headphones" value={hoursPending ? '…' : (stats.hours || '—')} unit=" hrs" label="Listening"
+                    tint={tint} textColor={txt} subtextColor={sub} bg={cardBg} border={cardBorder} />
+                  <StatTile icon="users" value={stats.artistCount || '—'} label="Artists"
+                    tint={tint} textColor={txt} subtextColor={sub} bg={cardBg} border={cardBorder} />
+                  <StatTile icon="pencil" value={stats.reviewCount || '—'} label="Reviews"
+                    onPress={stats.reviewCount > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Reviews`, albums: monthAlbums.filter(a => a.review && a.review.trim().length > 0) }) : undefined}
+                    tint={tint} textColor={txt} subtextColor={sub} bg={cardBg} border={cardBorder} />
                 </View>
 
                 {/* Everything past the hero and the stats strip is Pro. Free users
@@ -565,8 +561,8 @@ export default function MonthInReviewScreen() {
                 <ProLockedSection
                   locked={recapLocked}
                   colors={{ background: colors.background, text: txt, subtext: sub }}
-                  title="5 more sections inside"
-                  sub="Your most active day, highest rated, top artists, top genres and how you rated everything.">
+                  title="7 more sections inside"
+                  sub="Your most active day, highest rated, decades, top artists, top genres, songs and how you rated everything.">
 
                 {/* ── Day of Week ── */}
                 <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -637,6 +633,22 @@ export default function MonthInReviewScreen() {
                   </View>
                 )}
 
+                {/* ── Decades: when the month's albums came out ── */}
+                {monthAlbums.some(a => a.year) && (
+                  <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+                    <Text style={[st.label, { color: muted, marginBottom: 14 }]}>BY RELEASE YEAR</Text>
+                    <ReleaseYearChart
+                      albums={monthAlbums}
+                      onShowAlbums={(title, albums) => setModal({ title, albums })}
+                      livesIn={`Your ${MONTH_NAMES[selectedMonth]} lived`}
+                      tint={tint}
+                      textColor={txt}
+                      subtextColor={sub}
+                      borderColor={cardBorder}
+                    />
+                  </View>
+                )}
+
                 {/* ── Rating Distribution ── */}
                 {monthAlbums.filter(a => effectiveRating(a) > 0).length > 0 && (
                   <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -680,7 +692,8 @@ export default function MonthInReviewScreen() {
                       const cardW = Math.floor((screenWidth - 40 - 36 - GAP * 2) / 3);
                       const imgSize = cardW - 20;
                       const rows: typeof activeList[] = [];
-                      for (let i = 0; i < activeList.length; i += 3) rows.push(activeList.slice(i, i + 3));
+                      const shown = activeList.slice(0, artistsShown);
+                      for (let i = 0; i < shown.length; i += 3) rows.push(shown.slice(i, i + 3));
                       return (
                         <View style={{ gap: 16 }}>
                           {rows.map((row, ri) => (
@@ -709,6 +722,16 @@ export default function MonthInReviewScreen() {
                               })}
                             </View>
                           ))}
+                          {activeList.length > ARTISTS_SHOWN && (
+                            <Pressable
+                              onPress={() => setArtistsShown(n => (n >= activeList.length ? ARTISTS_SHOWN : n + ARTISTS_MORE))}
+                              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingTop: 4, opacity: pressed ? 0.6 : 1 })}>
+                              <Text style={{ color: tint, fontSize: 13, fontWeight: '700' }}>
+                                {artistsShown >= activeList.length ? 'Show fewer' : `See more · ${activeList.length - artistsShown} left`}
+                              </Text>
+                              <FontAwesome name={artistsShown >= activeList.length ? 'chevron-up' : 'chevron-down'} size={11} color={tint} />
+                            </Pressable>
+                          )}
                         </View>
                       );
                     })()}
@@ -735,6 +758,16 @@ export default function MonthInReviewScreen() {
                     <Text style={{ color: sub, fontSize: 12, marginTop: 4 }}>Tap a genre to see albums</Text>
                   </View>
                 )}
+
+                {/* ── Songs logged in this period ── */}
+                <SongStatsCard
+                  userId={viewedUserId}
+                  albums={loggedAlbums}
+                  colors={colors}
+                  within={d => d.getFullYear() === selectedYear && d.getMonth() === selectedMonth}
+                  minSongs={3}
+                  onSongPress={song => openSongPage(router, { id: song.songId, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, albumId: song.albumId, albumTitle: song.albumTitle, durationMs: song.durationMs })}
+                />
 
                 {/* ── First album of the month ── */}
                 {stats.firstAlbum && (

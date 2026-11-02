@@ -1,7 +1,7 @@
 import { StyleSheet, View, Text, ScrollView, Pressable, Modal, FlatList, useWindowDimensions, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
-import { useState, useEffect, Fragment, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -25,6 +25,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MAIN_GENRES } from '@/lib/genres';
 import { StatsMilestones } from '@/components/StatsMilestones';
 import { SongStatsCard } from '@/components/SongStatsCard';
+import { ReleaseYearChart } from '@/components/ReleaseYearChart';
+import { ReviewHero } from '@/components/ReviewHero';
+import { StatTile } from '@/components/StatTile';
 import { openSongPage } from '@/lib/openSong';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 
@@ -422,43 +425,42 @@ function ArtistListModal({
   );
 }
 
-// ─── Hero Stats ───────────────────────────────────────────────────────────────
+// ─── Year in Review / Monthly Stats links ─────────────────────────────────────
+// Doorways, not stats: a tinted card, solid icon and arrow, so they don't read
+// as quieter versus the bold stat tiles above them.
 
-function StatRow({
-  stats,
-  textColor = TEXT,
-  subtextColor = SUBTEXT,
-  borderColor = BORDER,
+function ReviewLink({
+  icon, title, sub, onPress, tint, textColor, subtextColor, bg,
 }: {
-  stats: { label: string; value: string | number; onPress?: () => void }[];
-  textColor?: string;
-  subtextColor?: string;
-  borderColor?: string;
+  icon: 'calendar' | 'bar-chart';
+  title: string;
+  sub: string;
+  onPress: () => void;
+  tint: string; textColor: string; subtextColor: string; bg: string;
 }) {
   return (
-    <View style={hs.row}>
-      {stats.map((stat, i) => (
-        <Fragment key={stat.label}>
-          <Pressable
-            style={({ pressed }) => [hs.box, stat.onPress && pressed && { opacity: 0.6 }]}
-            onPress={stat.onPress}
-            disabled={!stat.onPress}>
-            <Text style={[hs.value, { color: textColor }]}>{stat.value}</Text>
-            <Text style={[hs.label, { color: subtextColor }]}>{stat.label}</Text>
-          </Pressable>
-          {i < stats.length - 1 && <View style={[hs.divider, { backgroundColor: borderColor }]} />}
-        </Fragment>
-      ))}
-    </View>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [rl2.card, { backgroundColor: bg, borderColor: tint, opacity: pressed ? 0.7 : 1 }]}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: tint, opacity: 0.1 }]} />
+      <View style={rl2.top}>
+        <View style={[rl2.icon, { backgroundColor: tint }]}>
+          <FontAwesome name={icon} size={15} color="#FFFFFF" />
+        </View>
+        <FontAwesome name="arrow-right" size={14} color={tint} />
+      </View>
+      <Text style={[rl2.title, { color: textColor }]}>{title}</Text>
+      <Text style={[rl2.sub, { color: subtextColor }]}>{sub}</Text>
+    </Pressable>
   );
 }
 
-const hs = StyleSheet.create({
-  row:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8 },
-  box:     { flex: 1, alignItems: 'center', gap: 3 },
-  value:   { color: TEXT,    fontSize: 20, fontWeight: '700' },
-  label:   { color: SUBTEXT, fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.8, textAlign: 'center' },
-  divider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: BORDER },
+const rl2 = StyleSheet.create({
+  card:  { flex: 1, borderRadius: 14, borderWidth: 1, padding: 14, gap: 4, overflow: 'hidden' },
+  top:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  icon:  { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  sub:   { fontSize: 13 },
 });
 
 // ─── Rating distribution ──────────────────────────────────────────────────────
@@ -633,58 +635,9 @@ const ag = StyleSheet.create({
   sub:  { color: SUBTEXT, fontSize: 11, fontWeight: '500', textAlign: 'center' },
 });
 
-// ─── Year Bar Chart with drill-down ──────────────────────────────────────────
-
-const CHART_H = 130;
-const BAR_W   = 38;
-const BAR_GAP = 10;
-
-type ChartView = 'albums' | 'ratings';
-
-type Bucket = {
-  key: number;
-  label: string;
-  albums: LoggedAlbum[];
-  count: number;
-  avgRating: number;
-};
-
-function buildDecadeBuckets(loggedAlbums: LoggedAlbum[]): Bucket[] {
-  const byDecade = new Map<number, LoggedAlbum[]>();
-  for (const album of loggedAlbums) {
-    if (!album.year || album.year < 1900 || album.year > 2030) continue;
-    const decade = Math.floor(album.year / 10) * 10;
-    if (!byDecade.has(decade)) byDecade.set(decade, []);
-    byDecade.get(decade)!.push(album);
-  }
-  return [...byDecade.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([decade, albums]) => {
-      const rated = albums.filter(a => effectiveRating(a) > 0);
-      return {
-        key: decade,
-        label: `${decade}s`,
-        albums,
-        count: albums.length,
-        avgRating: rated.length > 0 ? rated.reduce((s, a) => s + effectiveRating(a), 0) / rated.length : 0,
-      };
-    });
-}
-
-function buildYearBuckets(loggedAlbums: LoggedAlbum[], decade: number): Bucket[] {
-  return Array.from({ length: 10 }, (_, i) => {
-    const year   = decade + i;
-    const albums = loggedAlbums.filter(a => a.year === year);
-    const rated  = albums.filter(a => effectiveRating(a) > 0);
-    return {
-      key: year,
-      label: String(year),
-      albums,
-      count: albums.length,
-      avgRating: rated.length > 0 ? rated.reduce((s, a) => s + effectiveRating(a), 0) / rated.length : 0,
-    };
-  });
-}
+// ─── Release Year Chart ──────────────────────────────────────────────────────
+// The chart itself is components/ReleaseYearChart (shared with Month and Year
+// in Review); this keeps My Stats' own album list pop-up.
 
 function YearChart({
   loggedAlbums,
@@ -694,6 +647,7 @@ function YearChart({
   subtextColor = SUBTEXT,
   borderColor = BORDER,
   themeColors,
+  ownerName,
 }: {
   loggedAlbums: LoggedAlbum[];
   onAlbumPress: (album: LoggedAlbum) => void;
@@ -702,28 +656,10 @@ function YearChart({
   subtextColor?: string;
   borderColor?: string;
   themeColors?: ModalColors;
+  /** Someone else's stats: their name for the headline. Omitted for your own. */
+  ownerName?: string;
 }) {
-  const [view,        setView]        = useState<ChartView>('albums');
-  const [drillDecade, setDrillDecade] = useState<number | null>(null);
-  const [modal,       setModal]       = useState<{ title: string; albums: LoggedAlbum[] } | null>(null);
-
-  const buckets: Bucket[] = drillDecade !== null
-    ? buildYearBuckets(loggedAlbums, drillDecade)
-    : buildDecadeBuckets(loggedAlbums);
-
-  const maxCount = Math.max(...buckets.map(b => b.count), 1);
-
-  function handleBarPress(bucket: Bucket) {
-    if (drillDecade === null) {
-      setDrillDecade(bucket.key);
-    } else if (bucket.albums.length > 0) {
-      setModal({ title: String(bucket.key), albums: bucket.albums });
-    }
-  }
-
-  if (buckets.length === 0) {
-    return <EmptyState text="Log some albums to see your year breakdown." />;
-  }
+  const [modal, setModal] = useState<{ title: string; albums: LoggedAlbum[] } | null>(null);
 
   return (
     <>
@@ -734,96 +670,22 @@ function YearChart({
         onAlbumPress={(album) => { setModal(null); setTimeout(() => onAlbumPress(album), 300); }}
         themeColors={themeColors}
       />
-
-      {/* Header row: back button + toggle */}
-      <View style={yc.headerRow}>
-        {drillDecade !== null ? (
-          <Pressable
-            style={({ pressed }) => [yc.backBtn, { opacity: pressed ? 0.6 : 1 }]}
-            onPress={() => setDrillDecade(null)}>
-            <FontAwesome name="chevron-left" size={11} color={tint} />
-            <Text style={[yc.backText, { color: tint }]}>All decades</Text>
-          </Pressable>
-        ) : <View />}
-
-        <View style={[yc.toggle, { backgroundColor: borderColor }]}>
-          {(['albums', 'ratings'] as ChartView[]).map(v => (
-            <Pressable
-              key={v}
-              style={[yc.toggleBtn, view === v && { backgroundColor: tint }]}
-              onPress={() => setView(v)}>
-              <Text style={[yc.toggleText, { color: subtextColor }, view === v && yc.toggleTextActive]}>
-                {v === 'albums' ? 'Albums' : 'Avg Rating'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      {/* Chart */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={yc.scroll}>
-        <View style={[yc.chartWrap, { height: CHART_H + 36 }]}>
-          {/* Guide lines */}
-          {[0.25, 0.5, 0.75, 1].map(pct => (
-            <View key={pct} style={[yc.guide, { bottom: pct * CHART_H + 28, backgroundColor: borderColor }]} />
-          ))}
-
-          {/* Bars */}
-          {buckets.map(bucket => {
-            const value    = view === 'albums' ? bucket.count : bucket.avgRating;
-            const maxVal   = view === 'albums' ? maxCount : 10;
-            const barH     = maxVal > 0 ? Math.max((value / maxVal) * CHART_H, value > 0 ? 4 : 0) : 0;
-            const valLabel = view === 'albums'
-              ? (bucket.count > 0 ? String(bucket.count) : '')
-              : (bucket.avgRating > 0 ? bucket.avgRating.toFixed(1) : '');
-            const pressable = drillDecade === null || bucket.albums.length > 0;
-
-            return (
-              <Pressable
-                key={bucket.key}
-                style={({ pressed }) => [yc.col, pressable && pressed && { opacity: 0.6 }]}
-                onPress={() => handleBarPress(bucket)}
-                disabled={!pressable}>
-                <Text style={[yc.valLabel, { opacity: valLabel ? 1 : 0, color: textColor }]}>{valLabel || '0'}</Text>
-                <View style={[yc.barArea, { height: CHART_H }]}>
-                  <View style={[yc.bar, { height: barH, backgroundColor: tint }]} />
-                </View>
-                <Text style={[yc.decLabel, { color: subtextColor }]}>{bucket.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </ScrollView>
-
-      {drillDecade !== null ? (
-        <>
-          <Pressable
-            style={({ pressed }) => [yc.seeAll, { opacity: pressed ? 0.6 : 1 }]}
-            onPress={() => {
-              const allDecadeAlbums = loggedAlbums.filter(
-                a => a.year >= drillDecade && a.year < drillDecade + 10
-              );
-              setModal({ title: `${drillDecade}s — All Albums`, albums: allDecadeAlbums });
-            }}>
-            <Text style={[yc.seeAllText, { color: tint }]}>
-              See all {loggedAlbums.filter(a => a.year >= drillDecade && a.year < drillDecade + 10).length} albums from the {drillDecade}s
-            </Text>
-            <FontAwesome name="chevron-right" size={11} color={tint} />
-          </Pressable>
-          <Text style={[yc.hint, { color: subtextColor }]}>Tap a bar to see albums</Text>
-        </>
-      ) : (
-        <Text style={[yc.hint, { color: subtextColor }]}>Tap a decade to explore</Text>
-      )}
+      <ReleaseYearChart
+        albums={loggedAlbums}
+        onShowAlbums={(title, albums) => setModal({ title, albums })}
+        livesIn={ownerName ? `${ownerName} lives` : 'You live'}
+        empty={<EmptyState text="Log some albums to see your year breakdown." />}
+        tint={tint}
+        textColor={textColor}
+        subtextColor={subtextColor}
+        borderColor={borderColor}
+      />
     </>
   );
 }
 
+// Toggle styles, shared by the artist and genre cards' Albums / Avg Rating switches.
 const yc = StyleSheet.create({
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  backBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backText:  { color: ACCENT, fontSize: 13, fontWeight: '600' },
-
   toggle: {
     flexDirection: 'row',
     backgroundColor: BORDER,
@@ -831,27 +693,8 @@ const yc = StyleSheet.create({
     padding: 2,
   },
   toggleBtn:        { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7 },
-  toggleActive:     { backgroundColor: ACCENT },
   toggleText:       { color: SUBTEXT, fontSize: 13, fontWeight: '600' },
   toggleTextActive: { color: '#0F0A07', fontSize: 13, fontWeight: '700' },
-
-  scroll:    { paddingRight: 8 },
-  chartWrap: { flexDirection: 'row', alignItems: 'flex-end', gap: BAR_GAP, position: 'relative' },
-  guide: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: BORDER,
-  },
-  col:      { width: BAR_W, alignItems: 'center', gap: 4 },
-  valLabel: { color: SUBTEXT, fontSize: 10, fontWeight: '600' },
-  barArea:  { width: BAR_W, justifyContent: 'flex-end' },
-  bar:      { width: BAR_W, backgroundColor: ACCENT, borderRadius: 4, opacity: 0.85 },
-  decLabel: { color: SUBTEXT, fontSize: 10, fontWeight: '500', textAlign: 'center' },
-  hint:       { color: SUBTEXT, fontSize: 12, marginTop: 6 },
-  seeAll:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: BORDER },
-  seeAllText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
 });
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -1074,6 +917,13 @@ export default function MyStatsScreen() {
     { label: 'Top Flip Streak', value: flipStreak > 0 ? flipStreak : '—' },
     { label: 'Best Streak',     value: longestStreak > 0 ? longestStreak : '—' },
   ];
+
+  // When the library starts, for the hero's "Since Jun 2022".
+  const firstLogged = (() => {
+    const first = loggedAlbums.reduce<string | null>(
+      (min, a) => (a.dateLogged && (!min || a.dateLogged < min) ? a.dateLogged : min), null);
+    return first ? new Date(first).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : null;
+  })();
 
   // ── Most listend artists ──────────────────────────────────────────────────
   const artistCounts = new Map<string, number>();
@@ -2320,34 +2170,60 @@ export default function MyStatsScreen() {
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}>
 
-        {/* ── Hero Stats ────────────────────────────────────────────────── */}
-        <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
-          <Text style={[s.cardTitle, { color: colors.textMuted, paddingHorizontal: 18, paddingTop: 18, marginBottom: 0 }]}>{viewedUserId ? 'STATS' : 'MY STATS'}</Text>
-          <StatRow stats={heroStats.slice(0, 3)} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
-          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: cardBorder, marginHorizontal: 8 }} />
-          <StatRow stats={heroStats.slice(3)} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} />
+        {/* ── Hero: all-time count over your best covers, like the reviews ── */}
+        <ReviewHero
+          label="All time"
+          albums={loggedAlbums}
+          note={firstLogged ? `Since ${firstLogged}` : undefined}
+          onPress={heroStats[0].onPress}
+          cardBg={cardBg}
+          cardBorder={cardBorder}
+          tint={colors.tint}
+          subtextColor={colors.subtext}
+          mutedColor={colors.textMuted}
+        />
+
+        {/* ── The rest of the headline stats (the hero has the album count) ── */}
+        <View style={{ gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <StatTile icon="headphones" value={totalHours} unit=" hrs" label="Listening"
+              tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} bg={cardBg} border={cardBorder} />
+            <StatTile icon="users" value={uniqueArtists} label="Artists" onPress={heroStats[2].onPress}
+              tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} bg={cardBg} border={cardBorder} />
+            <StatTile icon="volume-up" value={avgRating} unit=" /10" label="Avg rating"
+              extra={avgRating !== '—' ? (
+                <VolumeBars rating={Math.round(Number(avgRating))} activeColor={colors.tint} inactiveColor={cardBorder} />
+              ) : undefined}
+              tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} bg={cardBg} border={cardBorder} />
+          </View>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <StatTile icon="fire" value={longestStreak > 0 ? longestStreak : '—'} unit={longestStreak === 1 ? ' day' : ' days'} label="Best listening streak"
+              tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} bg={cardBg} border={cardBorder} />
+            <StatTile icon="random" value={flipStreak > 0 ? flipStreak : '—'} unit=" in a row" label="Best flip streak"
+              tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} bg={cardBg} border={cardBorder} />
+          </View>
         </View>
 
         {/* ── Year in Review + Monthly Stats cards ──────────────────────── */}
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Pressable
+          <ReviewLink
+            icon="calendar"
+            title="Year in Review"
+            sub={viewedUserId ? 'Deep dive into their year' : 'Deep dive into your year'}
             onPress={() => router.push(viewedUserId
               ? { pathname: '/year-in-review', params: { userId: viewedUserId, displayName: params.displayName ?? '', proTheme: params.proTheme ?? '' } } as any
               : '/year-in-review' as any)}
-            style={({ pressed }) => [s.card, { flex: 1, backgroundColor: cardBg, borderColor: cardBorder, gap: 6, opacity: pressed ? 0.7 : 1 }]}>
-            <FontAwesome name="calendar" size={18} color={colors.tint} />
-            <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 4 }}>Year in Review</Text>
-            <Text style={{ color: colors.subtext, fontSize: 12 }}>{viewedUserId ? 'Deep dive into their year' : 'Deep dive into your year'}</Text>
-          </Pressable>
-          <Pressable
+            tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} bg={cardBg}
+          />
+          <ReviewLink
+            icon="bar-chart"
+            title="Monthly Stats"
+            sub="Browse past months"
             onPress={() => router.push(viewedUserId
               ? { pathname: '/month-in-review', params: { userId: viewedUserId, displayName: params.displayName ?? '', proTheme: params.proTheme ?? '' } } as any
               : '/month-in-review' as any)}
-            style={({ pressed }) => [s.card, { flex: 1, backgroundColor: cardBg, borderColor: cardBorder, gap: 6, opacity: pressed ? 0.7 : 1 }]}>
-            <FontAwesome name="bar-chart" size={18} color={colors.tint} />
-            <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 4 }}>Monthly Stats</Text>
-            <Text style={{ color: colors.subtext, fontSize: 12 }}>Browse past months</Text>
-          </Pressable>
+            tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} bg={cardBg}
+          />
         </View>
 
         {/* ── Milestones ────────────────────────────────────────────────── */}
@@ -2372,7 +2248,7 @@ export default function MyStatsScreen() {
         {/* ── Year Chart ────────────────────────────────────────────────── */}
         <View style={[s.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <Text style={[s.cardTitle, { color: colors.textMuted }]}>BY RELEASE YEAR</Text>
-          <YearChart loggedAlbums={loggedAlbums} onAlbumPress={handleAlbumPress} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} themeColors={colors} />
+          <YearChart loggedAlbums={loggedAlbums} onAlbumPress={handleAlbumPress} tint={colors.tint} textColor={colors.text} subtextColor={colors.subtext} borderColor={colors.border} themeColors={colors} ownerName={viewedUserId ? (params.displayName || undefined) : undefined} />
         </View>
 
         {/* ── Rating Distribution ────────────────────────────────────────── */}

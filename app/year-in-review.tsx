@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, ScrollView, Pressable, FlatList,
   Modal, useWindowDimensions,
@@ -19,6 +19,11 @@ import { supabase } from '@/lib/supabase';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { AlbumReviewModal } from '@/components/AlbumReviewModal';
 import { ProLockedSection } from '@/components/ProLockedSection';
+import { ReleaseYearChart } from '@/components/ReleaseYearChart';
+import { ReviewHero } from '@/components/ReviewHero';
+import { StatTile } from '@/components/StatTile';
+import { SongStatsCard } from '@/components/SongStatsCard';
+import { openSongPage } from '@/lib/openSong';
 
 // ─── Style constants (match my-stats.tsx) ─────────────────────────────────────
 
@@ -26,6 +31,9 @@ const CARD_BG  = '#2E2018';
 const BORDER   = '#2a1e14';
 const TEXT     = '#f5e6c8';
 const SUBTEXT  = '#A08060';
+// Top Artists: two rows of three, then three more rows per "See more".
+const ARTISTS_SHOWN = 6;
+const ARTISTS_MORE  = 9;
 const ACCENT   = '#D4A017';
 
 const INITIAL_COLORS = ['#7a5018', '#5c3a10', '#6B4422', '#4a3218', '#8B6914', '#3d2a0e'];
@@ -115,7 +123,6 @@ function computeYearStats(albums: LoggedAlbum[]) {
   }
   const topArtistsByCount = [...artistCountMap.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 12)
     .map(([artist, count]) => ({ artist, count }));
   const topArtistsByRating = [...artistRatingMap.entries()]
     .filter(([, ratings]) => ratings.length >= 2)
@@ -124,8 +131,7 @@ function computeYearStats(albums: LoggedAlbum[]) {
       count: artistCountMap.get(artist) ?? 0,
       avg: ratings.reduce((s, r) => s + r, 0) / ratings.length,
     }))
-    .sort((a, b) => b.avg - a.avg || b.count - a.count)
-    .slice(0, 12);
+    .sort((a, b) => b.avg - a.avg || b.count - a.count);
 
   // Top genres
   const genreCountMap = new Map<string, number>();
@@ -145,38 +151,6 @@ function computeYearStats(albums: LoggedAlbum[]) {
     ratingDist, topArtistsByCount, topArtistsByRating, topGenres,
   };
 }
-
-// ─── StatRow ─────────────────────────────────────────────────────────────────
-
-function StatRow({ stats, textColor = TEXT, subtextColor = SUBTEXT, borderColor = BORDER }: {
-  stats: { label: string; value: string | number; onPress?: () => void }[];
-  textColor?: string; subtextColor?: string; borderColor?: string;
-}) {
-  return (
-    <View style={hs.row}>
-      {stats.map((stat, i) => (
-        <Fragment key={stat.label}>
-          <Pressable
-            style={({ pressed }) => [hs.box, stat.onPress && { opacity: pressed ? 0.6 : 1 }]}
-            onPress={stat.onPress}
-            disabled={!stat.onPress}>
-            <Text style={[hs.value, { color: textColor }]}>{stat.value}</Text>
-            <Text style={[hs.lbl, { color: subtextColor }]}>{stat.label}</Text>
-          </Pressable>
-          {i < stats.length - 1 && <View style={[hs.divider, { backgroundColor: borderColor }]} />}
-        </Fragment>
-      ))}
-    </View>
-  );
-}
-
-const hs = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8 },
-  box: { flex: 1, alignItems: 'center', gap: 3 },
-  value: { color: TEXT, fontSize: 20, fontWeight: '700' },
-  lbl: { color: SUBTEXT, fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.8, textAlign: 'center' },
-  divider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: BORDER },
-});
 
 // ─── RatingDistribution ───────────────────────────────────────────────────────
 
@@ -216,20 +190,24 @@ function RatingDistribution({ albums, onRatingPress, tint = ACCENT, textColor = 
 
 // ─── BarRow ───────────────────────────────────────────────────────────────────
 
-function BarRow({ label, count, maxCount, tint = ACCENT, textColor = TEXT, subtextColor = SUBTEXT, trackColor = BORDER }: {
+function BarRow({ label, count, maxCount, tint = ACCENT, textColor = TEXT, subtextColor = SUBTEXT, trackColor = BORDER, onPress }: {
   label: string; count: number; maxCount: number;
   tint?: string; textColor?: string; subtextColor?: string; trackColor?: string;
+  onPress?: () => void;
 }) {
   const pct = maxCount > 0 ? Math.max(count / maxCount, 0.02) : 0;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, opacity: pressed ? 0.7 : 1 })}>
       <Text style={{ color: textColor, fontSize: 13, fontWeight: '500', width: 110 }} numberOfLines={1}>{label}</Text>
       <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: trackColor, overflow: 'hidden', flexDirection: 'row' }}>
         <View style={{ flex: pct, height: 6, borderRadius: 3, backgroundColor: tint, opacity: 0.45 + pct * 0.55 }} />
         <View style={{ flex: 1 - pct }} />
       </View>
       <Text style={{ color: subtextColor, fontSize: 13, fontWeight: '600', width: 28, textAlign: 'right' }}>{count}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -561,6 +539,11 @@ export default function YearInReviewScreen() {
 
   const [selectedYear, setSelectedYear] = useState<number>(availYears[0] ?? new Date().getFullYear());
   const [artistView, setArtistView] = useState<'listend' | 'rated'>('listend');
+  // Top Artists starts at two rows; each "See more" adds three. Resets on a new year.
+  const [artistsShown, setArtistsShown] = useState(ARTISTS_SHOWN);
+  useEffect(() => { setArtistsShown(ARTISTS_SHOWN); }, [selectedYear]);
+  // Artist photos are one lookup each, so only fetch the ones on screen.
+  const requestedArtists = useRef(new Set<string>());
   const [highestRatedView, setHighestRatedView] = useState<'thisYear' | 'previous'>('thisYear');
   const [modal, setModal] = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
   const [reviewAlbum, setReviewAlbum] = useState<LoggedAlbum | null>(null);
@@ -577,11 +560,13 @@ export default function YearInReviewScreen() {
   useEffect(() => {
     if (yearAlbums.length === 0) return;
     const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+    const limit = artistsShown;
     const allNames = [...new Set([
-      ...stats.topArtistsByCount.map(a => a.artist),
-      ...stats.topArtistsByRating.map(a => a.artist),
-    ])];
+      ...stats.topArtistsByCount.slice(0, limit).map(a => a.artist),
+      ...stats.topArtistsByRating.slice(0, limit).map(a => a.artist),
+    ])].filter(n => !requestedArtists.current.has(n));
     if (allNames.length === 0) return;
+    allNames.forEach(n => requestedArtists.current.add(n));
     Promise.allSettled(
       allNames.map(name =>
         fetch(`${API_URL}/search?q=${encodeURIComponent(name)}&type=artist`)
@@ -596,7 +581,7 @@ export default function YearInReviewScreen() {
       }
       if (Object.keys(images).length > 0) setArtistImages(prev => ({ ...prev, ...images }));
     });
-  }, [selectedYear, loggedAlbums.length]);
+  }, [selectedYear, loggedAlbums.length, artistsShown]);
 
   // Fetch own username for review modal
   useEffect(() => {
@@ -722,26 +707,28 @@ export default function YearInReviewScreen() {
             ) : (
               <>
                 {/* ── Hero ── */}
-                <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder, alignItems: 'center', paddingVertical: 24 }]}>
-                  <Text style={{ color: muted, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 }}>
-                    {selectedYear}
-                  </Text>
-                  <Text style={{ color: tint, fontSize: 80, fontWeight: '800', letterSpacing: -4, lineHeight: 88 }}>{yearAlbums.length}</Text>
-                  <Text style={{ color: sub, fontSize: 14 }}>albums logged</Text>
-                </View>
+                <ReviewHero
+                  label={String(selectedYear)}
+                  albums={yearAlbums}
+                  previousCount={loggedAlbums.filter(a => new Date(a.dateLogged).getFullYear() === selectedYear - 1).length}
+                  previousLabel={String(selectedYear - 1)}
+                  onPress={yearAlbums.length > 0 ? () => setModal({ title: `${selectedYear} Albums`, albums: yearAlbums }) : undefined}
+                  cardBg={cardBg}
+                  cardBorder={cardBorder}
+                  tint={tint}
+                  subtextColor={sub}
+                  mutedColor={muted}
+                />
 
-                {/* ── Stats strip ── */}
-                <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
-                  <StatRow
-                    stats={[
-                      { label: 'Albums', value: yearAlbums.length, onPress: yearAlbums.length > 0 ? () => setModal({ title: `${selectedYear} Albums`, albums: yearAlbums }) : undefined },
-                      { label: 'Reviews', value: stats.reviewCount || '—', onPress: stats.reviewCount > 0 ? () => setModal({ title: `${selectedYear} Reviews`, albums: yearAlbums.filter(a => a.review && a.review.trim().length > 0) }) : undefined },
-                      { label: 'Hours', value: hoursPending ? '…' : (stats.hours || '—') },
-                    ]}
-                    textColor={txt}
-                    subtextColor={sub}
-                    borderColor={cardBorder}
-                  />
+                {/* ── Headline stats as tiles (the hero has the album count) ── */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <StatTile icon="headphones" value={hoursPending ? '…' : (stats.hours || '—')} unit=" hrs" label="Listening"
+                    tint={tint} textColor={txt} subtextColor={sub} bg={cardBg} border={cardBorder} />
+                  <StatTile icon="users" value={new Set(yearAlbums.map(a => a.artist)).size || '—'} label="Artists"
+                    tint={tint} textColor={txt} subtextColor={sub} bg={cardBg} border={cardBorder} />
+                  <StatTile icon="pencil" value={stats.reviewCount || '—'} label="Reviews"
+                    onPress={stats.reviewCount > 0 ? () => setModal({ title: `${selectedYear} Reviews`, albums: yearAlbums.filter(a => a.review && a.review.trim().length > 0) }) : undefined}
+                    tint={tint} textColor={txt} subtextColor={sub} bg={cardBg} border={cardBorder} />
                 </View>
 
                 {/* Pro from here down — the hero and stats strip stay free so the
@@ -750,7 +737,7 @@ export default function YearInReviewScreen() {
                   locked={recapLocked}
                   colors={{ background: colors.background, text: txt, subtext: sub }}
                   title="Your full year is inside"
-                  sub="Monthly activity, highest rated, milestones, decades, top artists and top genres.">
+                  sub="Monthly activity, highest rated, decades, milestones, top artists, top genres and songs.">
 
                 {/* ── Monthly Activity ── */}
                 <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -865,6 +852,22 @@ export default function YearInReviewScreen() {
                         </ScrollView>
                       );
                     })()}
+                  </View>
+                )}
+
+                {/* ── Decades: when the year's albums came out ── */}
+                {yearAlbums.some(a => a.year) && (
+                  <View style={[st.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+                    <Text style={[st.label, { color: muted, marginBottom: 14 }]}>BY RELEASE YEAR</Text>
+                    <ReleaseYearChart
+                      albums={yearAlbums}
+                      onShowAlbums={(title, albums) => setModal({ title, albums })}
+                      livesIn={`Your ${selectedYear} lived`}
+                      tint={tint}
+                      textColor={txt}
+                      subtextColor={sub}
+                      borderColor={cardBorder}
+                    />
                   </View>
                 )}
 
@@ -1082,7 +1085,8 @@ export default function YearInReviewScreen() {
 
                       // Chunk into rows of 3 — same as all-time stats
                       const rows: [string, string][][] = [];
-                      for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
+                      const shown = items.slice(0, artistsShown);
+                      for (let i = 0; i < shown.length; i += 3) rows.push(shown.slice(i, i + 3));
 
                       return (
                         <View style={{ gap: 16 }}>
@@ -1111,6 +1115,16 @@ export default function YearInReviewScreen() {
                               ))}
                             </View>
                           ))}
+                          {items.length > ARTISTS_SHOWN && (
+                            <Pressable
+                              onPress={() => setArtistsShown(n => (n >= items.length ? ARTISTS_SHOWN : n + ARTISTS_MORE))}
+                              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingTop: 4, opacity: pressed ? 0.6 : 1 })}>
+                              <Text style={{ color: tint, fontSize: 13, fontWeight: '700' }}>
+                                {artistsShown >= items.length ? 'Show fewer' : `See more · ${items.length - artistsShown} left`}
+                              </Text>
+                              <FontAwesome name={artistsShown >= items.length ? 'chevron-up' : 'chevron-down'} size={11} color={tint} />
+                            </Pressable>
+                          )}
                         </View>
                       );
                     })()}
@@ -1140,6 +1154,16 @@ export default function YearInReviewScreen() {
                     <Text style={{ color: sub, fontSize: 12, marginTop: 4 }}>Tap a genre to see albums</Text>
                   </View>
                 )}
+
+                {/* ── Songs logged in this period ── */}
+                <SongStatsCard
+                  userId={viewedUserId}
+                  albums={loggedAlbums}
+                  colors={colors}
+                  within={d => d.getFullYear() === selectedYear}
+                  minSongs={3}
+                  onSongPress={song => openSongPage(router, { id: song.songId, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, albumId: song.albumId, albumTitle: song.albumTitle, durationMs: song.durationMs })}
+                />
 
                 </ProLockedSection>
               </>
