@@ -5944,6 +5944,9 @@ async function buildArtistDiscography(id, bust = false) {
     'habibti (fomo)',   // Drake's expanded HABIBTI
     // The scrapped 1993 sessions of the album, not an edition of it.
     'give out but don\'t give up (the original memphis recordings)',   // Primal Scream
+    // The Stone Roses' singles and B-sides, which Apple doesn't flag.
+    'turns into stone',
+    'the stone roses: turns into stone',
   ];
   const inCollectionTitles = title => COLLECTION_TITLES.includes(title.toLowerCase());
 
@@ -6137,10 +6140,23 @@ async function buildArtistDiscography(id, bust = false) {
     const plain = key.replace(NICKNAME_KEY_RE, '');
     nicknamesByPlain.set(plain, (nicknamesByPlain.get(plain) ?? new Set()).add(key));
   }
+  // "The Stone Roses: Turns Into Stone" is "Turns Into Stone" with the band's
+  // name in front, so the artist prefix is dropped before grouping.
+  const artistPrefix = artistName ? `${artistName.toLowerCase()}: ` : null;
   const groupKey = title => {
-    const key = baseTitle(title);
+    let key = baseTitle(title);
+    if (artistPrefix && key.startsWith(artistPrefix) && key.length > artistPrefix.length) key = key.slice(artistPrefix.length);
     const nicks = nicknamesByPlain.get(key);
     return nicks?.size === 1 ? [...nicks][0] : key;
+  };
+
+  // With no plain-titled edition, a plain remaster stands for the album, not
+  // whichever box set has the most tracks: The Stone Roses showed as the
+  // 56-track 20th Anniversary Collectors Edition, cover and all, while the
+  // 12-track "(Remastered 2009)" everyone logs was folded away.
+  const isPlainRemaster = title => {
+    const suffix = title.match(VARIANT_SUFFIX_RE)?.[0] ?? '';
+    return /remaster/i.test(suffix) && !/anniversary|deluxe|collector|expanded|bonus|super|box|special|legacy/i.test(suffix);
   };
 
   const dedupByBaseTitle = items => {
@@ -6158,6 +6174,10 @@ async function buildArtistDiscography(id, bust = false) {
       const existingHasSuffix = /[\(\[]/.test(existing.title);
       if (!itemHasSuffix && existingHasSuffix) { byBase.set(key, item); continue; }
       if (itemHasSuffix && !existingHasSuffix) continue;
+      const itemPlainRemaster     = isPlainRemaster(item.title);
+      const existingPlainRemaster = isPlainRemaster(existing.title);
+      if (itemPlainRemaster && !existingPlainRemaster) { byBase.set(key, item); continue; }
+      if (!itemPlainRemaster && existingPlainRemaster) continue;
       if ((item.trackCount ?? 0) > (existing.trackCount ?? 0)) { byBase.set(key, item); continue; }
       if ((item.trackCount ?? 0) < (existing.trackCount ?? 0)) continue;
       if (item.year < existing.year) { byBase.set(key, item); continue; }
