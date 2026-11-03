@@ -1841,6 +1841,47 @@ const MANUAL_ALBUMS = [
       { number: 14, id: 'lst-regional-at-best-t14', title: 'Clear', durationMs: 218000 },
     ],
   },
+  {
+    id: 'lst-moina-go',
+    title: 'Moina Go',
+    artist: 'Habib Wahid',
+    artistId: '388983228',
+    year: 2005,
+    // His 2005 debut album (Ektaar Music). Apple and Spotify carry only a
+    // four-song "Moina Go - EP" dated 2026. Nine tracks and timings from
+    // MusicBrainz, whose 2004-12-31 date is a placeholder; Discogs has the
+    // 2005 CD (it adds an instrumental, left out here).
+    artworkUrl: 'https://coverartarchive.org/release/c68e36c7-7247-4551-939c-b881d577790d/front-500',
+    musicbrainzReleaseId: 'c68e36c7-7247-4551-939c-b881d577790d',
+    trackCount: 9,
+    tracks: [
+      { number: 1, id: 'lst-moina-go-t1', title: 'Moina Go', durationMs: 252000 },
+      { number: 2, id: 'lst-moina-go-t2', title: 'Ami Ek Paharadar', durationMs: 316000 },
+      { number: 3, id: 'lst-moina-go-t3', title: 'Deashlai', durationMs: 299000 },
+      { number: 4, id: 'lst-moina-go-t4', title: 'Din Gelo', durationMs: 340000 },
+      { number: 5, id: 'lst-moina-go-t5', title: 'Taarey Bhable Ki Aar', durationMs: 329000 },
+      { number: 6, id: 'lst-moina-go-t6', title: 'Esho Brishti Namai', durationMs: 290000 },
+      { number: 7, id: 'lst-moina-go-t7', title: 'Jaa Rey', durationMs: 276000 },
+      { number: 8, id: 'lst-moina-go-t8', title: 'Kobitay', durationMs: 367000 },
+      { number: 9, id: 'lst-moina-go-t9', title: 'Moina Go (Remix)', durationMs: 226000 },
+    ],
+  },
+  {
+    id: 'lst-owned-eighteen',
+    title: 'Eighteen',
+    artist: 'Owned',
+    artistId: '1688237390',
+    year: 2021,
+    // Bangladeshi rock band's 2021 EP; on Spotify, not Apple. Tracks and
+    // timings from Spotify, the only source; cover self-hosted from there.
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/owned-eighteen.jpg`,
+    trackCount: 3,
+    tracks: [
+      { number: 1, id: 'lst-owned-eighteen-t1', title: 'Abahon', durationMs: 300000 },
+      { number: 2, id: 'lst-owned-eighteen-t2', title: 'Shomorpon', durationMs: 261107 },
+      { number: 3, id: 'lst-owned-eighteen-t3', title: 'Bishorjon', durationMs: 287400 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────

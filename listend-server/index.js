@@ -1213,6 +1213,28 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1852632212', title: 'Demos', artist: 'Pixies', year: 1987,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/47/1e/56/471e5675-4a6d-fb85-17ea-3fc1666afa26/118787.jpg/500x500bb.jpg',
   },
+  // Bangladeshi releases on \`us\` that resolve or search badly. Black: by
+  // title + artist this resolved to Dierks Bentley's Black, and Apple's
+  // search never ranks the band's own. Aushomapto 1 is often written
+  // "Aushamapto I". Warfaze resolved to a duplicate Warfaze artist's copy.
+  'black::black': {
+    id: '1661090016', title: 'Black', artist: 'Black', year: 2011,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/47/f9/43/47f9436f-4c73-8289-84d4-a6ecf9a78399/cover.jpg/500x500bb.jpg',
+  },
+  'aurthohin::aushomapto1': {
+    id: '1665061749', title: 'Aushomapto 1', artist: 'Aurthohin', year: 2008,
+    aliases: ['Aushamapto I', 'Aushomapto I'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/fa/d4/80/fad48034-c280-6cbd-850b-686b488dfab0/cover.jpg/500x500bb.jpg',
+  },
+  'aurthohin::aushamaptoi': {
+    id: '1665061749', title: 'Aushomapto 1', artist: 'Aurthohin', year: 2008,
+    aliases: ['Aushamapto I', 'Aushomapto I'],
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/fa/d4/80/fad48034-c280-6cbd-850b-686b488dfab0/cover.jpg/500x500bb.jpg',
+  },
+  'warfaze::warfaze': {
+    id: '1738823879', title: 'Warfaze', artist: 'Warfaze', year: 1991,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/82/23/15/822315b2-67f5-0ab3-3e1c-c65ddde48cb6/46a02d27-bbbf-4497-87de-8e3f671bfd8d.jpg/500x500bb.jpg',
+  },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
@@ -5639,6 +5661,17 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/47/1e/56/471e5675-4a6d-fb85-17ea-3fc1666afa26/118787.jpg/500x500bb.jpg',
       year: 1987, isSingle: false, isCompilation: false, trackCount: 9,
       url: 'https://music.apple.com/it/album/demos/1852632212', type: 'album',
+    },
+  ],
+  '290133928': [ // Warfaze — hide the duplicate artist's copy of the debut
+    {
+      // Already on this page from Apple; listed here only so its \`replaces\`
+      // drops 1457601621, the same 1991 album under a second Warfaze artist.
+      id: '1738823879', title: 'Warfaze',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/82/23/15/822315b2-67f5-0ab3-3e1c-c65ddde48cb6/46a02d27-bbbf-4497-87de-8e3f671bfd8d.jpg/500x500bb.jpg',
+      year: 1991, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/us/album/warfaze/1738823879', type: 'album',
+      replaces: ['1457601621'],
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
