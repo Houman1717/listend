@@ -1882,6 +1882,32 @@ const MANUAL_ALBUMS = [
       { number: 3, id: 'lst-owned-eighteen-t3', title: 'Bishorjon', durationMs: 287400 },
     ],
   },
+  {
+    id: 'lst-vision-creation-newsun',
+    title: 'Vision Creation Newsun',
+    artist: 'Boredoms',
+    artistId: '2818923',
+    year: 1999,
+    // Their 1999 album (A.K.A. Records, 10 December), on no Apple storefront;
+    // a digital release is marked withdrawn on MusicBrainz. The standard
+    // nine-track CD, not the earlier limited two-disc edition. Tracks and
+    // timings from MusicBrainz, identical on the 2001 US CD; the titles
+    // really are these symbols.
+    artworkUrl: 'https://coverartarchive.org/release/413e60c9-6de0-4a1c-a1fb-e37655bfc1d2/front-500',
+    musicbrainzReleaseId: '413e60c9-6de0-4a1c-a1fb-e37655bfc1d2',
+    trackCount: 9,
+    tracks: [
+      { number: 1, id: 'lst-vision-creation-newsun-t1', title: '◯', durationMs: 822093 },
+      { number: 2, id: 'lst-vision-creation-newsun-t2', title: '☆', durationMs: 322933 },
+      { number: 3, id: 'lst-vision-creation-newsun-t3', title: '♡', durationMs: 411573 },
+      { number: 4, id: 'lst-vision-creation-newsun-t4', title: '꩜', durationMs: 393000 },
+      { number: 5, id: 'lst-vision-creation-newsun-t5', title: '〜', durationMs: 379226 },
+      { number: 6, id: 'lst-vision-creation-newsun-t6', title: '◎', durationMs: 441240 },
+      { number: 7, id: 'lst-vision-creation-newsun-t7', title: '↑', durationMs: 386026 },
+      { number: 8, id: 'lst-vision-creation-newsun-t8', title: 'Ω', durationMs: 456266 },
+      { number: 9, id: 'lst-vision-creation-newsun-t9', title: 'ずっと', durationMs: 451133 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
