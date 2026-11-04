@@ -2258,6 +2258,24 @@ function searchTextScore(q, primary, secondary = '') {
   return 25;
 }
 
+// "lum.e for the best", "zhu my life remixes": the query names the artist and
+// the rest of it is in the title. That's someone asking for one record, so it
+// ranks just under an exact title match. Without this it only scored 60, and
+// popular records that matched one word ("The Best of Talking Heads") beat it
+// on Listend popularity alone.
+function namesArtistAndTitle(q, title, artist) {
+  const qk = searchKey(q);
+  const ak = searchKey(artist);
+  if (ak.length < 2 || !qk.includes(ak)) return false;
+  const artistWords = new Set(foldForMatch(artist).split(/\s+/).map(searchKey).filter(Boolean));
+  const rest = foldForMatch(q).split(/\s+/).map(searchKey).filter(w => w && !artistWords.has(w));
+  const tk = searchKey(title.replace(/\s*-\s*(single|ep)\s*$/i, ''));
+  // The title has to start with what's left, and that has to be a real word:
+  // "a salty dog" leaves "a" once the band Salty Dog is taken out, and "a" is
+  // somewhere in nearly every title.
+  return rest.join('').length >= 3 && tk.startsWith(rest[0]) && rest.every(w => tk.includes(w));
+}
+
 const popBoost = (count, weight, cap) => Math.min(cap, weight * Math.log10(1 + (count ?? 0)));
 
 function rankSearchResults(type, q, results) {
@@ -2266,10 +2284,18 @@ function rankSearchResults(type, q, results) {
     const appleBoost = Math.max(0, 30 - rank * 2);
     let score;
     if (type === 'album') {
-      score = searchTextScore(q, r.title, r.artist) + appleBoost
-        + popBoost(albums.get(r.id), 12, 35)
-        + popBoost(artists.get(searchKey(r.artist)), 8, 25);
-      if (/\s-\s*single\s*$/i.test(r.title)) score -= 30;
+      const named = namesArtistAndTitle(q, r.title, r.artist);
+      const text = named ? 90 : searchTextScore(q, r.title, r.artist);
+      // Popularity picks between real matches. A record that misses some of
+      // the query's words only gets half of it, so it can't outrank one that
+      // has them all.
+      const popWeight = text >= 60 ? 1 : 0.5;
+      score = text + appleBoost
+        + popWeight * popBoost(albums.get(r.id), 12, 35)
+        + popWeight * popBoost(artists.get(searchKey(r.artist)), 8, 25);
+      // Apple labels some multi-track remix releases "- Single" too. When the
+      // query names that release, it's not noise.
+      if (/\s-\s*single\s*$/i.test(r.title) && !named) score -= 30;
       if (/^various artists$/i.test(r.artist ?? '')) score -= 10;
       if (SEARCH_JUNK.test(`${r.title} ${r.artist}`)) score -= 40;
     } else if (type === 'track') {
