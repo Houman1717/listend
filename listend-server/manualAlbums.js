@@ -1908,6 +1908,27 @@ const MANUAL_ALBUMS = [
       { number: 9, id: 'lst-vision-creation-newsun-t9', title: 'ずっと', durationMs: 451133 },
     ],
   },
+  {
+    id: 'lst-2001-sessions',
+    title: '2001 Sessions',
+    artist: 'Laurie Bird',
+    artistId: '1896526256',     // the artist IS on Apple Music — only this record is missing
+    year: 2001,
+    // A Natural Snow Buildings alias; this one is on Spotify but no Apple
+    // storefront, and not on MusicBrainz. Tracks and timings from Spotify,
+    // cover self-hosted from there.
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/2001-sessions.jpg`,
+    trackCount: 7,
+    tracks: [
+      { number: 1, id: 'lst-2001-sessions-t1', title: 'Intro', durationMs: 59160 },
+      { number: 2, id: 'lst-2001-sessions-t2', title: 'Dreadful Ghost', durationMs: 243560 },
+      { number: 3, id: 'lst-2001-sessions-t3', title: 'The Devil’s Candle', durationMs: 233600 },
+      { number: 4, id: 'lst-2001-sessions-t4', title: 'Carrying Away My Ghost', durationMs: 117720 },
+      { number: 5, id: 'lst-2001-sessions-t5', title: 'Guns & Rifles', durationMs: 303440 },
+      { number: 6, id: 'lst-2001-sessions-t6', title: 'Bloody Snow', durationMs: 225853 },
+      { number: 7, id: 'lst-2001-sessions-t7', title: 'Lost Highway', durationMs: 173426 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
