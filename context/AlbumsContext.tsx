@@ -195,6 +195,9 @@ const KEY = {
   TOP_ARTISTS:  '@listend:topArtists_v2',
   WANT:         '@listend:wantToListen_v2',
   PLAYLISTS:    '@listend:playlists_v2',
+  // Album ids the last successful sync got back from user_albums, so the next
+  // sync can tell "never saved" from "removed elsewhere" among local-only logs.
+  SYNCED_IDS:   '@listend:syncedAlbumIds_v1',
 };
 
 const COVER_COLORS = [
@@ -255,6 +258,8 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     // transient auth/RLS failure returns [] with no error, and that must not
     // wipe the user's library / picks).
     const cached = { logged: false, want: false, topAlbums: false, topSongs: false, topArtists: false };
+    let cachedLogged: LoggedAlbum[] = [];
+    let syncedIds: Set<string> | null = null;
     const nonEmptyArr = (s: string | null) => {
       if (s == null) return false;
       try { const v = JSON.parse(s); return Array.isArray(v) && v.some((x: any) => x != null); }
@@ -264,7 +269,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     (async () => {
       // ── Step 2: Fast restore from user-scoped AsyncStorage ─────────────────
       try {
-        const [albumsStr, topAlbumsStr, topSongsStr, topArtistsStr, wantStr, playlistsStr] =
+        const [albumsStr, topAlbumsStr, topSongsStr, topArtistsStr, wantStr, playlistsStr, syncedStr] =
           await Promise.all([
             AsyncStorage.getItem(sk(KEY.LOGGED,     uid)),
             AsyncStorage.getItem(sk(KEY.TOP_ALBUMS,  uid)),
@@ -272,6 +277,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
             AsyncStorage.getItem(sk(KEY.TOP_ARTISTS, uid)),
             AsyncStorage.getItem(sk(KEY.WANT,        uid)),
             AsyncStorage.getItem(sk(KEY.PLAYLISTS,   uid)),
+            AsyncStorage.getItem(sk(KEY.SYNCED_IDS,  uid)),
           ]);
 
         if (cancelled) return;
@@ -282,7 +288,11 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         cached.topArtists = nonEmptyArr(topArtistsStr);
         cached.want       = nonEmptyArr(wantStr);
 
-        if (albumsStr  !== null) setLoggedAlbums(JSON.parse(albumsStr));
+        if (albumsStr  !== null) {
+          cachedLogged = JSON.parse(albumsStr);
+          setLoggedAlbums(cachedLogged);
+        }
+        try { if (syncedStr !== null) syncedIds = new Set(JSON.parse(syncedStr)); } catch {}
         if (topAlbumsStr  !== null) setTopAlbums(padTo5(JSON.parse(topAlbumsStr)));
         if (topSongsStr   !== null) setTopSongs(padTo5(JSON.parse(topSongsStr)));
         if (topArtistsStr !== null) setTopArtists(padTo5(JSON.parse(topArtistsStr)));
@@ -400,6 +410,40 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
             AsyncStorage.setItem(sk(KEY.LOGGED, uid), JSON.stringify(result)).catch(() => {});
             return result;
           });
+
+          // Logs that are on this phone but have never been in the DB. Before
+          // bd7744e a failed save still showed as logged, and nothing ever
+          // retried it: the album counted on this phone only, until a later
+          // re-log or reinstall made it look like the library lost one. Save
+          // them now. Only ids no sync has ever returned. One that was in the
+          // DB before and isn't now was removed elsewhere (another device, an
+          // admin merge) and must not come back. Until a sync has recorded
+          // what the DB held, nothing is re-saved.
+          const unsaved = syncedIds
+            ? [...new Map(cachedLogged
+                .filter(a => !fetchedIds.has(a.id) && !syncedIds!.has(a.id))
+                .map(a => [a.id, a] as const)).values()]
+            : [];
+          if (unsaved.length > 0) {
+            console.warn('[AlbumsContext] re-saving', unsaved.length, 'logs that never reached the DB');
+            supabase
+              .from('user_albums')
+              .upsert(unsaved.map(a => ({
+                user_id:     uid,
+                spotify_id:  a.id,
+                title:       a.title,
+                artist:      a.artist,
+                artwork_url: a.artworkUrl ?? null,
+                year:        a.year,
+                rating:      a.rating,
+                review:      a.review ?? null,
+                listened_at: a.dateLogged,
+              })), { onConflict: 'user_id,spotify_id', ignoreDuplicates: true })
+              .then(({ error }) => {
+                if (error) console.error('[AlbumsContext] re-save of local-only logs failed:', error.message);
+              });
+          }
+          AsyncStorage.setItem(sk(KEY.SYNCED_IDS, uid), JSON.stringify([...fetchedIds])).catch(() => {});
         }
       }
 
@@ -682,7 +726,11 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
       coverColor: COVER_COLORS[colorIndex],
     };
 
-    setLoggedAlbums((prev) => [newAlbum, ...prev]);
+    // Replace, never duplicate: an entry already here for this id (say a
+    // phone-only copy from a save that failed long ago) was counted twice
+    // until the next launch's sync collapsed it, which looked like a loss.
+    const replaced = loggedAlbums.find(a => a.id === newAlbum.id);
+    setLoggedAlbums((prev) => [newAlbum, ...prev.filter(a => a.id !== newAlbum.id)]);
 
     if (user) {
       // Awaited, like the re-listen path above. This used to be fire-and-forget
@@ -708,7 +756,9 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
         console.error('[AlbumsContext] logAlbum upsert error:', upsertError.message);
         // By identity, not by id: a sync may have landed meanwhile, and an
         // already-logged album must keep its own entry.
-        setLoggedAlbums(prev => prev.filter(a => a !== newAlbum));
+        setLoggedAlbums(prev => replaced
+          ? prev.map(a => (a === newAlbum ? replaced : a))
+          : prev.filter(a => a !== newAlbum));
         return false;
       }
     }
