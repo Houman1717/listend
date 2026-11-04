@@ -1653,7 +1653,12 @@ async function resolveCanonicalAlbum({ title, artist, fallbackId, fallbackYear, 
         // ("Jay-Z" vs "JAY-Z & Kanye West"), which is why it stays — but only
         // after every artist-verified option above has been ruled out.
         pool.find(item => normalizeKey(item.attributes?.name) === nt) ??
-        pool[0];
+        // Apple's top hit only when the caller has nothing better. With no
+        // title match it's some other record: "Lum.e For The Best - EP" put
+        // Rick Ross & Pharrell's "For The Money" first, and logging the EP
+        // saved that; Taake's self-titled album got a Drake single. A caller
+        // holding the record's own id keeps it (the fallback below).
+        (fallbackId ? null : pool[0]);
 
       if (match) {
         resolved = {
