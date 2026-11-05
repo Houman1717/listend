@@ -1,4 +1,5 @@
 const supabase = require('./db');
+const { sendReengagementEmails } = require('./reengagementEmail');
 
 // "Come back" pushes for quiet accounts. Who gets one, and which message, is
 // decided in Postgres by reengagement_candidates() (supabase/
@@ -8,18 +9,25 @@ const supabase = require('./db');
 //
 // The daily cron only runs when REENGAGEMENT_ENABLED=true, so the first send
 // is a deliberate switch-on after a dry run, not a side effect of a deploy.
+//
+// channel 'email' does the same for quiet accounts with no push token
+// (reengagementEmail.js), behind its own REENGAGEMENT_EMAILS_ENABLED switch
+// and a lower daily limit so the sending domain warms up gradually. Both
+// channels log to reengagement_pushes, so the weekly cap covers both.
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_BATCH    = 100;   // Expo's per-request message limit
 const DAILY_LIMIT   = Number(process.env.REENGAGEMENT_DAILY_LIMIT) || 1500;
+const EMAIL_DAILY_LIMIT = Number(process.env.REENGAGEMENT_EMAIL_DAILY_LIMIT) || 500;
 
-let running = false;
+const running = { push: false, email: false };
 
-async function fetchCandidates({ limit = DAILY_LIMIT, userId = null, ignoreCaps = false } = {}) {
+async function fetchCandidates({ limit, userId = null, ignoreCaps = false, channel = 'push' } = {}) {
   const { data, error } = await supabase.rpc('reengagement_candidates', {
     p_limit: limit,
     p_only_user: userId,
     p_ignore_caps: ignoreCaps,
+    p_channel: channel,
   });
   if (error) throw new Error(`reengagement_candidates: ${error.message}`);
   return data ?? [];
@@ -61,22 +69,47 @@ async function sendBatch(messages) {
   return { delivered, dead };
 }
 
+async function record(userIds, byUser, channel) {
+  // Record only what was accepted, so a failed batch is retried tomorrow
+  // instead of silently counting against the cap.
+  const rows = [...userIds].map(id => ({ user_id: id, kind: byUser.get(id).kind, channel }));
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await supabase.from('reengagement_pushes').insert(rows.slice(i, i + 500));
+    if (error) console.error(`[reengagement:${channel}] record failed:`, error.message);
+  }
+}
+
 /**
- * Run one pass. dryRun returns who would get what without sending or
- * recording anything. userId + ignoreCaps targets one account (testing).
+ * Run one pass for a channel ('push' or 'email'). dryRun returns who would
+ * get what without sending or recording anything. userId + ignoreCaps
+ * targets one account (testing).
  */
-async function runReengagement({ dryRun = false, limit = DAILY_LIMIT, userId = null, ignoreCaps = false } = {}) {
-  if (running) return { skipped: 'already running' };
-  running = true;
+async function runReengagement({ channel = 'push', dryRun = false, limit, userId = null, ignoreCaps = false } = {}) {
+  if (running[channel]) return { skipped: 'already running' };
+  running[channel] = true;
   try {
-    const candidates = await fetchCandidates({ limit, userId, ignoreCaps });
+    const candidates = await fetchCandidates({
+      limit: limit ?? (channel === 'email' ? EMAIL_DAILY_LIMIT : DAILY_LIMIT),
+      userId, ignoreCaps, channel,
+    });
     const byKind = {};
     for (const c of candidates) byKind[c.kind] = (byKind[c.kind] ?? 0) + 1;
 
     if (dryRun) {
-      return { dryRun: true, count: candidates.length, byKind, sample: candidates.slice(0, 5) };
+      // never echo email addresses back, even to the admin route
+      const sample = candidates.slice(0, 5).map(({ email, ...c }) => c);
+      return { channel, dryRun: true, count: candidates.length, byKind, sample };
     }
-    if (!candidates.length) return { sent: 0, byKind };
+    if (!candidates.length) return { channel, sent: 0, byKind };
+
+    if (channel === 'email') {
+      const byUser = new Map(candidates.map(c => [c.user_id, c]));
+      const delivered = await sendReengagementEmails(candidates);
+      await record(delivered, byUser, 'email');
+      const result = { channel, candidates: candidates.length, sent: delivered.size, byKind };
+      console.log('[reengagement:email]', JSON.stringify(result));
+      return result;
+    }
 
     const byUser = new Map(candidates.map(c => [c.user_id, c]));
     const tokens = await fetchTokens([...byUser.keys()]);
@@ -106,24 +139,18 @@ async function runReengagement({ dryRun = false, limit = DAILY_LIMIT, userId = n
       }
     }
 
-    // Record only what Expo accepted, so a failed batch is retried tomorrow
-    // instead of silently counting against the cap.
-    const rows = [...delivered].map(id => ({ user_id: id, kind: byUser.get(id).kind }));
-    for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await supabase.from('reengagement_pushes').insert(rows.slice(i, i + 500));
-      if (error) console.error('[reengagement] record failed:', error.message);
-    }
+    await record(delivered, byUser, 'push');
 
     if (dead.length) {
       const { error } = await supabase.from('push_tokens').delete().in('token', dead);
       if (error) console.error('[reengagement] dead-token cleanup failed:', error.message);
     }
 
-    const result = { candidates: candidates.length, sent: delivered.size, deadTokens: dead.length, byKind };
-    console.log('[reengagement]', JSON.stringify(result));
+    const result = { channel, candidates: candidates.length, sent: delivered.size, deadTokens: dead.length, byKind };
+    console.log('[reengagement:push]', JSON.stringify(result));
     return result;
   } finally {
-    running = false;
+    running[channel] = false;
   }
 }
 

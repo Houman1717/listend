@@ -7671,14 +7671,20 @@ setTimeout(runCachePrune, 2 * 60 * 1000);
 // reengagement.js). Off unless REENGAGEMENT_ENABLED=true in Railway, so the
 // first real send is a deliberate switch-on after a dry run.
 cron.schedule('0 18 * * *', () => {
-  if (process.env.REENGAGEMENT_ENABLED !== 'true') return;
-  runReengagement().catch(err => console.error('[cron:reengagement]', err.message ?? err));
+  if (process.env.REENGAGEMENT_ENABLED === 'true') {
+    runReengagement({ channel: 'push' }).catch(err => console.error('[cron:reengagement]', err.message ?? err));
+  }
+  // Emails for quiet accounts with no push token — separate switch.
+  if (process.env.REENGAGEMENT_EMAILS_ENABLED === 'true') {
+    runReengagement({ channel: 'email' }).catch(err => console.error('[cron:reengagement-email]', err.message ?? err));
+  }
 }, { timezone: 'Europe/London' });
 
-// POST /api/admin/reengagement  { dryRun?: bool, limit?: int, userId?: uuid, ignoreCaps?: bool }
+// POST /api/admin/reengagement  { channel?: 'push'|'email', dryRun?: bool, limit?: int, userId?: uuid, ignoreCaps?: bool }
 // dryRun:true (the default) returns counts per message kind and a sample
 // without sending. userId + ignoreCaps:true sends to just that account.
 app.post('/api/admin/reengagement', requireAdmin, [
+  body('channel').optional().isIn(['push', 'email']),
   body('dryRun').optional().isBoolean(),
   body('limit').optional().isInt({ min: 1, max: 5000 }),
   body('userId').optional().isUUID(),
@@ -7686,10 +7692,10 @@ app.post('/api/admin/reengagement', requireAdmin, [
   validate,
 ], async (req, res) => {
   try {
-    const { dryRun = true, limit, userId = null, ignoreCaps = false } = req.body ?? {};
+    const { channel = 'push', dryRun = true, limit, userId = null, ignoreCaps = false } = req.body ?? {};
     // A real send to everyone goes through the cron's own switch, not this route.
     if (!dryRun && !userId) return res.status(400).json({ error: 'Real sends need a userId; the cron handles the rest.' });
-    res.json(await runReengagement({ dryRun, limit, userId, ignoreCaps }));
+    res.json(await runReengagement({ channel, dryRun, limit, userId, ignoreCaps }));
   } catch (err) {
     console.error('[admin/reengagement]', err.message ?? err);
     res.status(500).json({ error: err.message ?? 'Failed' });
