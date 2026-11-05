@@ -34,6 +34,9 @@ function openUrl(data) {
     q.set('id', data.albumId);
     if (data.title)  q.set('title', data.title);
     if (data.artist) q.set('artist', data.artist);
+    // album-detail only shows the cover it is handed; it doesn't fetch one
+    if (data.artworkUrl) q.set('artworkUrl', data.artworkUrl);
+    if (data.year)       q.set('year', String(data.year));
   }
   return `${SITE}/open?${q}`;
 }
