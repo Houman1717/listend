@@ -10,7 +10,7 @@ const supabase = require('./db');
 
 const RESEND_BATCH_URL = 'https://api.resend.com/emails/batch';
 const RESEND_BATCH     = 100;   // Resend's per-request limit
-const FROM     = 'Listend <noreply@listend.uk>';
+const FROM     = 'Listend <hello@listend.uk>';   // not noreply@: filters trust it less
 const REPLY_TO = 'support@listend.uk';
 const SITE     = 'https://listend.uk';
 const POSTAL   = process.env.EMAIL_POSTAL_ADDRESS || '';   // CAN-SPAM wants one for US recipients
