@@ -20,6 +20,10 @@ const C = {
   line: '#E6DDCF', gold: '#D4A017',
 };
 
+// Invisible padding after the preheader, so inbox previews stop there instead
+// of running on into the email body ("...out now. Listend New from DrakeHi").
+const PREHEADER_PAD = '&#847;&zwnj;&nbsp;'.repeat(90);
+
 const esc = s => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -135,7 +139,7 @@ function renderEmail(c, unsubUrl) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><title>${esc(k.subject)}</title></head>
 <body style="margin:0;padding:0;background:${C.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(k.preheader)}</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(k.preheader)}${PREHEADER_PAD}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.bg};">
   <tr><td align="center" style="padding:32px 16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
