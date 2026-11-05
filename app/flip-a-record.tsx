@@ -30,6 +30,9 @@ import { usePro } from '@/context/ProContext';
 import { supabase } from '@/lib/supabase';
 import { handleOrName } from '@/lib/userHandle';
 import { FLIP_POOL, FlipAlbum } from '@/constants/FlipPool';
+import { ShareCardSheet } from '@/components/share/ShareCardSheet';
+import { StreakCard as StreakShareCard, useOwnCardColors } from '@/components/share/ShareCards';
+import { ShareIcon } from '@/components/share/ShareIcon';
 
 const API_URL   = process.env.EXPO_PUBLIC_API_URL ?? '';
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -721,6 +724,8 @@ export default function FlipARecordScreen() {
   const [artworkUrl, setArtworkUrl]            = useState('');
   const [spotifyId,  setSpotifyId]             = useState('');
   const [recentCache, setRecentCache]          = useState<Record<string, AlbumData>>({});
+  const [streakShareOpen, setStreakShareOpen] = useState(false);
+  const streakCardColors = useOwnCardColors();
   const [friendFlips, setFriendFlips]          = useState<{ userId: string; username: string; handle: string; avatarUrl: string | null; albumTitle: string; albumArtist: string; streak: number }[]>([]);
 
   // Streaming sheet
@@ -1013,6 +1018,24 @@ export default function FlipARecordScreen() {
     <>
       <Stack.Screen options={{ title: 'Flip a Record', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false, contentStyle: { backgroundColor: colors.background } }} />
 
+      {streak > 0 && (
+        <ShareCardSheet
+          visible={streakShareOpen}
+          onClose={() => setStreakShareOpen(false)}
+          kind="streak"
+          images={[]}
+          renderCard={handle => {
+            const meta = STREAK_META[getStreakTier(streak)];
+            return (
+              <StreakShareCard
+                streak={streak} tierLabel={meta.label} caption={meta.caption} tierColor={meta.color} icon={meta.icon}
+                listened={libraryLoggedIds.size} poolSize={FLIP_POOL.length}
+                colors={streakCardColors} handle={handle} />
+            );
+          }}
+        />
+      )}
+
       {/* ── Streaming sheet ────────────────────────────────────────────────── */}
       <Modal visible={showStreamSheet} transparent animationType="slide" onRequestClose={() => setShowStreamSheet(false)}>
         <Pressable style={sf.streamOverlay} onPress={() => setShowStreamSheet(false)}>
@@ -1299,6 +1322,15 @@ export default function FlipARecordScreen() {
           return (
             <>
               <StreakCard streak={streak} isDark={isDark} />
+              {streak > 0 && (
+                <Pressable
+                  onPress={() => setStreakShareOpen(true)}
+                  hitSlop={6}
+                  style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, opacity: pressed ? 0.6 : 1 })}>
+                  <ShareIcon size={16} color="#D4A017" />
+                  <Text style={{ color: '#D4A017', fontSize: 13.5, fontWeight: '700' }}>Share your streak</Text>
+                </Pressable>
+              )}
               <Pressable
                 style={({ pressed }) => [sf.statsBlock, { opacity: pressed ? 0.75 : 1 }]}
                 onPress={() => setFullListVisible(true)}>

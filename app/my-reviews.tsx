@@ -43,6 +43,9 @@ import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { SongReviewsTab } from '@/components/SongReviewsTab';
 import { SongReviewCard } from '@/components/SongReviewCard';
 import type { SongReview } from '@/lib/songReviews';
+import { ShareCardSheet } from '@/components/share/ShareCardSheet';
+import { ReviewCard as ReviewShareCard, reviewCardImages, useOwnCardColors } from '@/components/share/ShareCards';
+import { ShareIcon } from '@/components/share/ShareIcon';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
 
@@ -179,6 +182,7 @@ function ReviewDetailModal({
   onAlbumPress,
   onUsernamePress,
   onReport,
+  canShare = false,
 }: {
   album: LoggedAlbum;
   reviewId: string;
@@ -194,9 +198,13 @@ function ReviewDetailModal({
   onAlbumPress: () => void;
   onUsernamePress?: (username: string) => void;
   onReport?: () => void;
+  /** Your own review: show the share-card button. */
+  canShare?: boolean;
 }) {
   const router = useRouter();
   const { user } = useAuth();
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareColors = useOwnCardColors();
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [localComments,    setLocalComments]    = useState<ReviewComment[]>([]);
   const border = isDark ? '#2a1e14' : '#e5e5e5';
@@ -237,6 +245,22 @@ function ReviewDetailModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      {canShare && (
+        <ShareCardSheet
+          visible={shareOpen}
+          onClose={() => setShareOpen(false)}
+          kind="review"
+          images={reviewCardImages(album)}
+          renderCard={h => (
+            <ReviewShareCard
+              album={{ title: album.title, artist: album.artist, year: album.year || undefined, artworkUrl: album.artworkUrl }}
+              rating={album.lastRating ?? album.rating}
+              review={album.lastReview ?? album.review}
+              colors={shareColors}
+              handle={h} />
+          )}
+        />
+      )}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardPad }}>
@@ -248,7 +272,11 @@ function ReviewDetailModal({
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[mrd.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            {onReport ? (
+            {canShare ? (
+              <Pressable onPress={() => setShareOpen(true)} hitSlop={12}>
+                <ShareIcon size={19} color={colors.tint} />
+              </Pressable>
+            ) : onReport ? (
               <Pressable onPress={onReport} hitSlop={12}>
                 <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
               </Pressable>
@@ -1124,6 +1152,7 @@ export default function MyReviewsScreen() {
             reviewerAvatarUrl={profileAvatarUrl}
             likeState={likeState}
             onLike={viewingOther ? () => handleToggleLike(selectedReview) : undefined}
+            canShare={!viewingOther}
             onClose={() => setSelectedReview(null)}
             onAlbumPress={() => {
               const a = selectedReview;

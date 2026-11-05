@@ -2,7 +2,7 @@
   "expo": {
     "name": "Listend",
     "slug": "Listend",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "listend",
@@ -11,7 +11,7 @@
     "updates": {
       "url": "https://u.expo.dev/a2196642-8c1a-430d-b72c-33980cceb721"
     },
-    "runtimeVersion": "1.0.3",
+    "runtimeVersion": "1.0.5",
     "splash": {
       "image": "./assets/images/splash-logo.png",
       "resizeMode": "contain",
@@ -23,7 +23,8 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "Listend uses your photo library so you can choose a profile photo that other users will see on your reviews and profile page."
+        "NSPhotoLibraryUsageDescription": "Listend uses your photo library so you can choose a profile photo that other users will see on your reviews and profile page.",
+        "NSPhotoLibraryAddUsageDescription": "Listend saves the share cards you create, like your Year in Review, to your photos."
       }
     },
     "android": {

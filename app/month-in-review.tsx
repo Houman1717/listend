@@ -27,6 +27,9 @@ import { GenresCard } from '@/components/GenresCard';
 import { RatingChart } from '@/components/RatingChart';
 import { openSongPage } from '@/lib/openSong';
 import { MAIN_GENRES } from '@/lib/genres';
+import { ShareCardSheet } from '@/components/share/ShareCardSheet';
+import { PeriodCard, periodCardImages, useOwnCardColors } from '@/components/share/ShareCards';
+import { ShareIcon } from '@/components/share/ShareIcon';
 
 const CARD_BG = '#2E2018';
 const BORDER  = '#2a1e14';
@@ -210,7 +213,9 @@ function mixHex(a: string, b: string, t: number): string {
 
 export default function MonthInReviewScreen() {
   const colorScheme = useColorScheme();
-  const { isPro, proLoaded, proTheme: ownProTheme } = usePro();
+  const { isPro, proLoaded, proTheme: ownProTheme, showPaywall } = usePro();
+  const cardColors = useOwnCardColors();
+  const [shareOpen, setShareOpen] = useState(false);
   const params = useLocalSearchParams<{ year?: string; month?: string; at?: string; userId?: string; displayName?: string; proTheme?: string }>();
   const viewedUserId = params.userId ?? null;
   // Only gate your own recap. Another user's is already their content to share,
@@ -428,7 +433,31 @@ export default function MonthInReviewScreen() {
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,
+        headerRight: !viewedUserId && monthAlbums.length > 0 ? () => (
+          <Pressable onPress={() => setShareOpen(true)} hitSlop={8}
+            style={({ pressed }) => ({ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.5 : 1 })}>
+            <ShareIcon size={21} color={colors.tint} />
+          </Pressable>
+        ) : undefined,
       }} />
+
+      {/* Free: the teaser card (covers, count, top artist). Pro: the full card. */}
+      <ShareCardSheet
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        kind="month"
+        images={periodCardImages(monthAlbums, isPro)}
+        renderCard={handle => (
+          <PeriodCard
+            title={`My ${MONTH_NAMES[selectedMonth]}${selectedYear !== new Date().getFullYear() ? ` ${selectedYear}` : ''}`}
+            albums={monthAlbums} full={isPro} colors={cardColors} handle={handle} />
+        )}
+        note={isPro ? undefined : {
+          text: 'Pro adds your hours, average rating and top album to the card.',
+          action: 'See Pro',
+          onPress: () => { setShareOpen(false); setTimeout(showPaywall, 400); },
+        }}
+      />
 
       <AlbumListModal
         title={modal?.title ?? null}
@@ -527,6 +556,19 @@ export default function MonthInReviewScreen() {
                     onPress={stats.reviewCount > 0 ? () => setModal({ title: `${MONTH_NAMES[selectedMonth]} Reviews`, albums: monthAlbums.filter(a => a.review && a.review.trim().length > 0) }) : undefined}
                     tint={tint} textColor={txt} subtextColor={sub} bg={cardBg} border={cardBorder} />
                 </View>
+
+                {!viewedUserId && (
+                  <Pressable
+                    onPress={() => setShareOpen(true)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      borderWidth: 1.5, borderColor: tint, borderRadius: 14, paddingVertical: 13,
+                      opacity: pressed ? 0.7 : 1,
+                    })}>
+                    <ShareIcon size={18} color={tint} />
+                    <Text style={{ color: tint, fontSize: 15.5, fontWeight: '800' }}>Share your {MONTH_NAMES[selectedMonth]}</Text>
+                  </Pressable>
+                )}
 
                 {/* Everything past the hero and the stats strip is Pro. Free users
                     still get those two cards with their real numbers, so the push

@@ -48,6 +48,9 @@ import { ProBadge } from '@/components/ProBadge';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { handleText, isAutoUsername, nameOrHandle } from '@/lib/userHandle';
+import { ShareCardSheet } from '@/components/share/ShareCardSheet';
+import { Top5Card, top5CardImages, top5ModesFor, TOP5_MODES, useOwnCardColors, type Top5Mode } from '@/components/share/ShareCards';
+import { ShareIcon } from '@/components/share/ShareIcon';
 
 const DARK_BG   = '#0F0A07';
 const CARD_BG   = '#2E2018';
@@ -1104,6 +1107,9 @@ export default function ListendScreen() {
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [top5EditMode, setTop5EditMode] = useState(false);
+  const [top5ShareOpen, setTop5ShareOpen] = useState(false);
+  const [top5ShareMode, setTop5ShareMode] = useState<Top5Mode>('albums');
+  const top5CardColors = useOwnCardColors();
   const [selectedTopAlbum, setSelectedTopAlbum] = useState<LoggedAlbum | null>(null);
 
   // Profile data — re-fetched each time the tab comes into focus
@@ -1325,12 +1331,38 @@ export default function ListendScreen() {
       <View style={s.section}>
         <View style={s.sectionHeader}>
           <Text style={[s.sectionTitle, { color: colors.textMuted }]}>MY TOP 5 ALBUMS</Text>
-          <Pressable
-            onPress={() => setTop5EditMode(v => !v)}
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
-            <Text style={[s.editLabel, { color: colors.tint }]}>{top5EditMode ? 'Done' : 'Edit'}</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+            {!top5EditMode && top5ModesFor({ albums: topAlbums, artists: topArtists, songs: topSongs }).length > 0 && (
+              <Pressable
+                onPress={() => {
+                  const modes = top5ModesFor({ albums: topAlbums, artists: topArtists, songs: topSongs });
+                  setTop5ShareMode(modes.includes('all') ? 'all' : modes[0]);
+                  setTop5ShareOpen(true);
+                }}
+                hitSlop={10}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, marginTop: -2 })}>
+                <ShareIcon size={17} color={colors.tint} />
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => setTop5EditMode(v => !v)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+              <Text style={[s.editLabel, { color: colors.tint }]}>{top5EditMode ? 'Done' : 'Edit'}</Text>
+            </Pressable>
+          </View>
         </View>
+        <ShareCardSheet
+          visible={top5ShareOpen}
+          onClose={() => setTop5ShareOpen(false)}
+          kind={`top5_${top5ShareMode}`}
+          images={top5CardImages(top5ShareMode, { albums: topAlbums, artists: topArtists, songs: topSongs })}
+          options={TOP5_MODES.filter(m => top5ModesFor({ albums: topAlbums, artists: topArtists, songs: topSongs }).includes(m.key))}
+          selected={top5ShareMode}
+          onSelect={k => setTop5ShareMode(k as Top5Mode)}
+          renderCard={handle => (
+            <Top5Card mode={top5ShareMode} data={{ albums: topAlbums, artists: topArtists, songs: topSongs }} colors={top5CardColors} handle={handle} />
+          )}
+        />
         <DraggableFavRow
           items={topAlbums.map(a => a ? { artworkUrl: a.artworkUrl, title: a.title } : null)}
           editMode={top5EditMode}

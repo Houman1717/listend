@@ -44,6 +44,9 @@ import { openSongPage } from '@/lib/openSong';
 import { TrackRatingsEditor, useTrackRatingsDraft } from '@/components/TrackRatingsEditor';
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { parseReviewTargetId } from '@/lib/reviewTargets';
+import { ShareCardSheet } from '@/components/share/ShareCardSheet';
+import { ReviewCard as ReviewShareCard, reviewCardImages, useOwnCardColors } from '@/components/share/ShareCards';
+import { ShareIcon } from '@/components/share/ShareIcon';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchSongCommunityRatings, fetchSongReviewCounts, withOwnRating, type SongMeta, type SongRatingStats } from '@/lib/songReviews';
 
@@ -873,6 +876,12 @@ export default function AlbumDetailScreen() {
   const [review, setReview]       = useState(loggedAlbum?.isRelistened ? (loggedAlbum?.lastReview ?? '') : (loggedAlbum?.review ?? ''));
   const [editMode, setEditMode]         = useState(false);
   const [showPlaylists, setShowPlaylists] = useState(false);
+  // Share card for your own rating/review (the saved one, not an unsaved edit).
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareCardColors = useOwnCardColors();
+  const shareRating = loggedAlbum ? (loggedAlbum.lastRating ?? loggedAlbum.rating ?? 0) : 0;
+  const shareReview = loggedAlbum ? ((loggedAlbum.isRelistened ? loggedAlbum.lastReview : loggedAlbum.review) ?? '') : '';
+  const canShareReview = !!loggedAlbum && (shareRating > 0 || shareReview.trim().length > 0);
   const [showSendSheet, setShowSendSheet] = useState(false);
   const { getSongReview } = useSongReviews();
   // Tracklist shows one set of ratings at a time: Listend's averages (default)
@@ -1834,6 +1843,22 @@ export default function AlbumDetailScreen() {
             ),
         }}
       />
+      {canShareReview && (
+        <ShareCardSheet
+          visible={shareOpen}
+          onClose={() => setShareOpen(false)}
+          kind="review"
+          images={reviewCardImages({ title: albumTitle, artist: albumArtist, artworkUrl: albumArtwork || loggedAlbum?.artworkUrl })}
+          renderCard={handle => (
+            <ReviewShareCard
+              album={{ title: albumTitle, artist: albumArtist, year: albumYear || undefined, artworkUrl: albumArtwork || loggedAlbum?.artworkUrl }}
+              rating={shareRating}
+              review={shareReview}
+              colors={shareCardColors}
+              handle={handle} />
+          )}
+        />
+      )}
       <ScrollView
         ref={scrollRef}
         style={{ backgroundColor: colors.background }}
@@ -1981,6 +2006,7 @@ export default function AlbumDetailScreen() {
               )}
             </View>
           ) : (
+            <View>
             <View style={s.editLogRow}>
               <View style={s.listendLeft}>
                 <View style={s.listendBadge}>
@@ -2002,6 +2028,16 @@ export default function AlbumDetailScreen() {
                   <Text style={s.editReviewBtnText}>Edit</Text>
                 </Pressable>
               </View>
+            </View>
+            {canShareReview && (
+              <Pressable
+                onPress={() => setShareOpen(true)}
+                hitSlop={6}
+                style={({ pressed }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, opacity: pressed ? 0.6 : 1 })}>
+                <ShareIcon size={16} color="#D4A017" />
+                <Text style={{ color: '#D4A017', fontSize: 14, fontWeight: '700' }}>Share your review</Text>
+              </Pressable>
+            )}
             </View>
           )
         ) : (
