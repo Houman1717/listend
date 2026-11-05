@@ -230,11 +230,13 @@ function AuthGate() {
       handledResponseId.current = id;
 
       const data = response.notification.request.content.data as any;
-      if (!data?.type) return;
-      if (data.type === 'reengage') {
-        // "Come back" pushes from listend-server/reengagement.js. Must stay
-        // ahead of the catch-all below, which would open a profile.
-        capture('reengage_opened', { kind: data.kind });
+      // "Come back" pushes (listend-server/reengagement.js) carry `reengage`
+      // and deliberately no `type`: they mostly reach people who haven't
+      // opened the app in weeks and so still run an older bundle, whose
+      // handler returns on a missing type (app just opens) but sends any
+      // unknown type to a profile with no user id.
+      if (data?.reengage) {
+        capture('reengage_opened', { kind: data.reengage });
         if (data.route === 'album' && data.albumId) {
           navigateToAlbum(router, {
             id: data.albumId, title: data.title ?? '', artist: data.artist ?? '',
@@ -247,7 +249,10 @@ function AuthGate() {
         } else if (data.route === 'flip') {
           router.push('/flip-a-record');
         }
-      } else if (data.type === 'flip_cooldown') {
+        return;
+      }
+      if (!data?.type) return;
+      if (data.type === 'flip_cooldown') {
         router.push('/flip-a-record');
       } else if (data.type === 'month_in_review') {
         router.push({

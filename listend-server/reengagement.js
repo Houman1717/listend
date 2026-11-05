@@ -82,10 +82,15 @@ async function runReengagement({ dryRun = false, limit = DAILY_LIMIT, userId = n
     const tokens = await fetchTokens([...byUser.keys()]);
     const messages = tokens.map(({ user_id, token }) => {
       const c = byUser.get(user_id);
+      // No `type` in the payload: these reach people still on an older app
+      // bundle, whose tap handler ignores a push without one (the app just
+      // opens) but sends any unknown type to a blank profile. The current
+      // bundle routes on `reengage` instead.
+      const { type, kind, ...rest } = c.data ?? {};
       return {
         userId: user_id,
         token,
-        payload: { to: token, title: c.title, body: c.body, data: c.data, sound: 'default' },
+        payload: { to: token, title: c.title, body: c.body, data: { ...rest, reengage: c.kind }, sound: 'default' },
       };
     });
 
