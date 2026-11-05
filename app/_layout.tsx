@@ -12,7 +12,8 @@ import { isAutoUsername } from '@/lib/userHandle';
 import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 import { PostHogProvider } from 'posthog-react-native';
-import { posthog, identifyUser, resetAnalytics } from '@/lib/analytics';
+import { posthog, identifyUser, resetAnalytics, capture } from '@/lib/analytics';
+import { navigateToAlbum } from '@/lib/navigateToAlbum';
 import { navigateToReviewNotification } from '@/lib/navigateToReviewNotification';
 
 import { useColorScheme } from '@/components/useColorScheme';
@@ -230,7 +231,23 @@ function AuthGate() {
 
       const data = response.notification.request.content.data as any;
       if (!data?.type) return;
-      if (data.type === 'flip_cooldown') {
+      if (data.type === 'reengage') {
+        // "Come back" pushes from listend-server/reengagement.js. Must stay
+        // ahead of the catch-all below, which would open a profile.
+        capture('reengage_opened', { kind: data.kind });
+        if (data.route === 'album' && data.albumId) {
+          navigateToAlbum(router, {
+            id: data.albumId, title: data.title ?? '', artist: data.artist ?? '',
+            artworkUrl: data.artworkUrl ?? '', year: data.year ?? undefined,
+          });
+        } else if (data.route === 'recent-activity') {
+          router.push('/recent-activity');
+        } else if (data.route === 'search') {
+          router.push('/(tabs)/search');
+        } else if (data.route === 'flip') {
+          router.push('/flip-a-record');
+        }
+      } else if (data.type === 'flip_cooldown') {
         router.push('/flip-a-record');
       } else if (data.type === 'month_in_review') {
         router.push({
@@ -387,6 +404,7 @@ function ThemedApp() {
           <Stack.Screen name="choose-username" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="user-profile" options={{ title: 'Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="followers-following" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
+          <Stack.Screen name="find-people" options={{ title: 'Find People', gestureEnabled: false }} />
           <Stack.Screen name="share-profile" options={{ title: 'Share Profile', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="artist-detail" options={{ title: '', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />
           <Stack.Screen name="dms" options={{ title: 'Messages', headerStyle: { backgroundColor: '#1c1410' }, headerTintColor: '#f5e6c8' }} />

@@ -13,7 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter, useNavigation } from 'expo-router';
+import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -131,6 +131,8 @@ async function uploadViaBackend(
 export default function EditProfileScreen() {
   const router     = useRouter();
   const navigation = useNavigation();
+  const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
+  const isOnboarding = onboarding === '1';
   const { user }   = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -260,14 +262,16 @@ export default function EditProfileScreen() {
       setToast(true);
       setTimeout(() => {
         setToast(false);
-        router.back();
+        // During sign-up the next step is Find People; from Settings, go back.
+        if (isOnboarding) router.replace('/find-people');
+        else router.back();
       }, 2400);
     } catch (err: any) {
       Alert.alert('Error saving profile', err?.message ?? 'Something went wrong.');
     } finally {
       setSaving(false);
     }
-  }, [user, loading, loadError, displayName, username, loadedUsername, bio, avatarUri, avatarBase64]);
+  }, [user, loading, loadError, displayName, username, loadedUsername, bio, avatarUri, avatarBase64, isOnboarding]);
 
   // ── Inject Save button into header ───────────────────────────────────────
   useEffect(() => {

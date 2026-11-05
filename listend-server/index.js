@@ -8,6 +8,7 @@ const { query, param, body, validationResult } = require('express-validator');
 const cron = require('node-cron');
 const supabase = require('./db');
 const { sendPush } = require('./sendPush');
+const { runReengagement } = require('./reengagement');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, pruneExpiredCache, TTL_24H, TTL_7D } = require('./cache');
 const path = require('path');
@@ -7666,6 +7667,35 @@ async function runCachePrune() {
 cron.schedule('30 4 * * *', runCachePrune);
 setTimeout(runCachePrune, 2 * 60 * 1000);
 
+// Daily 6 pm UK — "come back" pushes for accounts quiet for a week (see
+// reengagement.js). Off unless REENGAGEMENT_ENABLED=true in Railway, so the
+// first real send is a deliberate switch-on after a dry run.
+cron.schedule('0 18 * * *', () => {
+  if (process.env.REENGAGEMENT_ENABLED !== 'true') return;
+  runReengagement().catch(err => console.error('[cron:reengagement]', err.message ?? err));
+}, { timezone: 'Europe/London' });
+
+// POST /api/admin/reengagement  { dryRun?: bool, limit?: int, userId?: uuid, ignoreCaps?: bool }
+// dryRun:true (the default) returns counts per message kind and a sample
+// without sending. userId + ignoreCaps:true sends to just that account.
+app.post('/api/admin/reengagement', requireAdmin, [
+  body('dryRun').optional().isBoolean(),
+  body('limit').optional().isInt({ min: 1, max: 5000 }),
+  body('userId').optional().isUUID(),
+  body('ignoreCaps').optional().isBoolean(),
+  validate,
+], async (req, res) => {
+  try {
+    const { dryRun = true, limit, userId = null, ignoreCaps = false } = req.body ?? {};
+    // A real send to everyone goes through the cron's own switch, not this route.
+    if (!dryRun && !userId) return res.status(400).json({ error: 'Real sends need a userId; the cron handles the rest.' });
+    res.json(await runReengagement({ dryRun, limit, userId, ignoreCaps }));
+  } catch (err) {
+    console.error('[admin/reengagement]', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Failed' });
+  }
+});
+
 // ── POST /api/upload-avatar ───────────────────────────────────────────────────
 // Accepts { user_id, image_base64 }, uploads to the 'avatars' bucket using the
 // service-role key (bypasses RLS), returns { url }.
@@ -8226,8 +8256,11 @@ app.post('/api/webhook/notification', async (req, res) => {
       .single();
 
     const name = actor?.display_name || actor?.username || 'Someone';
-    const title = PUSH_TITLES[type] ?? 'New notification';
-    const body  = (PUSH_BODIES[type] ?? (() => name))(name);
+    // claim_inviter() writes follow / follow_request rows with the invite
+    // wording in `detail` — say that rather than a plain "new follower".
+    const fromInvite = (type === 'follow' || type === 'follow_request') && row.detail?.includes('your invite');
+    const title = fromInvite ? 'Your invite worked' : (PUSH_TITLES[type] ?? 'New notification');
+    const body  = fromInvite ? `${name} ${row.detail}` : (PUSH_BODIES[type] ?? (() => name))(name);
 
     await sendPush(user_id, title, body, { type, actorId: actor_id, targetId: target_id, commentId: comment_id });
     res.json({ ok: true });

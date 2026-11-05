@@ -42,6 +42,7 @@ import {
 import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { ProBadge } from '@/components/ProBadge';
 import { ProHomeCard } from '@/components/ProHomeCard';
+import { PeopleToFollowSection } from '@/components/PeopleToFollowSection';
 import { usePro } from '@/context/ProContext';
 import { ListendMark } from '@/components/AlbumGridCard';
 
@@ -1529,7 +1530,9 @@ export default function HomeScreen() {
         />
       </Section>
 
-      {/* 3 — Friends Recent Listend */}
+      {/* 3 — Friends Recent Listend. Hidden while empty (new accounts have no
+          mutual friends yet), so People to Follow sits right under Popular Reviews. */}
+      {(friendsListenedLoading || friendsListened.length > 0) && (
       <Section title="Friends Recent Listend" loading={friendsListenedLoading}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.row, { alignItems: 'stretch' }]}>
           {friendsListened.slice(0, 10).map((item) => (
@@ -1556,6 +1559,10 @@ export default function HomeScreen() {
           </Pressable>
         </ScrollView>
       </Section>
+      )}
+
+      {/* People to Follow — only for accounts following fewer than 3; hides itself otherwise */}
+      {user?.id && <PeopleToFollowSection userId={user.id} colors={colors} />}
 
       {/* 4 — Friends Recent Activity */}
       {(friendsActivityLoading || friendsActivity.length > 0) && (

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
+  Switch,
 } from 'react-native';
 import { useCallback, useState } from 'react';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
@@ -48,6 +49,8 @@ export default function NotificationSettingsScreen() {
   const [friends,  setFriends]  = useState<BelledFriend[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [removing, setRemoving] = useState<string | null>(null);
+  // null = unknown (not loaded, or the column isn't there yet) → row hidden
+  const [reminders, setReminders] = useState<boolean | null>(null);
 
   const sepColor  = proColors ? proColors.border     : isDark ? '#2a1e14' : '#e8e8e8';
   const rowBg     = proColors ? proColors.surface    : isDark ? '#1c1410' : '#fff';
@@ -61,6 +64,12 @@ export default function NotificationSettingsScreen() {
     if (!user?.id) return;
     const uid = user.id;
     (async () => {
+      // Never block the bells on this: a failed read just hides the row.
+      supabase.from('profiles').select('reminder_pushes').eq('id', uid).maybeSingle()
+        .then(({ data, error }) => {
+          if (!error && data && typeof data.reminder_pushes === 'boolean') setReminders(data.reminder_pushes);
+        });
+
       const { data: subs, error: subsErr } = await supabase
         .from('friend_activity_subscriptions')
         .select('target_id, reviews, ratings, listens')
@@ -105,6 +114,16 @@ export default function NotificationSettingsScreen() {
     setRemoving(null);
   }
 
+  async function toggleReminders(value: boolean) {
+    if (!user?.id) return;
+    setReminders(value);
+    const { error } = await supabase.from('profiles').update({ reminder_pushes: value }).eq('id', user.id);
+    if (error) {
+      setReminders(!value);
+      Alert.alert('Error', 'Could not update notifications. Please try again.');
+    }
+  }
+
   if (loading) {
     return (
       <View style={[s.center, { backgroundColor: sectionBg }]}>
@@ -121,6 +140,28 @@ export default function NotificationSettingsScreen() {
       headerShadowVisible: false,
     }} />
     <ScrollView style={[s.container, { backgroundColor: sectionBg }]} contentContainerStyle={s.content}>
+
+      {reminders !== null && (
+        <>
+          <Text style={[s.sectionLabel, { color: subColor }]}>REMINDERS</Text>
+          <View style={[s.card, { backgroundColor: rowBg, borderColor: sepColor }]}>
+            <View style={s.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.rowTitle, { color: textColor }]}>Listening reminders</Text>
+                <Text style={[s.rowSub, { color: subColor }]}>
+                  At most once a week, when you haven't logged anything in a while: new releases from artists you love, what friends are playing.
+                </Text>
+              </View>
+              <Switch
+                value={reminders}
+                onValueChange={toggleReminders}
+                trackColor={{ true: accent, false: sepColor }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+        </>
+      )}
 
       <Text style={[s.sectionLabel, { color: subColor }]}>FRIEND ACTIVITY</Text>
       <Text style={[s.intro, { color: subColor }]}>

@@ -57,7 +57,8 @@ export default function ChooseUsernameScreen() {
 
   /** Where to go once there's nothing left to do here. */
   function leave() {
-    if (isOnboarding) router.replace('/edit-profile');
+    // onboarding=1 tells edit-profile to carry on to Find People after saving.
+    if (isOnboarding) router.replace('/edit-profile?onboarding=1');
     else router.back();
   }
 
