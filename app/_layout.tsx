@@ -323,10 +323,14 @@ function AnalyticsIdentity() {
   return null;
 }
 
-// Enables PostHog autocapture (screens, taps, sessions). No-ops if no key set.
+// PostHog screen views + our own capture() events. No-ops if no key set.
+// Taps are NOT recorded: recording every tap took the project past the free
+// 1M events/month (Nov 2026), and past the limit PostHog drops everything,
+// including the events we actually use.
+const AUTOCAPTURE = { captureTouches: false, captureScreens: true };
 function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   if (!posthog) return <>{children}</>;
-  return <PostHogProvider client={posthog} autocapture>{children}</PostHogProvider>;
+  return <PostHogProvider client={posthog} autocapture={AUTOCAPTURE}>{children}</PostHogProvider>;
 }
 
 function RootLayoutNav() {
