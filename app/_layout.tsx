@@ -248,6 +248,9 @@ function AuthGate() {
           router.push('/(tabs)/search');
         } else if (data.route === 'flip') {
           router.push('/flip-a-record');
+        } else if (data.route === 'new-releases') {
+          // Release Friday (listend-server/releaseFriday.js)
+          router.push('/discover-new-releases' as any);
         }
         return;
       }

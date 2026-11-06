@@ -51,6 +51,7 @@ export default function NotificationSettingsScreen() {
   const [removing, setRemoving] = useState<string | null>(null);
   // null = unknown (not loaded, or the column isn't there yet) → row hidden
   const [reminders, setReminders] = useState<boolean | null>(null);
+  const [releaseFriday, setReleaseFriday] = useState<boolean | null>(null);
 
   const sepColor  = proColors ? proColors.border     : isDark ? '#2a1e14' : '#e8e8e8';
   const rowBg     = proColors ? proColors.surface    : isDark ? '#1c1410' : '#fff';
@@ -65,9 +66,11 @@ export default function NotificationSettingsScreen() {
     const uid = user.id;
     (async () => {
       // Never block the bells on this: a failed read just hides the row.
-      supabase.from('profiles').select('reminder_pushes').eq('id', uid).maybeSingle()
+      supabase.from('profiles').select('reminder_pushes, release_pushes').eq('id', uid).maybeSingle()
         .then(({ data, error }) => {
           if (!error && data && typeof data.reminder_pushes === 'boolean') setReminders(data.reminder_pushes);
+          // Column added with Release Friday; missing (or unreadable) just hides that row.
+          if (!error && data && typeof (data as any).release_pushes === 'boolean') setReleaseFriday((data as any).release_pushes);
         });
 
       const { data: subs, error: subsErr } = await supabase
@@ -112,6 +115,16 @@ export default function NotificationSettingsScreen() {
       Alert.alert('Error', 'Could not update notifications. Please try again.');
     }
     setRemoving(null);
+  }
+
+  async function toggleReleaseFriday(value: boolean) {
+    if (!user?.id) return;
+    setReleaseFriday(value);
+    const { error } = await supabase.from('profiles').update({ release_pushes: value }).eq('id', user.id);
+    if (error) {
+      setReleaseFriday(!value);
+      Alert.alert('Error', 'Could not update notifications. Please try again.');
+    }
   }
 
   async function toggleReminders(value: boolean) {
@@ -159,6 +172,23 @@ export default function NotificationSettingsScreen() {
                 thumbColor="#fff"
               />
             </View>
+            {releaseFriday !== null && (
+              <View style={[s.row, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sepColor }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rowTitle, { color: textColor }]}>Release Friday</Text>
+                  <Text style={[s.rowSub, { color: subColor }]}>
+                    Every Friday: the week's new albums, with artists you love first.
+                  </Text>
+                </View>
+                <Switch
+                  value={releaseFriday && !!reminders}
+                  disabled={!reminders}
+                  onValueChange={toggleReleaseFriday}
+                  trackColor={{ true: accent, false: sepColor }}
+                  thumbColor="#fff"
+                />
+              </View>
+            )}
           </View>
         </>
       )}
