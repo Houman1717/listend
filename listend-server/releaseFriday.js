@@ -1,5 +1,24 @@
 const supabase = require('./db');
+const crypto = require('crypto');
 const { sendPushes, fetchTokens, rpcAll } = require('./reengagement');
+
+// Title test (from 2026-11-13): half get "New Music Friday: …", half
+// "Out today: …". The group rides in the push's `reengage` value, which the
+// app logs on tap as PostHog reengage_opened { kind }, so taps per group can
+// be compared. Same person, same group every week (md5 of the user id), so
+// each group's numbers stay comparable; set TITLE_TEST = false to stop it and
+// everyone gets the winner in DEFAULT_PREFIX.
+const TITLE_TEST = true;
+const VARIANTS = {
+  nmf: 'New Music Friday: ',
+  out: 'Out today: ',
+};
+const DEFAULT_VARIANT = 'nmf';
+function variantFor(userId) {
+  if (!TITLE_TEST) return DEFAULT_VARIANT;
+  const h = parseInt(crypto.createHash('md5').update(String(userId)).digest('hex').slice(0, 8), 16);
+  return h % 2 === 0 ? 'nmf' : 'out';
+}
 
 // Release Friday: one push a week, Friday 12:00 London, listing the albums
 // added to the curated New Releases list (new_release_albums) since last
@@ -18,7 +37,6 @@ const { sendPushes, fetchTokens, rpcAll } = require('./reengagement');
 
 const FIRST_RUN_NEW = 20;   // no snapshot yet: treat the top of the list as new
 const NAMES_SHOWN   = 3;
-const TITLE         = 'Release Friday';
 
 function londonDate(d = new Date()) {
   // en-CA formats as YYYY-MM-DD
@@ -55,8 +73,18 @@ function joinNames(names) {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-/** Artists they like first (in list order), then the top of the week's list. */
-function bodyFor(fresh, likedLower) {
+// Most people only read the title, so it carries the biggest names. Lock
+// screens cut a title off at roughly 40 characters: past this, name one.
+const TITLE_MAX = 40;
+
+/**
+ * { title, body } for one person. Artists they like first (in list order),
+ * then the top of the week's list. Title names one or two; the body names
+ * the next two and counts the rest (albums, not artists).
+ *   New Music Friday: Lil Baby and more
+ *   Also new: Rex Orange County and Jack Harlow, plus 4 more. Be the first to rate them.
+ */
+function messageFor(fresh, likedLower, variant = DEFAULT_VARIANT) {
   const liked = new Set(likedLower);
   const artists = [];
   const seen = new Set();
@@ -64,10 +92,27 @@ function bodyFor(fresh, likedLower) {
   fresh.filter(a => liked.has(a.artist.toLowerCase())).forEach(a => add(a.artist));
   fresh.forEach(a => add(a.artist));
 
-  const named = artists.slice(0, NAMES_SHOWN);
-  const namedSet = new Set(named.map(n => n.toLowerCase()));
+  const rateIt = fresh.length === 1 ? 'Be the first to rate it.' : 'Be the first to rate them.';
+
+  // "New Music Friday: A, B and more". Lock screens cut titles at ~40
+  // characters, so fall back to one name, then drop "and more".
+  const PREFIX = VARIANTS[variant] ?? VARIANTS[DEFAULT_VARIANT];
+  const titleFor = (names, sayMore) => {
+    const more = sayMore && artists.length > names.length ? ' and more' : '';
+    if (names.length === 1) return `${PREFIX}${names[0]}${more}`;
+    return more ? `${PREFIX}${names[0]}, ${names[1]}${more}` : `${PREFIX}${names[0]} and ${names[1]}`;
+  };
+  const tries = [[artists.slice(0, 2), true], [artists.slice(0, 1), true], [artists.slice(0, 1), false]];
+  let [inTitle, sayMore] = tries.find(([n, m]) => titleFor(n, m).length <= TITLE_MAX) ?? tries[2];
+  const title = titleFor(inTitle, sayMore);
+
+  const inBody = artists.slice(inTitle.length, inTitle.length + NAMES_SHOWN - 1);
+  const namedSet = new Set([...inTitle, ...inBody].map(n => n.toLowerCase()));
   const more = fresh.filter(a => !namedSet.has(a.artist.toLowerCase())).length;
-  return `New from ${joinNames(named)}${more > 0 ? `, plus ${more} more` : ''}. Tap to see what's out.`;
+  const body = inBody.length
+    ? `Also new: ${joinNames(inBody)}${more > 0 ? `, plus ${more} more` : ''}. ${rateIt}`
+    : `${more > 0 ? `Plus ${more} more. ` : ''}${rateIt}`;
+  return { title, body };
 }
 
 /**
@@ -95,7 +140,12 @@ async function runReleaseFriday({ dryRun = false, userId = null, resend = false,
     p_artists: artistsLower, p_only_user: userId,
   }, skip > 0 ? { start: skip } : { order: 'user_id' });
 
-  const byUser = new Map((targets ?? []).map(t => [t.user_id, bodyFor(fresh, t.liked ?? [])]));
+  const byUser = new Map((targets ?? []).map(t => {
+    const variant = variantFor(t.user_id);
+    return [t.user_id, { ...messageFor(fresh, t.liked ?? [], variant), variant }];
+  }));
+  const groups = {};
+  for (const m of byUser.values()) groups[m.variant] = (groups[m.variant] ?? 0) + 1;
   const likedSomething = (targets ?? []).filter(t => (t.liked ?? []).length > 0).length;
 
   if (dryRun) {
@@ -104,7 +154,8 @@ async function runReleaseFriday({ dryRun = false, userId = null, resend = false,
       newAlbums: fresh.length,
       newPreview: fresh.slice(0, 8).map(a => `${a.artist} – ${a.title}`),
       recipients: byUser.size, withFavouriteArtist: likedSomething,
-      sampleBodies: [...new Set(byUser.values())].slice(0, 5),
+      groups,
+      samples: [...new Map([...byUser.values()].map(m => [`${m.title} | ${m.body}`, `${m.title} | ${m.body}`])).values()].slice(0, 6),
     };
   }
 
@@ -126,11 +177,12 @@ async function runReleaseFriday({ dryRun = false, userId = null, resend = false,
     token,
     payload: {
       to: token,
-      title: TITLE,
-      body: byUser.get(user_id),
+      title: byUser.get(user_id).title,
+      body: byUser.get(user_id).body,
       // `reengage` + no `type`: older bundles just open the app on tap
       // instead of sending an unknown type to a blank profile.
-      data: { reengage: 'release_friday', route: 'new-releases' },
+      // release_friday_nmf / release_friday_out: the title group, for the test
+      data: { reengage: `release_friday_${byUser.get(user_id).variant}`, route: 'new-releases' },
       sound: 'default',
     },
   }));
@@ -148,9 +200,11 @@ async function runReleaseFriday({ dryRun = false, userId = null, resend = false,
     if (upErr) console.error('[release-friday] recipients update failed:', upErr.message);
   }
 
-  const result = { today, newAlbums: fresh.length, recipients: byUser.size, sent: delivered.size, deadTokens: dead.length, test: !!userId, resend, skip };
+  const sentByGroup = {};
+  for (const id of delivered) { const v = byUser.get(id)?.variant; if (v) sentByGroup[v] = (sentByGroup[v] ?? 0) + 1; }
+  const result = { today, newAlbums: fresh.length, recipients: byUser.size, sentByGroup, sent: delivered.size, deadTokens: dead.length, test: !!userId, resend, skip };
   console.log('[release-friday]', JSON.stringify(result));
   return result;
 }
 
-module.exports = { runReleaseFriday, londonDate };
+module.exports = { runReleaseFriday, londonDate, messageFor, variantFor };
