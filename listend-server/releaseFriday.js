@@ -1,5 +1,5 @@
 const supabase = require('./db');
-const { sendPushes, fetchTokens } = require('./reengagement');
+const { sendPushes, fetchTokens, rpcAll } = require('./reengagement');
 
 // Release Friday: one push a week, Friday 12:00 London, listing the albums
 // added to the curated New Releases list (new_release_albums) since last
@@ -74,7 +74,10 @@ function bodyFor(fresh, likedLower) {
  * dryRun: who would get what, nothing sent or recorded.
  * userId: send to that one account only (testing); doesn't claim the week.
  */
-async function runReleaseFriday({ dryRun = false, userId = null, resend = false } = {}) {
+// skip (with resend): leave out the first N people in the function's unsorted
+// order. 2026-11-06 sends only reached the first 1,000 (row cap); skip:1000
+// sends to the rest without repeating it for those.
+async function runReleaseFriday({ dryRun = false, userId = null, resend = false, skip = 0 } = {}) {
   const { today, list, fresh, lastSentOn } = await loadWeek();
   // resend: today's send failed part-way (it has to be claimed already).
   // Sends to everyone again; there's no per-person record of who got it.
@@ -88,10 +91,9 @@ async function runReleaseFriday({ dryRun = false, userId = null, resend = false 
   }
 
   const artistsLower = [...new Set(fresh.map(a => a.artist.toLowerCase()))];
-  const { data: targets, error } = await supabase.rpc('release_friday_targets', {
+  const targets = await rpcAll('release_friday_targets', {
     p_artists: artistsLower, p_only_user: userId,
-  });
-  if (error) throw new Error(`release_friday_targets: ${error.message}`);
+  }, skip > 0 ? { start: skip } : { order: 'user_id' });
 
   const byUser = new Map((targets ?? []).map(t => [t.user_id, bodyFor(fresh, t.liked ?? [])]));
   const likedSomething = (targets ?? []).filter(t => (t.liked ?? []).length > 0).length;
@@ -136,12 +138,17 @@ async function runReleaseFriday({ dryRun = false, userId = null, resend = false 
   const { delivered, dead } = await sendPushes(messages, 'release-friday');
 
   if (!userId) {
+    let recipients = delivered.size;
+    if (skip > 0) {
+      const { data: row } = await supabase.from('release_fridays').select('recipients').eq('sent_on', today).maybeSingle();
+      recipients += row?.recipients ?? 0;
+    }
     const { error: upErr } = await supabase.from('release_fridays')
-      .update({ recipients: delivered.size }).eq('sent_on', today);
+      .update({ recipients }).eq('sent_on', today);
     if (upErr) console.error('[release-friday] recipients update failed:', upErr.message);
   }
 
-  const result = { today, newAlbums: fresh.length, recipients: byUser.size, sent: delivered.size, deadTokens: dead.length, test: !!userId, resend };
+  const result = { today, newAlbums: fresh.length, recipients: byUser.size, sent: delivered.size, deadTokens: dead.length, test: !!userId, resend, skip };
   console.log('[release-friday]', JSON.stringify(result));
   return result;
 }

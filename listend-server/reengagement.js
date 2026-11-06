@@ -27,15 +27,35 @@ const running = { push: false, email: false };
 // 100-id rule as fetchAllRowsIn in index.js.
 const ID_CHUNK = 100;
 
+// The Data API hands back at most 1,000 rows per request, RPCs included.
+// Release Friday 2026-11-06 only reached the first 1,000 of 4,423 because of
+// it. So read RPC results a page at a time. order: a column to sort the
+// function's result by, so pages don't overlap or skip (leave it out only to
+// continue the unsorted order an earlier un-paged call used). start: skip
+// that many rows first.
+const PAGE = 1000;
+async function rpcAll(fn, args, { order = null, start = 0 } = {}) {
+  const rows = [];
+  for (let from = start; ; from += PAGE) {
+    let q = supabase.rpc(fn, args);
+    if (order) q = q.order(order);
+    const { data, error } = await q.range(from, from + PAGE - 1);
+    if (error) throw new Error(`${fn}: ${error.message}`);
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+  return rows;
+}
+
 async function fetchCandidates({ limit, userId = null, ignoreCaps = false, channel = 'push' } = {}) {
-  const { data, error } = await supabase.rpc('reengagement_candidates', {
+  // The function picks and limits the set itself; sorting its result by
+  // user_id just keeps the pages stable.
+  return rpcAll('reengagement_candidates', {
     p_limit: limit,
     p_only_user: userId,
     p_ignore_caps: ignoreCaps,
     p_channel: channel,
-  });
-  if (error) throw new Error(`reengagement_candidates: ${error.message}`);
-  return data ?? [];
+  }, { order: 'user_id' });
 }
 
 async function fetchTokens(userIds) {
@@ -214,4 +234,4 @@ async function runReengagement({ channel = 'push', dryRun = false, limit, userId
   }
 }
 
-module.exports = { runReengagement, sendPushes, fetchTokens };
+module.exports = { runReengagement, sendPushes, fetchTokens, rpcAll };
