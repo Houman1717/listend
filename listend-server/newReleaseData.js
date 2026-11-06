@@ -3,6 +3,14 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Lil Baby',               title: 'FRESH' },
+  { artist: 'Rex Orange County',      title: 'Dream Fatigue' },
+  { artist: 'Skepta',                 title: 'The Fork and Knife' },
+  { artist: 'Jack Harlow',            title: 'Sweet Action II' },
+  { artist: 'Dove Cameron',           title: 'FINAL GIRL' },
+  { artist: 'Shygirl',                title: 'SWALLOW!' },
+  { artist: 'Kings of Leon',          title: 'O My Beloved' },
+  { artist: 'Current Joys',           title: 'ROSEBUD' },
   { artist: 'Dominic Fike',           title: 'HOW TO QUIT SMOKING' },
   { artist: 'Queens of the Stone Age', title: 'Perfecth' },
   { artist: 'BigXthaPlug',            title: 'BETTER OVER TIME' },

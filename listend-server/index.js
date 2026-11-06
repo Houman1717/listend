@@ -1420,6 +1420,12 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '6790597250', title: 'ZIRP!', artist: 'DIIV', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/54/31/87/54318724-e4d1-7254-a7d4-d2e671dff8ea/26CRGIM55137.rgb.jpg/500x500bb.jpg',
   },
+  // Released 2026-11-06. Search only returns the clean edition of Sweet
+  // Action II (6830926750, 7 tracks), so it's pinned to the explicit album.
+  'jackharlow::sweetactionii': {
+    id: '6829221591', title: 'Sweet Action II', artist: 'Jack Harlow', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/44/3f/e8/443fe891-43ef-1f3d-a2e3-8a2bccae58e0/075679547897.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],
