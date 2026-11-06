@@ -7672,7 +7672,7 @@ setTimeout(runCachePrune, 2 * 60 * 1000);
 // reengagement.js). Off unless REENGAGEMENT_ENABLED=true in Railway, so the
 // first real send is a deliberate switch-on after a dry run.
 cron.schedule('0 18 * * *', () => {
-  // Fridays belong to Release Friday (17:00): no come-back push on top of it.
+  // Fridays belong to Release Friday (12:00): no come-back push on top of it.
   const isFriday = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'Europe/London' }).format(new Date()) === 'Fri';
   const releaseFridayOn = process.env.RELEASE_FRIDAY_ENABLED === 'true';
   if (process.env.REENGAGEMENT_ENABLED === 'true' && !(isFriday && releaseFridayOn)) {
@@ -7706,10 +7706,10 @@ app.post('/api/admin/reengagement', requireAdmin, [
   }
 });
 
-// Fridays 5 pm UK — Release Friday: this week's new releases, artists each
+// Fridays 12 pm UK — Release Friday: this week's new releases, artists each
 // person likes named first (releaseFriday.js). Off unless
 // RELEASE_FRIDAY_ENABLED=true in Railway.
-cron.schedule('0 17 * * 5', () => {
+cron.schedule('0 12 * * 5', () => {
   if (process.env.RELEASE_FRIDAY_ENABLED !== 'true') return;
   runReleaseFriday().catch(err => console.error('[cron:release-friday]', err.message ?? err));
 }, { timezone: 'Europe/London' });

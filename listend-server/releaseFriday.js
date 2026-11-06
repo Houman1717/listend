@@ -1,7 +1,7 @@
 const supabase = require('./db');
 const { sendPushes, fetchTokens } = require('./reengagement');
 
-// Release Friday: one push a week, Friday 17:00 London, listing the albums
+// Release Friday: one push a week, Friday 12:00 London, listing the albums
 // added to the curated New Releases list (new_release_albums) since last
 // Friday. Each person sees artists they like named first. Tapping opens the
 // New Releases list (route 'new-releases'; older bundles just open the app).
