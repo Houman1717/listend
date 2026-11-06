@@ -74,6 +74,30 @@ async function sendBatch(messages) {
   return { delivered, dead };
 }
 
+/**
+ * Send prepared messages ({ userId, token, payload }) to Expo in batches,
+ * drop tokens Expo says are dead, and return who got at least one.
+ * Shared with releaseFriday.js.
+ */
+async function sendPushes(messages, label) {
+  const delivered = new Set();
+  const dead = [];
+  for (let i = 0; i < messages.length; i += EXPO_BATCH) {
+    try {
+      const r = await sendBatch(messages.slice(i, i + EXPO_BATCH));
+      r.delivered.forEach(id => delivered.add(id));
+      dead.push(...r.dead);
+    } catch (err) {
+      console.error(`[${label}] batch failed:`, err.message ?? err);
+    }
+  }
+  for (let i = 0; i < dead.length; i += ID_CHUNK) {
+    const { error } = await supabase.from('push_tokens').delete().in('token', dead.slice(i, i + ID_CHUNK));
+    if (error) console.error(`[${label}] dead-token cleanup failed:`, error.message);
+  }
+  return { delivered, dead };
+}
+
 async function record(userIds, byUser, channel) {
   // Record only what was accepted, so a failed batch is retried tomorrow
   // instead of silently counting against the cap.
@@ -132,24 +156,9 @@ async function runReengagement({ channel = 'push', dryRun = false, limit, userId
       };
     });
 
-    const delivered = new Set();
-    const dead = [];
-    for (let i = 0; i < messages.length; i += EXPO_BATCH) {
-      try {
-        const r = await sendBatch(messages.slice(i, i + EXPO_BATCH));
-        r.delivered.forEach(id => delivered.add(id));
-        dead.push(...r.dead);
-      } catch (err) {
-        console.error('[reengagement] batch failed:', err.message ?? err);
-      }
-    }
+    const { delivered, dead } = await sendPushes(messages, 'reengagement');
 
     await record(delivered, byUser, 'push');
-
-    for (let i = 0; i < dead.length; i += ID_CHUNK) {
-      const { error } = await supabase.from('push_tokens').delete().in('token', dead.slice(i, i + ID_CHUNK));
-      if (error) console.error('[reengagement] dead-token cleanup failed:', error.message);
-    }
 
     const result = { channel, candidates: candidates.length, sent: delivered.size, deadTokens: dead.length, byKind };
     console.log('[reengagement:push]', JSON.stringify(result));
@@ -159,4 +168,4 @@ async function runReengagement({ channel = 'push', dryRun = false, limit, userId
   }
 }
 
-module.exports = { runReengagement };
+module.exports = { runReengagement, sendPushes, fetchTokens };

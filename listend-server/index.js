@@ -9,6 +9,7 @@ const cron = require('node-cron');
 const supabase = require('./db');
 const { sendPush } = require('./sendPush');
 const { runReengagement } = require('./reengagement');
+const { runReleaseFriday } = require('./releaseFriday');
 const { runRefresh, refreshHomeArtists } = require('./refresh');
 const { getCached, setCache, deleteCache, deleteCachePrefix, pruneExpiredCache, TTL_24H, TTL_7D } = require('./cache');
 const path = require('path');
@@ -7671,7 +7672,10 @@ setTimeout(runCachePrune, 2 * 60 * 1000);
 // reengagement.js). Off unless REENGAGEMENT_ENABLED=true in Railway, so the
 // first real send is a deliberate switch-on after a dry run.
 cron.schedule('0 18 * * *', () => {
-  if (process.env.REENGAGEMENT_ENABLED === 'true') {
+  // Fridays belong to Release Friday (17:00): no come-back push on top of it.
+  const isFriday = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'Europe/London' }).format(new Date()) === 'Fri';
+  const releaseFridayOn = process.env.RELEASE_FRIDAY_ENABLED === 'true';
+  if (process.env.REENGAGEMENT_ENABLED === 'true' && !(isFriday && releaseFridayOn)) {
     runReengagement({ channel: 'push' }).catch(err => console.error('[cron:reengagement]', err.message ?? err));
   }
   // Emails for quiet accounts with no push token — separate switch.
@@ -7698,6 +7702,33 @@ app.post('/api/admin/reengagement', requireAdmin, [
     res.json(await runReengagement({ channel, dryRun, limit, userId, ignoreCaps }));
   } catch (err) {
     console.error('[admin/reengagement]', err.message ?? err);
+    res.status(500).json({ error: err.message ?? 'Failed' });
+  }
+});
+
+// Fridays 5 pm UK — Release Friday: this week's new releases, artists each
+// person likes named first (releaseFriday.js). Off unless
+// RELEASE_FRIDAY_ENABLED=true in Railway.
+cron.schedule('0 17 * * 5', () => {
+  if (process.env.RELEASE_FRIDAY_ENABLED !== 'true') return;
+  runReleaseFriday().catch(err => console.error('[cron:release-friday]', err.message ?? err));
+}, { timezone: 'Europe/London' });
+
+// POST /api/admin/release-friday  { dryRun?: bool, userId?: uuid }
+// dryRun:true (the default) shows this week's new albums, how many people
+// would get it and sample messages. userId + dryRun:false sends to just that
+// account without using up the week.
+app.post('/api/admin/release-friday', requireAdmin, [
+  body('dryRun').optional().isBoolean(),
+  body('userId').optional().isUUID(),
+  validate,
+], async (req, res) => {
+  try {
+    const { dryRun = true, userId = null } = req.body ?? {};
+    if (!dryRun && !userId) return res.status(400).json({ error: 'Real sends need a userId; the cron handles the rest.' });
+    res.json(await runReleaseFriday({ dryRun, userId }));
+  } catch (err) {
+    console.error('[admin/release-friday]', err.message ?? err);
     res.status(500).json({ error: err.message ?? 'Failed' });
   }
 });
