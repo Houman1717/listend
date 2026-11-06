@@ -184,8 +184,9 @@ function renderEmail(c, unsubUrl) {
 /** Make sure each user has an email_prefs row, and return their unsubscribe tokens. */
 async function unsubTokens(userIds) {
   const tokens = new Map();
-  for (let i = 0; i < userIds.length; i += 500) {
-    const slice = userIds.slice(i, i + 500);
+  // 100 at a time: the select's .in() list goes in the URL (500 overflowed it).
+  for (let i = 0; i < userIds.length; i += 100) {
+    const slice = userIds.slice(i, i + 100);
     const { error: upErr } = await supabase
       .from('email_prefs')
       .upsert(slice.map(id => ({ user_id: id })), { onConflict: 'user_id', ignoreDuplicates: true });

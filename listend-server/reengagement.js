@@ -22,6 +22,11 @@ const EMAIL_DAILY_LIMIT = Number(process.env.REENGAGEMENT_EMAIL_DAILY_LIMIT) || 
 
 const running = { push: false, email: false };
 
+// .in() lists go in the URL; 500 uuids made it too long and the request
+// failed outright ("fetch failed", 2026-11-05 — no pushes went out). Same
+// 100-id rule as fetchAllRowsIn in index.js.
+const ID_CHUNK = 100;
+
 async function fetchCandidates({ limit, userId = null, ignoreCaps = false, channel = 'push' } = {}) {
   const { data, error } = await supabase.rpc('reengagement_candidates', {
     p_limit: limit,
@@ -35,11 +40,11 @@ async function fetchCandidates({ limit, userId = null, ignoreCaps = false, chann
 
 async function fetchTokens(userIds) {
   const tokens = [];
-  for (let i = 0; i < userIds.length; i += 500) {
+  for (let i = 0; i < userIds.length; i += ID_CHUNK) {
     const { data, error } = await supabase
       .from('push_tokens')
       .select('user_id, token')
-      .in('user_id', userIds.slice(i, i + 500));
+      .in('user_id', userIds.slice(i, i + ID_CHUNK));
     if (error) throw new Error(`push_tokens: ${error.message}`);
     tokens.push(...(data ?? []));
   }
@@ -141,8 +146,8 @@ async function runReengagement({ channel = 'push', dryRun = false, limit, userId
 
     await record(delivered, byUser, 'push');
 
-    if (dead.length) {
-      const { error } = await supabase.from('push_tokens').delete().in('token', dead);
+    for (let i = 0; i < dead.length; i += ID_CHUNK) {
+      const { error } = await supabase.from('push_tokens').delete().in('token', dead.slice(i, i + ID_CHUNK));
       if (error) console.error('[reengagement] dead-token cleanup failed:', error.message);
     }
 
