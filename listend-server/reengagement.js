@@ -55,22 +55,65 @@ async function fetchTokens(userIds) {
  * Send one batch to Expo. Returns the user_ids that got at least one accepted
  * ticket, and the tokens Expo says are dead (app uninstalled / token rotated).
  */
-async function sendBatch(messages) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Expo accepts about 600 notifications a second per project. Sending 100-message
+// batches back to back went over that on 2026-11-06 (Release Friday): only 603
+// of ~4,400 went out, the rest were refused. So: pace the batches, and retry a
+// refused or failed batch with a growing wait.
+const BATCH_GAP_MS = 400;              // 100 per 0.4s = 250/s, well under the limit
+const RETRY_WAITS  = [2000, 5000, 15000, 30000];
+
+async function postToExpo(payloads) {
   const res = await fetch(EXPO_PUSH_URL, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify(messages.map(m => m.payload)),
+    body: JSON.stringify(payloads),
   });
   const json = await res.json().catch(() => null);
-  const tickets = Array.isArray(json?.data) ? json.data : [];
+  return { res, json };
+}
+
+async function sendBatch(messages) {
   const delivered = new Set();
   const dead = [];
+  let res, json;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      ({ res, json } = await postToExpo(messages.map(m => m.payload)));
+    } catch (err) {
+      res = null; json = null;
+      console.error('[push] Expo request failed:', err.message ?? err);
+    }
+    const retryable = !res || res.status === 429 || res.status >= 500;
+    if (!retryable || attempt >= RETRY_WAITS.length) break;
+    console.warn(`[push] Expo ${res?.status ?? 'network error'}, retrying in ${RETRY_WAITS[attempt]}ms`);
+    await sleep(RETRY_WAITS[attempt]);
+  }
+
+  // Tokens from more than one Expo project in one request: Expo refuses the
+  // whole request and lists the tokens per project. Send each group on its own.
+  const mixed = json?.errors?.find(e => e.code === 'PUSH_TOO_MANY_EXPERIENCE_IDS');
+  if (mixed?.details && typeof mixed.details === 'object') {
+    for (const group of Object.values(mixed.details)) {
+      const set = new Set(group);
+      const part = messages.filter(m => set.has(m.token));
+      if (!part.length) continue;
+      const r = await sendBatch(part);
+      r.delivered.forEach(id => delivered.add(id));
+      dead.push(...r.dead);
+      await sleep(BATCH_GAP_MS);
+    }
+    return { delivered, dead };
+  }
+
+  const tickets = Array.isArray(json?.data) ? json.data : [];
   messages.forEach((m, i) => {
     const t = tickets[i];
     if (t?.status === 'ok') delivered.add(m.userId);
     else if (t?.details?.error === 'DeviceNotRegistered') dead.push(m.token);
   });
-  if (!res.ok) console.error('[reengagement] Expo HTTP', res.status, JSON.stringify(json)?.slice(0, 300));
+  if (!res?.ok) console.error('[push] Expo HTTP', res?.status, JSON.stringify(json)?.slice(0, 300));
   return { delivered, dead };
 }
 
@@ -90,7 +133,10 @@ async function sendPushes(messages, label) {
     } catch (err) {
       console.error(`[${label}] batch failed:`, err.message ?? err);
     }
+    if (i + EXPO_BATCH < messages.length) await sleep(BATCH_GAP_MS);
   }
+  const users = new Set(messages.map(m => m.userId)).size;
+  console.log(`[${label}] delivered to ${delivered.size}/${users} users, ${dead.length} dead tokens`);
   for (let i = 0; i < dead.length; i += ID_CHUNK) {
     const { error } = await supabase.from('push_tokens').delete().in('token', dead.slice(i, i + ID_CHUNK));
     if (error) console.error(`[${label}] dead-token cleanup failed:`, error.message);

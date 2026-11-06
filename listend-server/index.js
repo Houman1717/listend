@@ -7727,12 +7727,15 @@ cron.schedule('0 12 * * 5', () => {
 app.post('/api/admin/release-friday', requireAdmin, [
   body('dryRun').optional().isBoolean(),
   body('userId').optional().isUUID(),
+  body('resend').optional().isBoolean(),
   validate,
 ], async (req, res) => {
   try {
-    const { dryRun = true, userId = null } = req.body ?? {};
-    if (!dryRun && !userId) return res.status(400).json({ error: 'Real sends need a userId; the cron handles the rest.' });
-    res.json(await runReleaseFriday({ dryRun, userId }));
+    // resend:true + dryRun:false re-sends today's push to everyone after a
+    // send that failed part-way (the cron already claimed today).
+    const { dryRun = true, userId = null, resend = false } = req.body ?? {};
+    if (!dryRun && !userId && !resend) return res.status(400).json({ error: 'Real sends need a userId (or resend:true); the cron handles the rest.' });
+    res.json(await runReleaseFriday({ dryRun, userId, resend }));
   } catch (err) {
     console.error('[admin/release-friday]', err.message ?? err);
     res.status(500).json({ error: err.message ?? 'Failed' });

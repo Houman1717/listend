@@ -74,8 +74,15 @@ function bodyFor(fresh, likedLower) {
  * dryRun: who would get what, nothing sent or recorded.
  * userId: send to that one account only (testing); doesn't claim the week.
  */
-async function runReleaseFriday({ dryRun = false, userId = null } = {}) {
+async function runReleaseFriday({ dryRun = false, userId = null, resend = false } = {}) {
   const { today, list, fresh, lastSentOn } = await loadWeek();
+  // resend: today's send failed part-way (it has to be claimed already).
+  // Sends to everyone again; there's no per-person record of who got it.
+  if (resend) {
+    const { data: claimed } = await supabase.from('release_fridays')
+      .select('sent_on').eq('sent_on', today).maybeSingle();
+    if (!claimed) return { skipped: `nothing was sent on ${today}, so nothing to resend` };
+  }
   if (!fresh.length) {
     return { skipped: 'nothing new on the list since last Friday', lastSentOn };
   }
@@ -101,7 +108,7 @@ async function runReleaseFriday({ dryRun = false, userId = null } = {}) {
 
   // Claim the day first so nothing can send twice. A one-account test
   // doesn't claim it (the real Friday send must still go out).
-  if (!userId) {
+  if (!userId && !resend) {
     const { error: claimErr } = await supabase.from('release_fridays').insert({
       sent_on: today, album_ids: list.map(a => a.spotify_id), new_count: fresh.length,
     });
@@ -134,7 +141,7 @@ async function runReleaseFriday({ dryRun = false, userId = null } = {}) {
     if (upErr) console.error('[release-friday] recipients update failed:', upErr.message);
   }
 
-  const result = { today, newAlbums: fresh.length, recipients: byUser.size, sent: delivered.size, deadTokens: dead.length, test: !!userId };
+  const result = { today, newAlbums: fresh.length, recipients: byUser.size, sent: delivered.size, deadTokens: dead.length, test: !!userId, resend };
   console.log('[release-friday]', JSON.stringify(result));
   return result;
 }
