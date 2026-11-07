@@ -88,3 +88,9 @@ export function readableTierColor(color: string, onLight: boolean): string {
   }
   return color;
 }
+
+/** Near-black or white, whichever reads better on `bg` (a #rrggbb colour). */
+export function textOn(bg: string): string {
+  const L = luminance(bg);
+  return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#0F0A07' : '#FFFFFF';
+}

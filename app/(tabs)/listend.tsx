@@ -22,6 +22,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors, { ColorsShape } from '@/constants/Colors';
+import { useFlip } from '@/context/FlipContext';
+import { ProfileStreakCoin } from '@/components/ProfileStreakCoin';
 import { useAlbums, TopAlbum, TopSong, TopArtist } from '@/context/AlbumsContext';
 import TopSongsCredits from '@/components/TopSongsCredits';
 import { useAuth } from '@/context/AuthContext';
@@ -103,6 +105,7 @@ function ProfileHeader({
   refreshKey?: number;
 }) {
   const router  = useRouter();
+  const { history: flipHistory } = useFlip();
   const shownName = nameOrHandle(displayName, username, profileUserId, 'Listend user');
   const ownHandle = handleText(username, profileUserId);
   // Accounts created through Apple/Google before the mandatory username step
@@ -197,7 +200,11 @@ function ProfileHeader({
         </View>
 
         {/* Username */}
-        {ownHandle ? <Text style={[ph.username, { color: colors.subtext }]}>{ownHandle}</Text> : null}
+        {/* Username, with the Flip a Record streak coin while one is going */}
+        <View style={ph.handleRow}>
+          {ownHandle ? <Text style={[ph.username, { color: colors.subtext, marginTop: 0, marginBottom: 0 }]}>{ownHandle}</Text> : null}
+          <ProfileStreakCoin history={flipHistory} onOpenFlip={() => router.push('/flip-a-record' as any)} name={shownName} isOwn colors={colors} />
+        </View>
 
         {/* Bio */}
         {bio ? <Text style={[ph.bio, { color: colors.subtext }]}>{bio}</Text> : null}
@@ -362,6 +369,7 @@ const ph = StyleSheet.create({
     marginTop: 3,
     marginBottom: 6,
   },
+  handleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, marginBottom: 6 },
   bio: {
     color: SUBTEXT,
     fontSize: 13,

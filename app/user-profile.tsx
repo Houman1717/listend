@@ -31,6 +31,7 @@ import { RatingBreakdownSheet, type RatedAlbum } from '@/components/RatingBreakd
 import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { reportContent } from '@/lib/reports';
 import { ProBadge } from '@/components/ProBadge';
+import { ProfileStreakCoin } from '@/components/ProfileStreakCoin';
 import { ProAttributionSheet } from '@/components/ProAttributionSheet';
 import { usePro } from '@/context/ProContext';
 import { getProTheme, themeToColors } from '@/lib/proThemes';
@@ -976,7 +977,13 @@ export default function UserProfileScreen() {
         </View>
 
         {/* Username */}
-        {handle ? <Text style={[s.username, { color: colors.subtext }]}>{handle}</Text> : null}
+        {/* Username, with the Flip a Record streak coin while one is going */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          {handle ? <Text style={[s.username, { color: colors.subtext, marginTop: 0 }]}>{handle}</Text> : null}
+          {!isPrivateWall && !isBlocked && (
+            <ProfileStreakCoin userId={viewedUserId} onOpenFlip={() => router.push('/flip-a-record' as any)} name={name} isOwn={false} colors={colors} />
+          )}
+        </View>
 
         {/* Bio */}
         {profile.bio ? <Text style={[s.bio, { color: colors.subtext }]}>{profile.bio}</Text> : null}

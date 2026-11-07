@@ -2,7 +2,8 @@ import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { getProTheme, type ProThemeKey } from '@/lib/proThemes';
+import { getProTheme, themeToColors, type ProThemeKey } from '@/lib/proThemes';
+import { textOn } from '@/lib/flipStreak';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 
@@ -30,11 +31,15 @@ export function ProAttributionSheet({
   themeKey?: ProThemeKey | null;
 }) {
   const theme = themeKey && themeKey !== 'default' ? getProTheme(themeKey) : null;
-  // Sheet follows the viewer's own light/dark setting, not the profile's theme —
-  // StyleSheet.create() is evaluated once at load, so every colour is inline.
+  // The sheet wears the profile's theme — it's a preview of exactly what Pro
+  // gets you. No theme: the viewer's own light/dark. StyleSheet.create() runs
+  // once at load, so every colour is inline.
   const colorScheme = useColorScheme();
-  const c = Colors[colorScheme ?? 'light'];
+  const c = theme ? themeToColors(theme) : Colors[colorScheme ?? 'light'];
   const goldTint = 'rgba(212,160,23,0.14)';
+  // The button takes the theme's accent; the tick stays gold — gold is Pro.
+  const ctaBg   = theme ? c.tint : ACCENT;
+  const ctaText = textOn(ctaBg);
 
   const PERKS = [
     { icon: 'bar-chart',  label: 'My Stats',        sub: 'Genres, decades, streaks and community comparisons' },
@@ -65,7 +70,7 @@ export function ProAttributionSheet({
 
             {/* The theme they actually tapped, shown as a real swatch */}
             {theme && (
-              <View style={[s.themeRow, { backgroundColor: c.card, borderColor: c.border }]}>
+              <View style={[s.themeRow, { backgroundColor: c.surface, borderColor: c.border }]}>
                 <View style={[s.swatch, { backgroundColor: theme.background, borderColor: theme.border }]}>
                   <View style={[s.swatchDot, { backgroundColor: theme.accent }]} />
                 </View>
@@ -93,8 +98,8 @@ export function ProAttributionSheet({
 
             <Pressable
               onPress={onGetPro}
-              style={({ pressed }) => [s.cta, { opacity: pressed ? 0.85 : 1 }]}>
-              <Text style={s.ctaText}>Get Listend Pro</Text>
+              style={({ pressed }) => [s.cta, { backgroundColor: ctaBg, opacity: pressed ? 0.85 : 1 }]}>
+              <Text style={[s.ctaText, { color: ctaText }]}>Get Listend Pro</Text>
             </Pressable>
 
             <Pressable onPress={onClose} style={({ pressed }) => [s.dismiss, { opacity: pressed ? 0.6 : 1 }]}>
