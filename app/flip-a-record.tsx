@@ -33,7 +33,7 @@ import { FLIP_POOL, FlipAlbum } from '@/constants/FlipPool';
 import { ShareCardSheet } from '@/components/share/ShareCardSheet';
 import { StreakCard as StreakShareCard, useOwnCardColors } from '@/components/share/ShareCards';
 import { ShareIcon } from '@/components/share/ShareIcon';
-import { getStreakTier, STREAK_META, currentFlipStreak, nextTierProgress } from '@/lib/flipStreak';
+import { getStreakTier, STREAK_META, currentFlipStreak, nextTierProgress, readableTierColor } from '@/lib/flipStreak';
 import { StreakMedal } from '@/components/StreakMedal';
 
 const API_URL   = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -108,6 +108,9 @@ function StreakCard({ streak, isDark }: { streak: number; isDark: boolean }) {
 
   const cardBg  = isDark ? 'rgba(18,10,4,0.92)' : 'rgba(255,252,242,0.96)';
   const dimText = isDark ? '#9a7550' : '#a07850';
+  // The bright golds vanish on the light card — darken them for text.
+  const ink     = readableTierColor(meta.color, !isDark);
+  const nextInk = next ? readableTierColor(STREAK_META[next.next].color, !isDark) : ink;
 
   return (
     <View style={[ssc.card, { backgroundColor: cardBg, borderColor: meta.color + '45' }]}>
@@ -119,8 +122,8 @@ function StreakCard({ streak, isDark }: { streak: number; isDark: boolean }) {
       <StreakMedal streak={streak} size={56} />
       <View style={{ flex: 1, gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 7 }}>
-          <Text style={[ssc.count, { color: meta.color }]}>{streak}</Text>
-          <Text style={[ssc.label, { color: meta.color }]} numberOfLines={1}>{meta.label}</Text>
+          <Text style={[ssc.count, { color: ink }]}>{streak}</Text>
+          <Text style={[ssc.label, { color: ink }]} numberOfLines={1}>{meta.label}</Text>
         </View>
         <Text style={[ssc.caption, { color: dimText }]}>{meta.caption}</Text>
         {next ? (
@@ -129,11 +132,11 @@ function StreakCard({ streak, isDark }: { streak: number; isDark: boolean }) {
               <View style={[ssc.fill, { backgroundColor: meta.color, width: `${Math.max(4, Math.round(next.progress * 100))}%` as `${number}%` }]} />
             </View>
             <Text style={[ssc.next, { color: dimText }]}>
-              {next.remaining} more to <Text style={{ color: STREAK_META[next.next].color, fontWeight: '700' }}>{STREAK_META[next.next].label}</Text>
+              {next.remaining} more to <Text style={{ color: nextInk, fontWeight: '700' }}>{STREAK_META[next.next].label}</Text>
             </Text>
           </View>
         ) : (
-          <Text style={[ssc.next, { color: meta.color, marginTop: 4 }]}>Top tier reached</Text>
+          <Text style={[ssc.next, { color: ink, marginTop: 4 }]}>Top tier reached</Text>
         )}
       </View>
     </View>

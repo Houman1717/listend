@@ -8,7 +8,7 @@ import type { FlippedRecord } from '@/context/FlipContext';
 import { libraryFinder, artistKey } from '@/lib/albumMatch';
 import { effectiveRating } from '@/lib/effectiveRating';
 import { primaryGenre } from '@/lib/genres';
-import { bestFlipStreak, currentFlipStreak, getStreakTier, STREAK_META } from '@/lib/flipStreak';
+import { bestFlipStreak, currentFlipStreak, getStreakTier, STREAK_META, isLightColor, readableTierColor } from '@/lib/flipStreak';
 import { StatTile } from '@/components/StatTile';
 import { StreakMedal } from '@/components/StreakMedal';
 
@@ -262,7 +262,7 @@ export function FlipStatsCard({
 function StreakTile({ streak, caption, colors }: { streak: number; caption: string; colors: Colors }) {
   const tier = getStreakTier(streak);
   const meta = STREAK_META[tier];
-  const color = tier === 0 ? colors.subtext : meta.color;
+  const color = tier === 0 ? colors.subtext : readableTierColor(meta.color, isLightColor(colors.cardBg));
   return (
     <View style={[s.streak, { backgroundColor: colors.cardBg, borderColor: tier === 0 ? colors.cardBorder : meta.color + '45' }]}>
       {tier > 0 && (
