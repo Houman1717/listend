@@ -33,7 +33,8 @@ import { FLIP_POOL, FlipAlbum } from '@/constants/FlipPool';
 import { ShareCardSheet } from '@/components/share/ShareCardSheet';
 import { StreakCard as StreakShareCard, useOwnCardColors } from '@/components/share/ShareCards';
 import { ShareIcon } from '@/components/share/ShareIcon';
-import { getStreakTier, STREAK_META, currentFlipStreak } from '@/lib/flipStreak';
+import { getStreakTier, STREAK_META, currentFlipStreak, nextTierProgress } from '@/lib/flipStreak';
+import { StreakMedal } from '@/components/StreakMedal';
 
 const API_URL   = process.env.EXPO_PUBLIC_API_URL ?? '';
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -99,78 +100,41 @@ function formatCountdown(ms: number): string {
 // ─── Streak tier system ───────────────────────────────────────────────────────
 // Tiers and streak maths live in lib/flipStreak so My Stats counts the same way.
 
-const CLUSTER = 54;
-
 function StreakCard({ streak, isDark }: { streak: number; isDark: boolean }) {
   const tier = getStreakTier(streak);
-  const meta = STREAK_META[tier];
-
-  const pulseAnim  = useRef(new Animated.Value(0)).current;
-  const rotAnim    = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (tier === 0) return;
-    const dur = tier >= 5 ? 900 : tier >= 3 ? 1400 : 2000;
-    const pulse = Animated.loop(Animated.sequence([
-      Animated.timing(pulseAnim, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(pulseAnim, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    ]));
-    pulse.start();
-
-    let rot: Animated.CompositeAnimation | null = null;
-    if (tier >= 2) {
-      const rotDur = Math.max(3000, 9000 - tier * 1000);
-      rot = Animated.loop(Animated.timing(rotAnim, { toValue: 1, duration: rotDur, easing: Easing.linear, useNativeDriver: true }));
-      rot.start();
-    }
-    return () => { pulse.stop(); rot?.stop(); };
-  }, [tier]);
-
   if (tier === 0) return null;
+  const meta = STREAK_META[tier];
+  const next = nextTierProgress(streak);
 
-  const glowOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.18, tier >= 5 ? 0.75 : 0.48] });
-  const glowScale   = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1.42] });
-  const ringOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.65] });
-  const ringRot     = rotAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg',  '360deg'] });
-  const ringRot2    = rotAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
-
-  const cardBg     = isDark ? 'rgba(18,10,4,0.92)' : 'rgba(255,252,242,0.96)';
-  const cardBorder = meta.color + '32';
-  const dimText    = isDark ? '#7a5535' : '#a07850';
+  const cardBg  = isDark ? 'rgba(18,10,4,0.92)' : 'rgba(255,252,242,0.96)';
+  const dimText = isDark ? '#9a7550' : '#a07850';
 
   return (
-    <View style={[ssc.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-      {/* Icon cluster */}
-      <View style={ssc.cluster}>
-        <Animated.View style={[ssc.glow, {
-          backgroundColor: meta.color,
-          opacity: glowOpacity,
-          transform: [{ scale: glowScale }],
-        }]} />
-        {tier >= 2 && (
-          <Animated.View style={[ssc.ring, {
-            borderColor: meta.color + '55',
-            opacity: ringOpacity,
-            transform: [{ rotate: ringRot }],
-          }]} />
-        )}
-        {tier >= 4 && (
-          <Animated.View style={[ssc.ringOuter, {
-            borderColor: meta.color + '28',
-            opacity: ringOpacity,
-            transform: [{ rotate: ringRot2 }],
-          }]} />
-        )}
-        <FontAwesome name={meta.icon as any} size={20} color={meta.color} style={{ zIndex: 3 }} />
-      </View>
-
-      {/* Text */}
-      <View style={{ flex: 1, gap: 3 }}>
+    <View style={[ssc.card, { backgroundColor: cardBg, borderColor: meta.color + '45' }]}>
+      <LinearGradient
+        colors={[meta.color + '2E', meta.color + '00']}
+        start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <StreakMedal streak={streak} size={56} />
+      <View style={{ flex: 1, gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 7 }}>
           <Text style={[ssc.count, { color: meta.color }]}>{streak}</Text>
-          <Text style={[ssc.label, { color: meta.color }]}>{meta.label}</Text>
+          <Text style={[ssc.label, { color: meta.color }]} numberOfLines={1}>{meta.label}</Text>
         </View>
         <Text style={[ssc.caption, { color: dimText }]}>{meta.caption}</Text>
+        {next ? (
+          <View style={{ gap: 5, marginTop: 4 }}>
+            <View style={[ssc.track, { backgroundColor: meta.color + '22' }]}>
+              <View style={[ssc.fill, { backgroundColor: meta.color, width: `${Math.max(4, Math.round(next.progress * 100))}%` as `${number}%` }]} />
+            </View>
+            <Text style={[ssc.next, { color: dimText }]}>
+              {next.remaining} more to <Text style={{ color: STREAK_META[next.next].color, fontWeight: '700' }}>{STREAK_META[next.next].label}</Text>
+            </Text>
+          </View>
+        ) : (
+          <Text style={[ssc.next, { color: meta.color, marginTop: 4 }]}>Top tier reached</Text>
+        )}
       </View>
     </View>
   );
@@ -178,48 +142,22 @@ function StreakCard({ streak, isDark }: { streak: number; isDark: boolean }) {
 
 const ssc = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
     marginTop: 20,
+    overflow: 'hidden',
   },
-  cluster: {
-    width: CLUSTER,
-    height: CLUSTER,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  glow: {
-    position: 'absolute',
-    width: CLUSTER,
-    height: CLUSTER,
-    borderRadius: CLUSTER / 2,
-  },
-  ring: {
-    position: 'absolute',
-    width: CLUSTER + 18,
-    height: CLUSTER + 18,
-    borderRadius: (CLUSTER + 18) / 2,
-    borderWidth: 1.5,
-    top: -9,
-    left: -9,
-  },
-  ringOuter: {
-    position: 'absolute',
-    width: CLUSTER + 34,
-    height: CLUSTER + 34,
-    borderRadius: (CLUSTER + 34) / 2,
-    borderWidth: 1,
-    top: -17,
-    left: -17,
-  },
-  count:   { fontSize: 22, fontWeight: '800', letterSpacing: -0.6 },
-  label:   { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  count:   { fontSize: 26, fontWeight: '800', letterSpacing: -0.8 },
+  label:   { fontSize: 16, fontWeight: '700', letterSpacing: -0.2, flexShrink: 1 },
   caption: { fontSize: 12, letterSpacing: -0.1 },
+  track:   { height: 5, borderRadius: 3, overflow: 'hidden' },
+  fill:    { height: 5, borderRadius: 3 },
+  next:    { fontSize: 11, fontWeight: '500' },
 });
 
 // ─── Album art: real image with vinyl fallback ────────────────────────────────

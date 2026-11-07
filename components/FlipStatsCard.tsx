@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import type { LoggedAlbum } from '@/context/AlbumsContext';
@@ -9,6 +10,7 @@ import { effectiveRating } from '@/lib/effectiveRating';
 import { primaryGenre } from '@/lib/genres';
 import { bestFlipStreak, currentFlipStreak, getStreakTier, STREAK_META } from '@/lib/flipStreak';
 import { StatTile } from '@/components/StatTile';
+import { StreakMedal } from '@/components/StreakMedal';
 
 // My Stats' Flip a Record card: how often you follow through on a flip, how
 // far the flips have pushed your taste, your streaks, and whether the dice
@@ -142,7 +144,6 @@ export function FlipStatsCard({
   }
 
   const tile = { tint: colors.tint, textColor: colors.text, subtextColor: colors.subtext, bg: colors.cardBg, border: colors.cardBorder };
-  const bestMeta = STREAK_META[getStreakTier(stats.best)];
   const diff = stats.flipAvg - stats.otherAvg;
   const showCompare = stats.ratedFlips >= MIN_RATED_TO_COMPARE && stats.hasOthers;
   const widened = stats.newArtists.length + stats.newGenres.length + stats.newDecades.length > 0;
@@ -184,9 +185,8 @@ export function FlipStatsCard({
 
       {/* ── Streaks ───────────────────────────────────────────────────────── */}
       <View style={s.tileRow}>
-        <StatTile icon="trophy" value={stats.best > 0 ? stats.best : '—'} unit=" in a row" label="Best streak" {...tile}
-          extra={bestMeta.label ? <Text style={[s.tier, { color: colors.tint }]} numberOfLines={1}>{bestMeta.label}</Text> : undefined} />
-        <StatTile icon="fire" value={stats.current > 0 ? stats.current : '—'} unit=" in a row" label="Current streak" {...tile} />
+        <StreakTile streak={stats.best} caption="Best streak" colors={colors} />
+        <StreakTile streak={stats.current} caption="Current streak" colors={colors} />
       </View>
 
       {/* ── How far it's widened your taste ───────────────────────────────── */}
@@ -258,6 +258,27 @@ export function FlipStatsCard({
   );
 }
 
+// A streak tile: the shared animated medal, the run, its tier and what it is.
+function StreakTile({ streak, caption, colors }: { streak: number; caption: string; colors: Colors }) {
+  const tier = getStreakTier(streak);
+  const meta = STREAK_META[tier];
+  const color = tier === 0 ? colors.subtext : meta.color;
+  return (
+    <View style={[s.streak, { backgroundColor: colors.cardBg, borderColor: tier === 0 ? colors.cardBorder : meta.color + '45' }]}>
+      {tier > 0 && (
+        <LinearGradient colors={[meta.color + '26', meta.color + '00']} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={StyleSheet.absoluteFill} />
+      )}
+      <StreakMedal streak={streak} size={52} dimColor={colors.subtext} />
+      <Text style={[s.streakValue, { color: colors.text, marginTop: 6 }]} numberOfLines={1}>
+        {streak > 0 ? streak : '—'}
+        {streak > 0 ? <Text style={[s.streakUnit, { color: colors.subtext }]}> in a row</Text> : null}
+      </Text>
+      <Text style={[s.streakTier, { color }]} numberOfLines={1}>{tier > 0 ? meta.label : 'No streak yet'}</Text>
+      <Text style={[s.streakCaption, { color: colors.subtext }]} numberOfLines={1}>{caption}</Text>
+    </View>
+  );
+}
+
 function Legend({ color, label, textColor, hollow, faded }: { color: string; label: string; textColor: string; hollow?: boolean; faded?: boolean }) {
   return (
     <View style={s.legendItem}>
@@ -297,7 +318,11 @@ const s = StyleSheet.create({
   legendText: { fontSize: 12, fontWeight: '500' },
 
   tileRow:    { flexDirection: 'row', gap: 10 },
-  tier:       { fontSize: 11, fontWeight: '700' },
+  streak:     { flex: 1, borderRadius: 14, borderWidth: 1, paddingVertical: 14, paddingHorizontal: 10, alignItems: 'center', gap: 2, overflow: 'hidden' },
+  streakValue:   { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+  streakUnit:    { fontSize: 13, fontWeight: '600', letterSpacing: 0 },
+  streakTier:    { fontSize: 12, fontWeight: '700' },
+  streakCaption: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   section:    { gap: 10, marginTop: 4 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
 

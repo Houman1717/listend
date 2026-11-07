@@ -47,3 +47,15 @@ export function bestFlipStreak(history: StreakRecord[]): number {
   }
   return best;
 }
+
+/** The streak each tier starts at. */
+export const TIER_START: Record<StreakTier, number> = { 0: 0, 1: 1, 2: 4, 3: 7, 4: 14, 5: 30, 6: 100 };
+
+/** The next tier up and how far through the current one you are (0–1). Null at the top tier. */
+export function nextTierProgress(streak: number): { next: StreakTier; remaining: number; progress: number } | null {
+  const tier = getStreakTier(streak);
+  if (tier === 6) return null;
+  const next = (tier + 1) as StreakTier;
+  const from = TIER_START[tier], to = TIER_START[next];
+  return { next, remaining: to - streak, progress: (streak - from) / (to - from) };
+}
