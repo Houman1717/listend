@@ -73,6 +73,22 @@ function rowToRecord(row: any): FlippedRecord {
   };
 }
 
+const HISTORY_COLUMNS = 'pool_id, album_title, album_artist, album_year, status, flipped_at, cooldown_until';
+
+// Someone else's flip history, newest first — for My Stats on their profile.
+// RLS lets followers read flips (and only followers), so a private or
+// unfollowed account simply comes back empty.
+export async function fetchFlipHistory(userId: string): Promise<FlippedRecord[]> {
+  const { data, error } = await supabase
+    .from('flip_records')
+    .select(HISTORY_COLUMNS)
+    .eq('user_id', userId)
+    .not('pool_id', 'is', null)
+    .order('flipped_at', { ascending: false });
+  if (error || !data) return [];
+  return data.map(rowToRecord);
+}
+
 const COOLDOWN_MS_FREE = 12 * 60 * 60 * 1000; // 12 hours for free users
 const COOLDOWN_MS_PRO  =  1 * 60 * 60 * 1000; //  1 hour  for pro users
 
@@ -107,7 +123,7 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     (async () => {
       const { data, error } = await supabase
         .from('flip_records')
-        .select('pool_id, album_title, album_artist, album_year, status, flipped_at, cooldown_until')
+        .select(HISTORY_COLUMNS)
         .eq('user_id', uid)
         .not('pool_id', 'is', null)
         .order('flipped_at', { ascending: false });

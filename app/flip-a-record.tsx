@@ -33,6 +33,7 @@ import { FLIP_POOL, FlipAlbum } from '@/constants/FlipPool';
 import { ShareCardSheet } from '@/components/share/ShareCardSheet';
 import { StreakCard as StreakShareCard, useOwnCardColors } from '@/components/share/ShareCards';
 import { ShareIcon } from '@/components/share/ShareIcon';
+import { getStreakTier, STREAK_META, currentFlipStreak } from '@/lib/flipStreak';
 
 const API_URL   = process.env.EXPO_PUBLIC_API_URL ?? '';
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -96,28 +97,7 @@ function formatCountdown(ms: number): string {
 }
 
 // ─── Streak tier system ───────────────────────────────────────────────────────
-
-type StreakTier = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-function getStreakTier(n: number): StreakTier {
-  if (n === 0) return 0;
-  if (n < 4)   return 1;
-  if (n < 7)   return 2;
-  if (n < 14)  return 3;
-  if (n < 30)  return 4;
-  if (n < 100) return 5;
-  return 6;
-}
-
-const STREAK_META: Record<StreakTier, { label: string; caption: string; color: string; icon: string }> = {
-  0: { label: '',                    caption: '',                            color: '#6B4C35', icon: 'fire'     },
-  1: { label: 'Ember Run',           caption: 'Just getting started',        color: '#C8601A', icon: 'fire'     },
-  2: { label: 'Vinyl Run',           caption: 'The needle is dropping',      color: '#D4A017', icon: 'dot-circle-o' },
-  3: { label: 'Discovery Streak',    caption: 'Deep in the crates',          color: '#D4A017', icon: 'compass'  },
-  4: { label: 'Collector Run',       caption: 'Serious about the dig',       color: '#E8C547', icon: 'star'     },
-  5: { label: 'Digging Streak',      caption: 'Rare finds, daily ritual',    color: '#F0D060', icon: 'diamond'  },
-  6: { label: 'Legendary Collector', caption: 'You are the record store',    color: '#FFE57A', icon: 'trophy'   },
-};
+// Tiers and streak maths live in lib/flipStreak so My Stats counts the same way.
 
 const CLUSTER = 54;
 
@@ -1001,15 +981,7 @@ export default function FlipARecordScreen() {
   }, [amazonTapped, amazonFetching, flipAmazonUrl]);
 
   // Derive streak: consecutive logged flips — skip the pending one at the top
-  const streak = (() => {
-    let count = 0;
-    for (const r of history) {
-      if (r.status === 'pending') continue;
-      if (r.status === 'logged') count++;
-      else break;
-    }
-    return count;
-  })();
+  const streak = currentFlipStreak(history);
 
   const borderCol = colors.border;
   const cardBg    = colors.background;

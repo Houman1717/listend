@@ -70,17 +70,30 @@ function artistsMatch(a: string, b: string): boolean {
 // same title by different artists (Pop Smoke's "Faith" vs George Michael's)
 // never count.
 export function libraryMatcher(library: MatchAlbum[]): (album: MatchAlbum) => boolean {
-  const artistsByTitle = new Map<string, string[]>();
+  const find = libraryFinder(library);
+  return (album) => find(album) !== undefined;
+}
+
+// Same matching as libraryMatcher, but hands back the library entry that
+// matched — My Stats' Flip card needs its cover, rating, genre and log date.
+export function libraryFinder<T extends MatchAlbum>(library: T[]): (album: MatchAlbum) => T | undefined {
+  const byTitle = new Map<string, T[]>();
   for (const a of library) {
     const t = loose(stripEditions(a.title));
     if (!t) continue;
-    const list = artistsByTitle.get(t);
-    const artist = a.artist ?? '';
-    if (list) list.push(artist); else artistsByTitle.set(t, [artist]);
+    const list = byTitle.get(t);
+    if (list) list.push(a); else byTitle.set(t, [a]);
   }
   return (album) => {
-    const artists = artistsByTitle.get(loose(stripEditions(album.title)));
-    if (!artists) return false;
-    return artists.some(a => artistsMatch(a, album.artist ?? ''));
+    const candidates = byTitle.get(loose(stripEditions(album.title)));
+    if (!candidates) return undefined;
+    return candidates.find(a => artistsMatch(a.artist ?? '', album.artist ?? ''));
   };
+}
+
+// One key per artist credit, folded like the matcher ("The Beatles" and
+// "Beatles" share one). Exact only — no partial credits — so it's cheap
+// enough to key a map over a whole library.
+export function artistKey(artist: string): string {
+  return words(artist).join('');
 }

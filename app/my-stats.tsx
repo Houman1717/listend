@@ -19,7 +19,9 @@ import { fetchMembers, rankMembers, memberQuery, type MemberRow } from '@/lib/me
 import { handleText, nameOrHandle } from '@/lib/userHandle';
 import { cardWidth as calcCardWidth, GAP, COLS, PADDING } from '@/components/AlbumGridCard';
 import { FLIP_POOL } from '@/constants/FlipPool';
-import { useFlip, poolLoggedIds } from '@/context/FlipContext';
+import { useFlip, poolLoggedIds, fetchFlipHistory, type FlippedRecord } from '@/context/FlipContext';
+import { bestFlipStreak } from '@/lib/flipStreak';
+import { FlipStatsCard } from '@/components/FlipStatsCard';
 import { libraryMatcher } from '@/lib/albumMatch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MAIN_GENRES } from '@/lib/genres';
@@ -235,17 +237,19 @@ const rm = StyleSheet.create({
 
 // ─── Ranked List Modal ("See all" for artists / genres) ──────────────────────
 
-type RankedItem = { key: string; label: string; value: string; imageUrl?: string; onPress: () => void };
+type RankedItem = { key: string; label: string; value?: string; sub?: string; imageUrl?: string; onPress: () => void };
 
 // Lowercased, accents stripped, so "beyonce" finds Beyoncé.
 function foldForSearch(s: string) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-function RankedListModal({ title, items, showImages, searchPlaceholder, onClose, themeColors }: {
+function RankedListModal({ title, items, showImages, unranked, searchPlaceholder, onClose, themeColors }: {
   title: string | null;
   items: RankedItem[];
   showImages: boolean;
+  /** A plain list, not a ranking — no position numbers. */
+  unranked?: boolean;
   /** Shows a search field that filters the list by label. */
   searchPlaceholder?: string;
   onClose: () => void;
@@ -321,7 +325,7 @@ function RankedListModal({ title, items, showImages, searchPlaceholder, onClose,
             ) : null}
             renderItem={({ item: { item, rank } }) => (
               <Pressable onPress={() => { Keyboard.dismiss(); item.onPress(); }} style={({ pressed }) => [rk.row, { opacity: pressed ? 0.6 : 1 }]}>
-                <Text style={[rk.rank, { color: sub }]}>{rank}</Text>
+                {!unranked && <Text style={[rk.rank, { color: sub }]}>{rank}</Text>}
                 {showImages && (item.imageUrl ? (
                   <ExpoImage source={{ uri: item.imageUrl }} style={rk.avatar} contentFit="cover" cachePolicy="disk" />
                 ) : (
@@ -329,8 +333,15 @@ function RankedListModal({ title, items, showImages, searchPlaceholder, onClose,
                     <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>{item.label.trim().charAt(0).toUpperCase()}</Text>
                   </View>
                 ))}
-                <Text style={[rk.label, { color: txt }]} numberOfLines={1}>{item.label}</Text>
-                <Text style={[rk.value, { color: sub }]}>{item.value}</Text>
+                {item.sub ? (
+                  <View style={{ flex: 1 }}>
+                    <Text style={[rk.label, { color: txt }]} numberOfLines={1}>{item.label}</Text>
+                    <Text style={[rk.value, { color: sub, marginTop: 2 }]} numberOfLines={1}>{item.sub}</Text>
+                  </View>
+                ) : (
+                  <Text style={[rk.label, { color: txt }]} numberOfLines={1}>{item.label}</Text>
+                )}
+                {item.value ? <Text style={[rk.value, { color: sub }]}>{item.value}</Text> : null}
                 <FontAwesome name="chevron-right" size={11} color={sub} />
               </Pressable>
             )}
@@ -609,7 +620,19 @@ export default function MyStatsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { loggedAlbums: ownAlbums, isLoaded: ownLoaded, topAlbums: myTop5Albums, topArtists: myTop5Artists, updateDurations } = useAlbums();
-  const { history: flipHistory } = useFlip();
+  const { history: ownFlipHistory } = useFlip();
+
+  // Another user's flips — followers can read them (RLS); anyone else gets
+  // an empty list and the Flip card stays hidden.
+  const [otherFlipHistory, setOtherFlipHistory] = useState<FlippedRecord[]>([]);
+  useEffect(() => {
+    if (!viewedUserId) return;
+    setOtherFlipHistory([]);
+    let cancelled = false;
+    fetchFlipHistory(viewedUserId).then(h => { if (!cancelled) setOtherFlipHistory(h); });
+    return () => { cancelled = true; };
+  }, [viewedUserId]);
+  const flipHistory = viewedUserId ? otherFlipHistory : ownFlipHistory;
 
   // Other-user album fetch
   const [otherAlbums,  setOtherAlbums]  = useState<LoggedAlbum[]>([]);
@@ -694,7 +717,8 @@ export default function MyStatsScreen() {
   }, [isLoaded, viewedUserId]);
 
   const [listModal,      setListModal]        = useState<{ title: string; albums: LoggedAlbum[]; onTitlePress?: () => void } | null>(null);
-  const [rankedModal,    setRankedModal]      = useState<'artists' | 'genres' | null>(null);
+  const [rankedModal,    setRankedModal]      = useState<'artists' | 'genres' | 'flipArtists' | null>(null);
+  const [flipArtists,    setFlipArtists]      = useState<LoggedAlbum[]>([]);
   const [artistView,     setArtistView]       = useState<'listend' | 'rated'>('listend');
   const [genreView,      setGenreView]        = useState<'listend' | 'rated'>('listend');
 
@@ -808,15 +832,7 @@ export default function MyStatsScreen() {
   const longestStreak = longestConsecutiveStreak(listenDayKeys);
 
   // Flip a Record streak — longest consecutive logged run across all history
-  const flipStreak = (() => {
-    let best = 0, current = 0;
-    for (const r of flipHistory) {
-      if (r.status === 'pending') continue;
-      if (r.status === 'logged') { current++; if (current > best) best = current; }
-      else current = 0;
-    }
-    return best;
-  })();
+  const flipStreak = bestFlipStreak(flipHistory);
 
   const heroStats = [
     { label: 'Albums Logged',   value: loggedAlbums.length, onPress: loggedAlbums.length > 0 ? () => setListModal({ title: 'Albums Logged', albums: loggedAlbums }) : undefined },
@@ -1146,10 +1162,23 @@ export default function MyStatsScreen() {
     })),
   }));
 
+  // Flip card → artists a flip introduced, with the album that did it. Tapping
+  // one goes straight to the artist.
+  const flipArtistItems: RankedItem[] = flipArtists.map(album => ({
+    key: album.artist,
+    label: album.artist,
+    sub: `via ${album.title}`,
+    imageUrl: artistImages[album.artist],
+    onPress: () => fromRanked(() => router.push({ pathname: '/artist-detail', params: { name: album.artist, artworkUrl: artistImages[album.artist] ?? '' } } as any)),
+  }));
+
   // Photos for the full artist list, fetched only once the sheet is opened.
   useEffect(() => {
-    if (rankedModal !== 'artists') return;
-    const names = (artistView === 'listend' ? allArtistsByCount : allRatedArtists).map(([a]) => a).filter(n => !artistImages[n]);
+    if (rankedModal !== 'artists' && rankedModal !== 'flipArtists') return;
+    const names = (rankedModal === 'flipArtists'
+      ? flipArtists.map(a => a.artist)
+      : (artistView === 'listend' ? allArtistsByCount : allRatedArtists).map(([a]) => a)
+    ).filter(n => !artistImages[n]);
     if (names.length === 0) return;
     let cancelled = false;
     const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -1670,6 +1699,7 @@ export default function MyStatsScreen() {
       { icon: 'line-chart', label: 'Growers & Faders',     sub: 'Albums your re-listens changed your mind about' },
       { icon: 'star',       label: 'Most Listend Artists', sub: 'Your most-played artists of all time' },
       { icon: 'flag',       label: 'Milestones',           sub: 'Your 1st, 50th, 100th album and when you logged it' },
+      { icon: 'random',     label: 'Flip a Record',        sub: 'How often you log your flips, and the new artists they found you' },
     ];
 
     return (
@@ -1790,11 +1820,14 @@ export default function MyStatsScreen() {
       <RankedListModal
         title={rankedModal === 'artists'
           ? (artistView === 'listend' ? 'Most Listend Artists' : 'Highest Rated Artists')
+          : rankedModal === 'flipArtists'
+            ? 'New artists from flips'
           : rankedModal === 'genres'
             ? (genreView === 'listend' ? 'Most Listend Genres' : 'Highest Rated Genres')
             : null}
-        items={rankedModal === 'artists' ? rankedArtistItems : rankedModal === 'genres' ? rankedGenreItems : []}
-        showImages={rankedModal === 'artists'}
+        items={rankedModal === 'artists' ? rankedArtistItems : rankedModal === 'flipArtists' ? flipArtistItems : rankedModal === 'genres' ? rankedGenreItems : []}
+        showImages={rankedModal === 'artists' || rankedModal === 'flipArtists'}
+        unranked={rankedModal === 'flipArtists'}
         searchPlaceholder={rankedModal === 'artists' ? 'Search artists' : undefined}
         onClose={() => setRankedModal(null)}
         themeColors={colors}
@@ -2386,6 +2419,18 @@ export default function MyStatsScreen() {
             )}
           </View>
         )}
+
+        {/* ── Flip a Record: follow-through, streaks, where it took you ──── */}
+        <FlipStatsCard
+          history={flipHistory}
+          albums={loggedAlbums}
+          isOwn={!viewedUserId}
+          onAlbumPress={handleAlbumPress}
+          onShowAlbums={(title, albums) => setListModal({ title, albums })}
+          onShowArtists={artists => { setFlipArtists(artists); setRankedModal('flipArtists'); }}
+          onStartFlipping={() => router.push('/flip-a-record' as any)}
+          colors={{ tint: colors.tint, text: colors.text, subtext: colors.subtext, muted: colors.textMuted, cardBg, cardBorder }}
+        />
 
         {/* ── Songs (hidden under 10 song logs) ──────────────────────────── */}
         <SongStatsCard
