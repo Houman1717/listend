@@ -48,6 +48,7 @@ import { ShareCardSheet } from '@/components/share/ShareCardSheet';
 import { ReviewCard as ReviewShareCard, reviewCardImages, useOwnCardColors } from '@/components/share/ShareCards';
 import { ShareIcon } from '@/components/share/ShareIcon';
 import { ReviewShareButton } from '@/components/share/ReviewShareButton';
+import { RATING_LABELS } from '@/components/VolumeRatingPicker';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchSongCommunityRatings, fetchSongReviewCounts, withOwnRating, type SongMeta, type SongRatingStats } from '@/lib/songReviews';
 
@@ -184,11 +185,6 @@ function sortReviews(reviews: CommunityReview[], sort: ReviewSort): CommunityRev
 
 // ─── Rating picker ────────────────────────────────────────────────────────────
 
-const RATING_LABELS: Record<number, string> = {
-  1: 'Skip', 2: 'Rough', 3: 'Forgettable', 4: 'Underwhelming',
-  5: 'Basic', 6: 'Likable', 7: 'Strong', 8: 'Standout',
-  9: 'Classic', 10: 'Timeless / No Skips',
-};
 const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
 const MINI_BAR_HEIGHTS = BAR_HEIGHTS.map(h => Math.round(h * 0.55));
 

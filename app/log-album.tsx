@@ -23,19 +23,8 @@ import { useFlip } from '@/context/FlipContext';
 import { capture } from '@/lib/analytics';
 import { useAndroidKeyboardHeight } from '@/hooks/useAndroidKeyboardHeight';
 import { TrackRatingsEditor, useTrackRatingsDraft } from '@/components/TrackRatingsEditor';
+import { RATING_LABELS } from '@/components/VolumeRatingPicker';
 
-const RATING_LABELS: Record<number, string> = {
-  1:  'Skip',
-  2:  'Rough',
-  3:  'Forgettable',
-  4:  'Underwhelming',
-  5:  'Basic',
-  6:  'Likable',
-  7:  'Strong',
-  8:  'Standout',
-  9:  'Classic',
-  10: 'Timeless / No Skips',
-};
 
 // Heights in px for bars 1–10 (staircase, bottom-aligned)
 const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];

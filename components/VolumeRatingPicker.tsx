@@ -7,10 +7,11 @@ import { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 // The Volume dial (1–10) — same look and gestures as album-detail's picker.
 // Inside a <Modal> this needs a GestureHandlerRootView above it.
 
+// The one list of Volume labels — every screen imports this, never a copy.
 export const RATING_LABELS: Record<number, string> = {
   1: 'Skip', 2: 'Rough', 3: 'Forgettable', 4: 'Underwhelming',
-  5: 'Basic', 6: 'Likable', 7: 'Strong', 8: 'Standout',
-  9: 'Classic', 10: 'Timeless / No Skips',
+  5: 'Average', 6: 'Likable', 7: 'Strong', 8: 'Standout',
+  9: 'Classic', 10: 'Timeless',
 };
 
 const BAR_HEIGHTS = [6, 9, 12, 15, 18, 22, 26, 30, 34, 38];
