@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -90,8 +91,9 @@ function Frame({ colors, handle, children, footer }: {
   );
 }
 
-function Cover({ url, size, colors, radius = 6 }: { url?: string; size: number; colors: CardColors; radius?: number }) {
-  const src = coverAt(url, size);
+/** fetchSize: the size whose URL the sheet preloaded, when drawn smaller than that. */
+function Cover({ url, size, colors, radius = 6, fetchSize }: { url?: string; size: number; colors: CardColors; radius?: number; fetchSize?: number }) {
+  const src = coverAt(url, fetchSize ?? size);
   return (
     <View style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', backgroundColor: colors.surface }}>
       {src ? <ExpoImage source={{ uri: src }} style={{ width: size, height: size }} contentFit="cover" cachePolicy="memory-disk" transition={0} /> : null}
@@ -213,26 +215,54 @@ export type ReviewCardAlbum = { title: string; artist: string; year?: number; ar
 
 const REVIEW_COVER = 236;
 
+// The whole review always goes on the card, never "…". Short reviews get the
+// big cover; as the text grows the card steps down these layouts (smaller
+// cover, then cover beside the title, then smaller type) until it fits.
+// Album reviews cap at 1000 characters, which fits the last step with room
+// to spare; only something past that would still be clipped.
+type ReviewLayout = { cover: number; row: boolean; font: number; line: number };
+const REVIEW_LAYOUTS: ReviewLayout[] = [
+  { cover: REVIEW_COVER, row: false, font: 15, line: 22 },
+  { cover: 196, row: false, font: 15, line: 22 },
+  { cover: 156, row: false, font: 14, line: 20 },
+  { cover: 96, row: true, font: 14, line: 20 },
+  { cover: 88, row: true, font: 13, line: 18.5 },
+  { cover: 80, row: true, font: 12, line: 17 },
+  { cover: 72, row: true, font: 11, line: 15.5 },
+];
+
 export function ReviewCard({ album, rating, review, colors, handle }: {
   album: ReviewCardAlbum; rating: number; review?: string; colors: CardColors; handle: string;
 }) {
   const text = (review ?? '').trim();
-  return (
-    <Frame colors={colors} handle={handle}>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-      <View style={{ alignItems: 'center' }}>
-        <Cover url={album.artworkUrl} size={REVIEW_COVER} colors={colors} radius={8} />
-      </View>
-      <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.5, marginTop: 18 }} numberOfLines={2}>
+  const [step, setStep] = useState(0);
+  const [space, setSpace] = useState(0);
+  const [content, setContent] = useState(0);
+  const [textH, setTextH] = useState(0);
+  const [clamp, setClamp] = useState<number | undefined>(undefined);
+  useEffect(() => { setStep(0); setContent(0); setClamp(undefined); }, [text, rating, album.title]);
+  // Measure, and drop a step while the content is taller than the space. On
+  // the last step, clip to whole lines rather than cut a line in half.
+  useEffect(() => {
+    if (!(space > 0 && content > space + 0.5) || clamp !== undefined) return;
+    // Forget the old height so the next step waits for its own measurement.
+    if (step < REVIEW_LAYOUTS.length - 1) { setContent(0); setStep(step + 1); }
+    else setClamp(Math.max(1, Math.floor((space - (content - textH)) / REVIEW_LAYOUTS[step].line)));
+  }, [space, content, textH, step, clamp]);
+  const L = REVIEW_LAYOUTS[step];
+
+  const titleBlock = (
+    <>
+      <Text style={{ color: colors.text, fontSize: L.row ? 18 : 22, fontWeight: '800', letterSpacing: -0.5, marginTop: L.row ? 0 : 18 }} numberOfLines={2}>
         {cardTitle(album.title)}
       </Text>
-      <Text style={{ color: colors.subtext, fontSize: 14, marginTop: 3 }} numberOfLines={1}>
+      <Text style={{ color: colors.subtext, fontSize: L.row ? 13 : 14, marginTop: 3 }} numberOfLines={1}>
         {album.artist}{album.year ? ` · ${album.year}` : ''}
       </Text>
       {rating > 0 && (
         // The app's signature volume rating, at the size it has in the app:
         // speaker, ten-bar staircase, score, then the rating's name.
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 7, marginTop: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 7, marginTop: L.row ? 10 : 12 }}>
           <FontAwesome name="volume-up" size={14} color={colors.tint} />
           <VolumeBars
             rating={rating}
@@ -243,15 +273,38 @@ export function ReviewCard({ album, rating, review, colors, handle }: {
             gap={2}
           />
           <Text style={{ color: colors.tint, fontSize: 17, fontWeight: '800', lineHeight: 18, marginBottom: -1 }}>{rating}</Text>
-          <Text style={{ color: colors.subtext, fontSize: 13.5, lineHeight: 18, marginBottom: -1 }}>· {RATING_LABELS[rating] ?? ''}</Text>
+          <Text style={{ color: colors.subtext, fontSize: 13.5, lineHeight: 18, marginBottom: -1 }} numberOfLines={1}>· {RATING_LABELS[rating] ?? ''}</Text>
         </View>
       )}
+    </>
+  );
+
+  return (
+    <Frame colors={colors} handle={handle}>
+      <View style={{ flex: 1, justifyContent: 'center', overflow: 'hidden' }}
+        onLayout={e => setSpace(e.nativeEvent.layout.height)}>
+      <View onLayout={e => setContent(e.nativeEvent.layout.height)}>
+      {L.row ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <Cover url={album.artworkUrl} size={L.cover} fetchSize={REVIEW_COVER} colors={colors} radius={6} />
+          <View style={{ flex: 1 }}>{titleBlock}</View>
+        </View>
+      ) : (
+        <>
+          <View style={{ alignItems: 'center' }}>
+            <Cover url={album.artworkUrl} size={L.cover} fetchSize={REVIEW_COVER} colors={colors} radius={8} />
+          </View>
+          {titleBlock}
+        </>
+      )}
       {text.length > 0 && (
-        <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22, marginTop: 12, fontStyle: 'italic' }}
-          numberOfLines={rating > 0 ? 5 : 7}>
-          {`“${text}”`}
+        <Text style={{ color: colors.text, fontSize: L.font, lineHeight: L.line, marginTop: L.row ? 16 : 12, fontStyle: 'italic' }}
+          onLayout={e => setTextH(e.nativeEvent.layout.height)}
+          numberOfLines={clamp}>
+          {`\u201C${text}\u201D`}
         </Text>
       )}
+      </View>
       </View>
     </Frame>
   );
