@@ -1954,6 +1954,36 @@ const MANUAL_ALBUMS = [
       { number: 10, id: 'lst-rika-barn-leka-bast-t10', title: 'Drömmar', durationMs: 360667 },
     ],
   },
+  {
+    id: 'lst-keo-live-at-village-underground',
+    title: 'Live at Village Underground',
+    artist: 'Keo',
+    artistId: '1636401744',
+    year: 2026,
+    isLive: true,
+    // Recorded 29 October 2025, released 1 May 2026 by Island on limited
+    // vinyl and as a webstore-only download; not on streaming. The vinyl's
+    // eleven tracks and title (the download adds Fly and Stolen Cars and a
+    // "The" not on the artwork); timings from the download's Discogs entry,
+    // to the second. "(Live …)" kept in titles so song ratings don't pool
+    // with the studio recordings. Cover self-hosted from Discogs.
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/keo-live-at-village-underground.jpg`,
+    aliases: ['Live at The Village Underground'],
+    trackCount: 11,
+    tracks: [
+      { number: 1, id: 'lst-keo-village-underground-t1', title: 'Hands (Live From Village Underground)', durationMs: 208000 },
+      { number: 2, id: 'lst-keo-village-underground-t2', title: 'Deserts (Live From Village Underground)', durationMs: 256000 },
+      { number: 3, id: 'lst-keo-village-underground-t3', title: 'Young (Live From Village Underground)', durationMs: 170000 },
+      { number: 4, id: 'lst-keo-village-underground-t4', title: 'Thorn (Live From Village Underground)', durationMs: 244000 },
+      { number: 5, id: 'lst-keo-village-underground-t5', title: 'Spaceman (Live From Village Underground)', durationMs: 326000 },
+      { number: 6, id: 'lst-keo-village-underground-t6', title: 'Spent On You (Live From Village Underground)', durationMs: 306000 },
+      { number: 7, id: 'lst-keo-village-underground-t7', title: 'Only We Know (Live From Village Underground)', durationMs: 200000 },
+      { number: 8, id: 'lst-keo-village-underground-t8', title: 'Kind, If You Will (Live From Village Underground)', durationMs: 284000 },
+      { number: 9, id: 'lst-keo-village-underground-t9', title: 'Kudos (Live From Village Underground)', durationMs: 335000 },
+      { number: 10, id: 'lst-keo-village-underground-t10', title: 'Crow (Live From Village Underground)', durationMs: 370000 },
+      { number: 11, id: 'lst-keo-village-underground-t11', title: 'I Lied, Amber (Live From Village Underground)', durationMs: 219000 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
