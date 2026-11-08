@@ -1237,6 +1237,12 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1738823879', title: 'Warfaze', artist: 'Warfaze', year: 1991,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/82/23/15/822315b2-67f5-0ab3-3e1c-c65ddde48cb6/46a02d27-bbbf-4497-87de-8e3f671bfd8d.jpg/500x500bb.jpg',
   },
+  // The original by Otomo Yoshihide's Ground Zero; resolving the title
+  // landed on a 2021 cover by Igor Krutogolov's Toy Orchestra.
+  'groundzero::consumered': {
+    id: '269238587', title: 'Consume Red', artist: 'Ground Zero', year: 1996,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/93/4e/07/mzi.odzgzmqh.jpg/500x500bb.jpg',
+  },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
@@ -4946,9 +4952,23 @@ const TRACKLIST_ADDITIONS = {
   ],
 };
 
+// Timings Apple's catalog API omits (durationInMillis absent, so 0:00 in the
+// app) though iTunes has them. Ground Zero's Consume Red, one 57-minute track.
+const TRACK_DURATION_FIXES = {
+  '269238587': { 1: 3422493 },
+};
+
+// Albums that are a single long piece — one track, yet not singles. The
+// discography would drop them with the singles; these stay, under Albums.
+const ONE_TRACK_ALBUM_IDS = new Set([
+  '269238587',   // Ground Zero — Consume Red (1996)
+]);
+
 const fixTracklist = (id, tracks) => {
   if (!Array.isArray(tracks)) return tracks;
   let out = TRACKLIST_CAPS[id] ? tracks.slice(0, TRACKLIST_CAPS[id]) : tracks;
+  const durations = TRACK_DURATION_FIXES[id];
+  if (durations) out = out.map(t => (!t.durationMs && durations[t.number] ? { ...t, durationMs: durations[t.number] } : t));
   const extra = (TRACKLIST_ADDITIONS[id] ?? []).filter(a => !out.some(t => t.number === a.number));
   if (extra.length) out = [...out, ...extra].sort((a, b) => a.number - b.number);
   return out;
@@ -6055,6 +6075,7 @@ async function buildArtistDiscography(id, bust = false) {
   // can't tell an EP from an album; see resolveShortRunTimes below.
   const categorize = (item, shortRunTimes) => {
     const t = item.title;
+    if (ONE_TRACK_ALBUM_IDS.has(item.id)) return 'albums';
     if (item.isLive) return 'live';   // a concert whose title doesn't say so
     if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
     if (inAllowlist(t)) return 'epsAndMixtapes';
@@ -6120,9 +6141,10 @@ async function buildArtistDiscography(id, bust = false) {
 
   // Global singles exclusion — runs before tab categorisation
   const isSingleRelease = item =>
-    item.isSingle === true ||
-    item.trackCount === 1 ||
-    /\s*-\s*single\b/i.test(item.title);
+    !ONE_TRACK_ALBUM_IDS.has(item.id) && (
+      item.isSingle === true ||
+      item.trackCount === 1 ||
+      /\s*-\s*single\b/i.test(item.title));
   const nonSingles = allItems.filter(item => !isSingleRelease(item));
   console.log(`[/catalog/artist/albums] ${allItems.length} total → ${nonSingles.length} after singles exclusion`);
 

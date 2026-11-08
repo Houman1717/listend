@@ -1929,6 +1929,31 @@ const MANUAL_ALBUMS = [
       { number: 7, id: 'lst-2001-sessions-t7', title: 'Lost Highway', durationMs: 173426 },
     ],
   },
+  {
+    id: 'lst-rika-barn-leka-bast',
+    title: 'Rika barn leka bäst',
+    artist: 'KSMB',
+    artistId: '79978196',
+    year: 1981,
+    // The Swedish punk band's 1981 album (MNW), on no Apple storefront. The
+    // original ten tracks, opening Intro included (Spotify drops it); titles
+    // from the 1981 LP, timings from the 1991 CD on MusicBrainz.
+    artworkUrl: 'https://coverartarchive.org/release/6e572a43-8968-44c7-9341-aff888368d02/front-500',
+    musicbrainzReleaseId: '6e572a43-8968-44c7-9341-aff888368d02',
+    trackCount: 10,
+    tracks: [
+      { number: 1, id: 'lst-rika-barn-leka-bast-t1', title: 'Intro', durationMs: 26533 },
+      { number: 2, id: 'lst-rika-barn-leka-bast-t2', title: 'Sex noll två', durationMs: 392973 },
+      { number: 3, id: 'lst-rika-barn-leka-bast-t3', title: 'Upp & ner', durationMs: 148626 },
+      { number: 4, id: 'lst-rika-barn-leka-bast-t4', title: 'Polsk zchlager', durationMs: 232533 },
+      { number: 5, id: 'lst-rika-barn-leka-bast-t5', title: 'Blått & guld', durationMs: 154506 },
+      { number: 6, id: 'lst-rika-barn-leka-bast-t6', title: 'Klockan 8', durationMs: 197826 },
+      { number: 7, id: 'lst-rika-barn-leka-bast-t7', title: 'Snopprock', durationMs: 176533 },
+      { number: 8, id: 'lst-rika-barn-leka-bast-t8', title: 'Jag är ingenting', durationMs: 323866 },
+      { number: 9, id: 'lst-rika-barn-leka-bast-t9', title: 'Jag vill bara dansa', durationMs: 202933 },
+      { number: 10, id: 'lst-rika-barn-leka-bast-t10', title: 'Drömmar', durationMs: 360667 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
