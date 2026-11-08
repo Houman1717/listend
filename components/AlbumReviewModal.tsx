@@ -16,9 +16,7 @@ import { fetchReviewComments, insertReviewComment } from '@/lib/reviewComments';
 import { VOLUME_EMPTY_DARK, VOLUME_EMPTY_LIGHT } from '@/constants/Colors';
 import VolumeBars from '@/components/VolumeBars';
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
-import { ShareCardSheet } from '@/components/share/ShareCardSheet';
-import { ReviewCard, reviewCardImages, useOwnCardColors } from '@/components/share/ShareCards';
-import { ShareIcon } from '@/components/share/ShareIcon';
+import { ReviewShareButton } from '@/components/share/ReviewShareButton';
 
 function VolumeBadge({ rating, isDark, tint = '#D4A017' }: { rating: number; isDark?: boolean; tint?: string }) {
   const inactive = isDark ? VOLUME_EMPTY_DARK : VOLUME_EMPTY_LIGHT;
@@ -79,10 +77,6 @@ export function AlbumReviewModal({
     ? handleOrName(username, displayName, authorId ?? reviewUserId, displayName || '…')
     : '…';
 
-  // Your own review can be shared as an image card.
-  const isOwnReview = !!user?.id && reviewUserId === user.id;
-  const [shareOpen, setShareOpen] = useState(false);
-  const shareColors = useOwnCardColors();
   const [liked,            setLiked]            = useState(false);
   const [likeCount,        setLikeCount]        = useState(0);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
@@ -172,22 +166,6 @@ export function AlbumReviewModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      {isOwnReview && (
-        <ShareCardSheet
-          visible={shareOpen}
-          onClose={() => setShareOpen(false)}
-          kind="review"
-          images={reviewCardImages(album)}
-          renderCard={h => (
-            <ReviewCard
-              album={{ title: album.title, artist: album.artist, year: album.year || undefined, artworkUrl: album.artworkUrl }}
-              rating={album.lastRating ?? album.rating}
-              review={album.lastReview ?? album.review}
-              colors={shareColors}
-              handle={h} />
-          )}
-        />
-      )}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight }}>
@@ -195,21 +173,24 @@ export function AlbumReviewModal({
 
           {/* Header */}
           <View style={[s.header, { borderBottomColor: border }]}>
-            <Pressable onPress={onClose} hitSlop={12}>
+            <Pressable onPress={onClose} hitSlop={12} style={s.headerSide}>
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[s.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            {isOwnReview && ((album.lastRating ?? album.rating) > 0 || !!(album.lastReview ?? album.review)) ? (
-              <Pressable onPress={() => setShareOpen(true)} hitSlop={12}>
-                <ShareIcon size={19} color={colors.tint} />
-              </Pressable>
-            ) : !isOwner && onReport ? (
-              <Pressable onPress={onReport} hitSlop={12}>
-                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
-              </Pressable>
-            ) : (
-              <View style={{ width: 24 }} />
-            )}
+            {/* Share (anyone's public review, credited to its author) + Report (others' only) */}
+            <View style={s.headerActions}>
+              <ReviewShareButton
+                reviewerId={reviewUserId}
+                album={{ title: album.title, artist: album.artist, year: album.year || undefined, artworkUrl: album.artworkUrl }}
+                rating={album.lastRating ?? album.rating}
+                review={album.lastReview ?? album.review}
+                color={colors.tint} />
+              {!isOwner && onReport && reviewUserId !== user?.id ? (
+                <Pressable onPress={onReport} hitSlop={12}>
+                  <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
 
           <ScrollView
@@ -368,6 +349,9 @@ const s = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: { fontSize: 16, fontWeight: '700' },
+  // Equal-width sides keep the title centred with one or two icons on the right.
+  headerSide:    { width: 64 },
+  headerActions: { width: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 18 },
   body: { padding: 20 },
   albumRow:    { flexDirection: 'row', gap: 14, marginBottom: 20 },
   art:         { width: 80, height: 80, borderRadius: 10 },

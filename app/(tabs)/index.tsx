@@ -31,6 +31,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchPlaylistCovers } from '@/lib/playlistArtwork';
 import { handleOrName } from '@/lib/userHandle';
 import { reviewOwnerId, parseReviewTargetId } from '@/lib/reviewTargets';
+import { ReviewShareButton } from '@/components/share/ReviewShareButton';
 import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { navigateToProfile } from '@/lib/navigateToProfile';
 import { reportContent } from '@/lib/reports';
@@ -403,17 +404,24 @@ function PopularReviewModal({
 
           {/* Header */}
           <View style={[rm.header, { borderBottomColor: border }]}>
-            <Pressable onPress={onClose} hitSlop={12}>
+            <Pressable onPress={onClose} hitSlop={12} style={rm.headerSide}>
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            {onReport ? (
-              <Pressable onPress={onReport} hitSlop={12}>
-                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
-              </Pressable>
-            ) : (
-              <View style={{ width: 24 }} />
-            )}
+            {/* Share (credited to the reviewer; hidden for private/blocked) + Report */}
+            <View style={rm.headerActions}>
+              <ReviewShareButton
+                reviewerId={review.userId}
+                album={{ title: review.albumTitle, artist: review.albumArtist, year: Number(review.albumYear) || undefined, artworkUrl: review.artworkUrl }}
+                rating={review.rating}
+                review={review.review}
+                color={colors.tint} />
+              {onReport ? (
+                <Pressable onPress={onReport} hitSlop={12}>
+                  <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
 
           <ScrollView
@@ -737,17 +745,24 @@ function FriendReviewModal({
 
           {/* Header */}
           <View style={[rm.header, { borderBottomColor: border }]}>
-            <Pressable onPress={onClose} hitSlop={12}>
+            <Pressable onPress={onClose} hitSlop={12} style={rm.headerSide}>
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[rm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Listen</Text>
-            {onReport ? (
-              <Pressable onPress={onReport} hitSlop={12}>
-                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
-              </Pressable>
-            ) : (
-              <View style={{ width: 24 }} />
-            )}
+            {/* Share (credited to the reviewer; hidden for private/blocked) + Report */}
+            <View style={rm.headerActions}>
+              <ReviewShareButton
+                reviewerId={reviewOwnerId(friend.id) ?? ''}
+                album={{ title: friend.album, artist: friend.artist, year: Number(friend.year) || undefined, artworkUrl: friend.artworkUrl }}
+                rating={friend.rating ?? 0}
+                review={friend.review}
+                color={colors.tint} />
+              {onReport ? (
+                <Pressable onPress={onReport} hitSlop={12}>
+                  <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
 
           <ScrollView
@@ -2116,6 +2131,9 @@ const pr = StyleSheet.create({
 // ─── Review modal styles ──────────────────────────────────────────────────────
 
 const rm = StyleSheet.create({
+  // Equal-width sides keep the title centred with one or two icons on the right.
+  headerSide:    { width: 64 },
+  headerActions: { width: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 18 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

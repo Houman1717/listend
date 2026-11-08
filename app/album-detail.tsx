@@ -47,6 +47,7 @@ import { parseReviewTargetId } from '@/lib/reviewTargets';
 import { ShareCardSheet } from '@/components/share/ShareCardSheet';
 import { ReviewCard as ReviewShareCard, reviewCardImages, useOwnCardColors } from '@/components/share/ShareCards';
 import { ShareIcon } from '@/components/share/ShareIcon';
+import { ReviewShareButton } from '@/components/share/ReviewShareButton';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import { fetchSongCommunityRatings, fetchSongReviewCounts, withOwnRating, type SongMeta, type SongRatingStats } from '@/lib/songReviews';
 
@@ -621,7 +622,7 @@ function AlbumSingleReviewModal({
   onAuthorPress?: (userId: string) => void;
   onReport?: () => void;
   isDark: boolean;
-  colors: { text: string; subtext: string; background: string };
+  colors: { text: string; subtext: string; background: string; tint?: string };
 }) {
   const hasInteractedRef = useRef(false);
   const [localLiked, setLocalLiked] = useState(liked);
@@ -656,17 +657,24 @@ function AlbumSingleReviewModal({
 
           {/* Header */}
           <View style={[arm.header, { borderBottomColor: border }]}>
-            <Pressable onPress={onClose} hitSlop={12}>
+            <Pressable onPress={onClose} hitSlop={12} style={arm.headerSide}>
               <FontAwesome name="chevron-down" size={16} color={isDark ? '#A08060' : '#6B4C35'} />
             </Pressable>
             <Text style={[arm.headerTitle, { color: isDark ? '#f5e6c8' : '#1A0F0A' }]}>Review</Text>
-            {onReport ? (
-              <Pressable onPress={onReport} hitSlop={12}>
-                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
-              </Pressable>
-            ) : (
-              <View style={{ width: 24 }} />
-            )}
+            {/* Share (credited to the reviewer; hidden for private/blocked) + Report */}
+            <View style={arm.headerActions}>
+              <ReviewShareButton
+                reviewerId={review.userId}
+                album={{ title: albumTitle, artist: albumArtist, year: albumYear || undefined, artworkUrl: albumArtwork }}
+                rating={review.rating}
+                review={review.text}
+                color={colors.tint ?? '#D4A017'} />
+              {onReport ? (
+                <Pressable onPress={onReport} hitSlop={12}>
+                  <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
 
           <ScrollView
@@ -784,6 +792,9 @@ function AlbumSingleReviewModal({
 }
 
 const arm = StyleSheet.create({
+  // Equal-width sides keep the title centred with one or two icons on the right.
+  headerSide:    { width: 64 },
+  headerActions: { width: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 18 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 15, fontWeight: '700' },
   body: { paddingHorizontal: 20, paddingTop: 20, gap: 14 },
