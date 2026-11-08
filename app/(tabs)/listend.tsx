@@ -157,6 +157,7 @@ function ProfileHeader({
 
   async function handleFollow() {
     if (!currentUserId || !profileUserId || followLoading) return;
+    if (currentUserId === profileUserId) return;   // can't follow yourself
     setFollowLoading(true);
     if (isFollowing) {
       await supabase

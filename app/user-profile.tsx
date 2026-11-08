@@ -686,6 +686,7 @@ export default function UserProfileScreen() {
   async function toggleFollow() {
     const currentUserId = user?.id ?? null;
     if (!currentUserId || !viewedUserId || followLoading) return;
+    if (currentUserId === viewedUserId) return;   // can't follow yourself
     setFollowLoading(true);
 
     if (isRequested) {
@@ -1007,8 +1008,8 @@ export default function UserProfileScreen() {
           </Pressable>
         </View>
 
-        {/* Follow + Message buttons */}
-        <View style={s.actionRow}>
+        {/* Follow + Message buttons — never on your own profile (no self-follows) */}
+        {!isOwnProfile && <View style={s.actionRow}>
           <Pressable
             style={({ pressed }) => [
               s.followBtn,
@@ -1033,7 +1034,7 @@ export default function UserProfileScreen() {
               <Text style={[s.messageBtnText, { color: profileAccent }]}>Message</Text>
             </Pressable>
           )}
-        </View>
+        </View>}
 
         {/* Private account wall — replaces stats + library */}
         {isPrivateWall && (
