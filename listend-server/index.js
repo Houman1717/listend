@@ -5733,6 +5733,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       replaces: ['1457601621'],
     },
   ],
+  '32616928': [ // Ground Zero — Apple has Consume Red on `us` but doesn't list it under them
+    {
+      id: '269238587', title: 'Consume Red',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/93/4e/07/mzi.odzgzmqh.jpg/500x500bb.jpg',
+      year: 1996, isSingle: false, isCompilation: false, trackCount: 1,
+      url: 'https://music.apple.com/us/album/consume-red/269238587', type: 'album',
+    },
+  ],
   '469647548': [ // Cro — not licensed for `us`
     {
       id: '1579322186', title: 'trip',
