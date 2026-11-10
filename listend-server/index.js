@@ -706,6 +706,12 @@ pinStorefront('it', [
   '1852632213', '1852632214', '1852632215', '1852632216', '1852632231', '1852632233',
   '1852632234', '1852632235', '1852632236',
 ]);
+// KAYTRANADA — Kaytra to Do (2013)
+pinStorefront('it', [
+  '1834599129',
+  '1834599130', '1834599131', '1834599132', '1834599133', '1834599134', '1834599135',
+  '1834599136', '1834599137',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1242,6 +1248,10 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'groundzero::consumered': {
     id: '269238587', title: 'Consume Red', artist: 'Ground Zero', year: 1996,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/93/4e/07/mzi.odzgzmqh.jpg/500x500bb.jpg',
+  },
+  'kaytranada::kaytratodo': {
+    id: '1834599129', title: 'Kaytra to Do', artist: 'KAYTRANADA', year: 2013,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/6f/52/40/6f524027-2f43-d1d9-e275-8bacdb784771/4018939239664.png/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -5739,6 +5749,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/93/4e/07/mzi.odzgzmqh.jpg/500x500bb.jpg',
       year: 1996, isSingle: false, isCompilation: false, trackCount: 1,
       url: 'https://music.apple.com/us/album/consume-red/269238587', type: 'album',
+    },
+  ],
+  '602382713': [ // KAYTRANADA — not licensed for `us`
+    {
+      id: '1834599129', title: 'Kaytra to Do',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/6f/52/40/6f524027-2f43-d1d9-e275-8bacdb784771/4018939239664.png/500x500bb.jpg',
+      year: 2013, isSingle: false, isCompilation: false, trackCount: 8,
+      url: 'https://music.apple.com/it/album/kaytra-to-do/1834599129', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
