@@ -712,6 +712,25 @@ pinStorefront('it', [
   '1834599130', '1834599131', '1834599132', '1834599133', '1834599134', '1834599135',
   '1834599136', '1834599137',
 ]);
+// Oslo Ess — Frie radikaler (2018)
+pinStorefront('no', [
+  '1678602629',
+  '1678602633', '1678602640', '1678602642', '1678602645', '1678602981', '1678602987',
+  '1678602990', '1678602992', '1678602994',
+]);
+// Oslo Ess — Det blir bra når det kommer folk (Live Akustisk) (2018)
+pinStorefront('no', [
+  '1678602741',
+  '1678602748', '1678602754', '1678602763', '1678603097', '1678603103', '1678603105',
+  '1678603109', '1678603119', '1678603123', '1678603366', '1678603385', '1678603387',
+  '1678603389', '1678603392',
+]);
+// Oslo Ess — Pønk, rock og harde kår (2021)
+pinStorefront('no', [
+  '1678594519',
+  '1678595056', '1678595208', '1678595213', '1678595387', '1678595392', '1678595396',
+  '1678595536', '1678595688', '1678595696', '1678595806',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1252,6 +1271,23 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'kaytranada::kaytratodo': {
     id: '1834599129', title: 'Kaytra to Do', artist: 'KAYTRANADA', year: 2013,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/6f/52/40/6f524027-2f43-d1d9-e275-8bacdb784771/4018939239664.png/500x500bb.jpg',
+  },
+  'osloess::frieradikaler': {
+    id: '1678602629', title: 'Frie radikaler', artist: 'Oslo Ess', year: 2018,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/72/d5/be/72d5be43-3d35-29d6-e36a-e904cfc485b7/196589660572.jpg/500x500bb.jpg',
+  },
+  'osloess::detblirbranrdetkommerfolkliveakustisk': {
+    id: '1678602741', title: 'Det blir bra når det kommer folk (Live Akustisk)', artist: 'Oslo Ess', year: 2018,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/d9/2a/e6/d92ae635-42bb-0caa-bdb6-96564768ec4c/196589660411.jpg/500x500bb.jpg',
+  },
+  'osloess::pnkrockoghardekr': {
+    id: '1678594519', title: 'Pønk, rock og harde kår', artist: 'Oslo Ess', year: 2021,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f2/36/c3/f236c3bf-9865-1434-871f-9b4258e310a5/196589660381.jpg/500x500bb.jpg',
+  },
+  // ø and å drop out of the key rather than folding; the plain spelling too.
+  'osloess::ponkrockoghardekar': {
+    id: '1678594519', title: 'Pønk, rock og harde kår', artist: 'Oslo Ess', year: 2021,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f2/36/c3/f236c3bf-9865-1434-871f-9b4258e310a5/196589660381.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -5796,6 +5832,26 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/6f/52/40/6f524027-2f43-d1d9-e275-8bacdb784771/4018939239664.png/500x500bb.jpg',
       year: 2013, isSingle: false, isCompilation: false, trackCount: 8,
       url: 'https://music.apple.com/it/album/kaytra-to-do/1834599129', type: 'album',
+    },
+  ],
+  '419123938': [ // Oslo Ess — not licensed for `us`
+    {
+      id: '1678602629', title: 'Frie radikaler',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/72/d5/be/72d5be43-3d35-29d6-e36a-e904cfc485b7/196589660572.jpg/500x500bb.jpg',
+      year: 2018, isSingle: false, isCompilation: false, trackCount: 9,
+      url: 'https://music.apple.com/no/album/frie-radikaler/1678602629', type: 'album',
+    },
+    {
+      id: '1678602741', title: 'Det blir bra når det kommer folk (Live Akustisk)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/d9/2a/e6/d92ae635-42bb-0caa-bdb6-96564768ec4c/196589660411.jpg/500x500bb.jpg',
+      year: 2018, isSingle: false, isCompilation: false, trackCount: 14,
+      url: 'https://music.apple.com/no/album/det-blir-bra-n%C3%A5r-det-kommer-folk-live-akustisk/1678602741', type: 'album',
+    },
+    {
+      id: '1678594519', title: 'Pønk, rock og harde kår',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f2/36/c3/f236c3bf-9865-1434-871f-9b4258e310a5/196589660381.jpg/500x500bb.jpg',
+      year: 2021, isSingle: false, isCompilation: false, trackCount: 10,
+      url: 'https://music.apple.com/no/album/p%C3%B8nk-rock-og-harde-k%C3%A5r/1678594519', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
