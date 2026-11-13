@@ -1282,11 +1282,13 @@ const CANONICAL_ALBUM_OVERRIDES = {
   },
   'osloess::pnkrockoghardekr': {
     id: '1678594519', title: 'Pønk, rock og harde kår', artist: 'Oslo Ess', year: 2021,
+    aliases: ['Ponk, rock og harde kar'],
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f2/36/c3/f236c3bf-9865-1434-871f-9b4258e310a5/196589660381.jpg/500x500bb.jpg',
   },
   // ø and å drop out of the key rather than folding; the plain spelling too.
   'osloess::ponkrockoghardekar': {
     id: '1678594519', title: 'Pønk, rock og harde kår', artist: 'Oslo Ess', year: 2021,
+    aliases: ['Ponk, rock og harde kar'],
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f2/36/c3/f236c3bf-9865-1434-871f-9b4258e310a5/196589660381.jpg/500x500bb.jpg',
   },
   'cro::trip': {
