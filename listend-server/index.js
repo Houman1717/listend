@@ -1442,6 +1442,45 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '6829221591', title: 'Sweet Action II', artist: 'Jack Harlow', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/44/3f/e8/443fe891-43ef-1f3d-a2e3-8a2bccae58e0/075679547897.jpg/500x500bb.jpg',
   },
+  // New Releases for 2026-11-13 (2hollis came out 11-11, Royal Blood 11-06).
+  // U2, Westside Gunn, Wiz Khalifa, Royal Blood and 2hollis weren't in Apple's
+  // search index yet. Search only returns the clean editions of GMFU and
+  // Cruel World…So It Ends. U2 is pinned to the 12-track standard album, not
+  // the Deluxe or Bonus Track Version. 2hollis has two explicit 16-track
+  // albums; this is the one dated 11-11 (ends "Heaven Speaker", "My One And
+  // Only", "Daisy"), not the 11-09 one ending in "Outro".
+  'u2::carnavaldeluz': {
+    id: '6812412381', title: 'Carnaval De Luz', artist: 'U2', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/22/aa/69/22aa69a4-2ab6-c37b-1491-8f0d6423c2a3/26UMGIM93067.rgb.jpg/500x500bb.jpg',
+  },
+  'offset::gmfu': {
+    id: '6832783991', title: 'GMFU', artist: 'Offset', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/c1/26/bc/c126bca7-bee0-8d53-c8eb-72d3df9c3731/26UM1IM16316.rgb.jpg/500x500bb.jpg',
+  },
+  'snohaalegra::legendarylove': {
+    id: '6819862096', title: 'Legendary Love', artist: 'Snoh Aalegra', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/11/17/75/11177586-6ecd-6183-ef18-11252eb229ca/193436490245_LLAlbumCover.jpg/500x500bb.jpg',
+  },
+  'westsidegunn::heelmatic': {
+    id: '6825097873', title: 'HEELMATIC', artist: 'Westside Gunn', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/e0/08/cf/e008cf0c-ef36-af3c-92cb-64263cf140d7/711641044048.jpg/500x500bb.jpg',
+  },
+  'hollyhumberstone::cruelworldsoitends': {
+    id: '6805958199', title: 'Cruel World…So It Ends', artist: 'Holly Humberstone', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7d/74/d3/7d74d31c-62fe-d0b7-0cb1-a1d1aafd727e/26UM1IM09221.rgb.jpg/500x500bb.jpg',
+  },
+  'wizkhalifa::cool': {
+    id: '6825151344', title: 'Cool', artist: 'Wiz Khalifa', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/95/d4/60/95d46028-a177-e197-863d-1138ff32df4f/ticket.ycnpqwog.jpg/500x500bb.jpg',
+  },
+  'royalblood::deadcompany': {
+    id: '6800026500', title: 'Dead Company', artist: 'Royal Blood', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/71/a4/de/71a4de9a-a29a-56cc-ffa9-102f6ca76a43/1200214816384.jpg/500x500bb.jpg',
+  },
+  '2hollis::pirouette': {
+    id: '6812861964', title: 'Pirouette', artist: '2hollis', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/dd/1f/b4/dd1fb404-93e5-4259-8230-27dec2c70675/26UM1IM13151.rgb.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],

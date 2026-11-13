@@ -3,6 +3,14 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'U2',                     title: 'Carnaval de Luz' },
+  { artist: 'Offset',                 title: 'GMFU' },
+  { artist: 'Snoh Aalegra',           title: 'Legendary Love' },
+  { artist: 'Westside Gunn',          title: 'HEELMATIC' },
+  { artist: 'Holly Humberstone',      title: 'Cruel World…So It Ends' },
+  { artist: 'Wiz Khalifa',            title: 'Cool' },
+  { artist: 'Royal Blood',            title: 'Dead Company' },
+  { artist: '2hollis',                title: 'Pirouette' },
   { artist: 'Lil Baby',               title: 'FRESH' },
   { artist: 'Rex Orange County',      title: 'Dream Fatigue' },
   { artist: 'Skepta',                 title: 'The Fork and Knife' },
