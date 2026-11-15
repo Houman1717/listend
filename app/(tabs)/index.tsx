@@ -319,14 +319,16 @@ function PopularReviewCard({
               : <Text style={pr.avatarLetter}>{prHandle(item).replace(/^@/, '')[0]?.toUpperCase() ?? '?'}</Text>
             }
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
-            <Text style={[pr.username, { color: '#D4A017' }]} numberOfLines={1}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
+            {/* flexShrink on the Text itself so a long handle truncates with "…"
+                instead of pushing the Pro tick over the comment/like counts */}
+            <Text style={[pr.username, { color: '#D4A017', flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">
               {prHandle(item)}
             </Text>
-            {item.isPro && <ProBadge size="xs" />}
+            {item.isPro && <View style={{ flexShrink: 0 }}><ProBadge size="xs" /></View>}
           </View>
         </Pressable>
-        <View style={pr.footerActions}>
+        <View style={[pr.footerActions, { flexShrink: 0 }]}>
           <Pressable
             onPress={(e) => { e.stopPropagation?.(); onCommentCountPress(); }}
             hitSlop={8}
@@ -2082,6 +2084,7 @@ const pr = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
     marginTop: 2,
   },
   userRow: {
@@ -2089,6 +2092,7 @@ const pr = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flex: 1,
+    minWidth: 0,
   },
   avatar: {
     width: 22,
