@@ -1291,6 +1291,11 @@ const CANONICAL_ALBUM_OVERRIDES = {
     aliases: ['Ponk, rock og harde kar'],
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f2/36/c3/f236c3bf-9865-1434-871f-9b4258e310a5/196589660381.jpg/500x500bb.jpg',
   },
+  // Commonly spelled "Jamz"; the manual entry only keys its own title.
+  'jpegmafia::communistslowjamz': {
+    id: 'lst-communist-slow-jams', title: 'Communist Slow Jams', artist: 'JPEGMAFIA', year: 2015,
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/communist-slow-jams.jpg`,
+  },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
