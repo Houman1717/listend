@@ -2008,6 +2008,46 @@ const MANUAL_ALBUMS = [
       { number: 8, id: 'lst-prince-black-album-t8', title: 'Rockhard in a Funky Place', durationMs: 271826 },
     ],
   },
+  {
+    id: 'lst-communist-slow-jams',
+    title: 'Communist Slow Jams',
+    artist: 'JPEGMAFIA',
+    artistId: '1130088441',
+    year: 2015,
+    isMixtape: true,
+    aliases: ['Communist Slow Jamz'],
+    // His 2015 self-produced tape, released on Bandcamp and SoundCloud,
+    // never on Apple. The full 22 tracks from his Bandcamp page (the
+    // SoundCloud set omits the 10-second R.I.P. Ismaaiyl Brinsley); timings
+    // agree with SoundCloud's to a tenth of a second. Cover self-hosted
+    // from Bandcamp.
+    artworkUrl: `${PUBLIC_BASE_URL}/static/albums/communist-slow-jams.jpg`,
+    trackCount: 22,
+    tracks: [
+      { number: 1, id: 'lst-communist-slow-jams-t1', title: 'Stoop', durationMs: 132660 },
+      { number: 2, id: 'lst-communist-slow-jams-t2', title: 'I Used To Be Into Dope', durationMs: 179700 },
+      { number: 3, id: 'lst-communist-slow-jams-t3', title: 'Polly', durationMs: 250340 },
+      { number: 4, id: 'lst-communist-slow-jams-t4', title: 'Wavves', durationMs: 196310 },
+      { number: 5, id: 'lst-communist-slow-jams-t5', title: 'Sweet Dreams Fuccboi', durationMs: 93280 },
+      { number: 6, id: 'lst-communist-slow-jams-t6', title: 'Reaper', durationMs: 75240 },
+      { number: 7, id: 'lst-communist-slow-jams-t7', title: '#Newblack PSA', durationMs: 70110 },
+      { number: 8, id: 'lst-communist-slow-jams-t8', title: 'Pimps', durationMs: 181120 },
+      { number: 9, id: 'lst-communist-slow-jams-t9', title: 'Once They Build a Starbucks It’s Ova', durationMs: 85900 },
+      { number: 10, id: 'lst-communist-slow-jams-t10', title: 'I’ll Never Forgive Hipsters For What They Did To Brooklyn', durationMs: 155600 },
+      { number: 11, id: 'lst-communist-slow-jams-t11', title: 'Swirl', durationMs: 82580 },
+      { number: 12, id: 'lst-communist-slow-jams-t12', title: 'Rape Culture', durationMs: 171120 },
+      { number: 13, id: 'lst-communist-slow-jams-t13', title: 'Japan', durationMs: 189150 },
+      { number: 14, id: 'lst-communist-slow-jams-t14', title: 'Bitcoin Assassination', durationMs: 107360 },
+      { number: 15, id: 'lst-communist-slow-jams-t15', title: 'R.I.P. Ismaaiyl Brinsley', durationMs: 10440 },
+      { number: 16, id: 'lst-communist-slow-jams-t16', title: 'Mothers Milk', durationMs: 182240 },
+      { number: 17, id: 'lst-communist-slow-jams-t17', title: 'Lemmy', durationMs: 183190 },
+      { number: 18, id: 'lst-communist-slow-jams-t18', title: '@darkskinmanson', durationMs: 182760 },
+      { number: 19, id: 'lst-communist-slow-jams-t19', title: 'Police & Niggaz Interlude', durationMs: 46170 },
+      { number: 20, id: 'lst-communist-slow-jams-t20', title: 'Police & Niggaz', durationMs: 198760 },
+      { number: 21, id: 'lst-communist-slow-jams-t21', title: 'Lee Daniels Freestyle', durationMs: 213600 },
+      { number: 22, id: 'lst-communist-slow-jams-t22', title: 'The Last of Us', durationMs: 135840 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────
