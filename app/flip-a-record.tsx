@@ -672,9 +672,14 @@ export default function FlipARecordScreen() {
     setAmazonMusicUrl(null);
     setAmazonFetched(false);
     const savedFlip = currentFlip;
+    // A slower lookup for a previous flip must not land on this one — that
+    // put one album's cover and "Listen on" link under another's title.
+    let stale = false;
     fetchAlbumData(savedFlip.title, savedFlip.artist).then(({ artworkUrl: url, spotifyId: sid }) => {
-      setArtworkUrl(url);
-      setSpotifyId(sid);
+      if (!stale) {
+        setArtworkUrl(url);
+        setSpotifyId(sid);
+      }
       // Backfill artwork onto the row flip() already inserted. Must be a plain
       // update (not upsert) — an upsert here can race flip()'s insert and win,
       // creating a row with no pool_id/status that silently falls out of every
@@ -689,6 +694,7 @@ export default function FlipARecordScreen() {
           .then(() => {});
       }
     });
+    return () => { stale = true; };
   }, [currentFlip?.id]);
 
   // ── Fetch data for the last 3 history items ───────────────────────────────
@@ -850,16 +856,24 @@ export default function FlipARecordScreen() {
     return () => loop.stop();
   }, [showFlipButton]);
 
+  // A second tap mid-spin used to restart the animation, which fires the first
+  // one's completion callback early — and the restarted one is then cut short
+  // when the vinyl unmounts, firing again. Each called flip(), so one tap
+  // landed two different records ~35ms apart.
+  const flipSpinningRef = useRef(false);
   function handleFlipPress() {
+    if (flipSpinningRef.current) return;
+    flipSpinningRef.current = true;
     vinylFlipSpin.setValue(0);
     Animated.timing(vinylFlipSpin, {
       toValue: 1,
       duration: 560,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
-    }).start(() => {
+    }).start(({ finished }) => {
+      flipSpinningRef.current = false;
       vinylFlipSpin.setValue(0);
-      flip();
+      if (finished) flip();
     });
   }
 

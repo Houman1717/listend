@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { useAlbums } from '@/context/AlbumsContext';
@@ -140,7 +140,8 @@ export function FlipProvider({ children }: { children: ReactNode }) {
         const raw = await AsyncStorage.getItem(flipKey(uid));
         if (raw) {
           const legacy = JSON.parse(raw);
-          const legacyHistory: FlippedRecord[] = legacy.history ?? [];
+          // Newest first — currentFlip reads history[0].
+          const legacyHistory: FlippedRecord[] = [...(legacy.history ?? [])].sort((a: FlippedRecord, b: FlippedRecord) => b.flippedAt - a.flippedAt);
           if (legacyHistory.length > 0) {
             await supabase.from('flip_records').insert(legacyHistory.map(r => ({
               user_id:      uid,
@@ -163,8 +164,18 @@ export function FlipProvider({ children }: { children: ReactNode }) {
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  // The most recent flip that is still unresolved
-  const currentFlip = history.find(r => r.status === 'pending') ?? null;
+  // Only the NEWEST flip can be the current one. A double tap on the vinyl used
+  // to fire flip() twice ~35ms apart (168 pairs in flip_records by 2026-11-15),
+  // leaving an older "ghost" pending row behind the one on screen. Picking
+  // "any pending" meant resolving the real flip surfaced the ghost — a record
+  // the user never chose — in its place.
+  const currentFlip = history[0]?.status === 'pending' ? history[0] : null;
+
+  // Latest history for flip()'s guard — the screen can call flip() from a
+  // closure made before the previous flip's setHistory re-rendered.
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  const lastFlipCallRef = useRef(0);
 
   // The cooldown is DERIVED from the last flip every render — never read back
   // from the stored `cooldown_until` column. Freezing it at flip time meant a
@@ -198,10 +209,12 @@ export function FlipProvider({ children }: { children: ReactNode }) {
     }
   }, [cooldownUntil, isLoaded]);
 
-  // IDs excluded from future flips: pending or logged via flip history
-  const excludedByHistory = useMemo(() => new Set(
-    history.filter(r => r.status === 'pending' || r.status === 'logged').map(r => r.id)
-  ), [history]);
+  // IDs excluded from future flips: the current flip, or logged via flip
+  // history. Older ghost pendings (see currentFlip) go back into the pool.
+  const excludedByHistory = useMemo(() => new Set([
+    ...history.filter(r => r.status === 'logged').map(r => r.id),
+    ...(currentFlip ? [currentFlip.id] : []),
+  ]), [history, currentFlip?.id]);
 
   const libraryLoggedIds = useMemo(() => poolLoggedIds(loggedAlbums), [loggedAlbums]);
 
@@ -212,6 +225,14 @@ export function FlipProvider({ children }: { children: ReactNode }) {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   function flip() {
+    // Never stack a second flip on an unresolved one (the screen hides the
+    // button then, but a tap already in flight can still land), and swallow
+    // repeat calls from the same tap before the first one has re-rendered.
+    const nowMs = Date.now();
+    if (historyRef.current[0]?.status === 'pending') return;
+    if (nowMs - lastFlipCallRef.current < 2000) return;
+    lastFlipCallRef.current = nowMs;
+
     const available = FLIP_POOL.filter(
       a => !excludedByHistory.has(a.id) && !libraryLoggedIds.has(a.id)
     );
@@ -219,7 +240,7 @@ export function FlipProvider({ children }: { children: ReactNode }) {
 
     const album = available[Math.floor(Math.random() * available.length)];
     capture('flip', { genre: album.genre, year: album.year });
-    const now = Date.now();
+    const now = nowMs;
     const record: FlippedRecord = {
       id:          album.id,
       title:       album.title,
