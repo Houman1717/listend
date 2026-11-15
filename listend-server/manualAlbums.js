@@ -1984,6 +1984,30 @@ const MANUAL_ALBUMS = [
       { number: 11, id: 'lst-keo-village-underground-t11', title: 'I Lied, Amber (Live From Village Underground)', durationMs: 219000 },
     ],
   },
+  {
+    id: 'lst-prince-black-album',
+    title: 'The Black Album',
+    artist: 'Prince',
+    artistId: '155814',
+    year: 1994,
+    // Withdrawn a week before its December 1987 release, then put out
+    // officially by Warner Bros. on 22 November 1994; long off streaming.
+    // The 1994 US CD from MusicBrainz (its plain black sleeve is the real
+    // cover).
+    artworkUrl: 'https://coverartarchive.org/release/58e58938-ac39-45d1-9829-dc85600e75fd/front-500',
+    musicbrainzReleaseId: '58e58938-ac39-45d1-9829-dc85600e75fd',
+    trackCount: 8,
+    tracks: [
+      { number: 1, id: 'lst-prince-black-album-t1', title: 'Le Grind', durationMs: 404333 },
+      { number: 2, id: 'lst-prince-black-album-t2', title: 'Cindy C.', durationMs: 375373 },
+      { number: 3, id: 'lst-prince-black-album-t3', title: 'Dead on It', durationMs: 277600 },
+      { number: 4, id: 'lst-prince-black-album-t4', title: 'When 2 R in Love', durationMs: 239626 },
+      { number: 5, id: 'lst-prince-black-album-t5', title: 'Bob George', durationMs: 336640 },
+      { number: 6, id: 'lst-prince-black-album-t6', title: 'Superfunkycalifragisexy', durationMs: 355733 },
+      { number: 7, id: 'lst-prince-black-album-t7', title: '2 Nigs United 4 West Compton', durationMs: 421466 },
+      { number: 8, id: 'lst-prince-black-album-t8', title: 'Rockhard in a Funky Place', durationMs: 271826 },
+    ],
+  },
 ];
 
 // ── Manually curated artists ──────────────────────────────────────────────────

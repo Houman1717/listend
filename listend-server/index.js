@@ -5033,7 +5033,25 @@ const TRACKLIST_CAPS = {
 // so Behind the Lines couldn't be rated; the same recording is on Apple as
 // track 20 of Platinum Collection, and song ratings key on title + artist, so
 // that id stands in. Skipped if Apple ever restores the track number.
+// Apple track number → the number it should show, applied before the
+// additions above slot in around it. For an album Apple only has in a
+// shorter edition whose order differs from the original.
+const TRACKLIST_RENUMBER = {
+  // Japan's Exorcising Ghosts: Apple has the 11-track CD; the original 1984
+  // double LP has 16, five of them interleaved (added below).
+  '724314377': { 2: 3, 3: 4, 4: 6, 5: 7, 6: 8, 7: 9, 8: 11, 9: 14, 10: 15, 11: 16 },
+};
+
 const TRACKLIST_ADDITIONS = {
+  // The LP's five tracks the CD dropped, each from the Japan album Apple has
+  // it on; the remix of Taking Islands in Africa is the one the LP used.
+  '724314377': [
+    { number: 2, id: '714888821', title: 'Swing', durationMs: 386667, featuredArtists: [] },
+    { number: 5, id: '1308550493', title: 'A Foreign Place', durationMs: 190480, featuredArtists: [] },
+    { number: 10, id: '714888866', title: 'Taking Islands In Africa (Steve Nye Remix)', durationMs: 297680, featuredArtists: [] },
+    { number: 12, id: '714661714', title: 'Sons of Pioneers', durationMs: 429293, featuredArtists: [] },
+    { number: 13, id: '724913376', title: 'Voices Raised In Welcome, Hands Held In Prayer', durationMs: 210133, featuredArtists: [] },
+  ],
   '393789536': [
     { number: 1, id: '309747975', title: 'Behind the Lines', durationMs: 343200, featuredArtists: [] },
   ],
@@ -5054,6 +5072,8 @@ const ONE_TRACK_ALBUM_IDS = new Set([
 const fixTracklist = (id, tracks) => {
   if (!Array.isArray(tracks)) return tracks;
   let out = TRACKLIST_CAPS[id] ? tracks.slice(0, TRACKLIST_CAPS[id]) : tracks;
+  const renumber = TRACKLIST_RENUMBER[id];
+  if (renumber) out = out.map(t => (renumber[t.number] ? { ...t, number: renumber[t.number] } : t));
   const durations = TRACK_DURATION_FIXES[id];
   if (durations) out = out.map(t => (!t.durationMs && durations[t.number] ? { ...t, durationMs: durations[t.number] } : t));
   const extra = (TRACKLIST_ADDITIONS[id] ?? []).filter(a => !out.some(t => t.number === a.number));
