@@ -2884,7 +2884,7 @@ const CLASSIC_IDS = [
   1440806790,  // Innervisions – Stevie Wonder
   1441164670,  // Revolver – The Beatles
   1443155637,  // The Joshua Tree – U2
-  212852926,   // Sign o' the Times – Prince
+  1544303593,  // Sign o' the Times – Prince (212852926 left Apple's us catalog)
   204669326,   // Ready to Die – The Notorious B.I.G.
   1065975633,  // The Wall – Pink Floyd
   529574560,   // Graceland – Paul Simon
@@ -2980,7 +2980,7 @@ const TOP_RATED_IDS = [
   800092985,   // The Queen Is Dead – The Smiths
   1049069472,  // Marquee Moon – Television
   268443092,   // Kind of Blue – Miles Davis
-  212852926,   // Sign o' the Times – Prince
+  1544303593,  // Sign o' the Times – Prince (212852926 left Apple's us catalog)
   357652252,   // Electric Ladyland – Jimi Hendrix
   1441164359,  // Rubber Soul – The Beatles
   580708175,   // Led Zeppelin IV – Led Zeppelin
@@ -7638,7 +7638,7 @@ app.get('/api/admin/merge-albums', requireAdmin, [
 
 app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
   try {
-    const keys = ['featured-playlists:meta:v11', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v10:${m.id}`)];
+    const keys = ['featured-playlists:meta:v12', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v11:${m.id}`)];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-featured-playlist-cache] done.');
@@ -8583,7 +8583,7 @@ async function resolveFeaturedPlaylistRaw(id) {
 // The hand-picked list, from cache when the startup pre-warm (or a request)
 // already resolved it.
 async function getHandPickedPlaylist(id) {
-  const CACHE_KEY = `featured-playlist:v10:${id}`;
+  const CACHE_KEY = `featured-playlist:v11:${id}`;
   const mem = cacheGet(CACHE_KEY);
   if (mem) return mem;
   const db = await getCached(CACHE_KEY, TTL_24H);
@@ -8596,7 +8596,7 @@ async function getHandPickedPlaylist(id) {
 
 // GET /api/featured-playlists — every featured playlist's metadata + 4 artwork URLs
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta:v11';
+  const CACHE_KEY = 'featured-playlists:meta:v12';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -8631,7 +8631,7 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:v10:${id}`;
+  const CACHE_KEY = `featured-playlist:v11:${id}`;
   try {
     if (STAT_PLAYLIST_IDS.has(id)) return res.json(await getStatPlaylist(id));
     const mem = cacheGet(CACHE_KEY);
@@ -9132,7 +9132,7 @@ app.listen(PORT, () => {
     try {
       const ids = FEATURED_PLAYLIST_META.map(m => m.id);
       for (const id of ids) {
-        const CACHE_KEY = `featured-playlist:v10:${id}`;
+        const CACHE_KEY = `featured-playlist:v11:${id}`;
         const mem = cacheGet(CACHE_KEY);
         if (mem && mem.every(a => a.artworkUrl)) continue;
         const db = await getCached(CACHE_KEY, TTL_24H);
