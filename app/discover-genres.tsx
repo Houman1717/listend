@@ -12,10 +12,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { CatalogAlbum } from '@/context/CatalogService';
-
-// ─── Backend URL ──────────────────────────────────────────────────────────────
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+import { loadChartLists } from '@/lib/chartLists';
 
 // ─── Display order for genre sections ────────────────────────────────────────
 
@@ -39,9 +36,7 @@ function loadGenres(): Promise<void> {
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    const res = await fetch(`${API_URL}/genres`);
-    if (!res.ok) throw new Error(`/genres → ${res.status}`);
-    const data: Record<string, CatalogAlbum[]> = await res.json();
+    const data = await loadChartLists('genre');
     for (const [label, albums] of Object.entries(data)) {
       cache[label] = albums;
     }

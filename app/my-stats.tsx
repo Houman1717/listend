@@ -25,6 +25,7 @@ import { FlipStatsCard } from '@/components/FlipStatsCard';
 import { libraryMatcher } from '@/lib/albumMatch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MAIN_GENRES } from '@/lib/genres';
+import { loadChartLists } from '@/lib/chartLists';
 import { StatsMilestones } from '@/components/StatsMilestones';
 import { SongStatsCard } from '@/components/SongStatsCard';
 import { ReleaseYearChart } from '@/components/ReleaseYearChart';
@@ -1043,22 +1044,10 @@ export default function MyStatsScreen() {
     });
   }, []);
 
-  // Fetch genre album lists (once)
+  // Genre + decade lists (once) — the same lists the Discover screens show.
   useEffect(() => {
-    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-    fetch(`${API_URL}/genres`)
-      .then(r => r.ok ? r.json() : {})
-      .then((data: Record<string, { title: string; artist: string }[]>) => setGenreAlbums(data))
-      .catch(() => {});
-  }, []);
-
-  // Fetch decade album lists (once)
-  useEffect(() => {
-    const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-    fetch(`${API_URL}/decades`)
-      .then(r => r.ok ? r.json() : {})
-      .then((data: Record<string, { title: string; artist: string }[]>) => setDecadeAlbums(data))
-      .catch(() => {});
+    loadChartLists('genre').then(setGenreAlbums).catch(() => {});
+    loadChartLists('decade').then(setDecadeAlbums).catch(() => {});
   }, []);
 
   // ── Re-Listend evolution (growers / faders) ───────────────────────────────

@@ -13,6 +13,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { CatalogAlbum } from '@/context/CatalogService';
+import { loadChartLists } from '@/lib/chartLists';
 import { useAlbums } from '@/context/AlbumsContext';
 
 // ─── Backend URL ──────────────────────────────────────────────────────────────
@@ -39,15 +40,11 @@ async function fetchForCategory(category: string, value?: string): Promise<Catal
       return res.json();
     }
     case 'genre': {
-      const res = await fetch(`${API_URL}/genres`);
-      if (!res.ok) throw new Error(`/genres → ${res.status}`);
-      const data: Record<string, CatalogAlbum[]> = await res.json();
+      const data = await loadChartLists('genre');
       return data[value ?? ''] ?? [];
     }
     case 'decade': {
-      const res = await fetch(`${API_URL}/decades`);
-      if (!res.ok) throw new Error(`/decades → ${res.status}`);
-      const data: Record<string, CatalogAlbum[]> = await res.json();
+      const data = await loadChartLists('decade');
       return data[value ?? ''] ?? [];
     }
     default:

@@ -2140,6 +2140,8 @@ app.get('/genres', async (req, res) => {
         // Bust cache so next request picks up newly seeded genres.
         cacheClear('genres');
         await deleteCache('genres');
+        cacheClear(GENRE_DECADE_CACHE_KEY);
+        await deleteCache(GENRE_DECADE_CACHE_KEY);
       })();
     }
 
@@ -3195,6 +3197,213 @@ async function computeCommunityTopRated() {
 
   return results;
 }
+
+// ── GET /api/discover/genre-charts + /api/discover/decade-charts ─────────────
+// Discover's Genre and By Decade lists, ranked from real Listend logs instead
+// of the hand-picked genreData.js / decadeData.js lists.
+//
+// One list per genre/decade: the CHART_LIST_SIZE most-listend albums (distinct
+// people, re-listens capped at +1 per person — same count as community-popular),
+// each carrying its stats so the app's Sort & Filter sheet can re-order by
+// popularity or rating without another request. An album belongs to one genre
+// (the primary genre most people's logs tag it with — the same rule as My
+// Listend's genre filter) and one decade (its most common release year).
+//
+// Small genres/decades don't have CHART_LIST_SIZE albums with real signal yet,
+// so the old hand-picked albums (genre_albums / decade_albums tables) fill the
+// rest, after the stat-ranked ones; they drop out as real data grows.
+//
+// Reads every album log, so it's rebuilt by cron every 3 h (these all-time
+// lists move slowly) and served from cache in between.
+
+// User decision 2026-11-16: 102 per list for now, to be raised later.
+const CHART_LIST_SIZE = 102;
+// Fewer listeners than this isn't a signal — one person's log shouldn't
+// outrank a hand-picked classic.
+const CHART_MIN_LISTENERS = 3;
+// Ratings needed before an album's average counts for the rating sort — same
+// threshold as lib/communityStats.ts; under it the album reads as unrated.
+const CHART_MIN_RATINGS = 5;
+// Same pull-to-the-mean as Discover Highest Rated (computeCommunityTopRated).
+const CHART_PRIOR_WEIGHT = 10;
+const DECADE_LABELS = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];
+// genre_tags says "Latin"; the genre lists (and the app's chips) key it "Reggaeton".
+const CHART_GENRE_KEY = { 'Latin': 'Reggaeton' };
+
+const GENRE_DECADE_CACHE_KEY = 'discover:genre-decade-charts';
+
+async function computeGenreDecadeCharts() {
+  const [albumRows, relistenRows, genreSeed, decadeSeed] = await Promise.all([
+    fetchAllRows((from, to) => supabase
+      .from('user_albums')
+      .select('spotify_id, user_id, title, artist, year, artwork_url, rating, listened_at, genre_tags')
+      .range(from, to)),
+    fetchAllRows((from, to) => supabase
+      .from('re_listens')
+      .select('spotify_id, user_id, title, artist, year, artwork_url')
+      .not('listened_at', 'is', null)
+      .range(from, to)),
+    fetchAllRows((from, to) => supabase
+      .from('genre_albums')
+      .select('genre_label, spotify_id, title, artist, artwork_url, year')
+      .order('updated_at')
+      .range(from, to)),
+    fetchAllRows((from, to) => supabase
+      .from('decade_albums')
+      .select('decade_label, spotify_id, title, artist, artwork_url, year')
+      .order('updated_at')
+      .range(from, to)),
+  ]);
+
+  const entries = new Map();
+  const getEntry = (r) => {
+    const key = communityAlbumKey(r.title, r.artist);
+    let e = entries.get(key);
+    if (!e) {
+      e = { reps: new Map(), baseUsers: new Set(), relistenUsers: new Set(),
+            yearCounts: new Map(), genreCounts: new Map(), ratings: new Map() };
+      entries.set(key, e);
+    }
+    return e;
+  };
+
+  for (const r of albumRows ?? []) {
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
+    const e = getEntry(r);
+    tallyRepresentative(e.reps, r);
+    tallyYear(e.yearCounts, r.year);
+    if (r.listened_at) e.baseUsers.add(r.user_id);
+    const g = Array.isArray(r.genre_tags) ? r.genre_tags[0] : null;
+    if (g) e.genreCounts.set(g, (e.genreCounts.get(g) ?? 0) + 1);
+    if (r.rating > 0) {
+      // One vote per person: plain + deluxe ratings average to one.
+      const u = e.ratings.get(r.user_id) ?? { sum: 0, n: 0 };
+      u.sum += r.rating; u.n++;
+      e.ratings.set(r.user_id, u);
+    }
+  }
+  for (const r of relistenRows ?? []) {
+    if (!r.spotify_id || !r.user_id || !r.title || !r.artist) continue;
+    const e = entries.get(communityAlbumKey(r.title, r.artist));
+    if (e) e.relistenUsers.add(r.user_id); // a re-listen alone has no genre tags
+  }
+
+  // Site-wide mean over albums with enough ratings, for the shrunk average.
+  let meanSum = 0, meanCount = 0;
+  for (const e of entries.values()) {
+    if (e.ratings.size < CHART_MIN_RATINGS) continue;
+    for (const u of e.ratings.values()) { meanSum += u.sum / u.n; meanCount++; }
+  }
+  const globalMean = meanCount > 0 ? meanSum / meanCount : 0;
+
+  const scored = [];
+  for (const [key, e] of entries) {
+    if (e.reps.size === 0) continue;
+    let total = 0;
+    for (const u of e.ratings.values()) total += u.sum / u.n;
+    const ratingCount = e.ratings.size;
+    let genre = null, best = 0;
+    for (const [g, n] of e.genreCounts) if (n > best) { genre = g; best = n; }
+    const year = mostCommonYear(e.yearCounts);
+    scored.push({
+      key,
+      genre,                                            // as tagged ("Latin")
+      listKey: genre ? (CHART_GENRE_KEY[genre] ?? genre) : null, // genre list key ("Reggaeton")
+      decade: year >= 1900 ? `${Math.floor(year / 10) * 10}s` : null,
+      listeners: e.baseUsers.size + e.relistenUsers.size,
+      ratingCount,
+      // 0 = not enough ratings to rank on (the app sorts those last).
+      avgRating: ratingCount >= CHART_MIN_RATINGS
+        ? Math.round(((total + globalMean * CHART_PRIOR_WEIGHT) / (ratingCount + CHART_PRIOR_WEIGHT)) * 100) / 100
+        : 0,
+      album: { ...pickRepresentative(e.reps), year },
+    });
+  }
+  scored.sort((a, b) => b.listeners - a.listeners || b.avgRating - a.avgRating);
+  const byKey = new Map(scored.map(s => [s.key, s]));
+
+  const toItem = (s) => ({
+    ...s.album,
+    genre: s.genre,
+    listeners: s.listeners,
+    ratingCount: s.ratingCount,
+    avgRating: s.avgRating,
+  });
+
+  function build(labels, labelOf, seedRows, seedLabelField) {
+    const lists = {};
+    for (const label of labels) {
+      const seen = new Set();
+      const list = [];
+      for (const s of scored) {
+        if (list.length >= CHART_LIST_SIZE) break;
+        if (s.listeners < CHART_MIN_LISTENERS) break; // sorted, so the rest are smaller
+        if (labelOf(s) !== label) continue;
+        seen.add(s.key);
+        list.push(toItem(s));
+      }
+      // Hand-picked top-up — the most-listend of them first, so the ones
+      // people actually play are the ones that make a nearly-full list.
+      const seeds = seedRows
+        .filter(r => r[seedLabelField] === label && r.spotify_id && r.title && r.artist)
+        .map(r => ({ r, key: communityAlbumKey(r.title, r.artist) }))
+        .map(x => ({ ...x, s: byKey.get(x.key) }))
+        .sort((a, b) => (b.s?.listeners ?? 0) - (a.s?.listeners ?? 0));
+      for (const { r, key, s } of seeds) {
+        if (list.length >= CHART_LIST_SIZE) break;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        list.push({
+          id: r.spotify_id,
+          title: r.title,
+          artist: r.artist,
+          artworkUrl: r.artwork_url ?? '',
+          year: r.year ?? 0,
+          genre: s?.genre ?? null,
+          listeners: s?.listeners ?? 0,
+          ratingCount: s?.ratingCount ?? 0,
+          avgRating: s?.avgRating ?? 0,
+          handPicked: true,
+        });
+      }
+      lists[label] = list;
+    }
+    return lists;
+  }
+
+  const genreLabels = [...new Set([...Object.keys(GENRE_ALBUMS), ...genreSeed.map(r => r.genre_label)])];
+  return {
+    genres:  build(genreLabels, s => s.listKey, genreSeed, 'genre_label'),
+    decades: build(DECADE_LABELS, s => s.decade, decadeSeed, 'decade_label'),
+  };
+}
+
+async function getGenreDecadeCharts() {
+  const mem = cacheGet(GENRE_DECADE_CACHE_KEY);
+  if (mem) return mem;
+  // Up to a day old — cron rebuilds it every 3 h.
+  const db = await getCached(GENRE_DECADE_CACHE_KEY, TTL_24H);
+  if (db) { cacheSet(GENRE_DECADE_CACHE_KEY, db, TTL_1H); return db; }
+  return warmChart(GENRE_DECADE_CACHE_KEY, computeGenreDecadeCharts);
+}
+
+app.get('/api/discover/genre-charts', async (req, res) => {
+  try {
+    res.json((await getGenreDecadeCharts()).genres);
+  } catch (err) {
+    console.error('[/api/discover/genre-charts]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/discover/decade-charts', async (req, res) => {
+  try {
+    res.json((await getGenreDecadeCharts()).decades);
+  } catch (err) {
+    console.error('[/api/discover/decade-charts]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // ── GET /api/discover/community-top-artists ───────────────────────────────────
 // Discover's Top Artists: how widely an artist is heard on Listend, blended
@@ -7046,7 +7255,8 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
                   'discover:classics', 'discover:top-rated', 'discover:recommended',
                   'discover:community-popular', 'discover:community-top-rated',
                   'discover:community-top-artists-v3', 'discover:community-top-songs',
-                  'discover:community-most-listend-songs', 'discover:community-highest-rated-songs'];
+                  'discover:community-most-listend-songs', 'discover:community-highest-rated-songs',
+                  'discover:genre-decade-charts'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-discover-cache] done.');
@@ -7345,6 +7555,8 @@ app.get('/api/admin/populate-genres', requireAdmin, async (req, res) => {
     // Bust the genres cache so the next client request fetches fresh data.
     cacheClear('genres');
     await deleteCache('genres');
+    cacheClear(GENRE_DECADE_CACHE_KEY);
+    await deleteCache(GENRE_DECADE_CACHE_KEY);
 
     console.log(`[populate-genres] complete — ${populated.length} inserted, ${errors.length} errors`);
     res.json({ ok: true, inserted: populated.length, errors: errors.length, errorDetails: errors });
@@ -7525,6 +7737,8 @@ app.get('/api/admin/fix-genre-album', requireAdmin, async (req, res) => {
 
     cacheClear('genres');
     await deleteCache('genres');
+    cacheClear(GENRE_DECADE_CACHE_KEY);
+    await deleteCache(GENRE_DECADE_CACHE_KEY);
 
     res.json({ ok: true, resolved });
   } catch (err) {
@@ -7577,6 +7791,8 @@ app.get('/api/admin/fix-decade-album', requireAdmin, async (req, res) => {
 
     cacheClear('decades');
     await deleteCache('decades');
+    cacheClear(GENRE_DECADE_CACHE_KEY);
+    await deleteCache(GENRE_DECADE_CACHE_KEY);
 
     res.json({ ok: true, resolved });
   } catch (err) {
@@ -7773,6 +7989,8 @@ app.get('/api/admin/populate-decades', requireAdmin, async (req, res) => {
 
     cacheClear('decades');
     await deleteCache('decades');
+    cacheClear(GENRE_DECADE_CACHE_KEY);
+    await deleteCache(GENRE_DECADE_CACHE_KEY);
 
     console.log(`[populate-decades] complete — ${populated.length} inserted, ${errors.length} errors`);
     res.json({ ok: true, inserted: populated.length, errors: errors.length, errorDetails: errors });
@@ -7813,6 +8031,10 @@ cron.schedule('*/30 * * * *', () => {
 });
 cron.schedule('15 * * * *', () => {
   refreshTopArtists().catch(err => console.error('[cron:top-artists]', err.message ?? err));
+});
+// Genre + decade lists (all-time, slow-moving) — every 3 h.
+cron.schedule('25 */3 * * *', () => {
+  warmChart(GENRE_DECADE_CACHE_KEY, computeGenreDecadeCharts).catch(err => console.error('[cron:genre-decade-charts]', err.message ?? err));
 });
 cron.schedule('5,35 * * * *', () => {
   warmChart('discover:community-popular', computeCommunityPopular).catch(err => console.error('[cron:community-popular]', err.message ?? err));
@@ -8666,6 +8888,8 @@ app.listen(PORT, () => {
       }
       cacheClear('genres');
       await deleteCache('genres');
+      cacheClear(GENRE_DECADE_CACHE_KEY);
+      await deleteCache(GENRE_DECADE_CACHE_KEY);
       console.log('[startup] genre seed complete');
     } catch (e) {
       console.error('[startup] genre seed failed:', e.message);
