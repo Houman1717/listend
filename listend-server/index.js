@@ -3244,14 +3244,64 @@ const NEW_CLASSIC_MIN_RATINGS = 10;
 // Live records, remasters and anniversary remixes carry a new year but aren't
 // new albums ("Pink Floyd at Pompeii – MCMLXXII (2025 Mix)").
 const NOT_NEW_RE = /\b(live|remaster(ed)?|anniversary|\d{4} mix)\b/i;
-// The featured playlists are album lists — Apple marks EPs and singles in the title.
-const EP_OR_SINGLE_RE = /\s-\s(EP|Single)$/i;
 const DIVISIVE_MIN_RATINGS = 15;
 // Below this the ratings broadly agree — not divisive, however few qualify.
 const DIVISIVE_MIN_SPREAD = 2;
 
 // v2: also carries the stat-ranked featured playlists. v3: deluxe/EP fixes.
-const GENRE_DECADE_CACHE_KEY = 'discover:genre-decade-charts:v3';
+const GENRE_DECADE_CACHE_KEY = 'discover:genre-decade-charts:v4';
+
+// ── Albums only, no greatest hits ──────────────────────────────────────────
+// The Discover lists and featured playlists are album lists: no singles, no
+// EPs, no greatest-hits or other compilations. Apple flags singles and
+// compilations on the catalog entry; titles catch what it doesn't flag
+// ("Legend – The Best of Bob Marley", "Bleech 9:3 - EP"). Live albums and
+// deluxe editions stay — they're albums.
+const SINGLE_OR_EP_RE = /\s-\s(single|ep)$|\bep\b|\be\.\s?p\./i;
+const GREATEST_HITS_RE = /\b(greatest\s+hits?|best\s+of|very\s+best|the\s+essential|anthology|retrospective|(ultimate|definitive|hits)\s+collection|number\s+ones|#1'?s)\b|^(gold|hits)\b/i;
+// Studio albums Apple flags isCompilation anyway (same list as the artist
+// discography's NOT_COMPILATION_TITLES).
+const NOT_COMPILATION_TITLES = new Set(['give out but don\'t give up', 'evil heat']);
+
+const ALBUM_KINDS_CACHE_KEY = 'album-kinds:v1';
+let albumKindsMem = null;
+
+// { id: { s: isSingle, c: isCompilation } } for Apple catalog ids, cached a
+// week (a release's type doesn't change). Ids Apple's `us` storefront doesn't
+// return are stored as {} so they aren't asked about every run — their title
+// still gets checked.
+async function getAlbumKinds(ids) {
+  if (!albumKindsMem) albumKindsMem = (await getCached(ALBUM_KINDS_CACHE_KEY, TTL_7D).catch(() => null)) ?? {};
+  const missing = [...new Set(ids)].filter(id => /^\d+$/.test(id) && !(id in albumKindsMem));
+  for (let i = 0; i < missing.length; i += 100) {
+    const chunk = missing.slice(i, i + 100);
+    try {
+      const data = await amFetch(`/catalog/us/albums?ids=${chunk.join(',')}`);
+      for (const id of chunk) albumKindsMem[id] = {};
+      for (const item of data.data ?? []) {
+        albumKindsMem[item.id] = { s: item.attributes?.isSingle === true, c: item.attributes?.isCompilation === true };
+      }
+    } catch (err) {
+      console.error('[album-kinds]', err.message ?? err); // try those again next run
+    }
+    if (i + 100 < missing.length) await new Promise(r => setTimeout(r, 250));
+  }
+  if (missing.length > 0) await setCache(ALBUM_KINDS_CACHE_KEY, albumKindsMem).catch(() => {});
+  return albumKindsMem;
+}
+
+// Why an album doesn't belong in a playlist, or null if it does.
+function playlistExclusion(album, kinds) {
+  const title = album.title ?? '';
+  const kind = kinds?.[album.id];
+  if (kind?.s || SINGLE_OR_EP_RE.test(title)) return 'single or EP';
+  if (GREATEST_HITS_RE.test(title)) return 'greatest hits';
+  if (kind?.c && !NOT_COMPILATION_TITLES.has(baseTitle(title))) return 'compilation';
+  return null;
+}
+
+// What the last builds left out, for /api/discover/playlist-exclusions.
+const handPickedExclusions = {};
 
 async function computeGenreDecadeCharts() {
   const [albumRows, relistenRows, genreSeed, decadeSeed] = await Promise.all([
@@ -3379,6 +3429,29 @@ async function computeGenreDecadeCharts() {
     });
   }
   scored.sort((a, b) => b.listeners - a.listeners || b.avgRating - a.avgRating);
+
+  // Ask Apple about everything that could make a list (with headroom for
+  // what gets left out), then skip singles, EPs and compilations below.
+  const candidateIds = new Set([...genreSeed, ...decadeSeed].map(r => r.spotify_id).filter(Boolean));
+  const perLabel = new Map();
+  const headroom = Math.ceil(CHART_LIST_SIZE * 1.5);
+  for (const s of scored) {
+    if (s.listeners < CHART_MIN_LISTENERS) break;
+    for (const label of [s.listKey && `g:${s.listKey}`, s.decade && `d:${s.decade}`].filter(Boolean)) {
+      const n = perLabel.get(label) ?? 0;
+      if (n < headroom) { perLabel.set(label, n + 1); candidateIds.add(s.album.id); }
+    }
+  }
+  const statPool = scored.filter(s => s.ratingCount >= CHART_MIN_RATINGS)
+    .sort((a, b) => b.avgRating - a.avgRating);
+  for (const s of statPool.slice(0, 3000)) candidateIds.add(s.album.id);
+  const kinds = await getAlbumKinds([...candidateIds]);
+  const excluded = [];
+  const isOut = (album, where) => {
+    const reason = playlistExclusion(album, kinds);
+    if (reason) excluded.push({ where, title: album.title, artist: album.artist, reason });
+    return !!reason;
+  };
   const byKey = new Map(scored.map(s => [s.key, s]));
 
   const toItem = (s) => ({
@@ -3398,6 +3471,7 @@ async function computeGenreDecadeCharts() {
         if (list.length >= CHART_LIST_SIZE) break;
         if (s.listeners < CHART_MIN_LISTENERS) break; // sorted, so the rest are smaller
         if (labelOf(s) !== label) continue;
+        if (isOut(s.album, label)) continue;
         seen.add(s.key);
         list.push(toItem(s));
       }
@@ -3412,6 +3486,7 @@ async function computeGenreDecadeCharts() {
         if (list.length >= CHART_LIST_SIZE) break;
         if (seen.has(key)) continue;
         seen.add(key);
+        if (isOut({ id: r.spotify_id, title: r.title, artist: r.artist }, label)) continue;
         list.push({
           id: r.spotify_id,
           title: r.title,
@@ -3433,22 +3508,28 @@ async function computeGenreDecadeCharts() {
   // genreData.js's genres only — genre_albums still holds rows for retired
   // labels (Soul, R&B, Rap, House) that no screen shows.
   const genreLabels = Object.keys(GENRE_ALBUMS);
-  const top = (pred, by) => scored.filter(s => !EP_OR_SINGLE_RE.test(s.album.title) && pred(s))
-    .sort((a, b) => by(b) - by(a))
-    .slice(0, STAT_PLAYLIST_SIZE).map(toItem);
+  const top = (id, pred, by) => {
+    const list = [];
+    for (const s of scored.filter(pred).sort((a, b) => by(b) - by(a))) {
+      if (list.length >= STAT_PLAYLIST_SIZE) break;
+      if (!isOut(s.album, id)) list.push(toItem(s));
+    }
+    return list;
+  };
   const newSince = new Date().getFullYear() - NEW_CLASSIC_YEARS;
   return {
     genres:  build(genreLabels, s => s.listKey, genreSeed, 'genre_label'),
     decades: build(DECADE_LABELS, s => s.decade, decadeSeed, 'decade_label'),
+    excluded,
     featured: {
-      'hidden-gems': top(
+      'hidden-gems': top('hidden-gems',
         s => s.ratingCount >= CHART_MIN_RATINGS && s.listeners <= HIDDEN_GEM_MAX_LISTENERS,
         s => s.avgRating),
-      'new-classics': top(
+      'new-classics': top('new-classics',
         s => s.album.year >= newSince && s.ratingCount >= NEW_CLASSIC_MIN_RATINGS
           && !NOT_NEW_RE.test(s.album.title),
         s => s.avgRating),
-      'most-divisive': top(
+      'most-divisive': top('most-divisive',
         s => s.ratingCount >= DIVISIVE_MIN_RATINGS && s.spread >= DIVISIVE_MIN_SPREAD,
         s => s.spread),
     },
@@ -3485,6 +3566,18 @@ app.get('/api/discover/genre-charts', async (req, res) => {
     res.json((await getGenreDecadeCharts()).genres);
   } catch (err) {
     console.error('[/api/discover/genre-charts]', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// What the album-only rule left out of the lists and playlists, and why —
+// for checking it isn't dropping real albums.
+app.get('/api/discover/playlist-exclusions', async (req, res) => {
+  try {
+    const charts = await getGenreDecadeCharts();
+    res.json({ charts: charts.excluded ?? [], handPicked: handPickedExclusions });
+  } catch (err) {
+    console.error('[/api/discover/playlist-exclusions]', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -7349,7 +7442,7 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
                   'discover:community-popular', 'discover:community-top-rated',
                   'discover:community-top-artists-v3', 'discover:community-top-songs',
                   'discover:community-most-listend-songs', 'discover:community-highest-rated-songs',
-                  'discover:genre-decade-charts:v3'];
+                  'discover:genre-decade-charts:v4'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-discover-cache] done.');
@@ -7535,7 +7628,7 @@ app.get('/api/admin/merge-albums', requireAdmin, [
 
 app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
   try {
-    const keys = ['featured-playlists:meta:v8', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v7:${m.id}`)];
+    const keys = ['featured-playlists:meta:v9', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v8:${m.id}`)];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-featured-playlist-cache] done.');
@@ -8416,24 +8509,24 @@ async function fetchConcurrent(items, fn, limit = 5) {
   return results;
 }
 
-// Fetch the first 4 artwork URLs for a playlist (used for the mosaic thumbnail).
-async function getPlaylistArtwork(id) {
-  if (id === 'all-time-classics') {
-    const first4 = CLASSIC_IDS.split(',').slice(0, 4).join(',');
-    const data = await amFetch(`/catalog/us/albums?ids=${first4}`);
-    return (data.data ?? []).map(item => amArtwork(item.attributes?.artwork));
-  }
-  const albums = PLAYLIST_ALBUMS[id] ?? [];
-  return Promise.all(
-    albums.slice(0, 4).map(({ artist, title }) =>
-      searchAMAlbum(artist, title).then(r => r?.artworkUrl ?? '').catch(() => ''),
-    ),
-  );
-}
 
 // A hand-picked featured playlist resolved against Apple Music (or the
 // classics by catalog id). Uncached — callers cache under featured-playlist:v6.
 async function resolveFeaturedPlaylist(id) {
+  const albums = await resolveFeaturedPlaylistRaw(id);
+  const kinds = await getAlbumKinds(albums.map(a => a.id));
+  const kept = [], out = [];
+  for (const a of albums) {
+    const reason = playlistExclusion(a, kinds);
+    if (reason) out.push({ where: id, title: a.title, artist: a.artist, reason });
+    else kept.push(a);
+  }
+  handPickedExclusions[id] = out;
+  if (out.length) console.log(`[featured-playlist:${id}] left out:`, out.map(o => `${o.artist} – ${o.title} (${o.reason})`).join('; '));
+  return kept;
+}
+
+async function resolveFeaturedPlaylistRaw(id) {
   if (id === 'all-time-classics') {
     const resp = await fetch(`https://api.music.apple.com/v1/catalog/us/albums?ids=${CLASSIC_IDS}`, {
       headers: { Authorization: `Bearer ${generateAppleToken()}` },
@@ -8469,7 +8562,7 @@ async function resolveFeaturedPlaylist(id) {
 // The hand-picked list, from cache when the startup pre-warm (or a request)
 // already resolved it.
 async function getHandPickedPlaylist(id) {
-  const CACHE_KEY = `featured-playlist:v7:${id}`;
+  const CACHE_KEY = `featured-playlist:v8:${id}`;
   const mem = cacheGet(CACHE_KEY);
   if (mem) return mem;
   const db = await getCached(CACHE_KEY, TTL_24H);
@@ -8482,7 +8575,7 @@ async function getHandPickedPlaylist(id) {
 
 // GET /api/featured-playlists — every featured playlist's metadata + 4 artwork URLs
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta:v8';
+  const CACHE_KEY = 'featured-playlists:meta:v9';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -8495,11 +8588,10 @@ app.get('/api/featured-playlists', async (req, res) => {
           const albums = await getStatPlaylist(meta.id);
           return { ...meta, albumCount: albums.length, artworkUrls: albums.slice(0, 4).map(a => a.artworkUrl ?? '') };
         }
-        const artworkUrls = await getPlaylistArtwork(meta.id);
-        const albumCount = meta.id === 'all-time-classics'
-          ? 48
-          : (PLAYLIST_ALBUMS[meta.id]?.length ?? 0);
-        return { ...meta, albumCount, artworkUrls };
+        // Resolved (and cached) by the startup pre-warm — and counted after
+        // singles and greatest hits are left out, so the card says what opens.
+        const albums = await getHandPickedPlaylist(meta.id);
+        return { ...meta, albumCount: albums.length, artworkUrls: albums.slice(0, 4).map(a => a.artworkUrl ?? '') };
       }),
     );
 
@@ -8518,7 +8610,7 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:v7:${id}`;
+  const CACHE_KEY = `featured-playlist:v8:${id}`;
   try {
     if (STAT_PLAYLIST_IDS.has(id)) return res.json(await getStatPlaylist(id));
     const mem = cacheGet(CACHE_KEY);
@@ -9019,43 +9111,15 @@ app.listen(PORT, () => {
     try {
       const ids = FEATURED_PLAYLIST_META.map(m => m.id);
       for (const id of ids) {
-        const CACHE_KEY = `featured-playlist:v7:${id}`;
+        const CACHE_KEY = `featured-playlist:v8:${id}`;
         const mem = cacheGet(CACHE_KEY);
         if (mem && mem.every(a => a.artworkUrl)) continue;
         const db = await getCached(CACHE_KEY, TTL_24H);
         if (db && db.every(a => a.artworkUrl)) { cacheSet(CACHE_KEY, db, TTL_6H); continue; }
 
         console.log(`[startup] pre-warming playlist: ${id}`);
-        let albums;
-        if (id === 'all-time-classics') {
-          const resp = await fetch(`https://api.music.apple.com/v1/catalog/us/albums?ids=${CLASSIC_IDS}`, {
-            headers: { Authorization: `Bearer ${generateAppleToken()}` },
-          });
-          if (!resp.ok) { console.warn(`[startup] all-time-classics AM fetch → ${resp.status}`); continue; }
-          const data = await resp.json();
-          albums = dedupeAlbums((data.data ?? []).map(item => ({
-            id: item.id,
-            title: item.attributes?.name ?? '',
-            artist: item.attributes?.artistName ?? '',
-            year: parseInt(item.attributes?.releaseDate?.slice(0, 4) ?? '0', 10),
-            artworkUrl: amArtwork(item.attributes?.artwork),
-          })));
-        } else {
-          const list = PLAYLIST_ALBUMS[id];
-          if (!list) continue;
-          albums = dedupeAlbums(await fetchConcurrent(list, ({ artist, title }) => searchAMAlbum(artist, title)));
-          const missing = albums.filter(a => !a.artworkUrl);
-          if (missing.length > 0) {
-            console.log(`[startup:${id}] retrying ${missing.length} albums sequentially`);
-            const retried = new Map();
-            for (const a of missing) {
-              const fresh = await searchAMAlbum(a.artist, a.title);
-              if (fresh.artworkUrl) retried.set(a.id, fresh);
-              await new Promise(r => setTimeout(r, 300));
-            }
-            if (retried.size > 0) albums = albums.map(a => retried.has(a.id) ? retried.get(a.id) : a);
-          }
-        }
+        if (id !== 'all-time-classics' && !PLAYLIST_ALBUMS[id]) continue; // stat-ranked
+        const albums = await resolveFeaturedPlaylist(id);
         cacheSet(CACHE_KEY, albums, TTL_6H);
         await setCache(CACHE_KEY, albums);
         console.log(`[startup] cached playlist: ${id} (${albums.length} albums, ${albums.filter(a => a.artworkUrl).length} with artwork)`);
