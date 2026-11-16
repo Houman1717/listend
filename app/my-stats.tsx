@@ -2500,16 +2500,20 @@ const GENRE_LABELS = [
 
 const DECADE_LABELS = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];
 
+// Same order as Discover (FEATURED_PLAYLIST_META in listend-server/featuredPlaylistsData.js).
 const FEATURED_PLAYLISTS = [
   { id: 'flip-a-record',    name: 'Flip a Record'    },
   { id: 'all-time-classics',name: 'All-Time Classics' },
+  { id: 'essentials',       name: 'Next Steps'        }, // id kept from its old name
   { id: 'late-night',       name: 'Late Night'        },
   { id: 'summer',           name: 'Summer'            },
+  { id: 'winter',           name: 'Winter'            },
   { id: 'heartbreak',       name: 'Heartbreak'        },
   { id: 'road-trip',        name: 'Road Trip'         },
   { id: 'chill',            name: 'Chill'             },
   { id: 'hidden-gems',      name: 'Hidden Gems'       },
-  { id: 'essentials',       name: 'Essentials'        },
+  { id: 'new-classics',     name: 'New Classics'      },
+  { id: 'most-divisive',    name: 'Most Divisive'     },
 ];
 
 function ProgressRing({

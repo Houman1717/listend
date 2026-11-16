@@ -1,16 +1,24 @@
-// Metadata for all 8 featured playlists (including all-time-classics which uses CLASSIC_IDS in index.js)
+// Metadata for the featured playlists, in Discover's order. all-time-classics
+// uses CLASSIC_IDS in index.js; hidden-gems, new-classics and most-divisive are
+// ranked from real logs (STAT_PLAYLIST_IDS in index.js) — hidden-gems' list
+// below only tops it up when there isn't enough data.
 const FEATURED_PLAYLIST_META = [
   { id: 'all-time-classics', name: 'All-Time Classics', emoji: '🎵', description: 'The albums that changed everything. Start here.' },
+  // id stays 'essentials' so likes and progress carry over from the old name.
+  { id: 'essentials',        name: 'Next Steps',        emoji: '📚', description: 'Done the classics? These are the records to hear next.' },
   { id: 'late-night',        name: 'Late Night',        emoji: '🌙', description: 'For when the world goes quiet and the music hits different.' },
   { id: 'summer',            name: 'Summer',            emoji: '☀️', description: 'Windows down, volume up. The soundtrack to your best days.' },
+  { id: 'winter',            name: 'Winter',            emoji: '❄️', description: 'Cold nights, warm records. Albums for the darker months.' },
   { id: 'heartbreak',        name: 'Heartbreak',        emoji: '💔', description: 'Albums that understand what you\'re going through.' },
   { id: 'road-trip',         name: 'Road Trip',         emoji: '🚗', description: 'Miles ahead, nothing behind. Let\'s drive.' },
   { id: 'chill',             name: 'Chill',             emoji: '😎', description: 'Low stakes, high comfort. Perfect background for anything.' },
-  { id: 'hidden-gems',       name: 'Hidden Gems',       emoji: '🔥', description: 'The albums that flew under the radar. Your new favourites.' },
-  { id: 'essentials',        name: 'Essentials',        emoji: '📚', description: 'Every music lover should hear these at least once.' },
+  { id: 'hidden-gems',       name: 'Hidden Gems',       emoji: '🔥', description: 'Rated highly by the few who found them. Your new favourites.' },
+  { id: 'new-classics',      name: 'New Classics',      emoji: '✨', description: 'The highest-rated albums of the last few years.' },
+  { id: 'most-divisive',     name: 'Most Divisive',     emoji: '⚖️', description: 'Love them or hate them: the albums Listend can\'t agree on.' },
 ];
 
-// Album lists for the 7 non-classics playlists (all-time-classics uses CLASSIC_IDS in index.js)
+// Hand-picked album lists (all-time-classics uses CLASSIC_IDS in index.js;
+// new-classics and most-divisive have none — they're ranked from real logs).
 const PLAYLIST_ALBUMS = {
   'late-night': [
     { artist: 'Frank Ocean',          title: 'Blonde' },
@@ -316,6 +324,59 @@ const PLAYLIST_ALBUMS = {
     { artist: 'Mdou Moctar',                       title: 'Afrique Victime' },
     { artist: 'Viagra Boys',                       title: 'Cave World' },
     { artist: 'Chat Pile',                         title: "God's Country" },
+  ],
+
+  // Added 2026-11-16 — cold-weather records. Shares only For Emma with the
+  // other lists; keep it that way so the playlists don't blur together.
+  'winter': [
+    { artist: 'Bon Iver',                  title: 'For Emma, Forever Ago' },
+    { artist: 'Björk',                     title: 'Vespertine' },
+    { artist: 'Kate Bush',                 title: '50 Words for Snow' },
+    { artist: 'Fleet Foxes',               title: 'Fleet Foxes' },
+    { artist: 'Sigur Rós',                 title: 'Ágætis byrjun' },
+    { artist: 'Joni Mitchell',             title: 'Hejira' },
+    { artist: 'Taylor Swift',              title: 'evermore' },
+    { artist: 'Phoebe Bridgers',           title: 'Punisher' },
+    { artist: 'Yo La Tengo',                title: 'And Then Nothing Turned Itself Inside-Out' },
+    { artist: 'The National',              title: 'High Violet' },
+    { artist: 'Sufjan Stevens',            title: 'Michigan' },
+    { artist: 'Simon & Garfunkel',         title: 'Bookends' },
+    { artist: 'Kanye West',                title: '808s & Heartbreak' },
+    { artist: 'Keith Jarrett',             title: 'The Köln Concert' },
+    { artist: 'Nick Drake',                title: 'Bryter Layter' },
+    { artist: 'Grizzly Bear',              title: 'Veckatimest' },
+    { artist: 'Interpol',                  title: 'Turn On the Bright Lights' },
+    { artist: 'Leonard Cohen',             title: 'Songs of Leonard Cohen' },
+    { artist: 'Nick Cave & The Bad Seeds', title: "The Boatman's Call" },
+    { artist: 'Max Richter',               title: 'The Blue Notebooks' },
+    { artist: 'Death Cab for Cutie',       title: 'Transatlanticism' },
+    { artist: 'Iron & Wine',               title: 'Our Endless Numbered Days' },
+    { artist: 'Beach House',               title: 'Bloom' },
+    { artist: 'Mazzy Star',                title: 'So Tonight That I Might See' },
+    { artist: 'The Tallest Man on Earth',  title: 'The Wild Hunt' },
+    { artist: 'Boards of Canada',          title: 'Music Has the Right to Children' },
+    { artist: 'Brian Eno',                 title: 'Ambient 1: Music for Airports' },
+    { artist: 'Burial',                    title: 'Burial' },
+    { artist: 'The Cure',                  title: 'Seventeen Seconds' },
+    { artist: 'Arcade Fire',               title: 'Neon Bible' },
+    { artist: 'Bright Eyes',               title: "I'm Wide Awake, It's Morning" },
+    { artist: 'Frightened Rabbit',         title: 'The Midnight Organ Fight' },
+    { artist: 'Low',                       title: 'Things We Lost in the Fire' },
+    { artist: 'Agnes Obel',                title: 'Philharmonics' },
+    { artist: 'Jónsi & Alex',              title: 'Riceboy Sleeps' },
+    { artist: 'Nils Frahm',                title: 'Felt' },
+    { artist: 'Damien Rice',               title: 'O' },
+    { artist: 'Ben Howard',                title: 'I Forget Where We Were' },
+    { artist: 'Gregory Alan Isakov',       title: 'Evening Machines' },
+    { artist: 'Ray LaMontagne',            title: 'Trouble' },
+    { artist: 'José González',             title: 'Veneer' },
+    { artist: 'Laura Marling',             title: 'Once I Was an Eagle' },
+    { artist: 'Feist',                     title: 'Metals' },
+    { artist: 'Explosions in the Sky',     title: 'The Earth Is Not a Cold Dead Place' },
+    { artist: 'The Microphones',           title: 'The Glow, Pt. 2' },
+    { artist: 'Drake',                     title: 'Take Care' },
+    { artist: 'Ólafur Arnalds',            title: '...And They Have Escaped the Weight of Darkness' },
+    { artist: 'John Coltrane',             title: 'Ballads' },
   ],
 
   'essentials': [
