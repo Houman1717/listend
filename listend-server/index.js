@@ -3244,6 +3244,8 @@ const NEW_CLASSIC_MIN_RATINGS = 10;
 // Live records, remasters and anniversary remixes carry a new year but aren't
 // new albums ("Pink Floyd at Pompeii – MCMLXXII (2025 Mix)").
 const NOT_NEW_RE = /\b(live|remaster(ed)?|anniversary|\d{4} mix)\b/i;
+// The featured playlists are album lists — Apple marks EPs and singles in the title.
+const EP_OR_SINGLE_RE = /\s-\s(EP|Single)$/i;
 const DIVISIVE_MIN_RATINGS = 15;
 // Below this the ratings broadly agree — not divisive, however few qualify.
 const DIVISIVE_MIN_SPREAD = 2;
@@ -3314,9 +3316,12 @@ async function computeGenreDecadeCharts() {
   for (const [key, e] of [...entries]) {
     const sep = key.lastIndexOf('::');
     const title = key.slice(0, sep), artist = key.slice(sep);
+    const noDeluxe = t => t.replace(/\s+deluxe(\s+(edition|version))?$/, '');
+    const beforeColon = title.includes(': ') ? title.slice(0, title.indexOf(': ')) : title;
     const parents = [
-      title.replace(/\s+deluxe(\s+(edition|version))?$/, ''),
-      title.includes(': ') ? title.slice(0, title.indexOf(': ')) : title,
+      noDeluxe(title),
+      beforeColon,
+      noDeluxe(beforeColon), // "eternal sunshine deluxe: brighter days ahead"
     ];
     const parentKey = parents.map(t => t + artist).find(k => k !== key && entries.has(k));
     if (!parentKey) continue;
@@ -3428,7 +3433,8 @@ async function computeGenreDecadeCharts() {
   // genreData.js's genres only — genre_albums still holds rows for retired
   // labels (Soul, R&B, Rap, House) that no screen shows.
   const genreLabels = Object.keys(GENRE_ALBUMS);
-  const top = (pred, by) => scored.filter(pred).sort((a, b) => by(b) - by(a))
+  const top = (pred, by) => scored.filter(s => !EP_OR_SINGLE_RE.test(s.album.title) && pred(s))
+    .sort((a, b) => by(b) - by(a))
     .slice(0, STAT_PLAYLIST_SIZE).map(toItem);
   const newSince = new Date().getFullYear() - NEW_CLASSIC_YEARS;
   return {
@@ -7529,7 +7535,7 @@ app.get('/api/admin/merge-albums', requireAdmin, [
 
 app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
   try {
-    const keys = ['featured-playlists:meta:v7', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v6:${m.id}`)];
+    const keys = ['featured-playlists:meta:v8', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v7:${m.id}`)];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-featured-playlist-cache] done.');
@@ -8463,7 +8469,7 @@ async function resolveFeaturedPlaylist(id) {
 // The hand-picked list, from cache when the startup pre-warm (or a request)
 // already resolved it.
 async function getHandPickedPlaylist(id) {
-  const CACHE_KEY = `featured-playlist:v6:${id}`;
+  const CACHE_KEY = `featured-playlist:v7:${id}`;
   const mem = cacheGet(CACHE_KEY);
   if (mem) return mem;
   const db = await getCached(CACHE_KEY, TTL_24H);
@@ -8476,7 +8482,7 @@ async function getHandPickedPlaylist(id) {
 
 // GET /api/featured-playlists — every featured playlist's metadata + 4 artwork URLs
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta:v7';
+  const CACHE_KEY = 'featured-playlists:meta:v8';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -8512,7 +8518,7 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:v6:${id}`;
+  const CACHE_KEY = `featured-playlist:v7:${id}`;
   try {
     if (STAT_PLAYLIST_IDS.has(id)) return res.json(await getStatPlaylist(id));
     const mem = cacheGet(CACHE_KEY);
@@ -9013,7 +9019,7 @@ app.listen(PORT, () => {
     try {
       const ids = FEATURED_PLAYLIST_META.map(m => m.id);
       for (const id of ids) {
-        const CACHE_KEY = `featured-playlist:v6:${id}`;
+        const CACHE_KEY = `featured-playlist:v7:${id}`;
         const mem = cacheGet(CACHE_KEY);
         if (mem && mem.every(a => a.artworkUrl)) continue;
         const db = await getCached(CACHE_KEY, TTL_24H);

@@ -339,7 +339,8 @@ const PLAYLIST_ALBUMS = {
     { artist: 'Phoebe Bridgers',           title: 'Punisher' },
     { artist: 'Yo La Tengo',                title: 'And Then Nothing Turned Itself Inside-Out' },
     { artist: 'The National',              title: 'High Violet' },
-    { artist: 'Sufjan Stevens',            title: 'Michigan' },
+    // Not Sufjan's Michigan: Apple's search lands on Illinois instead.
+    { artist: 'Big Thief',                 title: 'Dragon New Mountain I Believe in You' },
     { artist: 'Simon & Garfunkel',         title: 'Bookends' },
     { artist: 'Kanye West',                title: '808s & Heartbreak' },
     { artist: 'Keith Jarrett',             title: 'The Köln Concert' },
