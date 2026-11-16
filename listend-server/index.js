@@ -3371,7 +3371,9 @@ async function computeGenreDecadeCharts() {
     return lists;
   }
 
-  const genreLabels = [...new Set([...Object.keys(GENRE_ALBUMS), ...genreSeed.map(r => r.genre_label)])];
+  // genreData.js's genres only — genre_albums still holds rows for retired
+  // labels (Soul, R&B, Rap, House) that no screen shows.
+  const genreLabels = Object.keys(GENRE_ALBUMS);
   return {
     genres:  build(genreLabels, s => s.listKey, genreSeed, 'genre_label'),
     decades: build(DECADE_LABELS, s => s.decade, decadeSeed, 'decade_label'),
