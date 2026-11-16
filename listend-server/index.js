@@ -3250,8 +3250,8 @@ const DIVISIVE_MIN_RATINGS = 15;
 // Below this the ratings broadly agree — not divisive, however few qualify.
 const DIVISIVE_MIN_SPREAD = 2;
 
-// v2: also carries the stat-ranked featured playlists.
-const GENRE_DECADE_CACHE_KEY = 'discover:genre-decade-charts:v2';
+// v2: also carries the stat-ranked featured playlists. v3: deluxe/EP fixes.
+const GENRE_DECADE_CACHE_KEY = 'discover:genre-decade-charts:v3';
 
 async function computeGenreDecadeCharts() {
   const [albumRows, relistenRows, genreSeed, decadeSeed] = await Promise.all([
@@ -7349,7 +7349,7 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
                   'discover:community-popular', 'discover:community-top-rated',
                   'discover:community-top-artists-v3', 'discover:community-top-songs',
                   'discover:community-most-listend-songs', 'discover:community-highest-rated-songs',
-                  'discover:genre-decade-charts:v2'];
+                  'discover:genre-decade-charts:v3'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-discover-cache] done.');
