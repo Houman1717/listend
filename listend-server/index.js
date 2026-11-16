@@ -956,6 +956,62 @@ function editionScore(title) {
 // actual album, so the search-based resolver below would silently land on
 // the wrong Apple Music id. Checked before the search call runs.
 const CANONICAL_ALBUM_OVERRIDES = {
+  // Featured playlists (2026-11-16): Apple's search sent these hand-picked
+  // albums to a single, a greatest-hits or another record (Who's Next → a
+  // single by another band, Catch a Fire → Legend, Disintegration → Greatest
+  // Hits). Pinned to the edition people on Listend log most.
+  'thewho::whosnext': {
+    id: '1706357665', title: 'Who\'s Next', artist: 'The Who', year: 1971,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/a5/e7/70/a5e7703c-4e30-da7a-a319-2d3caef42c0e/23UM1IM04872.rgb.jpg/500x500bb.jpg',
+  },
+  'marvingaye::letsgetiton': {
+    id: '1442835298', title: 'Let\'s Get It On', artist: 'Marvin Gaye', year: 1973,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/dc/fa/3a/dcfa3a34-a2eb-8144-7fda-b978b7afbe19/06UMGIM11335.rgb.jpg/500x500bb.jpg',
+  },
+  'bobmarleythewailers::catchafire': {
+    id: '1423269033', title: 'Catch a Fire', artist: 'Bob Marley & The Wailers', year: 1973,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/25/b3/cd/25b3cd5f-2e29-8c3f-68ed-677786a7d55a/06UMGIM06492.rgb.jpg/500x500bb.jpg',
+  },
+  'davidbowie::stationtostation': {
+    id: '1195104858', title: 'Station to Station', artist: 'David Bowie', year: 1976,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/91/d8/47/91d847ac-8e39-85b0-36a6-ab3b8db46803/190295990268.jpg/500x500bb.jpg',
+  },
+  'thecure::disintegration': {
+    id: '372100016', title: 'Disintegration', artist: 'The Cure', year: 1989,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music/93/3c/2c/mzi.ujtdsknz.jpg/500x500bb.jpg',
+  },
+  'thekinks::thekinksarethevillagegreenpreservationsociety': {
+    id: '1415003287', title: 'The Kinks Are the Village Green Preservation Society', artist: 'The Kinks', year: 1968,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/19/1c/4b/191c4b01-df7c-638c-7c55-529c71e82447/4050538402223.jpg/500x500bb.jpg',
+  },
+  'usher::confessions': {
+    id: '386153476', title: 'Confessions', artist: 'USHER', year: 2004,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/02/c6/e1/02c6e1cd-8d57-97b4-6ef1-77d2be004509/mzi.sjrqsmrq.jpg/500x500bb.jpg',
+  },
+  'leonbridges::cominghome': {
+    id: '1079234232', title: 'Coming Home', artist: 'Leon Bridges', year: 2015,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/27/37/70/273770eb-92ac-1d00-87e6-e0f5ec0e97ab/886445452204.jpg/500x500bb.jpg',
+  },
+  'beastieboys::paulsboutique': {
+    id: '721276795', title: 'Paul\'s Boutique', artist: 'Beastie Boys', year: 1989,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/bf/b9/82/bfb9825b-e130-0664-2f2f-3a766a1161c6/05099969330056.rgb.jpg/500x500bb.jpg',
+  },
+  'cocteautwins::heavenorlasvegas': {
+    id: '258198881', title: 'Heaven or Las Vegas', artist: 'Cocteau Twins', year: 1990,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/76/cd/61/76cd61e7-0714-dce5-c48e-0f05f8fcb84b/652637001280.png/500x500bb.jpg',
+  },
+  'tomwaits::closingtime': {
+    id: '1485071375', title: 'Closing Time', artist: 'Tom Waits', year: 1973,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/c2/3b/dc/c23bdc61-b686-eab1-5f3c-677a9afacc2b/0045778756506.png/500x500bb.jpg',
+  },
+  'norahjones::comeawaywithme': {
+    id: '1624173298', title: 'Come Away with Me', artist: 'Norah Jones', year: 2002,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/a0/a0/8d/a0a08df2-390b-ad05-0d32-6673bcf7a2a9/13UABIM02784.rgb.jpg/500x500bb.jpg',
+  },
+  'nickdrake::fiveleavesleft': {
+    id: '1440656068', title: 'Five Leaves Left', artist: 'Nick Drake', year: 1969,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/be/97/b3/be97b362-d4aa-c0d5-368f-e3a154a94671/00042284291521.rgb.jpg/500x500bb.jpg',
+  },
   'mybloodyvalentine::loveless': {
     id: '1556921230', title: 'loveless', artist: 'my bloody valentine', year: 1991,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/4c/e1/51/4ce15131-7ac5-daf5-bf62-0202f27d691d/887830015998.png/500x500bb.jpg',
@@ -3249,54 +3305,24 @@ const DIVISIVE_MIN_RATINGS = 15;
 const DIVISIVE_MIN_SPREAD = 2;
 
 // v2: also carries the stat-ranked featured playlists. v3: deluxe/EP fixes.
-const GENRE_DECADE_CACHE_KEY = 'discover:genre-decade-charts:v4';
+const GENRE_DECADE_CACHE_KEY = 'discover:genre-decade-charts:v5';
 
 // ── Albums only, no greatest hits ──────────────────────────────────────────
 // The Discover lists and featured playlists are album lists: no singles, no
-// EPs, no greatest-hits or other compilations. Apple flags singles and
-// compilations on the catalog entry; titles catch what it doesn't flag
-// ("Legend – The Best of Bob Marley", "Bleech 9:3 - EP"). Live albums and
-// deluxe editions stay — they're albums.
+// EPs, no greatest hits. Decided by title — Apple names singles and EPs
+// "… - Single" / "… - EP". Its own isSingle/isCompilation flags were tried
+// and dropped (2026-11-16): isCompilation is set on plenty of studio albums
+// (Since I Left You, Veckatimest, XO, Maxinquaye, most classical recordings)
+// and isSingle on one-track albums like Fishmans' Long Season. Live albums
+// and deluxe editions stay — they're albums.
 const SINGLE_OR_EP_RE = /\s-\s(single|ep)$|\bep\b|\be\.\s?p\./i;
-const GREATEST_HITS_RE = /\b(greatest\s+hits?|best\s+of|very\s+best|the\s+essential|anthology|retrospective|(ultimate|definitive|hits)\s+collection|number\s+ones|#1'?s)\b|^(gold|hits)\b/i;
-// Studio albums Apple flags isCompilation anyway (same list as the artist
-// discography's NOT_COMPILATION_TITLES).
-const NOT_COMPILATION_TITLES = new Set(['give out but don\'t give up', 'evil heat']);
-
-const ALBUM_KINDS_CACHE_KEY = 'album-kinds:v1';
-let albumKindsMem = null;
-
-// { id: { s: isSingle, c: isCompilation } } for Apple catalog ids, cached a
-// week (a release's type doesn't change). Ids Apple's `us` storefront doesn't
-// return are stored as {} so they aren't asked about every run — their title
-// still gets checked.
-async function getAlbumKinds(ids) {
-  if (!albumKindsMem) albumKindsMem = (await getCached(ALBUM_KINDS_CACHE_KEY, TTL_7D).catch(() => null)) ?? {};
-  const missing = [...new Set(ids)].filter(id => /^\d+$/.test(id) && !(id in albumKindsMem));
-  for (let i = 0; i < missing.length; i += 100) {
-    const chunk = missing.slice(i, i + 100);
-    try {
-      const data = await amFetch(`/catalog/us/albums?ids=${chunk.join(',')}`);
-      for (const id of chunk) albumKindsMem[id] = {};
-      for (const item of data.data ?? []) {
-        albumKindsMem[item.id] = { s: item.attributes?.isSingle === true, c: item.attributes?.isCompilation === true };
-      }
-    } catch (err) {
-      console.error('[album-kinds]', err.message ?? err); // try those again next run
-    }
-    if (i + 100 < missing.length) await new Promise(r => setTimeout(r, 250));
-  }
-  if (missing.length > 0) await setCache(ALBUM_KINDS_CACHE_KEY, albumKindsMem).catch(() => {});
-  return albumKindsMem;
-}
+const GREATEST_HITS_RE = /\b(greatest\s+hits?|best\s+of|very\s+best|the\s+essential|retrospective|golden\s+records|the\s+hits|(a|the|ultimate|definitive|hits)\s+collection|number\s+ones|#1'?s)\b|^(gold|hits)\b/i;
 
 // Why an album doesn't belong in a playlist, or null if it does.
-function playlistExclusion(album, kinds) {
+function playlistExclusion(album) {
   const title = album.title ?? '';
-  const kind = kinds?.[album.id];
-  if (kind?.s || SINGLE_OR_EP_RE.test(title)) return 'single or EP';
+  if (SINGLE_OR_EP_RE.test(title)) return 'single or EP';
   if (GREATEST_HITS_RE.test(title)) return 'greatest hits';
-  if (kind?.c && !NOT_COMPILATION_TITLES.has(baseTitle(title))) return 'compilation';
   return null;
 }
 
@@ -3430,25 +3456,9 @@ async function computeGenreDecadeCharts() {
   }
   scored.sort((a, b) => b.listeners - a.listeners || b.avgRating - a.avgRating);
 
-  // Ask Apple about everything that could make a list (with headroom for
-  // what gets left out), then skip singles, EPs and compilations below.
-  const candidateIds = new Set([...genreSeed, ...decadeSeed].map(r => r.spotify_id).filter(Boolean));
-  const perLabel = new Map();
-  const headroom = Math.ceil(CHART_LIST_SIZE * 1.5);
-  for (const s of scored) {
-    if (s.listeners < CHART_MIN_LISTENERS) break;
-    for (const label of [s.listKey && `g:${s.listKey}`, s.decade && `d:${s.decade}`].filter(Boolean)) {
-      const n = perLabel.get(label) ?? 0;
-      if (n < headroom) { perLabel.set(label, n + 1); candidateIds.add(s.album.id); }
-    }
-  }
-  const statPool = scored.filter(s => s.ratingCount >= CHART_MIN_RATINGS)
-    .sort((a, b) => b.avgRating - a.avgRating);
-  for (const s of statPool.slice(0, 3000)) candidateIds.add(s.album.id);
-  const kinds = await getAlbumKinds([...candidateIds]);
   const excluded = [];
   const isOut = (album, where) => {
-    const reason = playlistExclusion(album, kinds);
+    const reason = playlistExclusion(album);
     if (reason) excluded.push({ where, title: album.title, artist: album.artist, reason });
     return !!reason;
   };
@@ -7442,7 +7452,7 @@ app.get('/api/admin/purge-discover-cache', requireAdmin, async (req, res) => {
                   'discover:community-popular', 'discover:community-top-rated',
                   'discover:community-top-artists-v3', 'discover:community-top-songs',
                   'discover:community-most-listend-songs', 'discover:community-highest-rated-songs',
-                  'discover:genre-decade-charts:v4'];
+                  'discover:genre-decade-charts:v5'];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-discover-cache] done.');
@@ -7628,7 +7638,7 @@ app.get('/api/admin/merge-albums', requireAdmin, [
 
 app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
   try {
-    const keys = ['featured-playlists:meta:v10', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v9:${m.id}`)];
+    const keys = ['featured-playlists:meta:v11', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v10:${m.id}`)];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-featured-playlist-cache] done.');
@@ -8518,11 +8528,10 @@ const HAND_PICKED_SIZE = 48;
 
 async function resolveFeaturedPlaylist(id) {
   const albums = await resolveFeaturedPlaylistRaw(id);
-  const kinds = await getAlbumKinds(albums.map(a => a.id));
   let kept = [];
   const out = [];
   for (const a of albums) {
-    const reason = playlistExclusion(a, kinds);
+    const reason = playlistExclusion(a);
     if (reason) out.push({ where: id, title: a.title, artist: a.artist, reason });
     else kept.push(a);
   }
@@ -8574,7 +8583,7 @@ async function resolveFeaturedPlaylistRaw(id) {
 // The hand-picked list, from cache when the startup pre-warm (or a request)
 // already resolved it.
 async function getHandPickedPlaylist(id) {
-  const CACHE_KEY = `featured-playlist:v9:${id}`;
+  const CACHE_KEY = `featured-playlist:v10:${id}`;
   const mem = cacheGet(CACHE_KEY);
   if (mem) return mem;
   const db = await getCached(CACHE_KEY, TTL_24H);
@@ -8587,7 +8596,7 @@ async function getHandPickedPlaylist(id) {
 
 // GET /api/featured-playlists — every featured playlist's metadata + 4 artwork URLs
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta:v10';
+  const CACHE_KEY = 'featured-playlists:meta:v11';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -8622,7 +8631,7 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:v9:${id}`;
+  const CACHE_KEY = `featured-playlist:v10:${id}`;
   try {
     if (STAT_PLAYLIST_IDS.has(id)) return res.json(await getStatPlaylist(id));
     const mem = cacheGet(CACHE_KEY);
@@ -9123,7 +9132,7 @@ app.listen(PORT, () => {
     try {
       const ids = FEATURED_PLAYLIST_META.map(m => m.id);
       for (const id of ids) {
-        const CACHE_KEY = `featured-playlist:v9:${id}`;
+        const CACHE_KEY = `featured-playlist:v10:${id}`;
         const mem = cacheGet(CACHE_KEY);
         if (mem && mem.every(a => a.artworkUrl)) continue;
         const db = await getCached(CACHE_KEY, TTL_24H);
