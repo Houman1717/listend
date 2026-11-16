@@ -1703,6 +1703,16 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1565501418', title: 'Two Sevens Clash', artist: 'Culture', year: 1977,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/bc/f5/28/bcf528af-51bd-b61c-d940-e7a54ddca0fc/00016351440129_Cover.jpg/500x500bb.jpg',
   },
+  // Nirvana — Bleach (1989). `us` only had the 26-track Deluxe Edition until
+  // Apple added the plain 13-track album (Nov 2026), so the key was cached to
+  // the deluxe and rating "Bleach" saved "Bleach (Deluxe Edition)", leaving it
+  // out of the artist page's "X of Y albums". Existing deluxe logs were moved
+  // to this id on 2026-11-16; "Bleach (Deluxe Edition)" itself still resolves
+  // to the deluxe.
+  'nirvana::bleach': {
+    id: '6830857209', title: 'Bleach', artist: 'Nirvana', year: 1989,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/88/e9/cf/88e9cfd7-8e05-9419-8bdb-bb199c27f33d/098787003468.png/500x500bb.jpg',
+  },
 };
 
 // Albums Listend carries itself (manualAlbums.js) pin exactly like the

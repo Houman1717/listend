@@ -39,6 +39,21 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+// "Bleach (Deluxe Edition)", "In Utero (20th Anniversary Edition)",
+// "Abbey Road (Remastered) [2019 Mix]" → the bare title, lowercased. Only
+// bracket groups naming an edition are stripped, repeatedly (Apple stacks
+// them); anything else — "(Blue Album)", "(Live)" — is part of the title.
+const EDITION_GROUP_RE =
+  /\s*[([][^()[\]]*\b(deluxe|edition|version|remaster(ed)?|anniversary|expanded|bonus|reissue|explicit|clean|\d{4}\s+(re)?mix)\b[^()[\]]*[)\]]\s*$/i;
+function editionlessTitle(title: string): string {
+  let t = title.trim();
+  for (;;) {
+    const next = t.replace(EDITION_GROUP_RE, '').trim();
+    if (next === t || !next) return t.toLowerCase();
+    t = next;
+  }
+}
+
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -227,16 +242,20 @@ export default function ArtistDetailScreen() {
   // ── Listened % — derived from already-fetched discography + logged albums ────
   const albumsOnly   = discography?.albums ?? [];
   const totalAlbums  = albumsOnly.length;
-  // By id, or by title for the same album logged under another catalog id.
+  // By id, or by title for the same album logged under another catalog id —
+  // edition tags stripped on both sides, so a "Bleach (Deluxe Edition)" log
+  // counts for "Bleach" (Apple only added the plain one later, and every
+  // earlier log is on the deluxe). Only edition tags go: "Weezer (Blue
+  // Album)" and "(Green Album)" stay two albums.
   const loggedMatch = useMemo(() => {
     const ids = new Set<string>();
     const titles = new Set<string>();
     const artistLower = artistName.toLowerCase();
     for (const logged of loggedAlbums) {
       ids.add(logged.id);
-      if (logged.artist.toLowerCase() === artistLower) titles.add(logged.title.toLowerCase());
+      if (logged.artist.toLowerCase() === artistLower) titles.add(editionlessTitle(logged.title));
     }
-    return (album: { id: string; title: string }) => ids.has(album.id) || titles.has(album.title.toLowerCase());
+    return (album: { id: string; title: string }) => ids.has(album.id) || titles.has(editionlessTitle(album.title));
   }, [loggedAlbums, artistName]);
   const listenedCount = albumsOnly.filter(loggedMatch).length;
   const listenedPct  = totalAlbums === 0 ? null : Math.round((listenedCount / totalAlbums) * 100);
