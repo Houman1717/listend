@@ -7638,7 +7638,7 @@ app.get('/api/admin/merge-albums', requireAdmin, [
 
 app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
   try {
-    const keys = ['featured-playlists:meta:v12', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v11:${m.id}`)];
+    const keys = ['featured-playlists:meta:v13', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v12:${m.id}`)];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-featured-playlist-cache] done.');
@@ -8583,7 +8583,7 @@ async function resolveFeaturedPlaylistRaw(id) {
 // The hand-picked list, from cache when the startup pre-warm (or a request)
 // already resolved it.
 async function getHandPickedPlaylist(id) {
-  const CACHE_KEY = `featured-playlist:v11:${id}`;
+  const CACHE_KEY = `featured-playlist:v12:${id}`;
   const mem = cacheGet(CACHE_KEY);
   if (mem) return mem;
   const db = await getCached(CACHE_KEY, TTL_24H);
@@ -8596,7 +8596,7 @@ async function getHandPickedPlaylist(id) {
 
 // GET /api/featured-playlists — every featured playlist's metadata + 4 artwork URLs
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta:v12';
+  const CACHE_KEY = 'featured-playlists:meta:v13';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -8631,7 +8631,7 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:v11:${id}`;
+  const CACHE_KEY = `featured-playlist:v12:${id}`;
   try {
     if (STAT_PLAYLIST_IDS.has(id)) return res.json(await getStatPlaylist(id));
     const mem = cacheGet(CACHE_KEY);
@@ -9132,7 +9132,7 @@ app.listen(PORT, () => {
     try {
       const ids = FEATURED_PLAYLIST_META.map(m => m.id);
       for (const id of ids) {
-        const CACHE_KEY = `featured-playlist:v11:${id}`;
+        const CACHE_KEY = `featured-playlist:v12:${id}`;
         const mem = cacheGet(CACHE_KEY);
         if (mem && mem.every(a => a.artworkUrl)) continue;
         const db = await getCached(CACHE_KEY, TTL_24H);

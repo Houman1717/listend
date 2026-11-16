@@ -426,7 +426,6 @@ const PLAYLIST_ALBUMS = {
     { artist: 'Tom Waits',                    title: 'Rain Dogs' },
     { artist: 'R.E.M.',                       title: 'Murmur' },
     { artist: 'Etta James',                   title: 'At Last!' },
-    { artist: 'Sam Cooke',                    title: 'Portrait of a Legend' },
     { artist: 'The Kinks',                    title: 'The Kinks Are the Village Green Preservation Society' },
     { artist: 'Bruce Springsteen',            title: 'Nebraska' },
   ],
