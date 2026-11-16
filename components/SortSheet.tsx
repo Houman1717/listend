@@ -49,6 +49,16 @@ const SORT_GROUPS: SortGroup[] = [
   { label: 'Duration',       a: { key: 'duration_long',     label: 'Longest'  }, b: { key: 'duration_short',   label: 'Shortest' } },
 ];
 
+function orderGroups(groups: SortGroup[], leadKeys: SortKey[]): SortGroup[] {
+  if (leadKeys.length === 0) return groups;
+  const rank = (g: SortGroup) => {
+    const i = leadKeys.findIndex(k => k === g.a.key || k === g.b.key);
+    return i === -1 ? leadKeys.length : i;
+  };
+  // Array sort is stable, so groups outside leadKeys keep their order.
+  return [...groups].sort((x, y) => rank(x) - rank(y));
+}
+
 // ─── Sort label helper ────────────────────────────────────────────────────────
 
 export function sortLabel(key: SortKey): string {
@@ -282,6 +292,7 @@ export function SortSheet({
   excludeKeys = [],
   filters = [],
   showShuffle = true,
+  leadKeys = [],
 }: {
   visible: boolean;
   activeKey: SortKey;
@@ -292,6 +303,9 @@ export function SortSheet({
   excludeKeys?: SortKey[];
   filters?: FilterSection[];
   showShuffle?: boolean;
+  // Sort groups to show first, in this order (by either key of the pair);
+  // the rest keep their usual order below.
+  leadKeys?: SortKey[];
 }) {
   const bg      = isDark ? '#1c1410' : '#fff';
   const text    = isDark ? '#f5e6c8' : '#1A0F0A';
@@ -336,7 +350,7 @@ export function SortSheet({
           {filters.length > 0 && (
             <Text style={[ss.sectionLabel, { color: text }]}>Sort By</Text>
           )}
-          {SORT_GROUPS.filter(g => !excludeKeys.includes(g.a.key) && !excludeKeys.includes(g.b.key)).map((group) => (
+          {orderGroups(SORT_GROUPS, leadKeys).filter(g => !excludeKeys.includes(g.a.key) && !excludeKeys.includes(g.b.key)).map((group) => (
             <View key={group.label} style={[ss.row, { borderBottomColor: border }]}>
               <Text style={[ss.groupLabel, { color: subtext }]}>{group.label}</Text>
               <View style={ss.btnPair}>

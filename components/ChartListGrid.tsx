@@ -13,7 +13,8 @@ import { Stack, useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { AlbumGridCard, cardWidth, GAP, PADDING } from '@/components/AlbumGridCard';
-import { SortBar, SortSheet, applySort, SortKey } from '@/components/SortSheet';
+import { SortBar, SortSheet, applySort, SortKey, DURATION_SORTS } from '@/components/SortSheet';
+import { fetchAlbumDurations } from '@/lib/albumDurations';
 import { useAlbums } from '@/context/AlbumsContext';
 import { useLibraryFilters } from '@/hooks/useLibraryFilters';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
@@ -23,15 +24,17 @@ import { ChartAlbum, ChartKind, cachedChartLists, loadChartLists } from '@/lib/c
 // first, hand-picked albums topping up thin lists), with My Listend's Sort &
 // Filter sheet to re-order by rating, release date and so on.
 
-// Sorts that mean nothing on a list you didn't build: when *you* added an
-// album, and duration (it would need a tracklist lookup per album).
-const EXCLUDED_SORTS: SortKey[] = ['date_new', 'date_old', 'duration_long', 'duration_short'];
+// When *you* added an album means nothing on a list you didn't build.
+const EXCLUDED_SORTS: SortKey[] = ['date_new', 'date_old'];
+// These lists are about what people play and rate, so those sorts lead.
+const LEAD_SORTS: SortKey[] = ['num_ratings_high', 'avg_rating_high'];
 
 type Row = ChartAlbum & {
   rating: number;               // your own rating, for the My Rating sort
   logged: boolean;
   communityAvgRating: number;   // what applySort reads for Average Rating
   communityRatingCount: number; // …and for Popularity (distinct listeners)
+  durationMs?: number;          // filled in when a duration sort is picked
 };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -68,6 +71,27 @@ export function ChartListGrid({ kind, label, title }: { kind: ChartKind; label: 
     return { byId, byKey };
   }, [loggedAlbums]);
 
+  // ── Sort ────────────────────────────────────────────────────────────────────
+  const [sortKey, setSortKey]     = useState<SortKey>('num_ratings_high');
+
+  // Durations only decide the order, so they're fetched the first time a
+  // duration sort asks — in one pass, applied in one state update.
+  const [durations, setDurations] = useState<Record<string, number>>({});
+  const durationsLoaded = useRef<ChartAlbum[] | null>(null);
+  useEffect(() => {
+    if (!DURATION_SORTS.has(sortKey) || albums.length === 0) return;
+    if (durationsLoaded.current === albums) return; // Longest ↔ Shortest reuses them
+    let cancelled = false;
+    fetchAlbumDurations(albums.map((a) => a.id), () => cancelled)
+      .then((found) => {
+        if (cancelled) return;
+        durationsLoaded.current = albums;
+        setDurations(found);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [sortKey, albums]);
+
   const source: Row[] = useMemo(() => albums.map((a) => {
     const key = `${norm(a.title)}::${norm(a.artist)}`;
     const rating = mine.byId.get(a.id) ?? mine.byKey.get(key);
@@ -77,11 +101,10 @@ export function ChartListGrid({ kind, label, title }: { kind: ChartKind; label: 
       logged: rating !== undefined,
       communityAvgRating: a.avgRating ?? 0,
       communityRatingCount: a.listeners ?? 0,
+      durationMs: durations[a.id],
     };
-  }), [albums, mine]);
+  }), [albums, mine, durations]);
 
-  // ── Sort ────────────────────────────────────────────────────────────────────
-  const [sortKey, setSortKey]     = useState<SortKey>('num_ratings_high');
   const [shuffled, setShuffled]   = useState<Row[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -217,6 +240,7 @@ export function ChartListGrid({ kind, label, title }: { kind: ChartKind; label: 
         isDark={isDark}
         tint={colors.tint}
         excludeKeys={EXCLUDED_SORTS}
+        leadKeys={LEAD_SORTS}
         filters={shownFilters}
       />
     </View>
