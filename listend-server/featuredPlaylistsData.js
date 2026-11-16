@@ -432,4 +432,67 @@ const PLAYLIST_ALBUMS = {
   ],
 };
 
-module.exports = { FEATURED_PLAYLIST_META, PLAYLIST_ALBUMS };
+// Reserves: when the albums-only rule (no singles, EPs or greatest hits —
+// playlistExclusion in index.js) or a failed Apple match drops a playlist
+// below 48, the server fills it back up from these, in order. Unused ones
+// never show. Keep them out of every other list.
+const RESERVE_ALBUMS = {
+  'late-night': [
+    { artist: 'Sade',                    title: 'Diamond Life' },
+    { artist: 'Moses Sumney',            title: 'Aromanticism' },
+    { artist: 'Kali Uchis',              title: 'Isolation' },
+    { artist: 'Thundercat',              title: 'Drunk' },
+    { artist: 'The Weeknd',              title: 'After Hours' },
+    { artist: 'Massive Attack',          title: 'Blue Lines' },
+  ],
+  'summer': [
+    { artist: 'Harry Styles',            title: "Harry's House" },
+    { artist: 'Tame Impala',             title: 'Currents' },
+    { artist: 'Vampire Weekend',         title: 'Vampire Weekend' },
+    { artist: 'Beyoncé',                 title: 'RENAISSANCE' },
+    { artist: "The B-52's",              title: 'Cosmic Thing' },
+    { artist: 'Caetano Veloso',          title: 'Transa' },
+  ],
+  'winter': [
+    { artist: 'Sigur Rós',               title: 'Takk...' },
+    { artist: 'Bon Iver',                title: 'Bon Iver, Bon Iver' },
+    { artist: 'Elliott Smith',           title: 'XO' },
+    { artist: 'Nick Drake',              title: 'Five Leaves Left' },
+    { artist: 'Low',                     title: 'Double Negative' },
+    { artist: 'Agnes Obel',              title: 'Aventine' },
+  ],
+  'heartbreak': [
+    { artist: 'Robyn',                   title: 'Body Talk' },
+    { artist: 'Bright Eyes',             title: 'Fevers and Mirrors' },
+    { artist: 'Nick Cave & The Bad Seeds', title: 'Skeleton Tree' },
+    { artist: 'Big Thief',               title: 'Capacity' },
+    { artist: 'Lana Del Rey',            title: 'Norman Fucking Rockwell!' },
+    { artist: 'Alanis Morissette',       title: 'Jagged Little Pill' },
+  ],
+  'road-trip': [
+    { artist: 'Fleetwood Mac',           title: 'Tango in the Night' },
+    { artist: 'The War on Drugs',        title: 'Lost in the Dream' },
+    { artist: 'Bruce Springsteen',       title: 'Darkness on the Edge of Town' },
+    { artist: 'Tom Petty and the Heartbreakers', title: 'Damn the Torpedoes' },
+    { artist: 'The Black Keys',          title: 'Brothers' },
+    { artist: 'Khalid',                  title: 'American Teen' },
+  ],
+  'chill': [
+    { artist: 'Rex Orange County',       title: 'Pony' },
+    { artist: 'Mac DeMarco',             title: 'This Old Dog' },
+    { artist: 'Jorja Smith',             title: 'Lost & Found' },
+    { artist: 'Kiefer',                  title: 'Happysad' },
+    { artist: 'Tom Misch & Yussef Dayes', title: 'What Kinda Music' },
+    { artist: 'Air',                     title: 'Talkie Walkie' },
+  ],
+  'essentials': [
+    { artist: 'Kate Bush',               title: 'Hounds of Love' },
+    { artist: 'Neil Young',              title: 'After the Gold Rush' },
+    { artist: 'Björk',                   title: 'Homogenic' },
+    { artist: 'De La Soul',              title: '3 Feet High and Rising' },
+    { artist: 'Television',              title: 'Marquee Moon' },
+    { artist: 'The Stooges',             title: 'Fun House' },
+  ],
+};
+
+module.exports = { FEATURED_PLAYLIST_META, PLAYLIST_ALBUMS, RESERVE_ALBUMS };

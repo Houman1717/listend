@@ -22,7 +22,7 @@ const { handleOrName } = require('./userHandle');
 const { GENRE_ALBUMS } = require('./genreData');
 const { DECADE_ALBUMS } = require('./decadeData');
 const { NEW_RELEASE_ALBUMS } = require('./newReleaseData');
-const { FEATURED_PLAYLIST_META, PLAYLIST_ALBUMS } = require('./featuredPlaylistsData');
+const { FEATURED_PLAYLIST_META, PLAYLIST_ALBUMS, RESERVE_ALBUMS } = require('./featuredPlaylistsData');
 
 async function amFetch(path) {
   const resp = await fetch(`https://api.music.apple.com/v1${path}`, {
@@ -7628,7 +7628,7 @@ app.get('/api/admin/merge-albums', requireAdmin, [
 
 app.get('/api/admin/purge-featured-playlist-cache', requireAdmin, async (req, res) => {
   try {
-    const keys = ['featured-playlists:meta:v9', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v8:${m.id}`)];
+    const keys = ['featured-playlists:meta:v10', ...FEATURED_PLAYLIST_META.map(m => `featured-playlist:v9:${m.id}`)];
     cacheClear(...keys);
     await Promise.all(keys.map(k => deleteCache(k)));
     console.log('[/api/admin/purge-featured-playlist-cache] done.');
@@ -8512,14 +8512,26 @@ async function fetchConcurrent(items, fn, limit = 5) {
 
 // A hand-picked featured playlist resolved against Apple Music (or the
 // classics by catalog id). Uncached — callers cache under featured-playlist:v6.
+// Hand-picked playlists hold this many; reserves (RESERVE_ALBUMS) refill
+// whatever the albums-only rule or a failed Apple match takes out.
+const HAND_PICKED_SIZE = 48;
+
 async function resolveFeaturedPlaylist(id) {
   const albums = await resolveFeaturedPlaylistRaw(id);
   const kinds = await getAlbumKinds(albums.map(a => a.id));
-  const kept = [], out = [];
+  let kept = [];
+  const out = [];
   for (const a of albums) {
     const reason = playlistExclusion(a, kinds);
     if (reason) out.push({ where: id, title: a.title, artist: a.artist, reason });
     else kept.push(a);
+  }
+  // With reserves to spare, an album Apple couldn't match (no artwork) goes
+  // before a reserve does; then cut back to the playlist's size.
+  if (kept.length > HAND_PICKED_SIZE) {
+    const unmatched = kept.filter(a => !a.artworkUrl).length;
+    if (unmatched > 0) kept = kept.filter(a => a.artworkUrl).concat(kept.filter(a => !a.artworkUrl));
+    kept = kept.slice(0, HAND_PICKED_SIZE);
   }
   handPickedExclusions[id] = out;
   if (out.length) console.log(`[featured-playlist:${id}] left out:`, out.map(o => `${o.artist} – ${o.title} (${o.reason})`).join('; '));
@@ -8541,7 +8553,7 @@ async function resolveFeaturedPlaylistRaw(id) {
       artworkUrl: amArtwork(item.attributes?.artwork),
     })));
   }
-  const list = PLAYLIST_ALBUMS[id] ?? [];
+  const list = [...(PLAYLIST_ALBUMS[id] ?? []), ...(RESERVE_ALBUMS[id] ?? [])];
   let albums = dedupeAlbums(await fetchConcurrent(list, ({ artist, title }) => searchAMAlbum(artist, title)));
 
   // Sequential fallback pass for any albums that still have no artwork
@@ -8562,7 +8574,7 @@ async function resolveFeaturedPlaylistRaw(id) {
 // The hand-picked list, from cache when the startup pre-warm (or a request)
 // already resolved it.
 async function getHandPickedPlaylist(id) {
-  const CACHE_KEY = `featured-playlist:v8:${id}`;
+  const CACHE_KEY = `featured-playlist:v9:${id}`;
   const mem = cacheGet(CACHE_KEY);
   if (mem) return mem;
   const db = await getCached(CACHE_KEY, TTL_24H);
@@ -8575,7 +8587,7 @@ async function getHandPickedPlaylist(id) {
 
 // GET /api/featured-playlists — every featured playlist's metadata + 4 artwork URLs
 app.get('/api/featured-playlists', async (req, res) => {
-  const CACHE_KEY = 'featured-playlists:meta:v9';
+  const CACHE_KEY = 'featured-playlists:meta:v10';
   try {
     const mem = cacheGet(CACHE_KEY);
     if (mem) return res.json(mem);
@@ -8610,7 +8622,7 @@ app.get('/api/featured-playlists/:id', [
   validate,
 ], async (req, res) => {
   const { id } = req.params;
-  const CACHE_KEY = `featured-playlist:v8:${id}`;
+  const CACHE_KEY = `featured-playlist:v9:${id}`;
   try {
     if (STAT_PLAYLIST_IDS.has(id)) return res.json(await getStatPlaylist(id));
     const mem = cacheGet(CACHE_KEY);
@@ -9111,7 +9123,7 @@ app.listen(PORT, () => {
     try {
       const ids = FEATURED_PLAYLIST_META.map(m => m.id);
       for (const id of ids) {
-        const CACHE_KEY = `featured-playlist:v8:${id}`;
+        const CACHE_KEY = `featured-playlist:v9:${id}`;
         const mem = cacheGet(CACHE_KEY);
         if (mem && mem.every(a => a.artworkUrl)) continue;
         const db = await getCached(CACHE_KEY, TTL_24H);
