@@ -1713,6 +1713,17 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '6830857209', title: 'Bleach', artist: 'Nirvana', year: 1989,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/88/e9/cf/88e9cfd7-8e05-9419-8bdb-bb199c27f33d/098787003468.png/500x500bb.jpg',
   },
+  // FKA twigs — EUSEXUA (Jan 2025, the tracklist on the vinyl and the one the
+  // artist page lists). Apple also carries a second "EUSEXUA" (1852333140,
+  // dated Nov 2025) that swaps four songs for Perfectly, The Dare, Got To Feel
+  // and Lonely But Exciting Road. The key had been cached to that one, so
+  // rating tracks on the real album logged the other, and the library entry
+  // then opened a tracklist missing half the ratings. Logs were moved to this
+  // id on 2026-11-19; the artist override below hides 1852333140 from search.
+  'fkatwigs::eusexua': {
+    id: '1767658574', title: 'EUSEXUA', artist: 'FKA twigs', year: 2025,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/ae/c8/24/aec824cf-8748-fb40-12c8-b7fb69a5ffe3/075679634382.jpg/500x500bb.jpg',
+  },
 };
 
 // Albums Listend carries itself (manualAlbums.js) pin exactly like the
@@ -6258,6 +6269,17 @@ const ARTIST_ALBUM_OVERRIDES = {
       year: 1991, isSingle: false, isCompilation: false, trackCount: 10,
       url: 'https://music.apple.com/us/album/warfaze/1738823879', type: 'album',
       replaces: ['1457601621'],
+    },
+  ],
+  '679661890': [ // FKA twigs — hide the alternate-tracklist EUSEXUA
+    {
+      // Already on this page from Apple; listed here only so its \`replaces\`
+      // drops 1852333140 (see 'fkatwigs::eusexua' in CANONICAL_ALBUM_OVERRIDES).
+      id: '1767658574', title: 'EUSEXUA',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/ae/c8/24/aec824cf-8748-fb40-12c8-b7fb69a5ffe3/075679634382.jpg/500x500bb.jpg',
+      year: 2025, isSingle: false, isCompilation: false, trackCount: 11,
+      url: 'https://music.apple.com/us/album/eusexua/1767658574', type: 'album',
+      replaces: ['1852333140'],
     },
   ],
   '32616928': [ // Ground Zero — Apple has Consume Red on `us` but doesn't list it under them
