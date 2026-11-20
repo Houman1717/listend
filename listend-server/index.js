@@ -731,6 +731,55 @@ pinStorefront('no', [
   '1678595056', '1678595208', '1678595213', '1678595387', '1678595392', '1678595396',
   '1678595536', '1678595688', '1678595696', '1678595806',
 ]);
+// Charlie Brown Jr. — Preço Curto, Prazo Longo (1999)
+pinStorefront('br', [
+  '1442604017',
+  '1442604184', '1442604297', '1442604308', '1442604438', '1442604444', '1442604453',
+  '1442604458', '1442604677', '1442604684', '1442604699', '1442604864', '1442604878',
+  '1442604974', '1442604978', '1442604982', '1442604985', '1442604994', '1442605355',
+  '1442605360', '1442605548', '1442605555', '1442605560', '1442605566', '1442605753',
+  '1442605762',
+]);
+// Charlie Brown Jr. — Acústico (Ao Vivo) (2003)
+pinStorefront('br', [
+  '1442597460',
+  '1442597734', '1442598020', '1442598024', '1442598029', '1442598033', '1442598040',
+  '1442598379', '1442598389', '1442598399', '1442598572', '1442598576', '1442598579',
+  '1442598763', '1442598766', '1442598770', '1442598773', '1442598777', '1442598780',
+  '1442598786', '1442599123',
+]);
+// Charlie Brown Jr. — Ritmo, Ritual e Responsa (2007)
+pinStorefront('br', [
+  '1470538350',
+  '1470538355', '1470538358', '1470538360', '1470538361', '1470538362', '1470538364',
+  '1470538365', '1470538366', '1470538369', '1470538371', '1470538375', '1470538527',
+  '1470538528', '1470538530', '1470538531', '1470538536', '1470538537', '1470538538',
+  '1470538539', '1470538540', '1470538542',
+]);
+// Charlie Brown Jr. — De 1997 a 2007 (2008)
+pinStorefront('br', [
+  '713797057',
+  '713797099', '713797102', '713797103', '713797104', '713797105', '713797106',
+  '713797107', '713797108', '713797110', '713797111', '713797112', '713797113',
+  '713797114', '713797115', '713797116', '713797118', '713797120', '713797123',
+  '713797125', '713797129', '713797131', '713797133', '713797136', '713797139',
+  '713797168', '713797170', '713797171', '713797172',
+]);
+// Charlie Brown Jr. — Papo Reto (2011)
+pinStorefront('br', [
+  '1442385847',
+  '1442385849', '1442386151', '1442386153', '1442386154', '1442386155', '1442386156',
+  '1442386158', '1442386159', '1442386160', '1442386169', '1442386170', '1442386171',
+  '1442386173', '1442386174', '1442386177', '1442386178',
+]);
+// Charlie Brown Jr. — A Arte de Charlie Brown Jr. (2015)
+pinStorefront('br', [
+  '1442673813',
+  '1442673820', '1442674010', '1442674013', '1442674017', '1442674019', '1442674021',
+  '1442674025', '1442674028', '1442674093', '1442674096', '1442674098', '1442674102',
+  '1442674105', '1442674110', '1442674113', '1442674114', '1442674119', '1442674182',
+  '1442674187', '1442674190',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1351,6 +1400,30 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'jpegmafia::communistslowjamz': {
     id: 'lst-communist-slow-jams', title: 'Communist Slow Jams', artist: 'JPEGMAFIA', year: 2015,
     artworkUrl: `${PUBLIC_BASE_URL}/static/albums/communist-slow-jams.jpg`,
+  },
+  'charliebrownjr::preocurtoprazolongo': {
+    id: '1442604017', title: 'Preço Curto, Prazo Longo', artist: 'Charlie Brown Jr.', year: 1999,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/2f/6e/07/2f6e07b5-26bd-ae6e-c452-e8a9d07a5823/17UM1IM42754.rgb.jpg/500x500bb.jpg',
+  },
+  'charliebrownjr::acsticoaovivo': {
+    id: '1442597460', title: 'Acústico (Ao Vivo)', artist: 'Charlie Brown Jr.', year: 2003,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e7/3a/40/e73a4096-c33a-bb38-c1ae-68ea834ee8f4/17UM1IM42476.rgb.jpg/500x500bb.jpg',
+  },
+  'charliebrownjr::ritmoritualeresponsa': {
+    id: '1470538350', title: 'Ritmo, Ritual e Responsa', artist: 'Charlie Brown Jr.', year: 2007,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/f2/ad/2e/f2ad2eeb-342f-04c3-efa4-eefbf2d9af87/19UMGIM03811.rgb.jpg/500x500bb.jpg',
+  },
+  'charliebrownjr::de1997a2007': {
+    id: '713797057', title: 'De 1997 a 2007', artist: 'Charlie Brown Jr.', year: 2008,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/0d/ea/95/0dea95e0-f5b2-f4cf-3c98-9c1173cbda75/14ULAIM00455.rgb.jpg/500x500bb.jpg',
+  },
+  'charliebrownjr::paporeto': {
+    id: '1442385847', title: 'Papo Reto', artist: 'Charlie Brown Jr.', year: 2011,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/3f/90/60/3f90600f-fa0f-3db0-f563-748a452f3ca3/17UM1IM44318.rgb.jpg/500x500bb.jpg',
+  },
+  'charliebrownjr::aartedecharliebrownjr': {
+    id: '1442673813', title: 'A Arte de Charlie Brown Jr.', artist: 'Charlie Brown Jr.', year: 2015,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/06/16/3c/06163c07-6c58-5ce5-2743-be5be74284c9/15UMGIM53809.rgb.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -6340,6 +6413,44 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f2/36/c3/f236c3bf-9865-1434-871f-9b4258e310a5/196589660381.jpg/500x500bb.jpg',
       year: 2021, isSingle: false, isCompilation: false, trackCount: 10,
       url: 'https://music.apple.com/no/album/p%C3%B8nk-rock-og-harde-k%C3%A5r/1678594519', type: 'album',
+    },
+  ],
+  '92451897': [ // Charlie Brown Jr. — not licensed for `us`
+    {
+      id: '1442604017', title: 'Preço Curto, Prazo Longo',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/2f/6e/07/2f6e07b5-26bd-ae6e-c452-e8a9d07a5823/17UM1IM42754.rgb.jpg/500x500bb.jpg',
+      year: 1999, isSingle: false, isCompilation: false, trackCount: 25,
+      url: 'https://music.apple.com/br/album/pre%C3%A7o-curto-prazo-longo/1442604017', type: 'album',
+    },
+    {
+      id: '1442597460', title: 'Acústico (Ao Vivo)',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e7/3a/40/e73a4096-c33a-bb38-c1ae-68ea834ee8f4/17UM1IM42476.rgb.jpg/500x500bb.jpg',
+      year: 2003, isSingle: false, isCompilation: false, trackCount: 20,
+      url: 'https://music.apple.com/br/album/ac%C3%BAstico-ao-vivo/1442597460', type: 'album',
+    },
+    {
+      id: '1470538350', title: 'Ritmo, Ritual e Responsa',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/f2/ad/2e/f2ad2eeb-342f-04c3-efa4-eefbf2d9af87/19UMGIM03811.rgb.jpg/500x500bb.jpg',
+      year: 2007, isSingle: false, isCompilation: false, trackCount: 21,
+      url: 'https://music.apple.com/br/album/ritmo-ritual-e-responsa/1470538350', type: 'album',
+    },
+    {
+      id: '713797057', title: 'De 1997 a 2007',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/0d/ea/95/0dea95e0-f5b2-f4cf-3c98-9c1173cbda75/14ULAIM00455.rgb.jpg/500x500bb.jpg',
+      year: 2008, isSingle: false, isCompilation: true, trackCount: 28,
+      url: 'https://music.apple.com/br/album/de-1997-a-2007/713797057', type: 'album',
+    },
+    {
+      id: '1442385847', title: 'Papo Reto',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/3f/90/60/3f90600f-fa0f-3db0-f563-748a452f3ca3/17UM1IM44318.rgb.jpg/500x500bb.jpg',
+      year: 2011, isSingle: false, isCompilation: true, trackCount: 16,
+      url: 'https://music.apple.com/br/album/papo-reto/1442385847', type: 'album',
+    },
+    {
+      id: '1442673813', title: 'A Arte de Charlie Brown Jr.',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/06/16/3c/06163c07-6c58-5ce5-2743-be5be74284c9/15UMGIM53809.rgb.jpg/500x500bb.jpg',
+      year: 2015, isSingle: false, isCompilation: true, trackCount: 20,
+      url: 'https://music.apple.com/br/album/a-arte-de-charlie-brown-jr/1442673813', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`

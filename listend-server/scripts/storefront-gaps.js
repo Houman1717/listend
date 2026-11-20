@@ -61,6 +61,9 @@ const EDITION_QUALIFIERS = /\b(remaster(ed)?|anniversary|anniversario|reissue|ed
 
 // iTunes doesn't expose Apple's isCompilation flag, and the pinned entry has to
 // carry one or a best-of files under Albums. Title is all there is to go on.
+// Mirrors LIVE_RE in index.js (English, Italian, Spanish, Portuguese).
+const LIVE_TITLE = /\b(live|concert|session|performance)\b|\b(dal|en|ao)\s+vivo\b/i;
+
 const COMPILATION_TITLE = /\b(best|collection|collezione|essential|anthology|antologia|greatest|hits|raccolta|singles|rarities|b-sides)\b/i;
 
 const artwork = r => (r.artworkUrl100 ?? '').replace('100x100bb', '500x500bb');
@@ -158,6 +161,14 @@ async function main() {
     const sameTitleOnUs = usByFullTitle.get(normalizeKey(r.collectionName));
     if (sameTitleOnUs && !includeVariants) { skipped.push([r, `us already carries it as "${sameTitleOnUs}"`]); continue; }
     const usEditions = usEditionsByBase.get(baseTitle(r.collectionName));
+    // A live album isn't an edition of the studio one it shares a name with:
+    // Charlie Brown Jr.'s studio Ritmo, Ritual e Responsa was skipped because
+    // \`us\` has "Ritmo Ritual e Responsa (Ao Vivo)".
+    if (usEditions && !LIVE_TITLE.test(r.collectionName) && usEditions.every(t => LIVE_TITLE.test(t))) {
+      notes.set(r.collectionId, `the studio album — us carries only "${usEditions[0]}"`);
+      keep.push(r);
+      continue;
+    }
     if (usEditions) {
       // Only a reissue on us, and this one's title is clean → it IS the original.
       const onlyReissues = usEditions.every(t => EDITION_QUALIFIERS.test(t));
