@@ -1425,6 +1425,16 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '1442673813', title: 'A Arte de Charlie Brown Jr.', artist: 'Charlie Brown Jr.', year: 2015,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/06/16/3c/06163c07-6c58-5ce5-2743-be5be74284c9/15UMGIM53809.rgb.jpg/500x500bb.jpg',
   },
+  // A Hungarian band's only release, which Apple titles "- Single"; search
+  // buried it under other Head On Collisions.
+  'headoncollision::headoncollisionsingle': {
+    id: '6794932634', title: 'Head On Collision - Single', artist: 'HEAD ON COLLISION', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/79/81/9e/79819ef3-f94a-703b-c516-edc54ea3e02f/artwork.jpg/500x500bb.jpg',
+  },
+  'headoncollision::headoncollision': {
+    id: '6794932634', title: 'Head On Collision - Single', artist: 'HEAD ON COLLISION', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/79/81/9e/79819ef3-f94a-703b-c516-edc54ea3e02f/artwork.jpg/500x500bb.jpg',
+  },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/44/47/894447b8-a219-b329-37ec-d44003f2e946/20UMGIM88246.rgb.jpg/500x500bb.jpg',
@@ -5591,11 +5601,12 @@ const TRACK_DURATION_FIXES = {
   '269238587': { 1: 3422493 },
 };
 
-// Albums that are a single long piece — one track, yet not singles. The
-// discography would drop them with the singles; these stay, under Albums.
-const ONE_TRACK_ALBUM_IDS = new Set([
-  '269238587',   // Ground Zero — Consume Red (1996)
-]);
+// Releases the discography would drop as singles (one track, or Apple's
+// "- Single" title) that belong on the artist page, and the tab they go in.
+const FORCED_RELEASE_TAB = {
+  '269238587': 'albums',          // Ground Zero — Consume Red (1996): one 57-minute piece
+  '6794932634': 'epsAndMixtapes', // HEAD ON COLLISION — Head On Collision: their only release, 3 tracks
+};
 
 const fixTracklist = (id, tracks) => {
   if (!Array.isArray(tracks)) return tracks;
@@ -6795,7 +6806,7 @@ async function buildArtistDiscography(id, bust = false) {
   // can't tell an EP from an album; see resolveShortRunTimes below.
   const categorize = (item, shortRunTimes) => {
     const t = item.title;
-    if (ONE_TRACK_ALBUM_IDS.has(item.id)) return 'albums';
+    if (FORCED_RELEASE_TAB[item.id]) return FORCED_RELEASE_TAB[item.id];
     if (item.isLive) return 'live';   // a concert whose title doesn't say so
     if (LIVE_RE.test(t) && !isLiveFalsePositive(t)) return 'live';
     if (inAllowlist(t)) return 'epsAndMixtapes';
@@ -6861,7 +6872,7 @@ async function buildArtistDiscography(id, bust = false) {
 
   // Global singles exclusion — runs before tab categorisation
   const isSingleRelease = item =>
-    !ONE_TRACK_ALBUM_IDS.has(item.id) && (
+    !FORCED_RELEASE_TAB[item.id] && (
       item.isSingle === true ||
       item.trackCount === 1 ||
       /\s*-\s*single\b/i.test(item.title));
