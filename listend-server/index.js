@@ -1580,6 +1580,30 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '6812861964', title: 'Pirouette', artist: '2hollis', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/dd/1f/b4/dd1fb404-93e5-4259-8230-27dec2c70675/26UM1IM13151.rgb.jpg/500x500bb.jpg',
   },
+  // New Releases for 2026-11-20. The GTA VI album, OTIS and Crown In The Grave
+  // weren't in Apple's search index yet (the GTA search only turns up Justice's
+  // Original Score and cover singles). ZAZA and Unusua were, but are pinned
+  // anyway so search can't pick a variant over the album.
+  'variousartists::grandtheftautovithealbum': {
+    id: '6812476961', title: 'Grand Theft Auto VI: The Album', artist: 'Various Artists', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/5d/d3/1c/5dd31c9c-1e1c-0bbc-104f-4a42e2bb4c59/075679556424.jpg/500x500bb.jpg',
+  },
+  'conwaythemachine::otis': {
+    id: '6826458152', title: 'OTIS', artist: 'Conway the Machine', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/c8/e7/f5/c8e7f5e2-600b-3568-7c6a-b7d74ae09f32/8721639421845.png/500x500bb.jpg',
+  },
+  'trivium::crowninthegrave': {
+    id: '6818635321', title: 'Crown In The Grave', artist: 'Trivium', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/43/b7/ce/43b7ce91-a19e-454e-208d-7ad7ceff459e/075679558688.jpg/500x500bb.jpg',
+  },
+  'iza::zaza': {
+    id: '6831860219', title: 'ZAZA', artist: 'IZA', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/d1/e1/07/d1e1078d-ee86-8ca9-4236-da4a93964fc2/1200220455881.jpg/500x500bb.jpg',
+  },
+  'toroymoi::unusua': {
+    id: '6823370459', title: 'Unusua', artist: 'Toro y Moi', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/42/0d/42/420d42e6-04cc-3588-be3e-aa58f9c1e03b/193436491488_TyMUnusuax.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],

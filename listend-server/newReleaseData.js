@@ -3,6 +3,11 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: 'Various Artists',        title: 'Grand Theft Auto VI: The Album' },
+  { artist: 'Conway the Machine',     title: 'OTIS' },
+  { artist: 'Trivium',                title: 'Crown In The Grave' },
+  { artist: 'IZA',                    title: 'ZAZA' },
+  { artist: 'Toro y Moi',             title: 'Unusua' },
   { artist: 'U2',                     title: 'Carnaval de Luz' },
   { artist: 'Offset',                 title: 'GMFU' },
   { artist: 'Snoh Aalegra',           title: 'Legendary Love' },
