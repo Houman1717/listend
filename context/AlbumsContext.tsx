@@ -220,6 +220,9 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
   const [wantToListen, setWantToListen] = useState<WantToListenAlbum[]>([]);
   const [playlists,    setPlaylists]    = useState<Playlist[]>([]);
   const reorderQueue = useRef<Promise<void>>(Promise.resolve());
+  // Ids logged on this phone since launch. The startup sync must keep these
+  // even when its fetch (started earlier) didn't return them yet.
+  const loggedThisSession = useRef(new Set<string>());
   const [pendingAlbum,  setPendingAlbum]  = useState<PendingAlbum | null>(null);
   const [isLoaded,        setIsLoaded]        = useState(false);
   const [isRemoteLoaded,  setIsRemoteLoaded]  = useState(false);
@@ -397,7 +400,13 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
             // Preserve local-only albums (e.g. logged while this fetch was in
             // flight, not yet in the DB response). The empty-result case is
             // handled above, so `albums` always has rows here.
-            const localOnly = prev.filter(a => !fetchedIds.has(a.id));
+            // But not ones an earlier sync did return: those were removed or
+            // moved to another id in the DB (another device, an admin merge,
+            // an edition fix like Bleach or EUSEXUA). Kept, the old id stayed
+            // on screen beside the new one.
+            const localOnly = prev.filter(a =>
+              !fetchedIds.has(a.id) &&
+              (!syncedIds?.has(a.id) || loggedThisSession.current.has(a.id)));
             const merged = albums.map(a => {
               const local = prevMap.get(a.id);
               if (local && local.dateLogged > a.dateLogged) {
@@ -443,7 +452,14 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
                 if (error) console.error('[AlbumsContext] re-save of local-only logs failed:', error.message);
               });
           }
-          AsyncStorage.setItem(sk(KEY.SYNCED_IDS, uid), JSON.stringify([...fetchedIds])).catch(() => {});
+          // Every id any sync has returned, not just this one's. Storing only
+          // this sync's ids forgot an id the DB had just dropped, so the next
+          // launch saw it as never saved and wrote it back: logs moved to
+          // another album id came back on the old one (Bleach, EUSEXUA).
+          AsyncStorage.setItem(
+            sk(KEY.SYNCED_IDS, uid),
+            JSON.stringify([...new Set([...(syncedIds ?? []), ...fetchedIds])]),
+          ).catch(() => {});
         }
       }
 
@@ -731,6 +747,7 @@ export function AlbumsProvider({ children }: { children: ReactNode }) {
     // until the next launch's sync collapsed it, which looked like a loss.
     const replaced = loggedAlbums.find(a => a.id === newAlbum.id);
     setLoggedAlbums((prev) => [newAlbum, ...prev.filter(a => a.id !== newAlbum.id)]);
+    loggedThisSession.current.add(newAlbum.id);
 
     if (user) {
       // Awaited, like the re-listen path above. This used to be fire-and-forget
