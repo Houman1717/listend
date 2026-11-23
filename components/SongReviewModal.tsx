@@ -29,24 +29,30 @@ import type { SongMeta } from '@/lib/songReviews';
  * Your own rating / review of a song, plus marking it as the album's
  * favourite. Opening it never logs anything — only Save does. Other people's
  * reviews live on the Song page, not here.
+ *
+ * `reListen`: a new listen of a song you've already logged — the form starts
+ * blank and saving adds a re-listen, leaving earlier listens as they were.
  */
 export function SongReviewModal({
   song,
   onClose,
   isDark,
   colors: colorsProp,
+  reListen: reListenProp = false,
 }: {
   song:    SongMeta | null;
   onClose: () => void;
   isDark:  boolean;
   colors?: any;
+  reListen?: boolean;
 }) {
   const colors = colorsProp ?? Colors[isDark ? 'dark' : 'light'];
-  const { getSongReview, saveSongReview, removeSongReview, setFavoriteSong } = useSongReviews();
+  const { getSongReview, saveSongReview, addSongReListen, removeSongReview, setFavoriteSong } = useSongReviews();
   const insets = useSafeAreaInsets();
   const keyboardHeight = useAndroidKeyboardHeight();
 
   const existing = song ? getSongReview(song) : undefined;
+  const reListen = reListenProp && !!existing;
 
   const [rating,     setRating]     = useState(0);
   const [reviewText, setReviewText] = useState('');
@@ -56,10 +62,10 @@ export function SongReviewModal({
   useEffect(() => {
     if (!song) return;
     const r = getSongReview(song);
-    setRating(r?.rating ?? 0);
-    setReviewText(r?.review ?? '');
+    setRating(reListenProp ? 0 : r?.rating ?? 0);
+    setReviewText(reListenProp ? '' : r?.review ?? '');
     setSaving(false);
-  }, [song?.id]);
+  }, [song?.id, reListenProp]);
 
   if (!song) return null;
 
@@ -67,7 +73,8 @@ export function SongReviewModal({
   const border    = colors.border;
   const muted     = colors.subtext;
   const fieldBg   = colors.surface;
-  const dirty     = !existing || rating !== existing.rating || reviewText.trim() !== (existing.review ?? '');
+  // A re-listen can be saved blank — "listened again, no new rating".
+  const dirty     = reListen || !existing || rating !== existing.rating || reviewText.trim() !== (existing.review ?? '');
   const canFavorite = !!song.albumId;
   const isFavorite  = !!existing?.isFavorite;
 
@@ -75,7 +82,9 @@ export function SongReviewModal({
     if (!song || saving) return;
     Keyboard.dismiss();
     setSaving(true);
-    const ok = await saveSongReview({ song, rating, review: reviewText });
+    const ok = reListen
+      ? await addSongReListen({ song, rating, review: reviewText })
+      : await saveSongReview({ song, rating, review: reviewText });
     setSaving(false);
     if (ok) onClose();
     else Alert.alert("Couldn't save", 'Check your connection and try again.');
@@ -83,7 +92,10 @@ export function SongReviewModal({
 
   function handleRemove() {
     if (!song) return;
-    Alert.alert('Remove song?', 'This removes your rating and review for this song.', [
+    const listens = (existing?.reListenCount ?? 0) + 1;
+    Alert.alert('Remove song?', listens > 1
+      ? `This removes all ${listens} listens of this song, with their ratings and reviews.`
+      : 'This removes your rating and review for this song.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -116,7 +128,7 @@ export function SongReviewModal({
               <Pressable onPress={onClose} hitSlop={12}>
                 <FontAwesome name="chevron-down" size={16} color={muted} />
               </Pressable>
-              <Text style={[s.headerTitle, { color: colors.text }]}>{existing ? 'Your Review' : 'Rate & Review'}</Text>
+              <Text style={[s.headerTitle, { color: colors.text }]}>{reListen ? 'Re-listen' : existing ? 'Your Review' : 'Rate & Review'}</Text>
               {canFavorite ? (
                 <Pressable onPress={handleFavorite} hitSlop={12} accessibilityLabel={isFavorite ? 'Unmark favourite track' : 'Mark as favourite track'}>
                   <Ionicons name={isFavorite ? 'trophy' : 'trophy-outline'} size={19} color={isFavorite ? accent : muted} />
@@ -151,7 +163,15 @@ export function SongReviewModal({
               </View>
 
               {/* Your rating */}
-              <Text style={[s.label, { color: muted }]}>YOUR RATING</Text>
+              <View style={s.labelRow}>
+                <Text style={[s.label, { color: muted }]}>{reListen ? 'THIS LISTEN' : 'YOUR RATING'}</Text>
+                {reListen && existing!.rating > 0 && (
+                  <View style={s.lastTime}>
+                    <FontAwesome name="repeat" size={10} color={muted} />
+                    <Text style={[s.lastTimeText, { color: muted }]}>Last time: {existing!.rating}</Text>
+                  </View>
+                )}
+              </View>
               <VolumeRatingPicker rating={rating} onChange={setRating} isDark={isDark} tint={accent} />
 
               {/* Your review */}
@@ -160,7 +180,7 @@ export function SongReviewModal({
                 style={[s.input, { backgroundColor: fieldBg, color: colors.text, borderColor: border }]}
                 value={reviewText}
                 onChangeText={setReviewText}
-                placeholder="What did you think of this song? (optional)"
+                placeholder={reListen ? 'How did it land this time? (optional)' : 'What did you think of this song? (optional)'}
                 placeholderTextColor={muted}
                 multiline
                 maxLength={5000}
@@ -173,10 +193,10 @@ export function SongReviewModal({
                 style={({ pressed }) => [s.saveBtn, { backgroundColor: accent, opacity: saving || !dirty ? 0.5 : pressed ? 0.8 : 1 }]}>
                 {saving
                   ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={s.saveText}>{existing ? 'Save' : rating > 0 || reviewText.trim() ? 'Log song' : 'Log as listened'}</Text>}
+                  : <Text style={s.saveText}>{reListen ? 'Log re-listen' : existing ? 'Save' : rating > 0 || reviewText.trim() ? 'Log song' : 'Log as listened'}</Text>}
               </Pressable>
 
-              {existing && (
+              {existing && !reListen && (
                 <Pressable onPress={handleRemove} hitSlop={8} style={({ pressed }) => [s.removeBtn, { opacity: pressed ? 0.6 : 1 }]}>
                   <Text style={[s.removeText, { color: muted }]}>Remove from My Songs</Text>
                 </Pressable>
@@ -200,6 +220,9 @@ const s = StyleSheet.create({
   songArtist: { fontSize: 14 },
   songAlbum: { fontSize: 12 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 20 },
+  labelRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  lastTime: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  lastTimeText: { fontSize: 12 },
   input: { minHeight: 100, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 12, fontSize: 15, marginTop: 8 },
   saveBtn: { height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   saveText: { color: '#fff', fontSize: 15, fontWeight: '700' },

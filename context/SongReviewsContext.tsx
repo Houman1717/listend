@@ -2,7 +2,10 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/supabaseQuery';
-import { SONG_REVIEW_COLUMNS, rowToSongReview, songKey, type SongMeta, type SongReview } from '@/lib/songReviews';
+import {
+  SONG_REVIEW_COLUMNS, SONG_RE_LISTEN_COLUMNS, rowToSongReview, rowToSongReListen, applySongReListens, songKey,
+  type SongMeta, type SongReview, type SongReListen,
+} from '@/lib/songReviews';
 
 type SaveInput = {
   song:    SongMeta;
@@ -10,6 +13,8 @@ type SaveInput = {
   review?: string;
   /** Move an existing log of another version of this song onto this one. */
   preferThisVersion?: boolean;
+  /** Internal: only move the first-listen row to this version, never touch re-listens. */
+  moveOnly?: boolean;
 };
 
 /** A song id, or a song we can also match by title + artist (any version). */
@@ -25,9 +30,23 @@ function isWeakVersion(s: { title: string; albumId?: string; albumTitle?: string
   return / - (single|ep)$/.test(album) || album === s.title.trim().toLowerCase();
 }
 
+type ReListenInput = {
+  song:        SongMeta;
+  rating:      number;
+  review?:     string;
+  listenedAt?: Date;
+};
+
 type SongReviewsContextType = {
-  /** The user's logged songs, newest listen first. Empty until loaded. */
+  /**
+   * The user's logged songs, newest first listen first. Empty until loaded.
+   * rating/review are the current ones — see SongReview.reListenCount.
+   */
   songReviews: SongReview[];
+  /** Every re-listen of every song, newest first. */
+  songReListens: SongReListen[];
+  /** Re-listens of one song (any version), newest first. */
+  reListensFor: (song: { title: string; artist: string }) => SongReListen[];
   /** False until the first successful load — don't treat [] as "none" before then. */
   songsLoaded: boolean;
   /**
@@ -37,8 +56,19 @@ type SongReviewsContextType = {
   getSongReview: (song: SongRef) => SongReview | undefined;
   /** The user's logged songs on one album. */
   songsForAlbum: (albumId: string) => SongReview[];
-  /** Log/update a song. Editing keeps the original listened_at. Returns false on failure. */
+  /**
+   * Log/update a song. Editing keeps the original listened_at. On a song
+   * you've re-listened, editing changes your latest listen, not the first.
+   * Returns false on failure.
+   */
   saveSongReview: (input: SaveInput) => Promise<boolean>;
+  /**
+   * A new listen of a song with its own rating/review; the first listen stays
+   * as it was. Logs the song normally if it was never logged.
+   */
+  addSongReListen: (input: ReListenInput) => Promise<boolean>;
+  /** Deletes one re-listen entry (by its id). */
+  removeSongReListen: (id: string) => Promise<boolean>;
   removeSongReview: (song: SongRef) => Promise<boolean>;
   /** Mark (or unmark) a song as the favourite on its album. Logs the song if needed. */
   setFavoriteSong: (song: SongMeta, on: boolean) => Promise<boolean>;
@@ -49,8 +79,20 @@ const SongReviewsContext = createContext<SongReviewsContextType | null>(null);
 
 export function SongReviewsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [songReviews, setSongReviewsState] = useState<SongReview[]>([]);
+  // First-listen rows exactly as stored in song_reviews.
+  const [baseSongs, setSongReviewsState] = useState<SongReview[]>([]);
   const [songsLoaded, setSongsLoaded] = useState(false);
+  const [songReListens, setReListensState] = useState<SongReListen[]>([]);
+  const reListenRef = useRef<SongReListen[]>([]);
+  function setReListens(next: SongReListen[] | ((prev: SongReListen[]) => SongReListen[])) {
+    reListenRef.current = (typeof next === 'function' ? next(reListenRef.current) : next)
+      .slice().sort((a, b) => b.listenedAt.localeCompare(a.listenedAt));
+    setReListensState(reListenRef.current);
+  }
+  const reListensOf = (s: { title: string; artist: string }) => {
+    const k = songKey(s.title, s.artist);
+    return reListenRef.current.filter(r => r.songKey === k);
+  };
   // Mirror of the latest list, updated synchronously, so several writes fired
   // back to back (e.g. rating a whole tracklist + a favourite on log) each see
   // the others' optimistic rows instead of a stale render's.
@@ -70,16 +112,30 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     if (!user) return;
-    const rows = await fetchAllRows<any>(
-      (from, to) => supabase
-        .from('song_reviews')
-        .select(SONG_REVIEW_COLUMNS)
-        .eq('user_id', user.id)
-        .order('listened_at', { ascending: false })
-        .range(from, to),
-      20,
-    );
+    const [rows, rlRows] = await Promise.all([
+      fetchAllRows<any>(
+        (from, to) => supabase
+          .from('song_reviews')
+          .select(SONG_REVIEW_COLUMNS)
+          .eq('user_id', user.id)
+          .order('listened_at', { ascending: false })
+          .range(from, to),
+        20,
+      ),
+      fetchAllRows<any>(
+        (from, to) => supabase
+          .from('song_re_listens')
+          .select(SONG_RE_LISTEN_COLUMNS)
+          .eq('user_id', user.id)
+          .order('listened_at', { ascending: false })
+          .order('id')
+          .range(from, to),
+        20,
+      ),
+    ]);
     // A failed read keeps whatever we already have — never overwrite with [].
+    if (rlRows) setReListens(rlRows.map(rowToSongReListen));
+    else console.warn('[SongReviews] re-listen read failed — keeping what we had');
     if (!rows) return;
     setSongReviews(rows.map(rowToSongReview));
     setSongsLoaded(true);
@@ -87,9 +143,21 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setSongReviews([]);
+    setReListens([]);
     setSongsLoaded(false);
     if (user) load();
   }, [user?.id]);
+
+  // What every screen reads: first listens with re-listens folded in.
+  const songReviews = useMemo(
+    () => applySongReListens(baseSongs, songReListens),
+    [baseSongs, songReListens],
+  );
+
+  const reListensFor = useCallback((s: { title: string; artist: string }) => {
+    const k = songKey(s.title, s.artist);
+    return songReListens.filter(r => r.songKey === k);
+  }, [songReListens]);
 
   const byId  = useMemo(() => new Map(songReviews.map(s => [s.songId, s])), [songReviews]);
   const byKey = useMemo(() => {
@@ -111,10 +179,38 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
     [songReviews],
   );
 
-  async function saveSongReview({ song, rating, review, preferThisVersion }: SaveInput): Promise<boolean> {
+  /**
+   * Editing a re-listened song edits the latest listen. The form shows the
+   * current rating/review, which can come from an older listen when the latest
+   * one left it blank — an unchanged value stays blank on the latest row.
+   */
+  async function editLatestReListen(existing: SongReview, rating: number, trimmed: string | undefined): Promise<boolean> {
+    const rls = reListensOf(existing);
+    const latest = rls[0];
+    const [current] = applySongReListens([existing], rls);
+    const nextRating = !latest.rating && rating === current.rating ? 0 : rating;
+    const nextReview = !latest.review && trimmed === current.review ? undefined : trimmed;
+    if (nextRating === latest.rating && nextReview === latest.review) return true;
+    const before = latest;
+    setReListens(prev => prev.map(r => r.id === latest.id ? { ...r, rating: nextRating, review: nextReview } : r));
+    const { error } = await supabase
+      .from('song_re_listens')
+      .update({ rating: nextRating, review: nextReview ?? null })
+      .eq('user_id', user!.id)
+      .eq('id', latest.id);
+    if (error) {
+      console.error('[SongReviews] re-listen edit error:', error.message);
+      setReListens(prev => prev.map(r => r.id === before.id ? before : r));
+      return false;
+    }
+    return true;
+  }
+
+  async function saveSongReview({ song, rating, review, preferThisVersion, moveOnly }: SaveInput): Promise<boolean> {
     if (!user) return false;
     const existing = findSong(song);
     const trimmed  = review?.trim() || undefined;
+    if (existing && !moveOnly && reListensOf(existing).length > 0) return editLatestReListen(existing, rating, trimmed);
     const listenedAt = existing?.listenedAt ?? new Date().toISOString();
 
     // Already logged as another version of this song: keep one log per song.
@@ -185,8 +281,16 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
     const existing = findSong(ref);
     if (!existing) return true;
     const songId = existing.songId;
+    const key = songKey(existing.title, existing.artist);
+    const rls = reListensOf(existing);
     setSongReviews(prev => prev.filter(s => s.songId !== songId));
-    const { error } = await supabase
+    setReListens(prev => prev.filter(r => r.songKey !== key));
+    // Re-listens first: if that fails nothing is gone, and a re-listen is
+    // never left pointing at a song that's no longer logged.
+    const { error: rlError } = rls.length > 0
+      ? await supabase.from('song_re_listens').delete().eq('user_id', user.id).eq('song_key', key)
+      : { error: null };
+    const { error } = rlError ? { error: rlError } : await supabase
       .from('song_reviews')
       .delete()
       .eq('user_id', user.id)
@@ -194,6 +298,68 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
     if (error) {
       console.error('[SongReviews] delete error:', error.message);
       setSongReviews(prev => [existing, ...prev].sort((a, b) => b.listenedAt.localeCompare(a.listenedAt)));
+      if (rlError) setReListens(prev => [...prev, ...rls]);
+      return false;
+    }
+    return true;
+  }
+
+  async function addSongReListen({ song, rating, review, listenedAt }: ReListenInput): Promise<boolean> {
+    if (!user) return false;
+    const existing = findSong(song);
+    if (!existing) return saveSongReview({ song, rating, review });
+    const trimmed = review?.trim() || undefined;
+    const at = (listenedAt ?? new Date()).toISOString();
+    // Title/artist come from the logged row so song_key always matches it.
+    const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const row: SongReListen = {
+      id:         tempId,
+      songId:     existing.songId,
+      songKey:    songKey(existing.title, existing.artist),
+      title:      existing.title,
+      artist:     existing.artist,
+      albumId:    existing.albumId,
+      albumTitle: existing.albumTitle,
+      artworkUrl: existing.artworkUrl ?? song.artworkUrl,
+      rating,
+      review:     trimmed,
+      listenedAt: at,
+    };
+    setReListens(prev => [row, ...prev]);
+    const { data, error } = await supabase
+      .from('song_re_listens')
+      .insert({
+        user_id:     user.id,
+        song_id:     row.songId,
+        title:       row.title,
+        artist:      row.artist,
+        album_id:    row.albumId ?? null,
+        album_title: row.albumTitle ?? null,
+        artwork_url: row.artworkUrl ?? null,
+        rating,
+        review:      trimmed ?? null,
+        listened_at: at,
+      })
+      .select('id')
+      .single();
+    if (error || !data) {
+      console.error('[SongReviews] re-listen error:', error?.message);
+      setReListens(prev => prev.filter(r => r.id !== tempId));
+      return false;
+    }
+    setReListens(prev => prev.map(r => r.id === tempId ? { ...r, id: (data as any).id } : r));
+    return true;
+  }
+
+  async function removeSongReListen(id: string): Promise<boolean> {
+    if (!user) return false;
+    const entry = reListenRef.current.find(r => r.id === id);
+    if (!entry) return true;
+    setReListens(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase.from('song_re_listens').delete().eq('user_id', user.id).eq('id', id);
+    if (error) {
+      console.error('[SongReviews] re-listen delete error:', error.message);
+      setReListens(prev => [...prev, entry]);
       return false;
     }
     return true;
@@ -209,7 +375,7 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
       if (!ok) return false;
     } else if (row.songId !== song.id && on) {
       // Logged as another version (e.g. the single): move it onto this album's track.
-      const ok = await saveSongReview({ song, rating: row.rating, review: row.review, preferThisVersion: true });
+      const ok = await saveSongReview({ song, rating: row.rating, review: row.review, preferThisVersion: true, moveOnly: true });
       if (!ok) return false;
     }
     const songId = findSong(song)?.songId ?? song.id;
@@ -239,10 +405,14 @@ export function SongReviewsProvider({ children }: { children: ReactNode }) {
   return (
     <SongReviewsContext.Provider value={{
       songReviews,
+      songReListens,
+      reListensFor,
       songsLoaded,
       getSongReview,
       songsForAlbum,
       saveSongReview,
+      addSongReListen,
+      removeSongReListen,
       removeSongReview,
       setFavoriteSong,
       refreshSongReviews: load,

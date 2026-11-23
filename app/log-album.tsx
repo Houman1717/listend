@@ -134,7 +134,7 @@ export default function LogAlbumScreen() {
     title:      pendingAlbum.title,
     artist:     pendingAlbum.artist,
     artworkUrl: pendingAlbum.artworkUrl,
-  } : null);
+  } : null, null, { reListen: reListenMode });
   const androidKeyboardHeight = useAndroidKeyboardHeight();
   const insets = useSafeAreaInsets();
 
@@ -193,7 +193,7 @@ export default function LogAlbumScreen() {
     // otherwise a canonical-id remap leaves Flip a Record stuck on this album.
     if (flipId) markLogged(flipId);
     // The album is logged either way; a failed track save just gets a heads-up.
-    const tracksOk = await trackDraft.save();
+    const tracksOk = await trackDraft.save(logDate);
     if (!tracksOk) Alert.alert('Some track ratings didn\'t save', 'Your album was logged. You can rate the tracks again from the album page.');
     router.dismiss();
   }

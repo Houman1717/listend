@@ -36,7 +36,7 @@ import { ReviewTrackRatings } from '@/components/ReviewTrackRatings';
 import { SongReviewCard } from '@/components/SongReviewCard';
 import { useSongReviews } from '@/context/SongReviewsContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { fetchUserSongReviews, type SongReview } from '@/lib/songReviews';
+import { fetchUserSongReviews, fetchUserSongReListens, firstListenView, type SongReview, type SongReListen } from '@/lib/songReviews';
 import {
   SONG_PLAYLIST_LIKE_PREFIX, fetchSongPlaylistsByIds, fetchUserSongPlaylists, isSongPlaylistLikeId, songPlaylistCovers,
 } from '@/lib/songPlaylists';
@@ -159,6 +159,8 @@ type SongItem = {
   songs:     SongReview[];   // newest first; one entry = a single song row
   /** Someone else's feed — every song here has a written review. */
   reviewedOnly?: boolean;
+  /** Later listens (song_re_listens), not first logs. */
+  reListen?: boolean;
   dateMs:    number;
   dateLabel: string;
 };
@@ -904,7 +906,7 @@ function FlippedRecordRow({ item, colors }: { item: FlipItem; colors: ColorsType
 function SongRow({ item, onPress, colors }: { item: SongItem; onPress: () => void; colors: ColorsType }) {
   if (item.songs.length > 1) return <AlbumSongsRow item={item} onPress={onPress} colors={colors} />;
   const song = item.songs[0];
-  const label = song.review ? 'Reviewed Song' : song.rating > 0 ? 'Rated Song' : 'Listened to Song';
+  const label = item.reListen ? 'Re-listened Song' : song.review ? 'Reviewed Song' : song.rating > 0 ? 'Rated Song' : 'Listened to Song';
   return (
     <Pressable style={({ pressed }) => [s.row, { opacity: pressed ? 0.72 : 1 }]} onPress={onPress}>
       {song.artworkUrl ? (
@@ -919,7 +921,7 @@ function SongRow({ item, onPress, colors }: { item: SongItem; onPress: () => voi
         <Text style={[s.artist, { color: colors.subtext }]} numberOfLines={1}>{song.artist}</Text>
         <View style={s.meta}>
           <View style={[s.typePill, { borderColor: colors.tint }]}>
-            <FontAwesome name="music" size={9} color={colors.tint} />
+            <FontAwesome name={item.reListen ? 'repeat' : 'music'} size={9} color={colors.tint} />
             <Text style={[s.typeLabel, { color: colors.tint }]}>{label}</Text>
           </View>
           {song.isFavorite && <Ionicons name="trophy" size={11} color={colors.tint} />}
@@ -955,9 +957,11 @@ function AlbumSongsRow({ item, onPress, colors }: { item: SongItem; onPress: () 
         </Text>
         <View style={s.meta}>
           <View style={[s.typePill, { borderColor: colors.tint }]}>
-            <FontAwesome name="music" size={9} color={colors.tint} />
+            <FontAwesome name={item.reListen ? 'repeat' : 'music'} size={9} color={colors.tint} />
             <Text style={[s.typeLabel, { color: colors.tint }]}>
-              {item.reviewedOnly
+              {item.reListen
+                ? `Re-listened ${item.songs.length} track${item.songs.length === 1 ? '' : 's'}`
+                : item.reviewedOnly
                 ? `Reviewed ${item.songs.length} tracks`
                 : rated > 0 ? `Rated ${rated} track${rated === 1 ? '' : 's'}` : `Listened to ${item.songs.length} tracks`}
             </Text>
@@ -1220,38 +1224,57 @@ export default function RecentActivityScreen() {
     });
   }, [featuredLikedPlaylists, featuredLikeDates, viewingOther]);
 
-  const { songReviews } = useSongReviews();
+  const { songReviews, songReListens } = useSongReviews();
   const [cardSong, setCardSong] = useState<SongReview | null>(null);
 
   // Someone else's reviewed songs (bare ratings stay private to their profile's Songs list).
+  // Each feed row is one listen, so first logs show the first-listen take.
   const [otherSongs, setOtherSongs] = useState<SongReview[]>([]);
+  const [otherSongReListens, setOtherSongReListens] = useState<SongReview[]>([]);
   useEffect(() => {
     if (!viewingOther) return;
     let cancelled = false;
     fetchUserSongReviews(viewingOther).then(list => {
-      if (!cancelled && list) setOtherSongs(list.filter(x => !!x.review));
+      if (!cancelled && list) setOtherSongs(list.map(firstListenView).filter(x => !!x.review));
+    });
+    fetchUserSongReListens(viewingOther).then(list => {
+      if (!cancelled && list) setOtherSongReListens(list.filter(x => !!x.review).map(reListenAsSong));
     });
     return () => { cancelled = true; };
   }, [viewingOther]);
 
-  function groupSongs(list: SongReview[], reviewedOnly: boolean): SongItem[] {
+  function reListenAsSong(r: SongReListen): SongReview {
+    return {
+      songId: r.songId, title: r.title, artist: r.artist, albumId: r.albumId, albumTitle: r.albumTitle,
+      artworkUrl: r.artworkUrl, rating: r.rating, review: r.review, isFavorite: false, listenedAt: r.listenedAt,
+    };
+  }
+
+  function groupSongs(list: SongReview[], reviewedOnly: boolean, reListen = false): SongItem[] {
     const groups = new Map<string, SongReview[]>();
     for (const song of list) {
       const day = song.listenedAt.slice(0, 10);
-      const k = song.albumId ? `${song.albumId}|${day}` : `single|${song.songId}`;
+      const k = song.albumId ? `${song.albumId}|${day}` : reListen ? `single|${song.songId}|${song.listenedAt}` : `single|${song.songId}`;
       const g = groups.get(k);
       if (g) g.push(song); else groups.set(k, [song]);
     }
     return [...groups.entries()].map(([k, songs]) => ({
-      key:       `song-${k}`,
+      key:       `${reListen ? 'song-rl' : 'song'}-${k}`,
       songs,
       reviewedOnly,
+      reListen,
       dateMs:    new Date(songs[0].listenedAt).getTime(),
       dateLabel: formatDateLabel(songs[0].listenedAt),
     }));
   }
-  const ownSongItems   = useMemo(() => groupSongs(songReviews, false), [songReviews]);
-  const otherSongItems = useMemo(() => groupSongs(otherSongs, true), [otherSongs]);
+  const ownSongItems   = useMemo(() => [
+    ...groupSongs(songReviews.map(firstListenView), false),
+    ...groupSongs(songReListens.map(reListenAsSong), false, true),
+  ], [songReviews, songReListens]);
+  const otherSongItems = useMemo(() => [
+    ...groupSongs(otherSongs, true),
+    ...groupSongs(otherSongReListens, true, true),
+  ], [otherSongs, otherSongReListens]);
 
   const feed = useMemo((): FeedItem[] => {
     const activityItems      = viewingOther ? otherActivity         : [...ownActivityItems, ...ownReListens];

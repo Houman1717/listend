@@ -18,6 +18,7 @@ import { CompactRating } from '@/components/CompactRating';
 import { AverageVolume } from '@/components/AverageVolume';
 import { avatarColor } from '@/components/ReviewComments';
 import { SongReviewModal } from '@/components/SongReviewModal';
+import { SongListenHistoryModal } from '@/components/SongListenHistoryModal';
 import { SongReviewDetailModal, type SongReviewEntry } from '@/components/SongReviewDetailModal';
 import { AddToSongPlaylistSheet } from '@/components/AddToSongPlaylistSheet';
 import { SendAlbumSheet } from '@/components/SendAlbumSheet';
@@ -67,6 +68,8 @@ export default function SongDetailScreen() {
   const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
   const [reviewsFailed, setReviewsFailed] = useState(false);
   const [editing, setEditing] = useState(params.edit === '1');
+  const [reListening, setReListening] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [addingToPlaylist, setAddingToPlaylist] = useState(false);
   const [sending, setSending] = useState(false);
   const [openEntry, setOpenEntry] = useState<SongReviewEntry | null>(null);
@@ -234,6 +237,16 @@ export default function SongDetailScreen() {
                 <Text style={s.listendBadgeText}>Listend</Text>
               </View>
               {mine.isFavorite && <Ionicons name="trophy" size={15} color={ACCENT} />}
+              {!!mine.reListenCount && (
+                <Pressable
+                  onPress={() => setHistoryOpen(true)}
+                  hitSlop={8}
+                  accessibilityLabel="Listen history"
+                  style={({ pressed }) => [s.listensBtn, { opacity: pressed ? 0.6 : 1 }]}>
+                  <FontAwesome name="repeat" size={12} color={ACCENT} />
+                  <Text style={s.listensText}>{mine.reListenCount + 1} listens</Text>
+                </Pressable>
+              )}
             </View>
             <View style={s.youRight}>
               {mine.rating > 0 && (
@@ -260,6 +273,14 @@ export default function SongDetailScreen() {
             <Text style={s.rateBtnText}>Rate & Review</Text>
           </Pressable>
         )}
+        {mine ? (
+          <Pressable
+            onPress={() => setReListening(true)}
+            style={({ pressed }) => [s.reListenBtn, { opacity: pressed ? 0.85 : 1 }]}>
+            <FontAwesome name="repeat" size={14} color="#fff" />
+            <Text style={s.reListenBtnText}>Re-listen</Text>
+          </Pressable>
+        ) : null}
         {mine?.review ? (
           <Pressable
             onPress={() => ownEntry && setOpenEntry(ownEntry)}
@@ -370,11 +391,20 @@ export default function SongDetailScreen() {
       </ScrollView>
 
       <SongReviewModal
-        song={editing ? song : null}
+        song={editing || reListening ? song : null}
+        reListen={reListening}
         isDark={isDark}
         colors={colors}
-        onClose={() => { setEditing(false); setRefreshTick(t => t + 1); }}
+        onClose={() => { setEditing(false); setReListening(false); setRefreshTick(t => t + 1); }}
       />
+      {historyOpen && mine && (
+        <SongListenHistoryModal
+          song={mine}
+          isDark={isDark}
+          colors={colors}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
       <SendAlbumSheet
         visible={sending}
         song={song}
@@ -425,6 +455,10 @@ const s = StyleSheet.create({
   editBtnText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
   rateBtn: { marginTop: 22, width: '100%', height: 50, borderRadius: 12, backgroundColor: ACCENT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   rateBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  reListenBtn: { marginTop: 14, width: '100%', height: 44, borderRadius: 12, backgroundColor: ACCENT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  reListenBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  listensBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  listensText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
   yourReview: { marginTop: 14, width: '100%', borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, gap: 6 },
   yourReviewLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
   yourReviewText: { fontSize: 14, lineHeight: 20, fontStyle: 'italic' },

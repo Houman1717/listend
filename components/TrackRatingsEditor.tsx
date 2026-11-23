@@ -33,8 +33,20 @@ export type TrackAlbum = {
   artworkUrl?: string;
 };
 
-export function useTrackRatingsDraft(album: TrackAlbum | null, preloadedTracks?: AlbumTrack[] | null) {
-  const { getSongReview, saveSongReview, setFavoriteSong, songsLoaded } = useSongReviews();
+/**
+ * `reListen`: the album is being re-listened, so the tracks start blank and
+ * whatever you rate is saved as a new listen of that song — the first-listen
+ * ratings are kept. `previous` holds each track's current rating for the
+ * "last time" hint.
+ */
+export function useTrackRatingsDraft(
+  album: TrackAlbum | null,
+  preloadedTracks?: AlbumTrack[] | null,
+  opts?: { reListen?: boolean },
+) {
+  const reListen = !!opts?.reListen;
+  const { getSongReview, saveSongReview, addSongReListen, setFavoriteSong, songsLoaded } = useSongReviews();
+  const [previous,      setPrevious]      = useState<Record<string, number>>({});
   const [open,          setOpen]          = useState(false);
   const [fetched,       setFetched]       = useState<AlbumTrack[] | null>(null);
   const [failed,        setFailed]        = useState(false);
@@ -65,13 +77,19 @@ export function useTrackRatingsDraft(album: TrackAlbum | null, preloadedTracks?:
     if (!list) return;
     const r: Record<string, number> = {};
     const rv: Record<string, string> = {};
+    const prev: Record<string, number> = {};
     let fav: string | null = null;
     for (const t of list) {
       const saved = getSongReview(meta(t));
+      if (saved?.isFavorite) fav = t.id;
+      if (reListen) {
+        if (saved && saved.rating > 0) prev[t.id] = saved.rating;
+        continue;
+      }
       if (saved) r[t.id] = saved.rating;
       if (saved?.review) rv[t.id] = saved.review;
-      if (saved?.isFavorite) fav = t.id;
     }
+    setPrevious(prev);
     setRatings(r);
     setReviews(rv);
     setFavoriteId(fav);
@@ -102,15 +120,25 @@ export function useTrackRatingsDraft(album: TrackAlbum | null, preloadedTracks?:
   /**
    * Saves only the tracks the user actually touched: a changed rating or
    * review, or a new favourite. Untouched tracks are never logged as listened.
+   * In re-listen mode a rated/reviewed track gets a new listen dated
+   * `listenedAt` (a track never logged before is logged as its first listen).
    * Returns false if any write failed.
    */
-  async function save(): Promise<boolean> {
+  async function save(listenedAt?: Date): Promise<boolean> {
     if (!tracks || !album || seededFor !== tracks) return true;
     const writes: Promise<boolean>[] = [];
     for (const t of tracks) {
       const existing   = getSongReview(meta(t));
       const next       = ratings[t.id] ?? 0;
       const nextReview = (reviews[t.id] ?? '').trim();
+      if (reListen) {
+        if (next > 0 || nextReview.length > 0) {
+          writes.push(existing
+            ? addSongReListen({ song: meta(t), rating: next, review: nextReview, listenedAt })
+            : saveSongReview({ song: meta(t), rating: next, review: nextReview }));
+        }
+        continue;
+      }
       const changed = existing
         ? existing.rating !== next || (existing.review ?? '') !== nextReview
         : next > 0 || nextReview.length > 0;
@@ -126,6 +154,7 @@ export function useTrackRatingsDraft(album: TrackAlbum | null, preloadedTracks?:
   }
 
   return {
+    reListen, previous,
     open, setOpen, tracks, failed, ready,
     ratings, setRatings, reviews, setReviews,
     favoriteId, setFavoriteId, openReviewId, setOpenReviewId,
@@ -156,7 +185,7 @@ export function TrackRatingsEditor({ draft, isDark, colors }: {
         }}>
         <FontAwesome name="list-ol" size={13} color={ACCENT} />
         <Text style={[s.toggleText, { color: colors.text }]}>
-          Rate the tracks <Text style={{ color: colors.subtext, fontWeight: '400' }}>(optional)</Text>
+          {draft.reListen ? 'Re-rate the tracks' : 'Rate the tracks'} <Text style={{ color: colors.subtext, fontWeight: '400' }}>(optional)</Text>
         </Text>
         <FontAwesome name={open ? 'chevron-up' : 'chevron-down'} size={12} color={colors.subtext} />
       </Pressable>
@@ -182,7 +211,9 @@ export function TrackRatingsEditor({ draft, isDark, colors }: {
                 <FontAwesome name="chevron-right" size={11} color={colors.subtext} />
               </Pressable>
               <Text style={[s.hint, { color: colors.subtext }]}>
-                Tap or drag the bars to rate. Tap a track name to review it.
+                {draft.reListen
+                  ? 'Fresh ratings for this listen — your first-listen ratings are kept. Tap a track name to review it.'
+                  : 'Tap or drag the bars to rate. Tap a track name to review it.'}
               </Text>
               {tracks!.map(t => {
                 const fav        = draft.favoriteId === t.id;
@@ -203,6 +234,11 @@ export function TrackRatingsEditor({ draft, isDark, colors }: {
                         {fav && <Ionicons name="trophy" size={12} color={ACCENT} />}
                         {(hasReview || reviewOpen) && <FontAwesome name="pencil" size={11} color={ACCENT} />}
                       </Pressable>
+                      {draft.reListen && draft.previous[t.id] > 0 && (
+                        <Text style={[s.prev, { color: colors.subtext }]} accessibilityLabel={`Last time ${draft.previous[t.id]}`}>
+                          last {draft.previous[t.id]}
+                        </Text>
+                      )}
                       <CompactVolumePicker
                         rating={draft.ratings[t.id] ?? 0}
                         onChange={r => draft.setRatings(prev => ({ ...prev, [t.id]: r }))}
@@ -284,6 +320,7 @@ const s = StyleSheet.create({
   num: { width: 20, fontSize: 12, textAlign: 'right' },
   titleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { flexShrink: 1, fontSize: 14 },
+  prev: { fontSize: 11, fontVariant: ['tabular-nums'] },
   reviewInput: { marginTop: 8, marginLeft: 30, minHeight: 64, borderRadius: 8, borderWidth: 1, padding: 10, fontSize: 14, lineHeight: 20 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: { maxHeight: '70%', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 10, paddingHorizontal: 20 },

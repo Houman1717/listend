@@ -21,7 +21,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SongReviewCard } from '@/components/SongReviewCard';
-import { SONG_REVIEW_COLUMNS, rowToSongReview, songKey, type SongReview } from '@/lib/songReviews';
+import { SONG_REVIEW_COLUMNS, rowToSongReview, songKey, applySongReListens, fetchUserSongReListens, type SongReview } from '@/lib/songReviews';
 import { countOrNull, displayCount, fetchAllRows } from '@/lib/supabaseQuery';
 import { openSongPage } from '@/lib/openSong';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -408,7 +408,13 @@ export default function UserProfileScreen() {
         .eq('song_key', songKey(song.title, song.artist))
         .order('listened_at', { ascending: false })
         .limit(1);
-      if (data?.[0]) { setCardSong(rowToSongReview(data[0])); return; }
+      if (data?.[0]) {
+        // Show their current take if they've re-listened to it.
+        const key = songKey(song.title, song.artist);
+        const rls = await fetchUserSongReListens(viewedUserId, [key]);
+        setCardSong(applySongReListens([rowToSongReview(data[0])], rls ?? [])[0]);
+        return;
+      }
     }
     openSongPage(router, { id: song.id, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, releaseDate: song.releaseDate });
   }
@@ -1255,7 +1261,7 @@ export default function UserProfileScreen() {
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="clock-o"    label="Recent Activity" sub={`${albumCount} logged albums`}  onPress={() => router.push({ pathname: '/recent-activity',  params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-            <NavRow icon="repeat"     label="Re-listend"      sub="Albums re-listend"              onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } } as any)} colors={colors} />
+            <NavRow icon="repeat"     label="Re-listend"      sub="Albums & songs re-listend"      onPress={() => router.push({ pathname: '/re-listened',      params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } } as any)} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
             <NavRow icon="list"       label="Playlists"       sub="Album & song lists"                  onPress={() => router.push({ pathname: '/my-playlists',     params: { userId: viewedUserId,                                    ...(navProTheme && { proTheme: navProTheme }) } })} colors={colors} />
             <View style={[s.navSeparator, { backgroundColor: colors.border }]} />

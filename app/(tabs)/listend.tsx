@@ -1263,6 +1263,11 @@ export default function ListendScreen() {
 
   const reviewCount = loggedAlbums.filter((a) => !!(a.lastReview ?? a.review)).length;
   const { songReviews, songsLoaded, getSongReview } = useSongReviews();
+  const reListendAlbumCount = loggedAlbums.filter(a => a.isRelistened).length;
+  const reListendSongCount  = songReviews.filter(x => (x.reListenCount ?? 0) > 0).length;
+  const reListendSub = reListendSongCount > 0
+    ? `${reListendAlbumCount} albums · ${reListendSongCount} songs`
+    : `${reListendAlbumCount} albums`;
   const [cardSong, setCardSong] = useState<SongReview | null>(null);
   // A Top 5 song you've rated opens your review card (like an album in My
   // Listend); one you haven't goes straight to its Song page.
@@ -1488,7 +1493,7 @@ export default function ListendScreen() {
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="clock-o"    label="Recent Activity" sub="Your recent activity"                                                        onPress={() => router.push('/recent-activity')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
-        <NavRow colors={colors} icon="repeat"     label="Re-Listend"      sub={`${loggedAlbums.filter(a => a.isRelistened).length} albums`}                 onPress={() => router.push('/re-listened')} />
+        <NavRow colors={colors} icon="repeat"     label="Re-Listend"      sub={reListendSub}                 onPress={() => router.push('/re-listened')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />
         <NavRow colors={colors} icon="list"       label="My Playlists"    sub="Album & song lists"                                                            onPress={() => router.push('/my-playlists')} />
         <View style={[s.navSeparator, { backgroundColor: colors.border }]} />

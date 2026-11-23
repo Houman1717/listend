@@ -24,6 +24,10 @@ import { useAlbums, LoggedAlbum } from '@/context/AlbumsContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { navigateToAlbum } from '@/lib/navigateToAlbum';
+import { useSongReviews } from '@/context/SongReviewsContext';
+import { SongListenHistoryModal } from '@/components/SongListenHistoryModal';
+import { fetchUserSongReviews, fetchUserSongReListens, songKey, type SongReview, type SongReListen } from '@/lib/songReviews';
+import { openSongPage } from '@/lib/openSong';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +85,46 @@ function ReListenedAlbumRow({
       <View style={s.albumInfo}>
         <Text style={[s.albumTitle, { color: colors.text }]} numberOfLines={1}>{album.title}</Text>
         <Text style={[s.albumArtist, { color: colors.subtext }]} numberOfLines={1}>{album.artist}{album.year > 0 ? ` · ${album.year}` : ''}</Text>
+        <View style={s.listenCountRow}>
+          <FontAwesome name="repeat" size={11} color={colors.tint} />
+          <Text style={[s.listenCountText, { color: colors.tint }]}>{totalListens} listen{totalListens !== 1 ? 's' : ''}</Text>
+        </View>
+      </View>
+      <FontAwesome name="chevron-right" size={12} color={colors.subtext} />
+    </Pressable>
+  );
+}
+
+// ─── Song row item ────────────────────────────────────────────────────────────
+
+function ReListenedSongRow({
+  song,
+  isDark,
+  colors,
+  onPress,
+}: {
+  song: SongReview;
+  isDark: boolean;
+  colors: any;
+  onPress: () => void;
+}) {
+  const totalListens = (song.reListenCount ?? 0) + 1;
+  return (
+    <Pressable
+      style={({ pressed }) => [s.albumRow, { borderBottomColor: isDark ? '#2a1e14' : '#e8e8e8', opacity: pressed ? 0.7 : 1 }]}
+      onPress={onPress}>
+      {song.artworkUrl ? (
+        <ExpoImage source={{ uri: song.artworkUrl }} style={s.albumArt} contentFit="cover" cachePolicy="disk" />
+      ) : (
+        <View style={[s.albumArt, { backgroundColor: '#2E2018', justifyContent: 'center', alignItems: 'center' }]}>
+          <FontAwesome name="music" size={20} color="rgba(255,255,255,0.4)" />
+        </View>
+      )}
+      <View style={s.albumInfo}>
+        <Text style={[s.albumTitle, { color: colors.text }]} numberOfLines={1}>{song.title}</Text>
+        <Text style={[s.albumArtist, { color: colors.subtext }]} numberOfLines={1}>
+          {song.artist}{song.albumTitle ? ` · ${song.albumTitle}` : ''}
+        </Text>
         <View style={s.listenCountRow}>
           <FontAwesome name="repeat" size={11} color={colors.tint} />
           <Text style={[s.listenCountText, { color: colors.tint }]}>{totalListens} listen{totalListens !== 1 ? 's' : ''}</Text>
@@ -259,7 +303,7 @@ const COVER_COLORS = ['#2d5a27','#7a4a2e','#1a3018','#d4a017','#7a3a1a','#8b1a1a
 export default function ReListenedScreen() {
   const colorScheme = useColorScheme();
   const { isPro, proTheme: ownProTheme } = usePro();
-  const params      = useLocalSearchParams<{ userId?: string; proTheme?: string }>();
+  const params      = useLocalSearchParams<{ userId?: string; proTheme?: string; tab?: string }>();
   const _themeKey = !params.userId ? ownProTheme : (params.proTheme ?? 'default');
   const colors = ((!params.userId ? isPro : !!params.proTheme) && _themeKey !== 'default')
     ? themeToColors(getProTheme(_themeKey))
@@ -268,8 +312,33 @@ export default function ReListenedScreen() {
   const router      = useRouter();
   const { user }    = useAuth();
   const { loggedAlbums, removeReListenEntry } = useAlbums();
+  const { songReviews } = useSongReviews();
 
   const viewingOther = params.userId && params.userId !== user?.id ? params.userId : null;
+  const [tab, setTab] = useState<'albums' | 'songs'>(params.tab === 'songs' ? 'songs' : 'albums');
+
+  // ── Songs tab ──────────────────────────────────────────────────────────────
+  const [otherSongs,     setOtherSongs]     = useState<SongReview[] | null>(null);
+  const [otherReListens, setOtherReListens] = useState<SongReListen[]>([]);
+  const [songsFailed,    setSongsFailed]    = useState(false);
+  const [historySong,    setHistorySong]    = useState<SongReview | null>(null);
+
+  useEffect(() => {
+    if (!viewingOther) return;
+    let cancelled = false;
+    Promise.all([fetchUserSongReviews(viewingOther), fetchUserSongReListens(viewingOther)]).then(([list, rls]) => {
+      if (cancelled) return;
+      if (!list) { setSongsFailed(true); return; }
+      setOtherSongs(list);
+      setOtherReListens(rls ?? []);
+    });
+    return () => { cancelled = true; };
+  }, [viewingOther]);
+
+  const reListenedSongs = (viewingOther ? (otherSongs ?? []) : songReviews)
+    .filter(x => (x.reListenCount ?? 0) > 0)
+    .sort((a, b) => (b.lastListenedAt ?? b.listenedAt).localeCompare(a.lastListenedAt ?? a.listenedAt));
+
 
   // For own profile: derive from context. For other user: fetch from Supabase.
   const [otherAlbums,    setOtherAlbums]    = useState<LoggedAlbum[]>([]);
@@ -344,6 +413,14 @@ export default function ReListenedScreen() {
         a.artist.toLowerCase().includes(query.toLowerCase())
       )
     : reListenedAlbums;
+
+  const displaySongs = query.trim()
+    ? reListenedSongs.filter(x =>
+        x.title.toLowerCase().includes(query.toLowerCase()) ||
+        x.artist.toLowerCase().includes(query.toLowerCase()) ||
+        (x.albumTitle ?? '').toLowerCase().includes(query.toLowerCase())
+      )
+    : reListenedSongs;
 
   const targetUserId     = viewingOther ?? user?.id ?? '';
 
@@ -448,23 +525,47 @@ export default function ReListenedScreen() {
         headerShadowVisible: false,
       }} />
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        {reListenedAlbums.length > 0 && (
-          <View style={[ss.countRow, { borderBottomColor: colors.border }]}>
-            <Text style={[ss.countText, { color: colors.subtext }]}>{reListenedAlbums.length} album{reListenedAlbums.length !== 1 ? 's' : ''}</Text>
-            <Pressable
-              onPress={() => {
-                const next = !searchOpen;
-                setSearchOpen(next);
-                if (!next) setQuery('');
-                else setTimeout(() => searchRef.current?.focus(), 50);
-              }}
-              hitSlop={10}
-              style={[ss.searchToggle, searchOpen && { backgroundColor: colors.tint }]}>
-              <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : colors.tint} />
-            </Pressable>
+        {/* Albums | Songs */}
+        <View style={[ss.countRow, { borderBottomColor: colors.border }]}>
+          <View style={[ss.tabToggle, { borderColor: colors.border }]}>
+            {(['albums', 'songs'] as const).map(k => {
+              const active = tab === k;
+              return (
+                <Pressable
+                  key={k}
+                  onPress={() => setTab(k)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  style={[ss.tabBtn, active && { backgroundColor: colors.tint }]}>
+                  <Text style={[ss.tabText, { color: active ? '#fff' : colors.subtext }]}>
+                    {k === 'albums' ? 'Albums' : 'Songs'}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-        )}
-        {reListenedAlbums.length > 0 && searchOpen && (
+          <View style={ss.countRight}>
+            <Text style={[ss.countText, { color: colors.subtext }]}>
+              {tab === 'albums'
+                ? `${reListenedAlbums.length} album${reListenedAlbums.length !== 1 ? 's' : ''}`
+                : `${reListenedSongs.length} song${reListenedSongs.length !== 1 ? 's' : ''}`}
+            </Text>
+            {(tab === 'albums' ? reListenedAlbums.length : reListenedSongs.length) > 0 && (
+              <Pressable
+                onPress={() => {
+                  const next = !searchOpen;
+                  setSearchOpen(next);
+                  if (!next) setQuery('');
+                  else setTimeout(() => searchRef.current?.focus(), 50);
+                }}
+                hitSlop={10}
+                style={[ss.searchToggle, searchOpen && { backgroundColor: colors.tint }]}>
+                <FontAwesome name="search" size={13} color={searchOpen ? '#fff' : colors.tint} />
+              </Pressable>
+            )}
+          </View>
+        </View>
+        {searchOpen && (
           <View style={[ss.searchBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
             <FontAwesome name="search" size={14} color={colors.subtext} />
             <TextInput
@@ -472,7 +573,7 @@ export default function ReListenedScreen() {
               style={[ss.searchInput, { color: colors.text }]}
               value={query}
               onChangeText={setQuery}
-              placeholder="Search albums…"
+              placeholder={tab === 'albums' ? 'Search albums…' : 'Search songs…'}
               placeholderTextColor={colors.subtext}
               autoCorrect={false}
               autoCapitalize="none"
@@ -481,6 +582,7 @@ export default function ReListenedScreen() {
             />
           </View>
         )}
+        {tab === 'albums' ? (
         <FlatList
           data={displayAlbums}
           keyExtractor={item => item.id}
@@ -517,7 +619,57 @@ export default function ReListenedScreen() {
             </View>
           )}
         />
+        ) : (
+          <FlatList
+            data={displaySongs}
+            keyExtractor={item => songKey(item.title, item.artist)}
+            style={{ flex: 1 }}
+            contentContainerStyle={displaySongs.length === 0 ? s.emptyContainer : { paddingBottom: 40 }}
+            ListEmptyComponent={
+              viewingOther && !otherSongs && !songsFailed ? (
+                <ActivityIndicator color={colors.tint} style={{ marginTop: 60 }} />
+              ) : (
+                <View style={s.emptyInner}>
+                  <FontAwesome name="repeat" size={40} color={isDark ? '#3a2818' : '#ddd'} />
+                  <Text style={[s.emptyTitle, { color: colors.text }]}>
+                    {songsFailed ? "Couldn't load songs" : query.trim() ? 'No songs found' : 'No song re-listens yet'}
+                  </Text>
+                  {!query.trim() && !songsFailed && !viewingOther && (
+                    <Text style={[s.emptySubtext, { color: colors.subtext }]}>
+                      Tap "Re-listen" on a song you've logged, or re-rate the tracks when you re-listen an album.
+                    </Text>
+                  )}
+                </View>
+              )
+            }
+            renderItem={({ item }) => (
+              <ReListenedSongRow
+                song={item}
+                isDark={isDark}
+                colors={colors}
+                onPress={() => setHistorySong(item)}
+              />
+            )}
+          />
+        )}
       </View>
+
+      {historySong && (
+        <SongListenHistoryModal
+          song={viewingOther ? historySong : (songReviews.find(x => x.songId === historySong.songId) ?? historySong)}
+          reListens={viewingOther
+            ? otherReListens.filter(r => r.songKey === songKey(historySong.title, historySong.artist))
+            : undefined}
+          isDark={isDark}
+          colors={colors}
+          onClose={() => setHistorySong(null)}
+          onSongPress={() => {
+            const song = historySong;
+            setHistorySong(null);
+            openSongPage(router, { id: song.songId, title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, albumId: song.albumId, albumTitle: song.albumTitle, durationMs: song.durationMs });
+          }}
+        />
+      )}
 
       {historyData && (
         <HistoryModal
@@ -630,6 +782,10 @@ const ss = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   countText: { fontSize: 13, fontWeight: '600' },
+  countRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tabToggle: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, padding: 2 },
+  tabBtn: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 999 },
+  tabText: { fontSize: 12, fontWeight: '700' },
   searchToggle: {
     width: 28, height: 28, borderRadius: 6,
     alignItems: 'center', justifyContent: 'center',

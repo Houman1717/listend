@@ -32,6 +32,32 @@ export type SongReview = {
   review?:     string;
   isFavorite:  boolean;
   listenedAt:  string;
+  /**
+   * Re-listens (song_re_listens). When there are any, `rating` / `review` hold
+   * the *current* take — latest non-zero re-listen rating, latest re-listen
+   * review — and the first listen moves to firstRating / firstReview, the same
+   * rule albums use (lib/effectiveRating.ts). Unset = never re-listened.
+   */
+  reListenCount?:  number;
+  firstRating?:    number;
+  firstReview?:    string;
+  lastListenedAt?: string;
+};
+
+/** One later listen of a song you'd already logged (song_re_listens row). */
+export type SongReListen = {
+  id:          string;
+  songId:      string;
+  /** Same key as songKey(title, artist) — links it to the song_reviews row. */
+  songKey:     string;
+  title:       string;
+  artist:      string;
+  albumId?:    string;
+  albumTitle?: string;
+  artworkUrl?: string;
+  rating:      number;
+  review?:     string;
+  listenedAt:  string;
 };
 
 /** What the app knows about a song when the user logs it. */
@@ -70,6 +96,106 @@ export function rowToSongReview(r: any): SongReview {
     isFavorite: !!r.is_favorite,
     listenedAt: r.listened_at,
   };
+}
+
+export const SONG_RE_LISTEN_COLUMNS =
+  'id, song_id, song_key, title, artist, album_id, album_title, artwork_url, rating, review, listened_at';
+
+export function rowToSongReListen(r: any): SongReListen {
+  return {
+    id:         r.id,
+    songId:     r.song_id,
+    songKey:    r.song_key ?? songKey(r.title, r.artist),
+    title:      r.title,
+    artist:     r.artist,
+    albumId:    r.album_id ?? undefined,
+    albumTitle: r.album_title ?? undefined,
+    artworkUrl: r.artwork_url ?? undefined,
+    rating:     r.rating ?? 0,
+    review:     r.review || undefined,
+    listenedAt: r.listened_at,
+  };
+}
+
+/**
+ * Folds re-listens into song logs: each song's rating/review become its
+ * current ones (see SongReview.reListenCount). `reListens` can be in any
+ * order. Songs with no re-listens come back unchanged.
+ */
+export function applySongReListens(list: SongReview[], reListens: SongReListen[]): SongReview[] {
+  if (reListens.length === 0) return list;
+  const byKey = new Map<string, SongReListen[]>();
+  for (const r of reListens) {
+    const g = byKey.get(r.songKey);
+    if (g) g.push(r); else byKey.set(r.songKey, [r]);
+  }
+  for (const g of byKey.values()) g.sort((a, b) => b.listenedAt.localeCompare(a.listenedAt));
+  return list.map(s => {
+    const base = s.reListenCount ? firstListenView(s) : s;
+    const rls = byKey.get(songKey(base.title, base.artist));
+    if (!rls?.length) return base;
+    const lastRating = rls.find(r => r.rating > 0)?.rating;
+    const lastReview = rls.find(r => !!r.review)?.review;
+    return {
+      ...base,
+      firstRating:    base.rating,
+      firstReview:    base.review,
+      rating:         lastRating ?? base.rating,
+      review:         lastReview ?? base.review,
+      reListenCount:  rls.length,
+      lastListenedAt: rls[0].listenedAt,
+    };
+  });
+}
+
+/** The song as it was on the first listen (undoes applySongReListens). */
+export function firstListenView(s: SongReview): SongReview {
+  if (!s.reListenCount) return s;
+  const { firstRating, firstReview, reListenCount, lastListenedAt, ...rest } = s;
+  return { ...rest, rating: firstRating ?? 0, review: firstReview };
+}
+
+/**
+ * One user's re-listens, newest first — all of them, or only for the given
+ * song keys. Null on failure.
+ */
+export async function fetchUserSongReListens(userId: string, keys?: string[]): Promise<SongReListen[] | null> {
+  if (keys && keys.length === 0) return [];
+  const rows = keys
+    ? await fetchAllRowsIn<any>(
+        [...new Set(keys)],
+        (chunk, from, to) => supabase
+          .from('song_re_listens')
+          .select(SONG_RE_LISTEN_COLUMNS)
+          .eq('user_id', userId)
+          .in('song_key', chunk)
+          .order('listened_at', { ascending: false })
+          .range(from, to),
+        5,
+      )
+    : await fetchAllRows<any>(
+        (from, to) => supabase
+          .from('song_re_listens')
+          .select(SONG_RE_LISTEN_COLUMNS)
+          .eq('user_id', userId)
+          .order('listened_at', { ascending: false })
+          .order('id')
+          .range(from, to),
+        20,
+      );
+  if (!rows) return null;
+  return rows.map(rowToSongReListen).sort((a, b) => b.listenedAt.localeCompare(a.listenedAt));
+}
+
+/**
+ * Applies one user's re-listens to their songs. If the re-listen read fails
+ * the songs come back as first-listen only rather than not at all.
+ */
+async function withUserReListens(userId: string, list: SongReview[], all = false): Promise<SongReview[]> {
+  if (list.length === 0) return list;
+  const rls = await fetchUserSongReListens(userId, all ? undefined : list.map(s => songKey(s.title, s.artist)));
+  if (!rls) console.warn('[songReviews] re-listen read failed — showing first-listen ratings');
+  return applySongReListens(list, rls ?? []);
 }
 
 export type SongRatingStats = { sum: number; count: number };
@@ -131,27 +257,44 @@ export function withOwnRating(stats: SongRatingStats | undefined, ownRating: num
  * the viewer and anyone they've blocked or been blocked by. Null on failure.
  */
 export async function fetchCommunitySongReviews(song: SongRef, viewerId?: string): Promise<CommunitySongReview[] | null> {
+  const key = songKey(song.title, song.artist);
   let q = supabase
     .from('song_reviews')
     .select(`user_id, ${SONG_REVIEW_COLUMNS}`)
-    .eq('song_key', songKey(song.title, song.artist))
-    .or('rating.gt.0,review.neq.')
+    .eq('song_key', key)
     .order('listened_at', { ascending: false })
-    .limit(200);
+    .limit(300);
   if (viewerId) q = q.neq('user_id', viewerId);
-  const [res, blocked] = await Promise.all([q, fetchBlockedIds(viewerId)]);
+  // Re-listens can carry a newer rating/review than the first listen.
+  let rq = supabase
+    .from('song_re_listens')
+    .select(`user_id, ${SONG_RE_LISTEN_COLUMNS}`)
+    .eq('song_key', key)
+    .order('listened_at', { ascending: false })
+    .limit(500);
+  if (viewerId) rq = rq.neq('user_id', viewerId);
+  const [res, rlRes, blocked] = await Promise.all([q, rq, fetchBlockedIds(viewerId)]);
   const all = rowsOrNull(res);
   if (!all) return null;
+  const rlRows = rowsOrNull(rlRes);
+  if (!rlRows) console.warn('[songReviews] community re-listen read failed — showing first-listen ratings');
+  const rlByUser = new Map<string, SongReListen[]>();
+  for (const r of rlRows ?? []) {
+    const g = rlByUser.get(r.user_id);
+    if (g) g.push(rowToSongReListen(r)); else rlByUser.set(r.user_id, [rowToSongReListen(r)]);
+  }
   // Newest first, so the first row per person is their latest version.
   const seen = new Set<string>();
-  const rows = all.filter((r: any) => {
-    if (blocked.has(r.user_id) || seen.has(r.user_id)) return false;
+  const rows: { userId: string; review: SongReview }[] = [];
+  for (const r of all as any[]) {
+    if (blocked.has(r.user_id) || seen.has(r.user_id)) continue;
     seen.add(r.user_id);
-    return true;
-  });
+    const [merged] = applySongReListens([rowToSongReview(r)], rlByUser.get(r.user_id) ?? []);
+    if (merged.rating > 0 || !!merged.review) rows.push({ userId: r.user_id, review: merged });
+  }
   if (rows.length === 0) return [];
 
-  const userIds = [...new Set(rows.map((r: any) => r.user_id as string))];
+  const userIds = [...new Set(rows.map(r => r.userId))];
   const profiles = await fetchAllRowsIn<any>(
     userIds,
     (chunk, from, to) => supabase.from('profiles').select('id, username, display_name, avatar_url').in('id', chunk).range(from, to),
@@ -159,11 +302,11 @@ export async function fetchCommunitySongReviews(song: SongRef, viewerId?: string
   );
   const byId = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
-  return rows.map((r: any) => {
-    const p = byId.get(r.user_id);
+  return rows.map(r => {
+    const p = byId.get(r.userId);
     return {
-      ...rowToSongReview(r),
-      userId:    r.user_id,
+      ...r.review,
+      userId:    r.userId,
       username:    p?.username ?? '',
       displayName: p?.display_name ?? null,
       avatarUrl:   p?.avatar_url ?? null,
@@ -185,7 +328,7 @@ export async function fetchUserSongReviews(userId: string): Promise<SongReview[]
       .range(from, to),
     20,
   );
-  return rows ? rows.map(rowToSongReview) : null;
+  return rows ? withUserReListens(userId, rows.map(rowToSongReview), true) : null;
 }
 
 /**
@@ -215,7 +358,7 @@ export async function fetchUserAlbumSongReviews(
     if (artist && (r.artist ?? '').trim().toLowerCase() !== artist) continue;
     out.set(r.song_id, rowToSongReview(r));
   }
-  return [...out.values()];
+  return withUserReListens(userId, [...out.values()]);
 }
 
 /** Same matching as fetchUserAlbumSongReviews, over an in-memory list. */
@@ -247,7 +390,7 @@ export async function fetchSongReviewCounts(songs: SongRef[], viewerId?: string)
     if (list) list.push(s.id); else idsByKey.set(k, [s.id]);
   }
   if (idsByKey.size === 0) return out;
-  const [rows, blocked] = await Promise.all([
+  const [rows, blocked, rlRows] = await Promise.all([
     fetchAllRowsIn<any>(
       [...idsByKey.keys()],
       (chunk, from, to) => supabase
@@ -260,10 +403,22 @@ export async function fetchSongReviewCounts(songs: SongRef[], viewerId?: string)
       5,
     ),
     fetchBlockedIds(viewerId),
+    // A review written on a re-listen counts too.
+    fetchAllRowsIn<any>(
+      [...idsByKey.keys()],
+      (chunk, from, to) => supabase
+        .from('song_re_listens')
+        .select('song_key, user_id')
+        .in('song_key', chunk)
+        .not('review', 'is', null)
+        .neq('review', '')
+        .range(from, to),
+      5,
+    ),
   ]);
   if (!rows) return null;
   const people = new Map<string, Set<string>>();
-  for (const r of rows) {
+  for (const r of [...rows, ...(rlRows ?? [])]) {
     if (r.user_id === viewerId || blocked.has(r.user_id)) continue;
     const set = people.get(r.song_key) ?? new Set<string>();
     set.add(r.user_id);
@@ -327,12 +482,27 @@ export async function fetchArtistTopSongs(artist: string, limit = 5): Promise<Ar
   if (!name) return { mostListend: [], topRated: [] };
   // ilike without wildcards is a case-insensitive equals — escape any the name contains.
   const pattern = name.replace(/[\\%_]/g, c => `\\${c}`);
-  const rows = await fetchAllRows<any>((from, to) => supabase
-    .from('song_reviews')
-    .select('user_id, song_id, song_key, title, artist, album_id, album_title, artwork_url, duration_ms, rating, listened_at')
-    .ilike('artist', pattern)
-    .range(from, to), ARTIST_SONG_PAGES);
+  const [rows, rlRows] = await Promise.all([
+    fetchAllRows<any>((from, to) => supabase
+      .from('song_reviews')
+      .select('user_id, song_id, song_key, title, artist, album_id, album_title, artwork_url, duration_ms, rating, listened_at')
+      .ilike('artist', pattern)
+      .range(from, to), ARTIST_SONG_PAGES),
+    fetchAllRows<any>((from, to) => supabase
+      .from('song_re_listens')
+      .select('user_id, song_key, rating, listened_at')
+      .ilike('artist', pattern)
+      .gt('rating', 0)
+      .range(from, to), ARTIST_SONG_PAGES),
+  ]);
   if (!rows) return null;
+  // Each person's newest non-zero re-listen rating replaces their first one.
+  const reRating = new Map<string, { rating: number; at: string }>();
+  for (const r of rlRows ?? []) {
+    const k = `${r.user_id}|${r.song_key}`;
+    const prev = reRating.get(k);
+    if (!prev || (r.listened_at ?? '') > prev.at) reRating.set(k, { rating: r.rating, at: r.listened_at ?? '' });
+  }
 
   type Version = { meta: any; users: Set<string> };
   const bySong = new Map<string, { versions: Map<string, Version>; latest: Map<string, { rating: number; at: string }> }>();
@@ -347,7 +517,8 @@ export async function fetchArtistTopSongs(artist: string, limit = 5): Promise<Ar
     // Show the album version when there is one, not the single.
     if (!v.meta.album_id && r.album_id) v.meta = r;
     const prev = e.latest.get(r.user_id);
-    if (!prev || (r.listened_at ?? '') > prev.at) e.latest.set(r.user_id, { rating: r.rating ?? 0, at: r.listened_at ?? '' });
+    const rating = reRating.get(`${r.user_id}|${r.song_key}`)?.rating ?? r.rating ?? 0;
+    if (!prev || (r.listened_at ?? '') > prev.at) e.latest.set(r.user_id, { rating, at: r.listened_at ?? '' });
   }
 
   const songs: ArtistTopSong[] = [];
