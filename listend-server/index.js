@@ -780,6 +780,13 @@ pinStorefront('br', [
   '1442674105', '1442674110', '1442674113', '1442674114', '1442674119', '1442674182',
   '1442674187', '1442674190',
 ]);
+// The Shirelles — Baby It's You (1962)
+pinStorefront('jp', [
+  '1763620272',
+  '1763620429', '1763620438', '1763620645', '1763620664', '1763620678', '1763620688',
+  '1763620692', '1763620911', '1763620912', '1763620916', '1763620919', '1763620929',
+  '1763620931', '1763620934', '1763621179', '1763621180', '1763621185',
+]);
 
 const storefrontFor = id => NON_US_STOREFRONT_IDS.get(id) ?? 'us';
 
@@ -1434,6 +1441,10 @@ const CANONICAL_ALBUM_OVERRIDES = {
   'headoncollision::headoncollision': {
     id: '6794932634', title: 'Head On Collision - Single', artist: 'HEAD ON COLLISION', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/79/81/9e/79819ef3-f94a-703b-c516-edc54ea3e02f/artwork.jpg/500x500bb.jpg',
+  },
+  'theshirelles::babyitsyou': {
+    id: '1763620272', title: 'Baby It\'s You', artist: 'The Shirelles', year: 1962,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/81/a7/39/81a739ad-d568-85c6-a801-56421bab5758/4582239497661_cover.jpg/500x500bb.jpg',
   },
   'cro::trip': {
     id: '1579322186', title: 'trip', artist: 'Cro', year: 2021,
@@ -6462,6 +6473,14 @@ const ARTIST_ALBUM_OVERRIDES = {
       artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/06/16/3c/06163c07-6c58-5ce5-2743-be5be74284c9/15UMGIM53809.rgb.jpg/500x500bb.jpg',
       year: 2015, isSingle: false, isCompilation: true, trackCount: 20,
       url: 'https://music.apple.com/br/album/a-arte-de-charlie-brown-jr/1442673813', type: 'album',
+    },
+  ],
+  '3541817': [ // The Shirelles — not licensed for `us`
+    {
+      id: '1763620272', title: 'Baby It\'s You',
+      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/81/a7/39/81a739ad-d568-85c6-a801-56421bab5758/4582239497661_cover.jpg/500x500bb.jpg',
+      year: 1962, isSingle: false, isCompilation: false, trackCount: 17,
+      url: 'https://music.apple.com/jp/album/baby-its-you/1763620272', type: 'album',
     },
   ],
   '469647548': [ // Cro — not licensed for `us`
