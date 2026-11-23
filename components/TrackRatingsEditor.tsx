@@ -212,7 +212,7 @@ export function TrackRatingsEditor({ draft, isDark, colors }: {
               </Pressable>
               <Text style={[s.hint, { color: colors.subtext }]}>
                 {draft.reListen
-                  ? 'Fresh ratings for this listen — your first-listen ratings are kept. Tap a track name to review it.'
+                  ? 'Fresh ratings for this listen. Your first-listen ratings are kept. Tap a track name to review it.'
                   : 'Tap or drag the bars to rate. Tap a track name to review it.'}
               </Text>
               {tracks!.map(t => {

@@ -47,6 +47,7 @@ import { parseReviewTargetId } from '@/lib/reviewTargets';
 import { ShareCardSheet } from '@/components/share/ShareCardSheet';
 import { ReviewCard as ReviewShareCard, reviewCardImages, useOwnCardColors } from '@/components/share/ShareCards';
 import { ShareIcon } from '@/components/share/ShareIcon';
+import { AlbumListenHistoryModal, fetchAlbumListenHistory, withoutEntry, type AlbumHistoryData } from '@/components/AlbumListenHistoryModal';
 import { ReviewShareButton } from '@/components/share/ReviewShareButton';
 import { RATING_LABELS } from '@/components/VolumeRatingPicker';
 import { useSongReviews } from '@/context/SongReviewsContext';
@@ -448,6 +449,7 @@ function AlbumReviewCard({
   comments,
   commentsExpanded = false,
   onAddComment,
+  shareAlbum,
 }: {
   review: CommunityReview;
   liked: boolean;
@@ -468,6 +470,8 @@ function AlbumReviewCard({
   comments?: ReviewComment[];
   commentsExpanded?: boolean;
   onAddComment?: (body: string, parentId?: string | null, username?: string, replyToUsername?: string, avatarUrl?: string | null) => void;
+  /** Show a share-card button for this review (the See more list). */
+  shareAlbum?: { title: string; artist: string; year?: number; artworkUrl?: string };
 }) {
   const displayCount = currentLikeCount ?? review.likeCount;
   const cardStyle = [
@@ -531,6 +535,15 @@ function AlbumReviewCard({
               </Text>
             </Pressable>
           ) : null}
+          {shareAlbum && (
+            <ReviewShareButton
+              reviewerId={review.userId}
+              album={shareAlbum}
+              rating={review.rating}
+              review={review.text}
+              color={isDark ? '#7a5535' : '#a07850'}
+              size={14} />
+          )}
           {!isOwn && (
             <Pressable onPress={onLike} hitSlop={8} style={s.reviewCardLikeBtn}>
               <FontAwesome
@@ -849,8 +862,11 @@ export default function AlbumDetailScreen() {
   const {
     loggedAlbums, updateReview, updateReListenReview, updateDuration, playlists, addAlbumToPlaylist, removeAlbumFromPlaylist,
     wantToListen, addToWantToListen, removeFromWantToListen,
-    setPendingAlbum, reListenMode, setReListenMode, removeLoggedAlbum, undoLastReListenEntry,
+    setPendingAlbum, reListenMode, setReListenMode, removeLoggedAlbum, undoLastReListenEntry, removeReListenEntry,
   } = useAlbums();
+  // Your listens of this album (first + re-listens), opened from the Your listen card.
+  const [listenHistory, setListenHistory] = useState<AlbumHistoryData | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const _paramTitle = (params.title ?? '').toLowerCase().trim();
   const _paramArtist = (params.artist ?? '').toLowerCase().trim();
@@ -1866,6 +1882,32 @@ export default function AlbumDetailScreen() {
           )}
         />
       )}
+      {listenHistory && (
+        <AlbumListenHistoryModal
+          data={listenHistory}
+          isDark={isDark}
+          colors={colors}
+          onClose={() => setListenHistory(null)}
+          onAlbumPress={() => setListenHistory(null)}
+          onDeleteEntry={(entry) => {
+            Alert.alert('Delete Re-listen', "Remove this re-listen entry? This can't be undone.", [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  await removeReListenEntry(listenHistory.album.id, entry.listenedAt);
+                  setListenHistory(prev => {
+                    if (!prev) return null;
+                    const entries = withoutEntry(prev.entries, entry);
+                    return entries.filter(e => !e.isOriginal).length === 0 ? null : { ...prev, entries };
+                  });
+                },
+              },
+            ]);
+          }}
+        />
+      )}
       <ScrollView
         ref={scrollRef}
         style={{ backgroundColor: colors.background }}
@@ -1906,10 +1948,10 @@ export default function AlbumDetailScreen() {
             <Text style={[s.sectionLabel, { color: colors.subtext, marginTop: 0 }]}>About This Album</Text>
             <Text
               style={[s.bioText, { color: colors.text }]}
-              numberOfLines={bioExpanded ? undefined : 3}>
+              numberOfLines={bioExpanded ? undefined : 2}>
               {lastfm.description}
             </Text>
-            {lastfm.description.length > 120 && (
+            {lastfm.description.length > 80 && (
               <Pressable onPress={() => setBioExpanded(v => !v)}>
                 <Text style={s.bioToggle}>{bioExpanded ? 'Show less' : 'Read more'}</Text>
               </Pressable>
@@ -2013,50 +2055,81 @@ export default function AlbumDetailScreen() {
               )}
             </View>
           ) : (
-            <View>
-            <View style={s.editLogRow}>
-              <View style={s.listendLeft}>
-                <View style={s.listendBadge}>
-                  <FontAwesome name="headphones" size={12} color="#fff" />
-                  <Text style={s.listendBadgeText}>{loggedAlbum?.isRelistened ? 'Re-listend' : 'Listend'}</Text>
-                </View>
-                <Text style={[s.editLogDate, { color: colors.subtext }]}>
-                  {formatLoggedDate(loggedAlbum!.dateLogged)}
+            // Everything about the listen you already logged lives in this
+            // card — Edit changes what's in it. Logging a new listen is the
+            // "Listen again" button below, with the other actions.
+            <View style={[s.yourListenCard, { backgroundColor: sectionBg, borderColor }]}>
+              <View style={s.yourListenHeader}>
+                <Text style={[s.yourListenLabel, { color: colors.subtext }]} numberOfLines={1}>
+                  {loggedAlbum?.isRelistened ? 'Latest listen' : 'Your listen'} · {formatLoggedDate(loggedAlbum!.lastListenedAt ?? loggedAlbum!.dateLogged)}
                 </Text>
+                {canShareReview && (
+                  <Pressable
+                    onPress={() => setShareOpen(true)}
+                    hitSlop={10}
+                    accessibilityLabel="Share your review"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                    <ShareIcon size={17} color="#D4A017" />
+                  </Pressable>
+                )}
               </View>
-              <View style={s.editLogRight}>
-                <FontAwesome name="volume-up" size={14} color={(loggedAlbum!.lastRating ?? loggedAlbum!.rating) > 0 ? '#D4A017' : (isDark ? '#3a2818' : '#ddd')} />
-                {(loggedAlbum!.lastRating ?? loggedAlbum!.rating) >= 1 && <MiniRatingBar rating={loggedAlbum!.lastRating ?? loggedAlbum!.rating} isDark={isDark} />}
+              <View style={s.yourListenRow}>
+                {(loggedAlbum!.lastRating ?? loggedAlbum!.rating) >= 1 ? (
+                  <View style={s.yourListenRating}>
+                    <FontAwesome name="volume-up" size={14} color="#D4A017" />
+                    <MiniRatingBar rating={loggedAlbum!.lastRating ?? loggedAlbum!.rating} isDark={isDark} />
+                  </View>
+                ) : (
+                  <Text style={[s.yourListenEmpty, { color: colors.subtext }]}>No rating yet</Text>
+                )}
                 <Pressable
                   onPress={handleStartEdit}
                   hitSlop={10}
-                  style={({ pressed }) => [s.editReviewBtn, { opacity: pressed ? 0.6 : 1 }]}>
-                  <FontAwesome name="pencil" size={11} color="#D4A017" />
-                  <Text style={s.editReviewBtnText}>Edit</Text>
+                  accessibilityLabel={loggedAlbum?.isRelistened ? 'Edit your latest listen' : 'Edit your listen'}
+                  style={({ pressed }) => [s.yourListenEdit, { opacity: pressed ? 0.6 : 1 }]}>
+                  <FontAwesome name="pencil" size={12} color={colors.subtext} />
+                  <Text style={[s.yourListenEditText, { color: colors.subtext }]}>Edit</Text>
                 </Pressable>
               </View>
-            </View>
-            {canShareReview && (
-              <Pressable
-                onPress={() => setShareOpen(true)}
-                hitSlop={6}
-                style={({ pressed }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, opacity: pressed ? 0.6 : 1 })}>
-                <ShareIcon size={16} color="#D4A017" />
-                <Text style={{ color: '#D4A017', fontSize: 14, fontWeight: '700' }}>Share your review</Text>
-              </Pressable>
-            )}
+              {ownReview?.text ? (
+                <Text style={[s.yourListenReview, { color: colors.text }]} numberOfLines={3}>"{ownReview.text}"</Text>
+              ) : null}
+              {loggedAlbum?.isRelistened && (
+                <Pressable
+                  onPress={async () => {
+                    if (!user?.id || historyLoading) return;
+                    setHistoryLoading(true);
+                    const entries = await fetchAlbumListenHistory(user.id, myAlbumId);
+                    setHistoryLoading(false);
+                    if (entries) setListenHistory({
+                      album: { id: myAlbumId, title: albumTitle, artist: albumArtist, year: albumYear, artworkUrl: albumArtwork || loggedAlbum?.artworkUrl },
+                      entries,
+                    });
+                    else Alert.alert("Couldn't load your listens", 'Check your connection and try again.');
+                  }}
+                  hitSlop={8}
+                  style={({ pressed }) => [s.yourListenHistory, { borderTopColor: borderColor, opacity: pressed ? 0.6 : 1 }]}>
+                  <FontAwesome name="repeat" size={12} color="#D4A017" />
+                  <Text style={s.yourListenHistoryText}>
+                    {(loggedAlbum.reListenCount ?? 0) + 1} listens · See history
+                  </Text>
+                  {historyLoading
+                    ? <ActivityIndicator size="small" color="#D4A017" style={{ marginLeft: 'auto' }} />
+                    : <FontAwesome name="chevron-right" size={11} color={colors.subtext} style={{ marginLeft: 'auto' }} />}
+                </Pressable>
+              )}
             </View>
           )
         ) : (
           <View style={s.ctaRow}>
             <Pressable
-              style={({ pressed }) => [s.listenBtn, s.ctaFlex, { backgroundColor: '#D4A017', borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
+              style={({ pressed }) => [s.listenBtn, s.ctaFlex, s.ctaCompact, { backgroundColor: '#D4A017', borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
               onPress={handleLog}>
               <FontAwesome name="headphones" size={16} color="#fff" />
-              <Text style={[s.listenBtnText, { color: '#fff' }]}>Listen</Text>
+              <Text style={[s.listenBtnText, s.ctaCompactText, { color: '#fff' }]}>Listen</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [s.secondaryBtn, s.ctaFlex, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [s.secondaryBtn, s.ctaFlex, s.ctaCompact, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
               onPress={handleWantToListen}>
               <FontAwesome name={isWanted ? 'bookmark' : 'bookmark-o'} size={14} color="#D4A017" />
               <Text style={[s.secondaryBtnText, { color: '#D4A017' }]}>
@@ -2066,27 +2139,37 @@ export default function AlbumDetailScreen() {
           </View>
         )}
 
-        {/* ── 3b. Re-listen button — hidden while editing to cut screen clutter ── */}
+        {/* ── 3b. Logged: Listen again + Listen on, in the same row the
+             Listen / Want to Listen buttons use before you've logged it.
+             Hidden while editing to cut clutter. ─────────────────────────── */}
         {isLogged && !editMode && (
-          <Pressable
-            style={({ pressed }) => [s.reListenBtn, { backgroundColor: '#D4A017', borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
-            onPress={handleReListenPressed}>
-            <FontAwesome name="repeat" size={15} color="#fff" />
-            <Text style={[s.reListenBtnText, { color: '#fff' }]}>Re-listen</Text>
-          </Pressable>
+          <View style={s.ctaRow}>
+            <Pressable
+              style={({ pressed }) => [s.listenBtn, s.ctaFlex, s.ctaCompact, { backgroundColor: '#D4A017', borderColor: '#D4A017', opacity: pressed ? 0.8 : 1 }]}
+              onPress={handleReListenPressed}>
+              <FontAwesome name="repeat" size={15} color="#fff" />
+              <Text style={[s.listenBtnText, s.ctaCompactText, { color: '#fff' }]}>Listen again</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [s.secondaryBtn, s.ctaFlex, s.ctaCompact, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
+              onPress={handleStream}>
+              <FontAwesome name="music" size={14} color="#D4A017" />
+              <Text style={[s.secondaryBtnText, { color: '#D4A017' }]}>Listen on</Text>
+            </Pressable>
+          </View>
         )}
 
-        {/* ── 3c. Stream button — hidden while editing to cut screen clutter ──── */}
-        {!editMode && (
+        {/* ── 3c. Not logged: Listen on under Listen / Want to Listen ─────── */}
+        {!isLogged && (
           <Pressable
-            style={({ pressed }) => [s.streamBtn, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [s.streamBtn, s.ctaCompact, { borderColor: '#D4A017', opacity: pressed ? 0.7 : 1 }]}
             onPress={handleStream}>
             <FontAwesome name="music" size={15} color="#D4A017" />
             <Text style={[s.streamBtnText, { color: '#D4A017' }]}>Listen on</Text>
           </Pressable>
         )}
 
-        {/* ── 4. Community Rating ───────────────────────────────────────────── */}
+        {/* ── 4. Community Rating — right above Reviews ──────────────────────── */}
         <CommunityRatingSection
           isDark={isDark}
           colors={colors}
@@ -2535,6 +2618,7 @@ export default function AlbumDetailScreen() {
                 isOwn={r.userId === user?.id}
                 fullWidth
                 highlighted={r.id === highlightedReviewId}
+                shareAlbum={{ title: albumTitle, artist: albumArtist, year: albumYear || undefined, artworkUrl: albumArtwork || undefined }}
               />
             )}
           />
@@ -2656,11 +2740,14 @@ const s = StyleSheet.create({
   section: { width: '100%', marginTop: 20, borderRadius: 14, padding: 16, borderWidth: StyleSheet.hairlineWidth },
 
   // About
-  bioText: { fontSize: 14, lineHeight: 22 },
-  bioToggle: { color: '#D4A017', fontSize: 13, fontWeight: '500', marginTop: 8 },
+  bioText: { fontSize: 13, lineHeight: 19 },
+  bioToggle: { color: '#D4A017', fontSize: 13, fontWeight: '500', marginTop: 6 },
 
   // Log / Edit buttons
   ctaRow: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 20 },
+  // Listen / Want to Listen / Listen again / Listen on — slimmer than the old 50pt blocks.
+  ctaCompact: { height: 42, borderRadius: 10 },
+  ctaCompactText: { fontSize: 15 },
   ctaFlex: { flex: 1, marginTop: 0 },
   primaryBtn: { marginTop: 20, width: '100%', height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   primaryBtnText: { fontSize: 16, fontWeight: '600' },
@@ -2672,22 +2759,19 @@ const s = StyleSheet.create({
   listenBtnText: { fontSize: 16, fontWeight: '600' },
 
   // Listend badge (logged)
-  listendLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  listendBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#D4A017',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  listendBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   // Logged / edit
-  editLogRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 16 },
-  editLogDate: { fontSize: 12 },
-  editLogRight: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  yourListenCard: { width: '100%', marginTop: 20, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 10 },
+  yourListenHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  yourListenLabel: { flexShrink: 1, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.2 },
+  yourListenRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  yourListenRating: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  yourListenEmpty: { fontSize: 14 },
+  yourListenEdit: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
+  yourListenEditText: { fontSize: 14, fontWeight: '500' },
+  yourListenReview: { fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
+  yourListenHistory: { flexDirection: 'row', alignItems: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, marginTop: 2 },
+  yourListenHistoryText: { color: '#D4A017', fontSize: 13, fontWeight: '600' },
 
   editBlock: { width: '100%', marginTop: 16 },
   editDateRow: {
@@ -2698,12 +2782,6 @@ const s = StyleSheet.create({
   editDateLabel: { fontSize: 13, fontWeight: '500' },
   editDateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   editDateBtnText: { fontSize: 13, fontWeight: '700', color: '#D4A017' },
-  editReviewBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 12, borderWidth: 1, borderColor: '#D4A017',
-  },
-  editReviewBtnText: { fontSize: 12, fontWeight: '700', color: '#D4A017' },
   editBtnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   editBtnFlex: { flex: 1, marginTop: 0 },
   removeListendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8B1A1A' },
@@ -2839,8 +2917,6 @@ const s = StyleSheet.create({
   streamBtnText: { fontSize: 15, fontWeight: '600' },
 
   // Re-listen button
-  reListenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 44, borderRadius: 12, borderWidth: 1, marginTop: 10 },
-  reListenBtnText: { fontSize: 15, fontWeight: '600' },
 
   // Streaming sheet
   streamPlatformRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },

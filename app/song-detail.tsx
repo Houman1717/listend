@@ -38,6 +38,12 @@ import {
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const ACCENT = '#D4A017';
 
+function formatListenDate(raw: string): string {
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -229,42 +235,64 @@ export default function SongDetailScreen() {
         ) : null}
 
         {/* ── You ──────────────────────────────────────────────────────── */}
+        {/* Same layout as the album page: your logged listen in one card
+            (Edit changes it), then "Listen again" to log a new one. */}
         {mine ? (
-          <View style={s.youRow}>
-            <View style={s.youLeft}>
-              <View style={s.listendBadge}>
-                <FontAwesome name="headphones" size={12} color="#fff" />
-                <Text style={s.listendBadgeText}>Listend</Text>
+          <>
+            <View style={[s.yourCard, { backgroundColor: sectionBg, borderColor: border }]}>
+              <View style={s.yourHeader}>
+                <Text style={[s.yourLabel, { color: colors.subtext }]} numberOfLines={1}>
+                  {mine.reListenCount ? 'Latest listen' : 'Your listen'} · {formatListenDate(mine.lastListenedAt ?? mine.listenedAt)}
+                </Text>
+                {mine.isFavorite && (
+                  <View style={s.favTag}>
+                    <Ionicons name="trophy" size={12} color={ACCENT} />
+                    <Text style={s.favTagText}>Favourite</Text>
+                  </View>
+                )}
               </View>
-              {mine.isFavorite && <Ionicons name="trophy" size={15} color={ACCENT} />}
+              <View style={s.yourRow}>
+                {mine.rating > 0 ? (
+                  <View style={s.youRight}>
+                    <FontAwesome name="volume-up" size={14} color={ACCENT} />
+                    <VolumeBars rating={mine.rating} activeColor={ACCENT} inactiveColor={inactive} heights={[4, 5, 7, 8, 10, 11, 13, 14, 16, 18]} barWidth={3} gap={1.5} />
+                    <Text style={s.youNum}>{mine.rating}</Text>
+                  </View>
+                ) : (
+                  <Text style={[s.yourEmpty, { color: colors.subtext }]}>No rating yet</Text>
+                )}
+                <Pressable
+                  onPress={() => setEditing(true)}
+                  hitSlop={10}
+                  accessibilityLabel={mine.reListenCount ? 'Edit your latest listen' : 'Edit your listen'}
+                  style={({ pressed }) => [s.yourEdit, { opacity: pressed ? 0.6 : 1 }]}>
+                  <FontAwesome name="pencil" size={12} color={colors.subtext} />
+                  <Text style={[s.yourEditText, { color: colors.subtext }]}>Edit</Text>
+                </Pressable>
+              </View>
+              {mine.review ? (
+                <Pressable onPress={() => ownEntry && setOpenEntry(ownEntry)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+                  <Text style={[s.yourReviewText, { color: colors.text }]} numberOfLines={3}>"{mine.review}"</Text>
+                </Pressable>
+              ) : null}
               {!!mine.reListenCount && (
                 <Pressable
                   onPress={() => setHistoryOpen(true)}
                   hitSlop={8}
-                  accessibilityLabel="Listen history"
-                  style={({ pressed }) => [s.listensBtn, { opacity: pressed ? 0.6 : 1 }]}>
+                  style={({ pressed }) => [s.yourHistory, { borderTopColor: border, opacity: pressed ? 0.6 : 1 }]}>
                   <FontAwesome name="repeat" size={12} color={ACCENT} />
-                  <Text style={s.listensText}>{mine.reListenCount + 1} listens</Text>
+                  <Text style={s.yourHistoryText}>{mine.reListenCount + 1} listens · See history</Text>
+                  <FontAwesome name="chevron-right" size={11} color={colors.subtext} style={{ marginLeft: 'auto' }} />
                 </Pressable>
               )}
             </View>
-            <View style={s.youRight}>
-              {mine.rating > 0 && (
-                <>
-                  <FontAwesome name="volume-up" size={14} color={ACCENT} />
-                  <VolumeBars rating={mine.rating} activeColor={ACCENT} inactiveColor={inactive} heights={[4, 5, 7, 8, 10, 11, 13, 14, 16, 18]} barWidth={3} gap={1.5} />
-                  <Text style={s.youNum}>{mine.rating}</Text>
-                </>
-              )}
-              <Pressable
-                onPress={() => setEditing(true)}
-                hitSlop={10}
-                style={({ pressed }) => [s.editBtn, { opacity: pressed ? 0.6 : 1 }]}>
-                <FontAwesome name="pencil" size={11} color={ACCENT} />
-                <Text style={s.editBtnText}>Edit</Text>
-              </Pressable>
-            </View>
-          </View>
+            <Pressable
+              onPress={() => setReListening(true)}
+              style={({ pressed }) => [s.rateBtn, { marginTop: 12, opacity: pressed ? 0.85 : 1 }]}>
+              <FontAwesome name="repeat" size={15} color="#fff" />
+              <Text style={s.rateBtnText}>Listen again</Text>
+            </Pressable>
+          </>
         ) : (
           <Pressable
             onPress={() => setEditing(true)}
@@ -273,22 +301,6 @@ export default function SongDetailScreen() {
             <Text style={s.rateBtnText}>Rate & Review</Text>
           </Pressable>
         )}
-        {mine ? (
-          <Pressable
-            onPress={() => setReListening(true)}
-            style={({ pressed }) => [s.reListenBtn, { opacity: pressed ? 0.85 : 1 }]}>
-            <FontAwesome name="repeat" size={14} color="#fff" />
-            <Text style={s.reListenBtnText}>Re-listen</Text>
-          </Pressable>
-        ) : null}
-        {mine?.review ? (
-          <Pressable
-            onPress={() => ownEntry && setOpenEntry(ownEntry)}
-            style={({ pressed }) => [s.yourReview, { borderColor: border, opacity: pressed ? 0.7 : 1 }]}>
-            <Text style={[s.yourReviewLabel, { color: muted }]}>YOUR REVIEW</Text>
-            <Text style={[s.yourReviewText, { color: colors.text }]} numberOfLines={4}>"{mine.review}"</Text>
-          </Pressable>
-        ) : null}
 
         {/* ── Ratings ──────────────────────────────────────────────────── */}
         <View style={[s.section, { backgroundColor: sectionBg, borderColor: border }]}>
@@ -445,22 +457,21 @@ const s = StyleSheet.create({
   albumCardTitle: { fontSize: 16, fontWeight: '700' },
   albumCardSub: { fontSize: 12 },
 
-  youRow: { marginTop: 22, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  youLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   youRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  listendBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: ACCENT, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  listendBadgeText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   youNum: { color: ACCENT, fontSize: 15, fontWeight: '800', marginRight: 6 },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: ACCENT, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
-  editBtnText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
   rateBtn: { marginTop: 22, width: '100%', height: 50, borderRadius: 12, backgroundColor: ACCENT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   rateBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  reListenBtn: { marginTop: 14, width: '100%', height: 44, borderRadius: 12, backgroundColor: ACCENT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  reListenBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  listensBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  listensText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
-  yourReview: { marginTop: 14, width: '100%', borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, gap: 6 },
-  yourReviewLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
+  yourCard: { marginTop: 22, width: '100%', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+  yourHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  yourLabel: { flexShrink: 1, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.2 },
+  favTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  favTagText: { color: ACCENT, fontSize: 12, fontWeight: '600' },
+  yourRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  yourEmpty: { fontSize: 14 },
+  yourEdit: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
+  yourEditText: { fontSize: 14, fontWeight: '500' },
+  yourHistory: { flexDirection: 'row', alignItems: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, marginTop: 2 },
+  yourHistoryText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
   yourReviewText: { fontSize: 14, lineHeight: 20, fontStyle: 'italic' },
 
   section: { marginTop: 18, width: '100%', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 16 },

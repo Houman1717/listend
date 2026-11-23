@@ -46,6 +46,7 @@ import type { SongReview } from '@/lib/songReviews';
 import { ShareCardSheet } from '@/components/share/ShareCardSheet';
 import { ReviewCard as ReviewShareCard, reviewCardImages, useOwnCardColors } from '@/components/share/ShareCards';
 import { ShareIcon } from '@/components/share/ShareIcon';
+import { ReviewShareButton } from '@/components/share/ReviewShareButton';
 
 // ─── Volume badge (with number) ───────────────────────────────────────────────
 
@@ -183,6 +184,7 @@ function ReviewDetailModal({
   onUsernamePress,
   onReport,
   canShare = false,
+  reviewerId,
 }: {
   album: LoggedAlbum;
   reviewId: string;
@@ -200,6 +202,11 @@ function ReviewDetailModal({
   onReport?: () => void;
   /** Your own review: show the share-card button. */
   canShare?: boolean;
+  /**
+   * Someone else's review: shows a share button credited to them (hidden for
+   * private or blocked accounts) next to Report.
+   */
+  reviewerId?: string;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -276,10 +283,22 @@ function ReviewDetailModal({
               <Pressable onPress={() => setShareOpen(true)} hitSlop={12}>
                 <ShareIcon size={19} color={colors.tint} />
               </Pressable>
-            ) : onReport ? (
-              <Pressable onPress={onReport} hitSlop={12}>
-                <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
-              </Pressable>
+            ) : reviewerId || onReport ? (
+              <View style={mrd.headerActions}>
+                {reviewerId && (
+                  <ReviewShareButton
+                    reviewerId={reviewerId}
+                    album={{ title: album.title, artist: album.artist, year: album.year || undefined, artworkUrl: album.artworkUrl }}
+                    rating={album.lastRating ?? album.rating}
+                    review={album.lastReview ?? album.review}
+                    color={colors.tint} />
+                )}
+                {onReport && (
+                  <Pressable onPress={onReport} hitSlop={12}>
+                    <FontAwesome name="flag-o" size={15} color={isDark ? '#A08060' : '#6B4C35'} />
+                  </Pressable>
+                )}
+              </View>
             ) : (
               <View style={{ width: 24 }} />
             )}
@@ -1153,6 +1172,7 @@ export default function MyReviewsScreen() {
             likeState={likeState}
             onLike={viewingOther ? () => handleToggleLike(selectedReview) : undefined}
             canShare={!viewingOther}
+            reviewerId={viewingOther ? ownerId : undefined}
             onClose={() => setSelectedReview(null)}
             onAlbumPress={() => {
               const a = selectedReview;
@@ -1188,6 +1208,7 @@ export default function MyReviewsScreen() {
               ? () => handleUnlikeLikedReview(selectedLiked)
               : () => handleToggleLikedReviewLike(selectedLiked)
             }
+            reviewerId={selectedLiked.ownerId}
             onClose={() => setSelectedLiked(null)}
             onAlbumPress={() => {
               const a = selectedLiked;
@@ -1283,6 +1304,7 @@ const s = StyleSheet.create({
 const mrd = StyleSheet.create({
   header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle:  { fontSize: 16, fontWeight: '700' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   albumRow:     { flexDirection: 'row', gap: 14, padding: 20, paddingBottom: 12 },
   art:          { width: 80, height: 80, borderRadius: 8, flexShrink: 0 },
   albumTitle:   { fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
