@@ -3,6 +3,10 @@
 // Used by /api/admin/populate-new-releases to seed the new_release_albums table via AM search.
 
 const NEW_RELEASE_ALBUMS = [
+  { artist: '6LACK',                  title: 'Vault 6 - EP' },
+  { artist: 'Peter Gabriel',          title: 'o\\i' },
+  { artist: 'Molly Santana',          title: 'Black Punk' },
+  { artist: 'Ed Maverick',            title: 'Sin Agua Es Ruta Yerma (Vol. II)' },
   { artist: 'Various Artists',        title: 'Grand Theft Auto VI: The Album' },
   { artist: 'Conway the Machine',     title: 'OTIS' },
   { artist: 'Trivium',                title: 'Crown In The Grave' },

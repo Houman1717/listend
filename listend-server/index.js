@@ -1698,6 +1698,25 @@ const CANONICAL_ALBUM_OVERRIDES = {
     id: '6823370459', title: 'Unusua', artist: 'Toro y Moi', year: 2026,
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/42/0d/42/420d42e6-04cc-3588-be3e-aa58f9c1e03b/193436491488_TyMUnusuax.jpg/500x500bb.jpg',
   },
+  // New Releases for 2026-11-27. 6LACK and Molly Santana weren't in Apple's
+  // search index yet; o\i and Ed Maverick's Vol. II were, but are pinned so
+  // search can't pick a single or Vol. I instead.
+  '6lack::vault6ep': {
+    id: '6836598663', title: 'Vault 6 - EP', artist: '6LACK', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/50/f5/5d/50f55dcf-8741-5345-b52e-54aef9f20daf/26UM1IM46954.rgb.jpg/500x500bb.jpg',
+  },
+  'petergabriel::oi': {
+    id: '6818148729', title: 'o\\i', artist: 'Peter Gabriel', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/58/df/92/58df923b-ea4e-b9d6-65d4-fcaa57013812/PG24_PeterGabriel_OI_3000pxls.jpg/500x500bb.jpg',
+  },
+  'mollysantana::blackpunk': {
+    id: '6837459760', title: 'Black Punk', artist: 'Molly Santana', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/91/e8/8d91e8bd-5ed0-ae13-cc19-5c35a1d02676/196874977132.jpg/500x500bb.jpg',
+  },
+  'edmaverick::sinaguaesrutayermavolii': {
+    id: '6837373563', title: 'Sin Agua Es Ruta Yerma (Vol. II)', artist: 'Ed Maverick', year: 2026,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/62/ca/06/62ca06f6-1034-c932-8145-d1d288dea180/26UM1IM33914.rgb.jpg/500x500bb.jpg',
+  },
   '高中正義::therainbowgoblins': {
     id: '1444174484', title: '虹伝説 -The Rainbow Goblins-', artist: '高中正義', year: 1981,
     aliases: ['Masayoshi Takanaka', 'Niji Densetsu'],
